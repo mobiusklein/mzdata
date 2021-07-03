@@ -4,51 +4,29 @@ use std::option::Option;
 
 use crate::peak::{Peak};
 use crate::mass_error::{MassErrorType};
+use crate::coordinate::{CoordinateLike, MZ};
 
-pub trait PeakCollection<T> : ops::Index<usize> {
+
+pub trait PeakCollection<T: CoordinateLike<C>, C> : ops::Index<usize>
+    where <Self as ops::Index<usize>>::Output : CoordinateLike<C>
+    {
     fn sort(&mut self);
 
     fn len(&self) -> usize;
+    fn get_item(&self, i: usize) -> &T;
+    fn get_slice(&self, i: ops::Range<usize>) -> &[T];
 
-    fn search(&self, query: f64, error_tolerance: f64, error_type: MassErrorType) -> Option<usize>;
-    fn has_peak(&self, query: f64, error_tolerance: f64, error_type: MassErrorType) -> Option<T>;
-    fn between(&self, low: f64, high: f64, error_tolerance: f64, error_type: MassErrorType) -> &[T];
-    fn all_peaks_for(&self, query: f64, error_tolerance: f64, error_type: MassErrorType) -> &[T];
-}
+    fn _search_by(&self, query: f64) -> Result<usize, usize>;
 
-
-#[derive(Clone, Debug)]
-pub struct PeakSet {
-    pub peaks: Vec<Peak>,
-}
-
-impl PeakSet {
-
-    pub fn new(mut peaks: Vec<Peak>) -> PeakSet {
-        Self::_sort(&mut peaks);
-        let inst: PeakSet = PeakSet { peaks: peaks, };
-        return inst;
-    }
-
-    pub fn from(peaks: Vec<Peak>) -> PeakSet{
-        let inst: PeakSet = PeakSet { peaks: peaks };
-        return inst;
-    }
-
-    fn _sort(peaks: &mut Vec<Peak>) {
-        peaks.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        for (i, p) in peaks.iter_mut().enumerate() {
-            p.index = i as u32;
-        }
-    }
-
-    fn _closest_peak(&self, mz: f64, error_tolerance: f64, i: usize, error_type: MassErrorType) -> Option<usize> {
+    fn _closest_peak(&self, query: f64, error_tolerance: f64, i: usize, error_type: MassErrorType) -> Option<usize> {
         let mut j = i;
         let mut best = j;
-        let mut best_err = error_type.call(self[j].mz, mz).abs();
+        let mut best_err = error_type.call(
+            self.get_item(j).get_coordinate(), query).abs();
         let n = self.len();
         while j < n {
-            let err = error_type.call(self[j].mz, mz).abs();
+            let err = error_type.call(
+                self.get_item(j).get_coordinate(), query).abs();
             if err < best_err && err < error_tolerance{
                 best_err = err;
                 best = j;
@@ -60,9 +38,128 @@ impl PeakSet {
         }
         return Some(best);
     }
+
+    fn search(&self, query: f64, error_tolerance: f64, error_type: MassErrorType) -> Option<usize> {
+        let lower_bound = error_type.lower_bound(query, error_tolerance);
+        let i = match self._search_by(lower_bound) {
+            Ok(j) => self._closest_peak(query, error_tolerance, j, error_type),
+            Err(j) => self._closest_peak(query, error_tolerance, j, error_type),
+        };
+        return i;
+    }
+
+    fn has_peak(&self, query: f64, error_tolerance: f64, error_type: MassErrorType) -> Option<&T> {
+        return match self.search(query, error_tolerance, error_type) {
+            Some(j) => Some(self.get_item(j)),
+            None => None
+        }
+    }
+
+    fn between(&self, low: f64, high: f64, error_tolerance: f64, error_type: MassErrorType) -> &[T] {
+        let lower_bound = error_type.lower_bound(low, error_tolerance);
+        let upper_bound = error_type.upper_bound(high, error_tolerance);
+
+        let n = self.len();
+        if n == 0 {
+            return &self.get_slice(0..0);
+        }
+
+        let mut lower_index = match self._search_by(lower_bound) {
+            Ok(j) => j,
+            Err(j) => j,
+        };
+
+        let mut upper_index = match self._search_by(upper_bound) {
+            Ok(j) => j,
+            Err(j) => j,
+        };
+
+        if lower_index < n {
+            if self[lower_index].get_coordinate() < lower_bound {
+                lower_index += 1;
+            }
+        }
+
+        if upper_index < n {
+            if self[upper_index].get_coordinate() > upper_bound {
+                upper_index -= 1;
+            }
+        }
+
+        let subset = &self.get_slice(lower_index..upper_index + 1);
+        return subset
+    }
+
+    fn all_peaks_for(&self, query: f64, error_tolerance: f64, error_type: MassErrorType) -> &[T] {
+        let lower_bound = error_type.lower_bound(query, error_tolerance);
+        let upper_bound = error_type.upper_bound(query, error_tolerance);
+
+        let n = self.len();
+        if n == 0 {
+            return &self.get_slice(0..0);
+        }
+
+        let mut lower_index = match self._search_by(lower_bound) {
+            Ok(j) => j,
+            Err(j) => j,
+        };
+        if lower_index < n {
+            if self[lower_index].get_coordinate() < lower_bound {
+                lower_index += 1;
+            }
+        }
+
+        let mut upper_index = lower_index;
+
+        for i in lower_index + 1..n {
+            if self[i].get_coordinate() >= upper_bound {
+                break
+            } else {
+                upper_index = i;
+            }
+        }
+
+        return &self.get_slice(lower_index..upper_index + 1);
+    }
 }
 
-impl PeakCollection<Peak> for PeakSet {
+
+#[derive(Clone, Debug)]
+pub struct PeakSet {
+    pub peaks: Vec<Peak>,
+}
+
+impl PeakSet {
+
+    pub fn new(mut peaks: Vec<Peak>) -> Self {
+        Self::_sort(&mut peaks);
+        let inst: PeakSet = PeakSet { peaks: peaks, };
+        return inst;
+    }
+
+    pub fn from<V: Iterator>(peaks: V, sort: bool) -> PeakSet where V: Iterator<Item=Peak> {
+        let peaks: Vec<Peak> = peaks.collect();
+        if sort {
+            return Self::new(peaks)
+        } else {
+            return Self::wrap(peaks)
+        }
+    }
+
+    pub fn wrap(peaks: Vec<Peak>) -> PeakSet{
+        let inst: PeakSet = PeakSet { peaks: peaks };
+        return inst;
+    }
+
+    fn _sort(peaks: &mut Vec<Peak>) {
+        peaks.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        for (i, p) in peaks.iter_mut().enumerate() {
+            p.index = i as u32;
+        }
+    }
+}
+
+impl PeakCollection<Peak, MZ> for PeakSet {
     fn sort(&mut self) {
         Self::_sort(&mut self.peaks);
     }
@@ -71,87 +168,16 @@ impl PeakCollection<Peak> for PeakSet {
         return self.peaks.len();
     }
 
-    fn search(&self, query: f64, error_tolerance: f64, error_type: MassErrorType) -> Option<usize> {
-        let lower_bound = error_type.lower_bound(query, error_tolerance);
-        let i = match self.peaks.binary_search_by(|peak| peak.mz.partial_cmp(&lower_bound).unwrap()) {
-            Ok(j) => self._closest_peak(query, error_tolerance, j, error_type),
-            Err(j) => self._closest_peak(query, error_tolerance, j, error_type),
-        };
-        return i;
+    fn get_item(&self, i: usize) -> &Peak {
+        return &self[i]
     }
 
-    fn has_peak(&self, query: f64, error_tolerance: f64, error_type: MassErrorType) -> Option<Peak> {
-        return match self.search(query, error_tolerance, error_type) {
-            Some(j) => Some(self[j]),
-            None => None
-        }
+    fn get_slice(&self, i: ops::Range<usize>) -> &[Peak] {
+        return &self.peaks[i]
     }
 
-    fn between(&self, low: f64, high: f64, error_tolerance: f64, error_type: MassErrorType) -> &[Peak] {
-        let lower_bound = error_type.lower_bound(low, error_tolerance);
-        let upper_bound = error_type.upper_bound(high, error_tolerance);
-
-        let n = self.len();
-        if n == 0 {
-            return &self.peaks[..];
-        }
-
-        let mut lower_index = match self.peaks.binary_search_by(|peak| peak.mz.partial_cmp(&lower_bound).unwrap()) {
-            Ok(j) => j,
-            Err(j) => j,
-        };
-
-        let mut upper_index = match self.peaks.binary_search_by(|peak| peak.mz.partial_cmp(&upper_bound).unwrap()) {
-            Ok(j) => j,
-            Err(j) => j,
-        };
-
-        if lower_index < n {
-            if self[lower_index].mz < lower_bound {
-                lower_index += 1;
-            }
-        }
-
-        if upper_index < n {
-            if self[upper_index].mz > upper_bound {
-                upper_index -= 1;
-            }
-        }
-
-        let subset = &self.peaks[lower_index..upper_index + 1];
-        return subset
-    }
-
-    fn all_peaks_for(&self, query: f64, error_tolerance: f64, error_type: MassErrorType) -> &[Peak] {
-        let lower_bound = error_type.lower_bound(query, error_tolerance);
-        let upper_bound = error_type.upper_bound(query, error_tolerance);
-
-        let n = self.len();
-        if n == 0 {
-            return &self.peaks[..];
-        }
-
-        let mut lower_index = match self.peaks.binary_search_by(|peak| peak.mz.partial_cmp(&lower_bound).unwrap()) {
-            Ok(j) => j,
-            Err(j) => j,
-        };
-        if lower_index < n {
-            if self[lower_index].mz < lower_bound {
-                lower_index += 1;
-            }
-        }
-
-        let mut upper_index = lower_index;
-
-        for i in lower_index + 1..n {
-            if self[i].mz >= upper_bound {
-                break
-            } else {
-                upper_index = i;
-            }
-        }
-
-        return &self.peaks[lower_index..upper_index + 1];
+    fn _search_by(&self, query: f64) -> Result<usize, usize> {
+        self.peaks.binary_search_by(|peak| peak.get_coordinate().partial_cmp(&query).unwrap())
     }
 }
 

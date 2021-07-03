@@ -3,6 +3,7 @@ use std::cmp;
 use std::hash;
 use std::option::Option;
 
+use crate::coordinate::{CoordinateLike, MZ};
 
 #[derive(Default, Copy, Clone, Debug)]
 pub struct Peak {
@@ -43,5 +44,11 @@ impl cmp::PartialEq<Peak> for Peak {
 
     fn ne(&self, other: &Peak) -> bool {
         return !(self == other)
+    }
+}
+
+impl CoordinateLike<MZ> for Peak {
+    fn get_coordinate(&self) -> f64 {
+        return self.mz
     }
 }

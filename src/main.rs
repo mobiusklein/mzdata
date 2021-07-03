@@ -15,4 +15,10 @@ fn main() {
         Some(p) => println!("{}", p),
         None => println!("No Match")
     }
+    for (i, p) in (&peaks).into_iter().enumerate() {
+        println!("{} => {}", i, p);
+    }
+    for (i, p) in (&peaks).into_iter().enumerate() {
+        println!("{} => {}", i, p);
+    }
 }
