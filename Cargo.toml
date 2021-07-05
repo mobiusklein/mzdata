@@ -14,3 +14,5 @@ name = "structured"
 src = "src/lib.rs"
 
 [dependencies]
+regex = "1"
+lazy_static = "1.4.0"

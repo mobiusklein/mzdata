@@ -1,24 +1,25 @@
-use structured::{Peak, PeakSet, MassErrorType, PeakCollection};
+use std::fs;
+use std::path;
+use std::env;
+
+use structured::MGFReader;
 
 
 fn main() {
-    let peak = Peak {mz: 100.0, .. Default::default()};
-    let peak2 = Peak {mz: 101.0, .. Default::default()};
-    let peak3 = Peak {mz: 102.0, .. Default::default()};
-    println!("{}, {}", peak, peak2);
-    println!("{}", peak <= peak2);
-
-    let peaks = PeakSet::new(vec![peak3, peak2, peak]);
-    println!("{}", peaks);
-    println!("{}, {}", peaks[0], peaks[2]);
-    match peaks.has_peak(101.01, 0.02, MassErrorType::Exact) {
-        Some(p) => println!("{}", p),
-        None => println!("No Match")
+    let args: Vec<String> = env::args().collect();
+    let path: &path::Path;
+    if args.len() > 1 {
+        path = path::Path::new(&args[1]);
+    } else {
+        path = path::Path::new("C:\\Users\\Joshua\\Dev\\ms_deisotope\\ms_deisotope\\test\\test_data\\small.mgf");
     }
-    for (i, p) in (&peaks).into_iter().enumerate() {
-        println!("{} => {}", i, p);
+    println!("Path: {}", path.to_str().unwrap());
+    let file = fs::File::open(path).unwrap();
+    let reader = MGFReader::new(file);
+    let mut counter = 0;
+    for _scan in reader {
+        // println!("Scan ID: {}", _scan.description.id);
+        counter += 1;
     }
-    for (i, p) in (&peaks).into_iter().enumerate() {
-        println!("{} => {}", i, p);
-    }
+    println!("{} scans in {}", counter, path.to_str().unwrap());
 }
