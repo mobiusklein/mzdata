@@ -4,6 +4,7 @@ pub mod mass_error;
 pub mod peak_set;
 pub mod scan;
 pub mod io;
+pub mod spectrum;
 
 pub use crate::coordinate::{CoordinateDimension, CoordinateLike, MZ, Mass};
 pub use crate::peak::{CentroidPeak, DeconvolutedPeak};

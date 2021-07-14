@@ -17,14 +17,25 @@ pub struct ScanDescription {
     pub index: usize,
     pub ms_level: i8,
     pub time: f32,
+    pub polarity: i8,
     pub precursor_information: Option<Precursor>,
     pub annotations: HashMap<String, String>,
 }
 
 
+type I32ArrayMap = HashMap<String, Vec<i32>>;
+type F64ArrayMap = HashMap<String, Vec<f64>>;
+
+
+#[derive(Debug, Default)]
+pub struct BinaryArrayMap {
+    pub double_arrays: F64ArrayMap,
+    pub int_arrays: I32ArrayMap
+}
+
+
 pub struct RawDataArrays {
-    pub mz: Vec<f64>,
-    pub intensity: Vec<f64>
+    pub arrays: BinaryArrayMap
 }
 
 
