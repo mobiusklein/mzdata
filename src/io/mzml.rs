@@ -6,12 +6,13 @@ use std::io;
 use crate::spectrum::params::{Param, ParamList};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{DataArray, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, ArrayType};
+use crate::spectrum::{RawSpectrum};
 
 pub type Bytes = Vec<u8>;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum MzMLParserState {
-    Start,
+    Start = 0,
     Spectrum,
     SpectrumList,
     BinaryDataArrayList,
@@ -29,6 +30,7 @@ pub enum MzMLParserState {
     Activation,
     ParserError,
     SpectrumDone,
+    SpectrumListDone,
 }
 
 
@@ -38,12 +40,18 @@ const BUFFER_SIZE: usize = 10000;
 #[derive(Default)]
 pub struct MzMLSpectrumBuilder {
     pub params: ParamList,
-    pub acquisition: AcquisitionInformation,
+    pub acquisition: Acquisition,
     pub precursor: Precursor,
+
     pub arrays: BinaryArrayMap,
     pub current_array: DataArray,
+
     pub index: usize,
     pub scan_id: String,
+    pub ms_level: u8,
+    pub polarity: ScanPolarity,
+    pub is_profile: ScanSiganlContinuity,
+    pub has_precursor: bool,
 }
 
 pub type ParserResult = Result<MzMLParserState, String>;
@@ -55,12 +63,36 @@ impl MzMLSpectrumBuilder {
 
     pub fn reset(&mut self) {
         self.params.clear();
-        self.acquisition = AcquisitionInformation::default();
+        self.acquisition = Acquisition::default();
         self.arrays.clear();
         self.current_array.clear();
         self.scan_id.clear();
+
         self.precursor = Precursor::default();
         self.index = 0;
+        self.has_precursor = false;
+        self.is_profile = ScanSiganlContinuity::Unknown;
+        self.polarity = ScanPolarity::Unknown;
+    }
+
+    pub fn to_spectrum(&self, spectrum: &mut RawSpectrum)  {
+        let description = &mut spectrum.description;
+
+        description.id = self.scan_id.clone();
+        description.index = self.index;
+        description.is_profile = self.is_profile;
+        description.ms_level = self.ms_level;
+        description.polarity = self.polarity;
+
+        description.params = self.params.clone();
+        description.acquisition = self.acquisition.clone();
+        if self.has_precursor {
+            description.precursor = Some(self.precursor.clone());
+        } else {
+            description.precursor = None;
+        }
+
+        spectrum.arrays = self.arrays.clone();
     }
 
     fn handle_param<B: io::BufRead>(&self, event: &BytesStart, reader: &Reader<B>) -> Param {
@@ -268,6 +300,73 @@ impl MzMLSpectrumBuilder {
         }
     }
 
+    pub fn fill_spectrum(&mut self, param: Param) {
+        match param.name.as_ref() {
+            "ms level" => {
+                self.ms_level = param.coerce().expect("Failed to parse ms level");
+            },
+            "positive scan" => {
+                self.polarity = ScanPolarity::Positive;
+            },
+            "negative scan" => {
+                self.polarity = ScanPolarity::Negative;
+            },
+            "profile spectrum" => {
+                self.is_profile = ScanSiganlContinuity::Profile;
+            },
+            "centroid spectrum" => {
+                self.is_profile = ScanSiganlContinuity::Centroid;
+            },
+            &_ => {
+                self.params.push(param);
+            }
+        };
+    }
+
+    pub fn fill_param_into(&mut self, param: Param, state: MzMLParserState) {
+        match state {
+            MzMLParserState::Spectrum => {
+                self.params.push(param);
+            },
+            MzMLParserState::ScanList => {
+                self.acquisition.params.push(param)
+            }
+            MzMLParserState::Scan => {
+                self.acquisition.scans.last_mut().unwrap().params.push(param)
+            },
+            MzMLParserState::ScanWindowList => {
+                self.acquisition.scans.last_mut().unwrap().params.push(param)
+            },
+            MzMLParserState::ScanWindow => {
+                self.fill_scan_window(param);
+            },
+            MzMLParserState::IsolationWindow => {
+                self.fill_isolation_window(param);
+            },
+            MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
+                self.fill_selected_ion(param);
+            },
+            MzMLParserState::Activation => {
+                match param.name.as_ref() {
+                    "collision energy" | "activation energy" => {
+                        self.precursor.activation.energy = param.coerce().expect("Failed to parse collision energy");
+                    },
+                    &_ => {
+                        self.precursor.activation.params.push(param);
+                    }
+                }
+            },
+            MzMLParserState::BinaryDataArrayList => {},
+            MzMLParserState::BinaryDataArray => {
+                self.fill_binary_data_array(param);
+            },
+            MzMLParserState::Precursor | MzMLParserState::PrecursorList => {
+                self.precursor.params.push(param);
+            },
+            _ => {}
+        };
+    }
+
     pub fn start_element<B: io::BufRead>(&mut self, event: &BytesStart, state: MzMLParserState, reader: &Reader<B>) -> ParserResult {
         let elt_name = event.name();
         match elt_name {
@@ -290,66 +389,43 @@ impl MzMLSpectrumBuilder {
                         }
                     }
                 }
-
                 return Ok(MzMLParserState::Spectrum);
-
             }
             b"spectrumList" => {
                 return Ok(MzMLParserState::SpectrumList);
             }
             b"cvParam" | b"userParam" => {
+                println!("{:?}", event);
                 let param = self.handle_param(event, reader);
-                match state {
-                    MzMLParserState::Spectrum => {
-                        self.params.push(param);
-                    },
-                    MzMLParserState::ScanList => {
-                        self.acquisition.params.push(param)
-                    }
-                    MzMLParserState::Scan => {
-                        self.acquisition.scans.last_mut().unwrap().params.push(param)
-                    },
-                    MzMLParserState::ScanWindowList => {
-                        self.acquisition.scans.last_mut().unwrap().params.push(param)
-                    },
-                    MzMLParserState::ScanWindow => {
-                        self.fill_scan_window(param);
-                    },
-                    MzMLParserState::IsolationWindow => {
-                        self.fill_isolation_window(param);
-                    },
-                    MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
-                        self.fill_selected_ion(param);
-                    },
-                    MzMLParserState::Activation => {
-                        match param.name.as_ref() {
-                            "collision energy" | "activation energy" => {
-                                self.precursor.activation.energy = param.coerce().expect("Failed to parse collision energy");
-                            },
-                            &_ => {
-                                self.precursor.activation.params.push(param);
-                            }
-                        }
-                    },
-                    MzMLParserState::BinaryDataArrayList => {},
-                    MzMLParserState::BinaryDataArray => {
-                        self.fill_binary_data_array(param);
-                    },
-                    MzMLParserState::Precursor | MzMLParserState::PrecursorList => {
-                        self.precursor.params.push(param);
-                    },
-                    _ => {}
-
-                };
+                self.fill_param_into(param, state);
                 return Ok(state);
             },
             b"scanList" => {
                 return Ok(MzMLParserState::ScanList);
             },
             b"scan" => {
+                let mut scan_event = ScanEvent::default();
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            match attr.key {
+                                b"instrumentConfigurationRef" => {
+                                    scan_event.instrument_configuration_id = attr.unescape_and_decode_value(reader).expect("Error decoding id");
+                                },
+                                _ => {}
+                            }
+                        },
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg));
+                        }
+                    }
+                }
+                self.acquisition.scans.push(scan_event);
                 return Ok(MzMLParserState::Scan);
             },
             b"scanWindow" => {
+                let window = ScanWindow::default();
+                self.acquisition.scans.last_mut().expect("Scan window without scan").scan_windows.push(window);
                 return Ok(MzMLParserState::ScanWindow);
             },
             b"scanWindowList" => {
@@ -359,6 +435,22 @@ impl MzMLSpectrumBuilder {
                 return Ok(MzMLParserState::PrecursorList);
             },
             b"precursor" => {
+                self.has_precursor = true;
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            match attr.key {
+                                b"spectrumRef" => {
+                                    self.precursor.precursor_id = attr.unescape_and_decode_value(reader).expect("Error decoding id");
+                                },
+                                _ => {}
+                            }
+                        },
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg));
+                        }
+                    }
+                }
                 return Ok(MzMLParserState::Precursor);
             },
             b"isolationWindow" => {
@@ -387,12 +479,25 @@ impl MzMLSpectrumBuilder {
         return Ok(state);
     }
 
+    pub fn empty_element<B: io::BufRead>(&mut self, event: &BytesStart, state: MzMLParserState, reader: &Reader<B>) -> ParserResult {
+        let elt_name = event.name();
+        match elt_name {
+            b"cvParam" | b"userParam" => {
+                let param = self.handle_param(event, reader);
+                self.fill_param_into(param, state);
+                return Ok(state);
+            },
+            &_ => {}
+        }
+        return Ok(state);
+    }
+
     pub fn end_element(&mut self, event: &BytesEnd, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
         match elt_name {
             b"spectrum" => {
                 return Ok(MzMLParserState::SpectrumDone)
-            }
+            },
             b"scanList" => {
                 return Ok(MzMLParserState::Spectrum)
             },
@@ -429,10 +534,14 @@ impl MzMLSpectrumBuilder {
             b"binaryDataArray" => {
                 let array = self.current_array.clone();
                 self.arrays.add(array);
+                self.current_array.clear();
                 return Ok(MzMLParserState::BinaryDataArrayList)
             },
             b"binary" => {
                 return Ok(MzMLParserState::BinaryDataArray)
+            },
+            b"spectrumList" => {
+                return Ok(MzMLParserState::SpectrumListDone)
             }
             _ => {
 
@@ -471,15 +580,16 @@ impl<R: io::Read> MzMLReader<R> {
         }
     }
 
-    fn _parse_into(mut self, buffer: &mut Bytes, accumulator: &mut MzMLSpectrumBuilder) -> Self {
-        let mut reader = Reader::from_reader(self.handle);
-
+    fn _parse_into(&mut self, buffer: &mut Bytes, accumulator: &mut MzMLSpectrumBuilder) {
+        let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         loop {
             match reader.read_event(buffer) {
                 Ok(Event::Start(ref e)) => {
                     match accumulator.start_element(e, self.state, &reader) {
-                        Ok(state) => {self.state = state;},
+                        Ok(state) => {
+                            self.state = state;
+                        },
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
                             self.error = message;
@@ -504,6 +614,15 @@ impl<R: io::Read> MzMLReader<R> {
                         }
                     }
                 },
+                Ok(Event::Empty(ref e)) => {
+                    match accumulator.empty_element(e, self.state, &reader) {
+                        Ok(state) => {self.state = state;},
+                        Err(message) => {
+                            self.state = MzMLParserState::ParserError;
+                            self.error = message;
+                        }
+                    }
+                }
                 Ok(Event::Eof) => {
                     break;
                 },
@@ -511,16 +630,25 @@ impl<R: io::Read> MzMLReader<R> {
                 _ => {}
             }
             buffer.clear();
+            match self.state {
+                MzMLParserState::SpectrumDone | MzMLParserState::ParserError => {
+                    break;
+                },
+                _ => {}
+            };
+
         }
-        self.handle = reader.into_underlying_reader();
-        return self;
     }
 
-    pub fn get(mut self) {
+    pub fn read_next(&mut self) -> RawSpectrum {
         let mut buffer = Bytes::new();
         let mut accumulator = MzMLSpectrumBuilder::new();
-        self = self._parse_into(&mut buffer, &mut accumulator);
-        println!("{}", self.error);
+        let mut desc = RawSpectrum::default();
+        self._parse_into(&mut buffer, &mut accumulator);
+        accumulator.to_spectrum(&mut desc);
+        let arr = &desc.arrays.byte_buffer_map[&ArrayType::MZArray];
+        println!("{:?}", arr.decode());
+        return desc;
     }
 
 

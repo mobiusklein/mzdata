@@ -126,7 +126,7 @@ pub trait PeakCollection<T: CoordinateLike<C>, C> : ops::Index<usize>
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PeakSet {
     pub peaks: Vec<CentroidPeak>,
 }

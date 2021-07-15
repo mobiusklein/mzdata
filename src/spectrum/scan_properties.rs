@@ -36,19 +36,20 @@ pub type ScanWindowList = Vec<ScanWindow>;
 
 
 #[derive(Default, Debug, Clone)]
-pub struct ScanEventInformation {
+pub struct ScanEvent {
     pub start_time: f64,
     pub injection_time: f32,
     pub scan_windows: ScanWindowList,
+    pub instrument_configuration_id: String,
     pub params: params::ParamList
 }
 
 
-pub type ScanEventList = Vec<ScanEventInformation>;
+pub type ScanEventList = Vec<ScanEvent>;
 
 
 #[derive(Default, Debug, Clone)]
-pub struct AcquisitionInformation {
+pub struct Acquisition {
     pub scans: ScanEventList,
     pub params: params::ParamList
 }
@@ -79,16 +80,46 @@ pub struct Precursor {
     pub activation: Activation
 }
 
+#[repr(i8)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub enum ScanPolarity {
+    Unknown = 0,
+    Positive = 1,
+    Negative = -1
+}
+
+impl Default for ScanPolarity {
+    fn default() -> ScanPolarity {
+        ScanPolarity::Unknown
+    }
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub enum ScanSiganlContinuity {
+    Unknown = 0,
+    Centroid = 1,
+    Profile = 5,
+}
+
+impl Default for ScanSiganlContinuity {
+    fn default() -> ScanSiganlContinuity {
+        ScanSiganlContinuity::Unknown
+    }
+}
+
+
 #[derive(Debug, Default, Clone)]
 pub struct SpectrumDescription {
     pub id: String,
     pub index: usize,
-    pub ms_level: i8,
-    pub time: f32,
-    pub polarity: i8,
-    pub is_profile: i8,
+    pub ms_level: u8,
+
+    pub polarity: ScanPolarity,
+    pub is_profile: ScanSiganlContinuity,
+
     pub params: params::ParamList,
-    pub acquisition: Option<AcquisitionInformation>,
-    pub precursor_information: Option<Precursor>,
+    pub acquisition: Acquisition,
+    pub precursor: Option<Precursor>,
     pub annotations: HashMap<String, String>,
 }

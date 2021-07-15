@@ -16,8 +16,10 @@ pub struct ScanDescription {
     pub id: String,
     pub index: usize,
     pub ms_level: i8,
+
     pub time: f32,
     pub polarity: i8,
+
     pub precursor_information: Option<Precursor>,
     pub annotations: HashMap<String, String>,
 }
