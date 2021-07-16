@@ -5,7 +5,7 @@ use std::option::Option;
 
 use crate::coordinate::{CoordinateLike, MZ, Mass};
 
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Default, Clone, Debug)]
 pub struct CentroidPeak {
     pub mz: f64,
     pub intensity: f32,
@@ -41,20 +41,17 @@ impl cmp::PartialEq<CentroidPeak> for CentroidPeak {
         }
         return true;
     }
-
-    fn ne(&self, other: &CentroidPeak) -> bool {
-        return !(self == other)
-    }
 }
 
 impl CoordinateLike<MZ> for CentroidPeak {
+    #[inline]
     fn get_coordinate(&self) -> f64 {
         return self.mz
     }
 }
 
 
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Default, Clone, Debug)]
 pub struct DeconvolutedPeak {
     pub neutral_mass: f64,
     pub intensity: f32,
@@ -94,19 +91,17 @@ impl cmp::PartialEq<DeconvolutedPeak> for DeconvolutedPeak {
         }
         return true;
     }
-
-    fn ne(&self, other: &DeconvolutedPeak) -> bool {
-        return !(self == other)
-    }
 }
 
 impl CoordinateLike<Mass> for DeconvolutedPeak {
+    #[inline]
     fn get_coordinate(&self) -> f64 {
         return self.neutral_mass
     }
 }
 
 impl CoordinateLike<MZ> for DeconvolutedPeak {
+    #[inline]
     fn get_coordinate(&self) -> f64 {
         let charge_carrier: f64 = 1.007276;
         let charge = self.charge as f64;

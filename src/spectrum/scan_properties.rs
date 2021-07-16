@@ -54,6 +54,19 @@ pub struct Acquisition {
     pub params: params::ParamList
 }
 
+impl Acquisition {
+    pub fn first_scan(&self) -> Option<&ScanEvent> {
+        self.scans.first()
+    }
+
+    pub fn first_scan_mut(&mut self) -> Option<&mut ScanEvent> {
+        if self.scans.len() == 0 {
+            self.scans.push(ScanEvent::default());
+        }
+        return self.scans.first_mut();
+    }
+}
+
 
 #[derive(Debug, Clone, Default)]
 pub struct SelectedIon {

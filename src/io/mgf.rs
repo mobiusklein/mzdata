@@ -6,7 +6,9 @@ use lazy_static::lazy_static;
 
 use crate::peak::{CentroidPeak};
 use crate::peak_set::{PeakSet, PeakCollection};
-use crate::scan::{CentroidScan, ScanDescription, Precursor};
+use crate::spectrum::{Precursor, SpectrumDescription,
+                      SelectedIon, CentroidSpectrum, scan_properties};
+
 
 #[derive(PartialEq, Debug)]
 pub enum MGFParserState {
@@ -50,7 +52,7 @@ impl<R: io::Read> MGFReader<R>{
         return None
     }
 
-    fn handle_scan_header(&mut self, line: &str, description: &mut ScanDescription, peaks: &mut PeakSet) -> bool {
+    fn handle_scan_header(&mut self, line: &str, description: &mut SpectrumDescription, peaks: &mut PeakSet) -> bool {
         let peak_line = match self.parse_peak_from_line(line) {
             Some(peak) => {peaks.push(peak); true}
             None => false
@@ -69,16 +71,22 @@ impl<R: io::Read> MGFReader<R>{
             let value = parts[1];
             match key {
                 "TITLE" => {description.id = String::from(value)},
-                "RTINSECONDS" => {description.time = value.parse().unwrap()},
+                "RTINSECONDS" => {
+                    let scan_ev = description.acquisition.first_scan_mut().expect("Automatically adds scan event");
+                    scan_ev.start_time = value.parse().unwrap()
+                },
                 "PEPMASS" => {
                     let parts: Vec<&str> = value.split_ascii_whitespace().collect();
                     let mz: f64 = parts[0].parse().unwrap();
                     let intensity: f32 = parts[1].parse().unwrap();
                     let mut charge: i32 = 0;
+
                     if parts.len() > 2 {
                         charge = parts[2].parse().unwrap();
                     }
-                    description.precursor_information = Some(Precursor {mz, intensity, charge, ..Default::default()});
+                    description.precursor = Some(Precursor {
+                        ion: SelectedIon {mz, intensity, charge, ..Default::default()},
+                        ..Default::default()});
                 }
                 &_ => {
                     description.annotations.insert(String::from(key.to_lowercase()), String::from(value));
@@ -127,10 +135,15 @@ impl<R: io::Read> MGFReader<R>{
         return true;
     }
 
-    pub fn new_scan(&self) -> CentroidScan {
-        let description: ScanDescription = ScanDescription { ms_level: 2, ..Default::default() };
+    pub fn new_scan(&self) -> CentroidSpectrum {
+        let description: SpectrumDescription = SpectrumDescription {
+            ms_level: 2,
+            is_profile: scan_properties::ScanSiganlContinuity::Centroid,
+            polarity: scan_properties::ScanPolarity::Unknown,
+            ..Default::default() };
+
         let peaks: PeakSet = PeakSet::empty();
-        let scan =  CentroidScan {description, peaks};
+        let scan = CentroidSpectrum {description, peaks};
         return scan;
     }
 
@@ -138,7 +151,7 @@ impl<R: io::Read> MGFReader<R>{
         return self.handle.read_line(buffer);
     }
 
-    pub fn read_next(&mut self) -> Option<CentroidScan> {
+    pub fn read_next(&mut self) -> Option<CentroidSpectrum> {
         let mut scan = self.new_scan();
         match self.read_into(&mut scan) {
             Ok(offset) => if offset > 0 { Some(scan) } else { None },
@@ -148,7 +161,7 @@ impl<R: io::Read> MGFReader<R>{
         }
     }
 
-    pub fn read_into(&mut self, spectrum: &mut CentroidScan) -> Result<usize, String>{
+    pub fn read_into(&mut self, spectrum: &mut CentroidSpectrum) -> Result<usize, String>{
         let mut buffer = String::new();
         let mut work = true;
         let mut offset: usize = 0;
@@ -204,7 +217,7 @@ impl<R: io::Read> MGFReader<R>{
 }
 
 impl<R: io::Read> Iterator for MGFReader<R> {
-    type Item = CentroidScan;
+    type Item = CentroidSpectrum;
 
     fn next(&mut self) -> Option<Self::Item> {
         return self.read_next();
