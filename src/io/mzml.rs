@@ -1,9 +1,11 @@
+use std::io;
+use std::io::{Read, Seek, BufReader};
+
 use quick_xml::Reader;
 use quick_xml::events::{Event, BytesStart, BytesText, BytesEnd};
 use quick_xml::Error as XMLError;
 
-use std::io;
-use std::io::{Read, Seek, BufReader};
+use indexmap::IndexMap;
 
 use crate::spectrum::params::{Param, ParamList};
 use crate::spectrum::scan_properties::*;
@@ -595,8 +597,14 @@ pub struct MzMLReader<R: Read> {
     pub handle: BufReader<R>,
     pub error: String,
     buffer: Bytes,
+    pub index: IndexMap<String, u64>
 }
 
+fn error_message_from(buffer_text: &str, err: &XMLError, state: &MzMLParserState) -> String {
+    format!(
+        "Error at position {}: {:?} in state {:?}",
+        buffer_text, err, state)
+}
 
 impl<R: Read> MzMLReader<R> {
     pub fn new(file: R) -> MzMLReader<R> {
@@ -605,7 +613,8 @@ impl<R: Read> MzMLReader<R> {
             handle: handle,
             state: MzMLParserState::Start,
             error: String::from(""),
-            buffer: Bytes::new()
+            buffer: Bytes::new(),
+            index: IndexMap::new(),
         }
     }
 
@@ -657,17 +666,19 @@ impl<R: Read> MzMLReader<R> {
                     break;
                 },
                 Err(err) => {
-                    println!("Error: {:?}", err);
-                    match err {
+                    match &err {
                         XMLError::EndEventMismatch {expected, found: _found} => {
-                            if expected == "" {
+                            if expected == "" && self.state == MzMLParserState::Resume {
                                 continue;
+                            } else {
+                                self.error = error_message_from(
+                                    &String::from_utf8_lossy(&self.buffer), &err, &self.state);
+                                self.state = MzMLParserState::ParserError;
                             }
                         },
                         _ => {
-                            self.error = format!(
-                                "Error at position {}: {:?} in state {:?}",
-                                String::from_utf8_lossy(&self.buffer), err, self.state);
+                            self.error = error_message_from(
+                                &String::from_utf8_lossy(&self.buffer), &err, &self.state);
                             self.state = MzMLParserState::ParserError;
                         }
                     }
@@ -718,7 +729,6 @@ impl<R: Read> MzMLReader<R> {
                 Some(spectrum)
             },
             Err(_err) => {
-                println!("read_next Err {:?}", _err);
                 None
             }
         }
@@ -735,7 +745,80 @@ impl<R: io::Read + io::Seek> Iterator for MzMLReader<R> {
 
 
 impl <R: io::Read + io::Seek> MzMLReader<R> {
+    pub fn new_indexed(file: R) -> MzMLReader<R> {
+        let mut reader = Self::new(file);
+        reader.build_index();
+        reader
+    }
+
     pub fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
         self.handle.seek(pos)
+    }
+
+    pub fn build_index(&mut self) -> u64 {
+        let start = self.handle.stream_position().expect("Failed to save restore location");
+        self.seek(io::SeekFrom::Start(0)).expect("Failed to reset stream to beginning");
+        let mut reader = Reader::from_reader(&mut self.handle);
+        reader.trim_text(true);
+        let mut offset = 0 as u64;
+        loop {
+            match reader.read_event(&mut self.buffer) {
+                Ok(Event::Start(ref e)) => {
+                    let element_name = e.name();
+                    if element_name == b"spectrum" {
+                        // Hit a spectrum, extract ID and save current offset
+
+                        for attr_parsed in e.attributes() {
+                            match attr_parsed {
+                                Ok(attr) => {
+                                    match attr.key {
+                                        b"id" => {
+                                            let scan_id = attr.unescape_and_decode_value(&reader).expect("Error decoding id");
+                                            // This count is off by 2 because somehow the < and > bytes are removed?
+                                            self.index.insert(scan_id, (reader.buffer_position() - e.len() - 2) as u64);
+                                            break;
+                                        },
+                                        &_ => {}
+                                    };
+                                },
+                                Err(_msg) => {
+
+                                }
+                            }
+                        }
+                    }
+                },
+                Ok(Event::End(ref e)) => {
+                    let element_name = e.name();
+                    if element_name == b"spectrumList" {
+                        break;
+                    }
+                },
+                Ok(Event::Eof) => {
+                    break;
+                }
+                _ => {}
+            };
+            self.buffer.clear();
+        }
+        offset = reader.buffer_position() as u64;
+        self.handle.seek(io::SeekFrom::Start(start)).expect("Failed to restore location");
+        return offset;
+    }
+
+    pub fn get_spectrum_by_id(&mut self, id: &str) -> Option<RawSpectrum> {
+        let offset_ref = self.index.get(id);
+        let offset = *offset_ref.expect("Failed to retrieve offset");
+        drop(offset_ref);
+        self.seek(io::SeekFrom::Start(offset)).expect("Failed to move seek to offset");
+        return self.read_next();
+    }
+
+    pub fn get_spectrum_by_index(&mut self, index: usize) -> Option<RawSpectrum> {
+        let (_id, offset) = self.index.get_index(index)?;
+        drop(_id);
+        let byte_offset = *offset;
+        self.seek(io::SeekFrom::Start(byte_offset)).ok()?;
+        return self.read_next();
     }
 }
