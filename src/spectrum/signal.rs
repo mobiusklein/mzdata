@@ -113,6 +113,9 @@ impl Debug for DataArray {
     }
 }
 
+/// A type to represent a base64-encoded, possibly compressed data
+/// array of a fixed size, usually numeric, type. It can be decoded,
+/// and it can
 impl<'transient, 'lifespan: 'transient> DataArray {
     pub fn new() -> DataArray {
         DataArray {
@@ -169,18 +172,22 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    pub fn coerce_from<T: Clone + Sized>(&'lifespan self, buffer: Cow<'transient, Bytes>) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
+        let n = buffer.len();
+        let z = mem::size_of::<T>();
+        if n % z != 0 {
+            return Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        }
+        let m = n / z;
+        unsafe {
+            Ok(Cow::Borrowed(slice::from_raw_parts(buffer.as_ptr() as *const T, m)))
+        }
+    }
+
     pub fn coerce<T: Clone + Sized>(&'lifespan self) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
         match self.decode() {
             Ok(data) => {
-                let n = data.len();
-                let z = mem::size_of::<T>();
-                if n % z != 0 {
-                    return Err(ArrayRetrievalError::DataTypeSizeMismatch)
-                }
-                let m = n / z;
-                unsafe {
-                    Ok(Cow::Borrowed(slice::from_raw_parts(data.as_ptr() as *const T, m)))
-                }
+                self.coerce_from(data)
             },
             Err(err) => Err(err)
         }

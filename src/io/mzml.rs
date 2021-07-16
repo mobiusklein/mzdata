@@ -760,7 +760,6 @@ impl <R: io::Read + io::Seek> MzMLReader<R> {
         self.seek(io::SeekFrom::Start(0)).expect("Failed to reset stream to beginning");
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
-        let mut offset = 0 as u64;
         loop {
             match reader.read_event(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => {
@@ -801,7 +800,7 @@ impl <R: io::Read + io::Seek> MzMLReader<R> {
             };
             self.buffer.clear();
         }
-        offset = reader.buffer_position() as u64;
+        let offset = reader.buffer_position() as u64;
         self.handle.seek(io::SeekFrom::Start(start)).expect("Failed to restore location");
         return offset;
     }
