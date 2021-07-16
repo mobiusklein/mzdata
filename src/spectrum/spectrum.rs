@@ -2,8 +2,8 @@ use std::borrow;
 
 use crate::spectrum::scan_properties::{SpectrumDescription, Acquisition, Precursor, ScanSiganlContinuity};
 use crate::spectrum::signal::{BinaryArrayMap, ArrayType};
-use crate::peak::CentroidPeak;
-use crate::peak_set::{PeakSet, PeakCollection};
+use crate::peaks::CentroidPeak;
+use crate::peaks::{PeakSet, PeakCollection};
 
 
 pub trait SpectrumBehavior {

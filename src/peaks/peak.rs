@@ -3,7 +3,7 @@ use std::cmp;
 use std::hash;
 use std::option::Option;
 
-use crate::coordinate::{CoordinateLike, MZ, Mass};
+use crate::peaks::coordinate::{IndexedCoordinate, CoordinateLike, MZ, Mass};
 
 #[derive(Default, Clone, Debug)]
 pub struct CentroidPeak {
@@ -47,6 +47,16 @@ impl CoordinateLike<MZ> for CentroidPeak {
     #[inline]
     fn get_coordinate(&self) -> f64 {
         return self.mz
+    }
+}
+
+impl IndexedCoordinate<MZ> for CentroidPeak {
+    fn get_index(&self) -> u32 {
+        self.index
+    }
+
+    fn set_index(&mut self, index: u32) {
+        self.index = index;
     }
 }
 
@@ -97,6 +107,16 @@ impl CoordinateLike<Mass> for DeconvolutedPeak {
     #[inline]
     fn get_coordinate(&self) -> f64 {
         return self.neutral_mass
+    }
+}
+
+impl IndexedCoordinate<Mass> for DeconvolutedPeak {
+    fn get_index(&self) -> u32 {
+        self.index
+    }
+
+    fn set_index(&mut self, index: u32) {
+        self.index = index;
     }
 }
 

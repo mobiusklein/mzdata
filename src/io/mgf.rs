@@ -4,8 +4,7 @@ use std::io;
 use regex::Regex;
 use lazy_static::lazy_static;
 
-use crate::peak::{CentroidPeak};
-use crate::peak_set::{PeakSet, PeakCollection};
+use crate::peaks::{CentroidPeak,PeakSet, PeakCollection};
 use crate::spectrum::{Precursor, SpectrumDescription,
                       SelectedIon, CentroidSpectrum, scan_properties};
 

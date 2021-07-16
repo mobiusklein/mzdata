@@ -3,7 +3,7 @@ use std::path;
 // use std::env;
 
 use structured::spectrum::{SpectrumBehavior, ScanSiganlContinuity};
-use structured::peak_set::{PeakCollection};
+use structured::peaks::{PeakCollection};
 use structured::io::mzml;
 
 fn main() {

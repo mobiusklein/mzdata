@@ -1,10 +1,9 @@
 use std::fmt;
 use std::ops;
-use std::option::Option;
-
-use crate::peak::{CentroidPeak};
+use std::marker;
 use crate::mass_error::{MassErrorType};
-use crate::coordinate::{CoordinateLike, MZ};
+use super::peak::{CentroidPeak};
+use super::coordinate::{CoordinateLike, IndexedCoordinate, MZ};
 
 
 pub trait PeakCollection<T: CoordinateLike<C>, C> : ops::Index<usize>
@@ -126,26 +125,31 @@ pub trait PeakCollection<T: CoordinateLike<C>, C> : ops::Index<usize>
 }
 
 
-#[derive(Clone, Debug, Default)]
-pub struct PeakSet {
-    pub peaks: Vec<CentroidPeak>,
+#[derive(Default, Clone, Debug)]
+pub struct PeakSetVec<P: IndexedCoordinate<C>, C> {
+    pub peaks: Vec<P>,
+    phantom: marker::PhantomData<C>
 }
 
-impl PeakSet {
 
-    pub fn new(mut peaks: Vec<CentroidPeak>) -> Self {
+impl<P: IndexedCoordinate<C>, C>  PeakSetVec<P, C> {
+
+    pub fn new(mut peaks: Vec<P>) -> Self {
         Self::_sort(&mut peaks);
-        let inst: Self = Self { peaks: peaks, };
+        let inst: Self = Self {
+            peaks: peaks,
+            phantom: marker::PhantomData
+        };
         return inst;
     }
 
     pub fn empty() -> Self {
-        let inst: Self = Self { peaks: Vec::new() };
+        let inst: Self = Self { peaks: Vec::new(), phantom: marker::PhantomData };
         return inst;
     }
 
-    pub fn from<V: Iterator>(peaks: V, sort: bool) -> Self where V: Iterator<Item=CentroidPeak> {
-        let peaks: Vec<CentroidPeak> = peaks.collect();
+    pub fn from<V: Iterator>(peaks: V, sort: bool) -> Self where V: Iterator<Item=P> {
+        let peaks: Vec<P> = peaks.collect();
         if sort {
             return Self::new(peaks)
         } else {
@@ -153,32 +157,32 @@ impl PeakSet {
         }
     }
 
-    pub fn wrap(peaks: Vec<CentroidPeak>) -> Self{
-        let inst: Self = Self { peaks: peaks };
+    pub fn wrap(peaks: Vec<P>) -> Self{
+        let inst: Self = Self { peaks: peaks, phantom: marker::PhantomData };
         return inst;
     }
 
-    fn _sort(peaks: &mut Vec<CentroidPeak>) {
+    fn _sort(peaks: &mut Vec<P>) {
         peaks.sort_by(|a, b| a.partial_cmp(b).unwrap());
         for (i, p) in peaks.iter_mut().enumerate() {
-            p.index = i as u32;
+            p.set_index(i as u32);
         }
     }
 }
 
-impl PeakCollection<CentroidPeak, MZ> for PeakSet {
+impl<P: IndexedCoordinate<C>, C> PeakCollection<P, C> for PeakSetVec<P, C> {
     fn sort(&mut self) {
         Self::_sort(&mut self.peaks);
     }
 
-    fn push(&mut self, peak: CentroidPeak) {
+    fn push(&mut self, peak: P) {
         let n = self.len();
         match self.peaks.last() {
             Some(p) => {
                 if p <= &peak {
                     self.peaks.push(peak);
                     let fin = &mut self.peaks[n];
-                    fin.index = n as u32;
+                    fin.set_index(n as u32);
                 } else {
                     self.peaks.push(peak);
                     self.sort();
@@ -187,7 +191,7 @@ impl PeakCollection<CentroidPeak, MZ> for PeakSet {
             None => {
                 self.peaks.push(peak);
                 let fin = &mut self.peaks[n];
-                fin.index = n as u32;
+                fin.set_index(n as u32);
             }
         }
     }
@@ -196,11 +200,11 @@ impl PeakCollection<CentroidPeak, MZ> for PeakSet {
         return self.peaks.len();
     }
 
-    fn get_item(&self, i: usize) -> &CentroidPeak {
+    fn get_item(&self, i: usize) -> &P {
         return &self[i]
     }
 
-    fn get_slice(&self, i: ops::Range<usize>) -> &[CentroidPeak] {
+    fn get_slice(&self, i: ops::Range<usize>) -> &[P] {
         return &self.peaks[i]
     }
 
@@ -209,57 +213,87 @@ impl PeakCollection<CentroidPeak, MZ> for PeakSet {
     }
 }
 
-
-impl fmt::Display for PeakSet {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "PeakSet([").expect("Write failed");
-        let n = self.len() - 1;
-        for (i, peak) in self.into_iter().enumerate() {
-            write!(f, "{}", peak).expect("Write failed");
-            if i != n {
-                write!(f, ", ").expect("Write failed");
-            }
-        }
-        write!(f, "])").expect("Write failed");
-        return Ok(())
-    }
-}
-
-impl ops::Index<usize> for PeakSet {
-    type Output = CentroidPeak;
+impl<P: IndexedCoordinate<C>, C> ops::Index<usize> for PeakSetVec<P, C> {
+    type Output = P;
 
     fn index(&self, i: usize) -> &Self::Output {
         return &(self.peaks[i]);
     }
 }
 
-impl<'a> IntoIterator for &'a PeakSet {
-    type Item = &'a CentroidPeak;
-    type IntoIter = PeakSetIter<'a>;
+impl<P: IndexedCoordinate<C>, C> fmt::Display for PeakSetVec<P, C> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "PeakSetVec(<{} Peaks>)", self.len())?;
+        return Ok(())
+    }
+}
+
+impl<'a, P: IndexedCoordinate<C>, C> IntoIterator for &'a PeakSetVec<P, C> {
+    type Item = &'a P;
+    type IntoIter = PeakSetIter<'a, P, C>;
 
     fn into_iter(self) -> Self::IntoIter {
         return PeakSetIter::new(self);
     }
 }
 
-// Iterators
+impl<'a, P: IndexedCoordinate<C>, C> IntoIterator for &'a mut PeakSetVec<P, C> {
+    type Item = &'a mut P;
+    type IntoIter = PeakSetIterMut<'a, P, C>;
 
-pub struct PeakSetIter<'a> {
-    iter: std::slice::Iter<'a, CentroidPeak>
+    fn into_iter(self) -> Self::IntoIter {
+        return PeakSetIterMut::new(self);
+    }
 }
 
-impl<'a> PeakSetIter<'a> {
-    fn new(peaks: &'a PeakSet) -> PeakSetIter<'a> {
+/// Iterators
+
+// Reference Iterator
+
+pub struct PeakSetIter<'a, P, C> {
+    iter: std::slice::Iter<'a, P>,
+    phantom: marker::PhantomData<C>
+}
+
+impl<'a, P: IndexedCoordinate<C>, C> PeakSetIter<'a, P, C> {
+    fn new(peaks: &'a PeakSetVec<P, C>) -> PeakSetIter<'a, P, C> {
         return PeakSetIter {
-            iter: peaks.peaks.iter()
+            iter: peaks.peaks.iter(),
+            phantom: marker::PhantomData
         }
     }
 }
 
-impl<'a> Iterator for PeakSetIter<'a> {
-    type Item = &'a CentroidPeak;
+impl<'a, P: IndexedCoordinate<C>, C> Iterator for PeakSetIter<'a, P, C> {
+    type Item = &'a P;
 
     fn next(&mut self) -> Option<Self::Item> {
         return self.iter.next()
     }
 }
+
+// Mutable Reference Iterator
+
+pub struct PeakSetIterMut<'a, P, C> {
+    iter: std::slice::IterMut<'a, P>,
+    phantom: marker::PhantomData<C>
+}
+
+impl<'a, P: IndexedCoordinate<C>, C> PeakSetIterMut<'a, P, C> {
+    fn new(peaks: &'a mut PeakSetVec<P, C>) -> PeakSetIterMut<'a, P, C> {
+        return PeakSetIterMut {
+            iter: peaks.peaks.iter_mut(),
+            phantom: marker::PhantomData
+        }
+    }
+}
+
+impl<'a, P, C> Iterator for PeakSetIterMut<'a, P, C> {
+    type Item = &'a mut P;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        return self.iter.next()
+    }
+}
+
+pub type PeakSet = PeakSetVec<CentroidPeak, MZ>;
