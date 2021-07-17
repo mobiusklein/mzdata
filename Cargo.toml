@@ -9,7 +9,7 @@ keywods = [
 ]
 
 description = "A library to read mass spectrometry data formats"
-
+license = "Apache2"
 repository = "https://github.com/mobiusklein/mzdata"
 
 
@@ -23,11 +23,12 @@ src = "src/main.rs"
 name = "mzdata"
 src = "src/lib.rs"
 
+[profile.release]
+lto = true
 
 [dependencies]
 regex = "1"
 lazy_static = "1.4.0"
-serde = { version = "1.0", features = [ "derive" ] }
 quick-xml = { version = "0.22", features = [ "serialize" ] }
 base64 = "0.13.0"
 flate2 = "1.0.20"

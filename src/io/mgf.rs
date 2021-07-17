@@ -1,5 +1,7 @@
 use std::io;
 use std::io::prelude::*;
+use std::io::SeekFrom;
+use std::str;
 
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
@@ -9,6 +11,8 @@ use crate::peaks::{CentroidPeak, PeakCollection, PeakSet};
 use crate::spectrum::{
     scan_properties, CentroidSpectrum, Precursor, SelectedIon, SpectrumDescription,
 };
+
+use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanIterator, ScanSource};
 
 #[derive(PartialEq, Debug)]
 pub enum MGFParserState {
@@ -20,7 +24,6 @@ pub enum MGFParserState {
     Done,
     Error,
 }
-
 
 pub struct MGFReader<R: io::Read> {
     pub handle: io::BufReader<R>,
@@ -71,10 +74,10 @@ impl<R: io::Read> MGFReader<R> {
         };
         if peak_line {
             self.state = MGFParserState::Peaks;
-            return true;
+            true
         } else if line == "END IONS" {
             self.state = MGFParserState::Between;
-            return true;
+            true
         } else if line.contains('=') {
             let parts: Vec<&str> = line.splitn(2, '=').collect();
             let key = parts[0];
@@ -160,7 +163,7 @@ impl<R: io::Read> MGFReader<R> {
     pub fn new_scan(&self) -> CentroidSpectrum {
         let description: SpectrumDescription = SpectrumDescription {
             ms_level: 2,
-            is_profile: scan_properties::ScanSiganlContinuity::Centroid,
+            signal_continuity: scan_properties::SignalContinuity::Centroid,
             polarity: scan_properties::ScanPolarity::Unknown,
             ..Default::default()
         };
@@ -252,5 +255,143 @@ impl<R: io::Read> Iterator for MGFReader<R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.read_next()
+    }
+}
+
+impl<R: io::Read + io::Seek> MGFReader<R> {
+    /// Construct a new MzMLReader and build an offset index
+    /// using [`Self::build_index`]
+    pub fn new_indexed(file: R) -> MGFReader<R> {
+        let mut reader = Self::new(file);
+        reader.build_index();
+        reader
+    }
+
+    pub fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.handle.seek(pos)
+    }
+
+    pub fn build_index(&mut self) -> u64 {
+        let mut offset: u64 = 0;
+        let mut last_start: u64 = 0;
+
+        let mut found_start = false;
+
+        let start = self
+            .handle
+            .stream_position()
+            .expect("Failed to save restore location");
+        self.seek(SeekFrom::Start(0))
+            .expect("Failed to reset stream to beginning");
+
+        let mut buffer: Vec<u8> = Vec::new();
+
+        loop {
+            buffer.clear();
+            let b = match self.handle.read_until(b'\n', &mut buffer) {
+                Ok(b) => b,
+                Err(err) => {
+                    panic!("Error while reading file: {}", err);
+                }
+            };
+            if b == 0 {
+                break;
+            }
+            if buffer.starts_with(b"BEGIN IONS") {
+                found_start = true;
+                last_start = offset;
+            } else if found_start && buffer.starts_with(b"TITLE=") {
+                match str::from_utf8(&buffer[6..]) {
+                    Ok(string) => {
+                        self.index.insert(string.to_owned(), last_start);
+                    }
+                    Err(_err) => {}
+                };
+                found_start = false;
+                last_start = 0;
+            }
+            offset += b as u64;
+        }
+        self.seek(SeekFrom::Start(start))
+            .expect("Failed to restore location");
+        offset
+    }
+}
+
+impl<R: io::Read + io::Seek> ScanIterator<CentroidSpectrum> for MGFReader<R> {}
+
+impl<R: io::Read + io::Seek> ScanSource<CentroidSpectrum> for MGFReader<R> {
+    /// Retrieve a spectrum by it's native ID
+    fn get_spectrum_by_id(&mut self, id: &str) -> Option<CentroidSpectrum> {
+        let offset_ref = self.index.get(id);
+        let offset = *offset_ref.expect("Failed to retrieve offset");
+        let start = self
+            .handle
+            .stream_position()
+            .expect("Failed to save checkpoint");
+        self.seek(SeekFrom::Start(offset))
+            .expect("Failed to move seek to offset");
+        let result = self.read_next();
+        self.seek(SeekFrom::Start(start))
+            .expect("Failed to restore offset");
+        result
+    }
+
+    /// Retrieve a spectrum by it's integer index
+    fn get_spectrum_by_index(&mut self, index: usize) -> Option<CentroidSpectrum> {
+        let (_id, offset) = self.index.get_index(index)?;
+        let byte_offset = *offset;
+        let start = self
+            .handle
+            .stream_position()
+            .expect("Failed to save checkpoint");
+        self.seek(SeekFrom::Start(byte_offset)).ok()?;
+        let result = self.read_next();
+        self.seek(SeekFrom::Start(start))
+            .expect("Failed to restore offset");
+        result
+    }
+
+    /// Return the data stream to the beginning
+    fn reset(&mut self) -> &Self {
+        self.seek(SeekFrom::Start(0))
+            .expect("Failed to reset file stream");
+        self
+    }
+
+    fn get_index(&self) -> &IndexMap<String, u64> {
+        &self.index
+    }
+}
+
+impl<R: io::Read + io::Seek> RandomAccessScanIterator<CentroidSpectrum> for MGFReader<R> {
+    fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
+        match self._offset_of_id(id) {
+            Some(offset) => match self.seek(SeekFrom::Start(offset)) {
+                Ok(_) => Ok(self),
+                Err(err) => Err(ScanAccessError::IOError(err)),
+            },
+            None => Err(ScanAccessError::ScanNotFound),
+        }
+    }
+
+    fn start_from_index(&mut self, index: usize) -> Result<&Self, ScanAccessError> {
+        match self._offset_of_index(index) {
+            Some(offset) => match self.seek(SeekFrom::Start(offset)) {
+                Ok(_) => Ok(self),
+                Err(err) => Err(ScanAccessError::IOError(err)),
+            },
+            None => Err(ScanAccessError::ScanNotFound),
+        }
+    }
+
+    fn start_from_time(&mut self, time: f64) -> Result<&Self, ScanAccessError> {
+        match self._offset_of_time(time) {
+            Some(offset) => match self.seek(SeekFrom::Start(offset)) {
+                Ok(_) => Ok(self),
+                Err(err) => Err(ScanAccessError::IOError(err)),
+            },
+            None => Err(ScanAccessError::ScanNotFound),
+        }
     }
 }

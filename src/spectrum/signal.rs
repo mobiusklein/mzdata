@@ -13,6 +13,7 @@ use base64;
 use flate2::write::ZlibDecoder;
 
 use super::params::ParamList;
+use crate::peaks::{PeakCollection, PeakSet};
 
 type Bytes = Vec<u8>;
 
@@ -27,7 +28,7 @@ pub enum BinaryDataArrayType {
 }
 
 impl BinaryDataArrayType {
-    pub fn size_of(&self) -> usize {
+    pub const fn size_of(&self) -> usize {
         match self {
             BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => 1,
             BinaryDataArrayType::Float32 | BinaryDataArrayType::Int32 => 4,
@@ -79,6 +80,17 @@ impl Default for ArrayType {
     }
 }
 
+impl ArrayType {
+    pub const fn preferred_dtype(&self) -> BinaryDataArrayType {
+        match self {
+            ArrayType::MZArray => BinaryDataArrayType::Float64,
+            ArrayType::IntensityArray => BinaryDataArrayType::Float32,
+            ArrayType::ChargeArray => BinaryDataArrayType::Int32,
+            _ => BinaryDataArrayType::Float32,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum ArrayRetrievalError {
     NotFound,
@@ -114,6 +126,38 @@ impl Debug for DataArray {
 impl<'transient, 'lifespan: 'transient> DataArray {
     pub fn new() -> DataArray {
         DataArray {
+            ..Default::default()
+        }
+    }
+
+    pub fn from_name(name: &ArrayType) -> DataArray {
+        DataArray {
+            dtype: name.preferred_dtype(),
+            name: name.clone(),
+            compression: BinaryCompressionType::Decoded,
+            ..Default::default()
+        }
+    }
+
+    pub fn from_name_and_type(name: &ArrayType, dtype: BinaryDataArrayType) -> DataArray {
+        DataArray {
+            dtype,
+            name: name.clone(),
+            compression: BinaryCompressionType::Decoded,
+            ..Default::default()
+        }
+    }
+
+    pub fn from_name_type_size(
+        name: &ArrayType,
+        dtype: BinaryDataArrayType,
+        size: usize,
+    ) -> DataArray {
+        DataArray {
+            dtype,
+            name: name.clone(),
+            data: Bytes::with_capacity(size),
+            compression: BinaryCompressionType::Decoded,
             ..Default::default()
         }
     }
@@ -271,7 +315,7 @@ pub struct BinaryArrayMap {
     pub byte_buffer_map: HashMap<ArrayType, DataArray>,
 }
 
-impl<'lifespan, 'transient: 'lifespan> BinaryArrayMap {
+impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
     pub fn new() -> BinaryArrayMap {
         BinaryArrayMap {
             ..Default::default()
@@ -288,5 +332,57 @@ impl<'lifespan, 'transient: 'lifespan> BinaryArrayMap {
 
     pub fn clear(&mut self) {
         self.byte_buffer_map.clear();
+    }
+
+    pub fn mzs(&'lifespan self) -> Cow<'transient, [f64]> {
+        let mz_array = self
+            .get(&ArrayType::MZArray)
+            .expect("Did not find m/z array")
+            .to_f64()
+            .expect("Failed to decode m/z array");
+        mz_array
+    }
+
+    pub fn intensities(&'lifespan self) -> Cow<'transient, [f32]> {
+        let intensities = self
+            .get(&ArrayType::IntensityArray)
+            .expect("Did not find intensity array")
+            .to_f32()
+            .expect("Failed to decode intensity array");
+        intensities
+    }
+
+    pub fn from(peaks: PeakSet) -> BinaryArrayMap {
+        let mut arrays = BinaryArrayMap::new();
+
+        let mut mz_array = DataArray::from_name_type_size(
+            &ArrayType::MZArray,
+            BinaryDataArrayType::Float64,
+            peaks.len() * BinaryDataArrayType::Float64.size_of(),
+        );
+
+        let mut intensity_array = DataArray::from_name_type_size(
+            &ArrayType::IntensityArray,
+            BinaryDataArrayType::Float32,
+            peaks.len() * BinaryDataArrayType::Float32.size_of(),
+        );
+
+        mz_array.compression = BinaryCompressionType::Decoded;
+        intensity_array.compression = BinaryCompressionType::Decoded;
+
+        for p in peaks.iter() {
+            let mz: f64 = p.mz;
+            let inten: f32 = p.intensity;
+
+            let raw_bytes: [u8; mem::size_of::<f64>()] = unsafe { mem::transmute(mz) };
+            mz_array.data.extend(raw_bytes);
+
+            let raw_bytes: [u8; mem::size_of::<f32>()] = unsafe { mem::transmute(inten) };
+            intensity_array.data.extend(raw_bytes);
+        }
+
+        arrays.add(mz_array);
+        arrays.add(intensity_array);
+        arrays
     }
 }

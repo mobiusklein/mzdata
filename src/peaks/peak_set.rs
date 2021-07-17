@@ -5,6 +5,8 @@ use std::fmt;
 use std::marker;
 use std::ops;
 
+/// A trait for an ordered container of mass spectral peaks. The trait
+/// interoperates with [`CoordinateLike`] to make searching efficient.
 pub trait PeakCollection<T: CoordinateLike<C>, C>: ops::Index<usize>
 where
     <Self as ops::Index<usize>>::Output: CoordinateLike<C>,
@@ -139,6 +141,8 @@ where
     }
 }
 
+/// Represent a sorted list of processed mass spectral peaks. It is a
+/// concrete implementation of [`PeakCollection`] based on a [`Vec`].
 #[derive(Default, Clone, Debug)]
 pub struct PeakSetVec<P: IndexedCoordinate<C>, C> {
     pub peaks: Vec<P>,
@@ -149,7 +153,7 @@ impl<P: IndexedCoordinate<C>, C> PeakSetVec<P, C> {
     pub fn new(mut peaks: Vec<P>) -> Self {
         Self::_sort(&mut peaks);
         Self {
-            peaks: peaks,
+            peaks,
             phantom: marker::PhantomData,
         }
     }
@@ -179,7 +183,7 @@ impl<P: IndexedCoordinate<C>, C> PeakSetVec<P, C> {
 
     pub fn wrap(peaks: Vec<P>) -> Self {
         Self {
-            peaks: peaks,
+            peaks,
             phantom: marker::PhantomData,
         }
     }

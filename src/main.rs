@@ -4,7 +4,7 @@ use std::path;
 
 use mzdata::io::{mzml, ScanSource};
 use mzdata::peaks::PeakCollection;
-use mzdata::spectrum::{ScanSiganlContinuity, SpectrumBehavior};
+use mzdata::spectrum::{SignalContinuity, SpectrumBehavior};
 
 fn main() {
     // let args: Vec<String> = env::args().collect();
@@ -21,7 +21,7 @@ fn main() {
             scan.id(),
             scan.description().ms_level
         );
-        if scan.description().is_profile != ScanSiganlContinuity::Centroid {
+        if scan.description().signal_continuity != SignalContinuity::Centroid {
             println!("Profile spectrum");
         } else {
             let cscan = scan.into_centroid().expect("Coercion to centroid failed");

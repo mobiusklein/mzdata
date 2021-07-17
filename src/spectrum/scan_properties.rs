@@ -103,15 +103,15 @@ impl Default for ScanPolarity {
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub enum ScanSiganlContinuity {
+pub enum SignalContinuity {
     Unknown = 0,
     Centroid = 1,
     Profile = 5,
 }
 
-impl Default for ScanSiganlContinuity {
-    fn default() -> ScanSiganlContinuity {
-        ScanSiganlContinuity::Unknown
+impl Default for SignalContinuity {
+    fn default() -> SignalContinuity {
+        SignalContinuity::Unknown
     }
 }
 
@@ -122,7 +122,7 @@ pub struct SpectrumDescription {
     pub ms_level: u8,
 
     pub polarity: ScanPolarity,
-    pub is_profile: ScanSiganlContinuity,
+    pub signal_continuity: SignalContinuity,
 
     pub params: params::ParamList,
     pub acquisition: Acquisition,

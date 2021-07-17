@@ -1,5 +1,5 @@
 use std::io;
-use std::io::{BufReader, Read, Seek};
+use std::io::{BufReader, Read, Seek, SeekFrom};
 
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
@@ -7,14 +7,13 @@ use quick_xml::Reader;
 
 use indexmap::IndexMap;
 
+use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanIterator, ScanSource};
 use crate::spectrum::params::{Param, ParamList};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
 };
 use crate::spectrum::RawSpectrum;
-use super::{ScanIterator, ScanSource};
-
 
 pub type Bytes = Vec<u8>;
 
@@ -52,7 +51,6 @@ pub enum MzMLParserState {
     ParserError,
 }
 
-
 #[derive(Debug, Clone)]
 pub enum MzMLParserError {
     NoError,
@@ -83,7 +81,7 @@ struct MzMLSpectrumBuilder {
     pub scan_id: String,
     pub ms_level: u8,
     pub polarity: ScanPolarity,
-    pub is_profile: ScanSiganlContinuity,
+    pub signal_continuity: SignalContinuity,
     pub has_precursor: bool,
 }
 
@@ -106,7 +104,7 @@ impl MzMLSpectrumBuilder {
         self.precursor = Precursor::default();
         self.index = 0;
         self.has_precursor = false;
-        self.is_profile = ScanSiganlContinuity::Unknown;
+        self.signal_continuity = SignalContinuity::Unknown;
         self.polarity = ScanPolarity::Unknown;
     }
 
@@ -115,7 +113,7 @@ impl MzMLSpectrumBuilder {
 
         description.id = self.scan_id.clone();
         description.index = self.index;
-        description.is_profile = self.is_profile;
+        description.signal_continuity = self.signal_continuity;
         description.ms_level = self.ms_level;
         description.polarity = self.polarity;
 
@@ -135,7 +133,7 @@ impl MzMLSpectrumBuilder {
 
         description.id = self.scan_id;
         description.index = self.index;
-        description.is_profile = self.is_profile;
+        description.signal_continuity = self.signal_continuity;
         description.ms_level = self.ms_level;
         description.polarity = self.polarity;
 
@@ -150,7 +148,12 @@ impl MzMLSpectrumBuilder {
         spectrum.arrays = self.arrays;
     }
 
-    fn handle_param<B: io::BufRead>(&self, event: &BytesStart, reader: &Reader<B>, state: MzMLParserState) -> Result<Param, MzMLParserError> {
+    fn handle_param<B: io::BufRead>(
+        &self,
+        event: &BytesStart,
+        reader: &Reader<B>,
+        state: MzMLParserState,
+    ) -> Result<Param, MzMLParserError> {
         let mut param = Param::new();
         for attr_parsed in event.attributes() {
             match attr_parsed {
@@ -186,15 +189,17 @@ impl MzMLSpectrumBuilder {
                     b"unitCvRef" => {}
                     _ => {}
                 },
-                Err(msg) => {
-                    return Err(self.handle_xml_error(msg, state))
-                }
+                Err(msg) => return Err(self.handle_xml_error(msg, state)),
             }
         }
         Ok(param)
     }
 
-    pub fn handle_xml_error(&self, error: quick_xml::Error, state: MzMLParserState) -> MzMLParserError {
+    pub fn handle_xml_error(
+        &self,
+        error: quick_xml::Error,
+        state: MzMLParserState,
+    ) -> MzMLParserError {
         MzMLParserError::XMLError(state, format!("{:?}", error))
     }
 
@@ -378,10 +383,10 @@ impl MzMLSpectrumBuilder {
                 self.polarity = ScanPolarity::Negative;
             }
             "profile spectrum" => {
-                self.is_profile = ScanSiganlContinuity::Profile;
+                self.signal_continuity = SignalContinuity::Profile;
             }
             "centroid spectrum" => {
-                self.is_profile = ScanSiganlContinuity::Centroid;
+                self.signal_continuity = SignalContinuity::Centroid;
             }
             &_ => {
                 self.params.push(param);
@@ -479,14 +484,13 @@ impl MzMLSpectrumBuilder {
                 let mut scan_event = ScanEvent::default();
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
-                        Ok(attr) => match attr.key {
-                            b"instrumentConfigurationRef" => {
+                        Ok(attr) => {
+                            if attr.key == b"instrumentConfigurationRef" {
                                 scan_event.instrument_configuration_id = attr
                                     .unescape_and_decode_value(reader)
                                     .expect("Error decoding id");
                             }
-                            _ => {}
-                        },
+                        }
                         Err(msg) => {
                             return Err(self.handle_xml_error(msg, state));
                         }
@@ -515,14 +519,13 @@ impl MzMLSpectrumBuilder {
                 self.has_precursor = true;
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
-                        Ok(attr) => match attr.key {
-                            b"spectrumRef" => {
+                        Ok(attr) => {
+                            if attr.key == b"spectrumRef" {
                                 self.precursor.precursor_id = attr
                                     .unescape_and_decode_value(reader)
                                     .expect("Error decoding id");
                             }
-                            _ => {}
-                        },
+                        }
                         Err(msg) => {
                             return Err(self.handle_xml_error(msg, state));
                         }
@@ -564,17 +567,13 @@ impl MzMLSpectrumBuilder {
     ) -> ParserResult {
         let elt_name = event.name();
         match elt_name {
-            b"cvParam" | b"userParam" => {
-                match self.handle_param(event, reader, state) {
-                    Ok(param) => {
-                        self.fill_param_into(param, state);
-                        return Ok(state)
-                    },
-                    Err(err) => {
-                        return Err(err)
-                    }
+            b"cvParam" | b"userParam" => match self.handle_param(event, reader, state) {
+                Ok(param) => {
+                    self.fill_param_into(param, state);
+                    return Ok(state);
                 }
-            }
+                Err(err) => return Err(err),
+            },
             &_ => {}
         }
         Ok(state)
@@ -614,19 +613,15 @@ impl MzMLSpectrumBuilder {
     }
 
     pub fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult {
-        match state {
-            MzMLParserState::Binary => {
-                let bin = event
-                    .unescaped()
-                    .expect("Failed to unescape binary data array content");
-                self.current_array.data = Bytes::from(&*bin);
-            }
-            _ => {}
+        if state == MzMLParserState::Binary {
+            let bin = event
+                .unescaped()
+                .expect("Failed to unescape binary data array content");
+            self.current_array.data = Bytes::from(&*bin);
         }
         Ok(state)
     }
 }
-
 
 /// An mzML parser that supports iteration and random access
 pub struct MzMLReader<R: Read> {
@@ -641,7 +636,7 @@ impl<R: Read> MzMLReader<R> {
     pub fn new(file: R) -> MzMLReader<R> {
         let handle = BufReader::with_capacity(BUFFER_SIZE, file);
         MzMLReader {
-            handle: handle,
+            handle,
             state: MzMLParserState::Start,
             error: MzMLParserError::default(),
             buffer: Bytes::new(),
@@ -649,7 +644,10 @@ impl<R: Read> MzMLReader<R> {
         }
     }
 
-    fn _parse_into(&mut self, accumulator: &mut MzMLSpectrumBuilder) -> Result<usize, MzMLParserError> {
+    fn _parse_into(
+        &mut self,
+        accumulator: &mut MzMLSpectrumBuilder,
+    ) -> Result<usize, MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         let mut offset: usize = 0;
@@ -711,13 +709,17 @@ impl<R: Read> MzMLReader<R> {
                             continue;
                         } else {
                             self.error = MzMLParserError::IncompleteElementError(
-                                String::from_utf8_lossy(&self.buffer).to_owned().to_string(), self.state);
+                                String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
+                                self.state,
+                            );
                             self.state = MzMLParserState::ParserError;
                         }
                     }
                     _ => {
                         self.error = MzMLParserError::IncompleteElementError(
-                            String::from_utf8_lossy(&self.buffer).to_owned().to_string(), self.state);
+                            String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
+                            self.state,
+                        );
                         self.state = MzMLParserState::ParserError;
                     }
                 },
@@ -762,7 +764,7 @@ impl<R: Read> MzMLReader<R> {
     }
 }
 
-impl<R: io::Read + io::Seek> Iterator for MzMLReader<R> {
+impl<R: io::Read> Iterator for MzMLReader<R> {
     type Item = RawSpectrum;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -777,33 +779,78 @@ impl<R: io::Read + io::Seek> ScanSource<RawSpectrum> for MzMLReader<R> {
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<RawSpectrum> {
         let offset_ref = self.index.get(id);
         let offset = *offset_ref.expect("Failed to retrieve offset");
-        self.seek(io::SeekFrom::Start(offset))
+        let start = self
+            .handle
+            .stream_position()
+            .expect("Failed to save checkpoint");
+        self.seek(SeekFrom::Start(offset))
             .expect("Failed to move seek to offset");
-        self.read_next()
+        let result = self.read_next();
+        self.seek(SeekFrom::Start(start))
+            .expect("Failed to restore offset");
+        result
     }
 
     /// Retrieve a spectrum by it's integer index
     fn get_spectrum_by_index(&mut self, index: usize) -> Option<RawSpectrum> {
         let (_id, offset) = self.index.get_index(index)?;
         let byte_offset = *offset;
-        self.seek(io::SeekFrom::Start(byte_offset)).ok()?;
-        self.read_next()
+        let start = self
+            .handle
+            .stream_position()
+            .expect("Failed to save checkpoint");
+        self.seek(SeekFrom::Start(byte_offset)).ok()?;
+        let result = self.read_next();
+        self.seek(SeekFrom::Start(start))
+            .expect("Failed to restore offset");
+        result
     }
 
     /// Return the data stream to the beginning
     fn reset(&mut self) -> &Self {
-        self.seek(io::SeekFrom::Start(0)).expect("Failed to reset file stream");
+        self.seek(SeekFrom::Start(0))
+            .expect("Failed to reset file stream");
         self
     }
 
-    /// Retrieve the number of spectra in source file
-    fn len(&self) -> usize {
-        self.index.len()
+    fn get_index(&self) -> &IndexMap<String, u64> {
+        &self.index
+    }
+}
+
+impl<R: io::Read + io::Seek> RandomAccessScanIterator<RawSpectrum> for MzMLReader<R> {
+    fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
+        match self._offset_of_id(id) {
+            Some(offset) => match self.seek(SeekFrom::Start(offset)) {
+                Ok(_) => Ok(self),
+                Err(err) => Err(ScanAccessError::IOError(err)),
+            },
+            None => Err(ScanAccessError::ScanNotFound),
+        }
+    }
+
+    fn start_from_index(&mut self, index: usize) -> Result<&Self, ScanAccessError> {
+        match self._offset_of_index(index) {
+            Some(offset) => match self.seek(SeekFrom::Start(offset)) {
+                Ok(_) => Ok(self),
+                Err(err) => Err(ScanAccessError::IOError(err)),
+            },
+            None => Err(ScanAccessError::ScanNotFound),
+        }
+    }
+
+    fn start_from_time(&mut self, time: f64) -> Result<&Self, ScanAccessError> {
+        match self._offset_of_time(time) {
+            Some(offset) => match self.seek(SeekFrom::Start(offset)) {
+                Ok(_) => Ok(self),
+                Err(err) => Err(ScanAccessError::IOError(err)),
+            },
+            None => Err(ScanAccessError::ScanNotFound),
+        }
     }
 }
 
 impl<R: io::Read + io::Seek> MzMLReader<R> {
-
     /// Construct a new MzMLReader and build an offset index
     /// using [`Self::build_index`]
     pub fn new_indexed(file: R) -> MzMLReader<R> {
@@ -812,7 +859,7 @@ impl<R: io::Read + io::Seek> MzMLReader<R> {
         reader
     }
 
-    pub fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+    pub fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.handle.seek(pos)
     }
 
@@ -822,7 +869,7 @@ impl<R: io::Read + io::Seek> MzMLReader<R> {
             .handle
             .stream_position()
             .expect("Failed to save restore location");
-        self.seek(io::SeekFrom::Start(0))
+        self.seek(SeekFrom::Start(0))
             .expect("Failed to reset stream to beginning");
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
@@ -871,7 +918,7 @@ impl<R: io::Read + io::Seek> MzMLReader<R> {
         }
         let offset = reader.buffer_position() as u64;
         self.handle
-            .seek(io::SeekFrom::Start(start))
+            .seek(SeekFrom::Start(start))
             .expect("Failed to restore location");
         offset
     }
