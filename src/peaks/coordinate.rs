@@ -1,4 +1,3 @@
-
 #[derive(Default, Debug, Clone, Copy)]
 pub struct MZ {}
 #[derive(Default, Debug, Clone, Copy)]
@@ -15,11 +14,11 @@ pub enum CoordinateDimension {
     IonMobility(IonMobility),
 }
 
-pub trait CoordinateLike<T> : PartialOrd {
+pub trait CoordinateLike<T>: PartialOrd {
     fn get_coordinate(&self) -> f64;
 }
 
-pub trait IndexedCoordinate<T> : CoordinateLike<T> {
+pub trait IndexedCoordinate<T>: CoordinateLike<T> {
     fn get_index(&self) -> u32;
     fn set_index(&mut self, index: u32);
 }

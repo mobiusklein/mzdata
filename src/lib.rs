@@ -1,16 +1,15 @@
-pub mod mass_error;
 pub mod io;
-pub mod spectrum;
+pub mod mass_error;
 pub mod peaks;
+pub mod spectrum;
 
+pub use crate::peaks::coordinate::{CoordinateDimension, CoordinateLike, Mass, MZ};
 
-pub use crate::peaks::coordinate::{CoordinateDimension, CoordinateLike, MZ, Mass};
-
-pub use crate::peaks::peak::{CentroidPeak, DeconvolutedPeak};
-pub use crate::peaks::{PeakSet, PeakCollection};
 pub use crate::mass_error::MassErrorType;
+pub use crate::peaks::peak::{CentroidPeak, DeconvolutedPeak};
+pub use crate::peaks::{PeakCollection, PeakSet};
 
-pub use crate::io::mgf::{MGFReader};
-pub use crate::io::mzml::{MzMLReader};
+pub use crate::io::mgf::MGFReader;
+pub use crate::io::mzml::MzMLReader;
 
-pub use crate::spectrum::{RawSpectrum, CentroidSpectrum, SpectrumBehavior};
+pub use crate::spectrum::{CentroidSpectrum, RawSpectrum, SpectrumBehavior};

@@ -101,6 +101,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mz-data-rs"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "flate2",
+ "indexmap",
+ "lazy_static",
+ "num-traits",
+ "quick-xml",
+ "regex",
+ "serde",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -172,20 +186,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "structured"
-version = "0.1.0"
-dependencies = [
- "base64",
- "flate2",
- "indexmap",
- "lazy_static",
- "num-traits",
- "quick-xml",
- "regex",
- "serde",
 ]
 
 [[package]]

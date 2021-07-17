@@ -1,13 +1,14 @@
-use std::io::prelude::*;
 use std::io;
+use std::io::prelude::*;
 
-use regex::Regex;
+use indexmap::IndexMap;
 use lazy_static::lazy_static;
+use regex::Regex;
 
-use crate::peaks::{CentroidPeak,PeakSet, PeakCollection};
-use crate::spectrum::{Precursor, SpectrumDescription,
-                      SelectedIon, CentroidSpectrum, scan_properties};
-
+use crate::peaks::{CentroidPeak, PeakCollection, PeakSet};
+use crate::spectrum::{
+    scan_properties, CentroidSpectrum, Precursor, SelectedIon, SpectrumDescription,
+};
 
 #[derive(PartialEq, Debug)]
 pub enum MGFParserState {
@@ -26,10 +27,10 @@ pub struct MGFReader<R: io::Read> {
     pub state: MGFParserState,
     pub offset: usize,
     pub error: String,
+    pub index: IndexMap<String, u64>,
 }
 
-
-impl<R: io::Read> MGFReader<R>{
+impl<R: io::Read> MGFReader<R> {
     fn parse_peak_from_line(&mut self, line: &str) -> Option<CentroidPeak> {
         let mut chars = line.chars();
         let first = chars.next().unwrap();
@@ -46,34 +47,47 @@ impl<R: io::Read> MGFReader<R>{
             }
             let mz: f64 = parts[0].parse().unwrap();
             let intensity: f32 = parts[1].parse().unwrap();
-            return Some(CentroidPeak {mz, intensity, ..Default::default()});
+            return Some(CentroidPeak {
+                mz,
+                intensity,
+                ..Default::default()
+            });
         }
-        return None
+        None
     }
 
-    fn handle_scan_header(&mut self, line: &str, description: &mut SpectrumDescription, peaks: &mut PeakSet) -> bool {
+    fn handle_scan_header(
+        &mut self,
+        line: &str,
+        description: &mut SpectrumDescription,
+        peaks: &mut PeakSet,
+    ) -> bool {
         let peak_line = match self.parse_peak_from_line(line) {
-            Some(peak) => {peaks.push(peak); true}
-            None => false
+            Some(peak) => {
+                peaks.push(peak);
+                true
+            }
+            None => false,
         };
         if peak_line {
             self.state = MGFParserState::Peaks;
-            return true
-        }
-        else if line == "END IONS" {
+            return true;
+        } else if line == "END IONS" {
             self.state = MGFParserState::Between;
-            return true
-        }
-        else if line.contains('=') {
+            return true;
+        } else if line.contains('=') {
             let parts: Vec<&str> = line.splitn(2, '=').collect();
             let key = parts[0];
             let value = parts[1];
             match key {
-                "TITLE" => {description.id = String::from(value)},
+                "TITLE" => description.id = String::from(value),
                 "RTINSECONDS" => {
-                    let scan_ev = description.acquisition.first_scan_mut().expect("Automatically adds scan event");
+                    let scan_ev = description
+                        .acquisition
+                        .first_scan_mut()
+                        .expect("Automatically adds scan event");
                     scan_ev.start_time = value.parse().unwrap()
-                },
+                }
                 "PEPMASS" => {
                     let parts: Vec<&str> = value.split_ascii_whitespace().collect();
                     let mz: f64 = parts[0].parse().unwrap();
@@ -84,54 +98,63 @@ impl<R: io::Read> MGFReader<R>{
                         charge = parts[2].parse().unwrap();
                     }
                     description.precursor = Some(Precursor {
-                        ion: SelectedIon {mz, intensity, charge, ..Default::default()},
-                        ..Default::default()});
+                        ion: SelectedIon {
+                            mz,
+                            intensity,
+                            charge,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    });
                 }
                 &_ => {
-                    description.annotations.insert(String::from(key.to_lowercase()), String::from(value));
+                    description
+                        .annotations
+                        .insert(String::from(key.to_lowercase()), String::from(value));
                 }
             };
 
-            return true;
+            true
         } else {
             self.state = MGFParserState::Error;
-            self.error = String::from(format!("Unexpected content {} in scan header", line));
-            return false;
+            self.error = format!("Unexpected content {} in scan header", line);
+            false
         }
     }
 
-    fn handle_peak(&mut self, line: &str, peaks: &mut PeakSet) -> bool{
+    fn handle_peak(&mut self, line: &str, peaks: &mut PeakSet) -> bool {
         let peak_line = match self.parse_peak_from_line(line) {
-            Some(peak) => {peaks.push(peak); return true}
-            None => false
+            Some(peak) => {
+                peaks.push(peak);
+                return true;
+            }
+            None => false,
         };
         if peak_line {
-            return true
-        }
-        else if line == "END IONS" {
+            true
+        } else if line == "END IONS" {
             self.state = MGFParserState::Between;
-            return false;
-        }
-        else {
+            false
+        } else {
             self.state = MGFParserState::Error;
-            self.error = String::from(format!("Unexpected content {} in peak list", line));
-            return false;
+            self.error = format!("Unexpected content {} in peak list", line);
+            false
         }
     }
 
     fn handle_start(&mut self, line: &str) -> bool {
-        if line.contains("=") {}
-        else if line == "BEGIN IONS" {
+        if line.contains('=') {
+        } else if line == "BEGIN IONS" {
             self.state = MGFParserState::ScanHeaders;
         }
-        return true;
+        true
     }
 
     fn handle_between(&mut self, line: &str) -> bool {
         if line == "BEGIN IONS" {
             self.state = MGFParserState::ScanHeaders;
         }
-        return true;
+        true
     }
 
     pub fn new_scan(&self) -> CentroidSpectrum {
@@ -139,28 +162,34 @@ impl<R: io::Read> MGFReader<R>{
             ms_level: 2,
             is_profile: scan_properties::ScanSiganlContinuity::Centroid,
             polarity: scan_properties::ScanPolarity::Unknown,
-            ..Default::default() };
+            ..Default::default()
+        };
 
         let peaks: PeakSet = PeakSet::empty();
-        let scan = CentroidSpectrum {description, peaks};
-        return scan;
+        CentroidSpectrum { description, peaks }
     }
 
     fn read_line(&mut self, buffer: &mut String) -> io::Result<usize> {
-        return self.handle.read_line(buffer);
+        self.handle.read_line(buffer)
     }
 
     pub fn read_next(&mut self) -> Option<CentroidSpectrum> {
         let mut scan = self.new_scan();
         match self.read_into(&mut scan) {
-            Ok(offset) => if offset > 0 { Some(scan) } else { None },
+            Ok(offset) => {
+                if offset > 0 {
+                    Some(scan)
+                } else {
+                    None
+                }
+            }
             Err(message) => {
                 panic!("{}", message);
             }
         }
     }
 
-    pub fn read_into(&mut self, spectrum: &mut CentroidSpectrum) -> Result<usize, String>{
+    pub fn read_into(&mut self, spectrum: &mut CentroidSpectrum) -> Result<usize, String> {
         let mut buffer = String::new();
         let mut work = true;
         let mut offset: usize = 0;
@@ -168,22 +197,22 @@ impl<R: io::Read> MGFReader<R>{
         let peaks = &mut spectrum.peaks;
 
         while work {
-            buffer.truncate(0);
+            buffer.clear();
             let b = match self.read_line(&mut buffer) {
                 Ok(b) => {
                     if b == 0 {
                         work = false;
                     }
                     b
-                },
+                }
                 Err(err) => {
-                    return Err(String::from(format!("Error while reading file: {}", err)));
+                    return Err(format!("Error while reading file: {}", err));
                 }
             };
             offset += b;
             if b == 0 {
                 self.state = MGFParserState::Done;
-                break
+                break;
             }
             let line = buffer.trim();
             let n = line.len();
@@ -192,26 +221,29 @@ impl<R: io::Read> MGFReader<R>{
             }
             if self.state == MGFParserState::Start {
                 work = self.handle_start(line);
-            }
-            else if self.state == MGFParserState::Between {
+            } else if self.state == MGFParserState::Between {
                 work = self.handle_between(line);
-            }
-            else if self.state == MGFParserState::ScanHeaders {
+            } else if self.state == MGFParserState::ScanHeaders {
                 work = self.handle_scan_header(line, description, peaks)
-            }
-            else if self.state == MGFParserState::Peaks {
+            } else if self.state == MGFParserState::Peaks {
                 work = self.handle_peak(line, peaks);
             }
             if matches!(self.state, MGFParserState::Error) {
                 panic!("MGF Parsing Error: {}", self.error);
             }
         }
-        return Ok(offset);
+        Ok(offset)
     }
 
     pub fn new(file: R) -> MGFReader<R> {
         let handle = io::BufReader::with_capacity(500, file);
-        return MGFReader {handle, state: MGFParserState::Start, offset: 0, error: String::from("")}
+        MGFReader {
+            handle,
+            state: MGFParserState::Start,
+            offset: 0,
+            error: String::new(),
+            index: IndexMap::new(),
+        }
     }
 }
 
@@ -219,6 +251,6 @@ impl<R: io::Read> Iterator for MGFReader<R> {
     type Item = CentroidSpectrum;
 
     fn next(&mut self) -> Option<Self::Item> {
-        return self.read_next();
+        self.read_next()
     }
 }
