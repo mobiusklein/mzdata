@@ -2,6 +2,16 @@
 name = "mzdata"
 version = "0.1.0"
 edition = "2018"
+keywods = [
+    'mass spectrometry',
+    'mzml',
+    'mgf'
+]
+
+description = "A library to read mass spectrometry data formats"
+
+repository = "https://github.com/mobiusklein/mzdata"
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [[bin]]
