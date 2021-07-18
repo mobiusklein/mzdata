@@ -3,7 +3,6 @@ use std::io::prelude::*;
 use std::io::SeekFrom;
 use std::str;
 
-use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -13,6 +12,8 @@ use crate::spectrum::{
 };
 
 use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanIterator, ScanSource};
+use super::offset_index::OffsetIndex;
+
 
 #[derive(PartialEq, Debug)]
 pub enum MGFParserState {
@@ -30,7 +31,7 @@ pub struct MGFReader<R: io::Read> {
     pub state: MGFParserState,
     pub offset: usize,
     pub error: String,
-    pub index: IndexMap<String, u64>,
+    pub index: OffsetIndex,
 }
 
 impl<R: io::Read> MGFReader<R> {
@@ -245,7 +246,7 @@ impl<R: io::Read> MGFReader<R> {
             state: MGFParserState::Start,
             offset: 0,
             error: String::new(),
-            index: IndexMap::new(),
+            index: OffsetIndex::new("spectrum".to_owned()),
         }
     }
 }
@@ -324,7 +325,7 @@ impl<R: io::Read + io::Seek> ScanSource<CentroidSpectrum> for MGFReader<R> {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<CentroidSpectrum> {
         let offset_ref = self.index.get(id);
-        let offset = *offset_ref.expect("Failed to retrieve offset");
+        let offset = offset_ref.expect("Failed to retrieve offset");
         let start = self
             .handle
             .stream_position()
@@ -340,7 +341,7 @@ impl<R: io::Read + io::Seek> ScanSource<CentroidSpectrum> for MGFReader<R> {
     /// Retrieve a spectrum by it's integer index
     fn get_spectrum_by_index(&mut self, index: usize) -> Option<CentroidSpectrum> {
         let (_id, offset) = self.index.get_index(index)?;
-        let byte_offset = *offset;
+        let byte_offset = offset;
         let start = self
             .handle
             .stream_position()
@@ -359,7 +360,7 @@ impl<R: io::Read + io::Seek> ScanSource<CentroidSpectrum> for MGFReader<R> {
         self
     }
 
-    fn get_index(&self) -> &IndexMap<String, u64> {
+    fn get_index(&self) -> &OffsetIndex {
         &self.index
     }
 }
@@ -393,5 +394,55 @@ impl<R: io::Read + io::Seek> RandomAccessScanIterator<CentroidSpectrum> for MGFR
             },
             None => Err(ScanAccessError::ScanNotFound),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::path;
+    use std::fs;
+    use crate::spectrum::spectrum::SpectrumBehavior;
+
+    #[test]
+    fn test_reader() {
+        let path = path::Path::new("./test/data/small.mgf");
+        let file = fs::File::open(path).expect("Test file doesn't exist");
+        let reader = MGFReader::new(file);
+        let mut ms1_count = 0;
+        let mut msn_count = 0;
+        for scan in reader {
+            let level = scan.ms_level();
+            if level == 1 {
+                ms1_count += 1;
+            } else {
+                msn_count += 1;
+            }
+        }
+        assert_eq!(ms1_count, 0);
+        assert_eq!(msn_count, 34);
+    }
+
+    #[test]
+    fn test_reader_indexed() {
+        let path = path::Path::new("./test/data/small.mgf");
+        let file = fs::File::open(path).expect("Test file doesn't exist");
+        let mut reader = MGFReader::new_indexed(file);
+
+        let n = reader.len();
+        let mut ms1_count = 0;
+        let mut msn_count = 0;
+
+        for i in (0..n).rev() {
+            let scan = reader.get_spectrum_by_index(i).expect("Missing spectrum");
+            let level = scan.ms_level();
+            if level == 1 {
+                ms1_count += 1;
+            } else {
+                msn_count += 1;
+            }
+        }
+        assert_eq!(ms1_count, 0);
+        assert_eq!(msn_count, 34);
     }
 }

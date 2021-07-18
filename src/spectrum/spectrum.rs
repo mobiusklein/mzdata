@@ -14,9 +14,13 @@ pub trait SpectrumBehavior {
         &self.description().acquisition
     }
 
-    fn precursor(&self) -> &Option<Precursor> {
+    fn precursor(&self) -> Option<&Precursor> {
         let desc = self.description();
-        &desc.precursor
+        if let Some(precursor) = &desc.precursor {
+            Some(precursor)
+        } else {
+            None
+        }
     }
 
     fn start_time(&self) -> f64 {
@@ -25,6 +29,10 @@ pub trait SpectrumBehavior {
             Some(evt) => evt.start_time,
             None => 0.0,
         }
+    }
+
+    fn ms_level(&self) -> u8 {
+        self.description().ms_level
     }
 
     fn id(&self) -> &str {

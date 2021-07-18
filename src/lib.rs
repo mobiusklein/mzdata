@@ -2,6 +2,8 @@ pub mod io;
 pub mod mass_error;
 pub mod peaks;
 pub mod spectrum;
+pub mod meta;
+pub mod params;
 
 pub use crate::peaks::coordinate::{CoordinateDimension, CoordinateLike, Mass, MZ};
 

@@ -33,4 +33,4 @@ quick-xml = { version = "0.22", features = [ "serialize" ] }
 base64 = "0.13.0"
 flate2 = "1.0.20"
 num-traits = "0.2"
-indexmap = "1.7.0"
+indexmap = { version = "1.7.0", features = [ "serde" ] }

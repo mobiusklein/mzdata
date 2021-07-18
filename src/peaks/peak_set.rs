@@ -338,3 +338,30 @@ impl<'a, P, C> Iterator for PeakSetIterMut<'a, P, C> {
 }
 
 pub type PeakSet = PeakSetVec<CentroidPeak, MZ>;
+
+
+#[cfg(test)]
+mod test {
+    use std::fs;
+    use crate::io::{MGFReader};
+
+    use super::*;
+
+    #[test]
+    fn test_sequence_behavior() {
+        let mut reader = MGFReader::new(
+            fs::File::open("./test/data/small.mgf").expect(
+                "Missing test file"));
+        let scan = reader.next().expect("Failed to read first spectrum");
+        let peaks = scan.peaks;
+
+        assert_eq!(peaks.len(), 485);
+        assert!((peaks[0].mz - 231.3888).abs() < 1e-3);
+
+        for peak in &peaks {
+            assert!(peak.mz > 231.0);
+        }
+    }
+
+
+}

@@ -12,7 +12,7 @@ use num_traits::Num;
 use base64;
 use flate2::write::ZlibDecoder;
 
-use super::params::ParamList;
+use crate::params::ParamList;
 use crate::peaks::{PeakCollection, PeakSet};
 
 type Bytes = Vec<u8>;

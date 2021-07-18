@@ -1,8 +1,8 @@
 use std::io;
 
-use indexmap::IndexMap;
-
 use crate::spectrum::SpectrumBehavior;
+
+use super::OffsetIndex;
 
 pub trait ScanIterator<S: SpectrumBehavior>: Iterator<Item = S> {}
 
@@ -15,13 +15,13 @@ pub trait ScanSource<S: SpectrumBehavior>: ScanIterator<S> {
     }
 
     fn _offset_of_id(&self, id: &str) -> Option<u64> {
-        self.get_index().get(id).map(|offset| *offset)
+        self.get_index().get(id).map(|offset| offset)
     }
 
     fn _offset_of_index(&self, index: usize) -> Option<u64> {
         self.get_index()
             .get_index(index)
-            .map(|(_id, offset)| *offset)
+            .map(|(_id, offset)| offset)
     }
 
     fn _offset_of_time(&mut self, time: f64) -> Option<u64> {
@@ -37,7 +37,7 @@ pub trait ScanSource<S: SpectrumBehavior>: ScanIterator<S> {
     /// Retrieve a spectrum by it's integer index
     fn get_spectrum_by_index(&mut self, index: usize) -> Option<S>;
 
-    fn get_index(&self) -> &IndexMap<String, u64>;
+    fn get_index(&self) -> &OffsetIndex;
 
     /// Retrieve a spectrum by its scan start time
     fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {

@@ -5,10 +5,10 @@ use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
 use quick_xml::Reader;
 
-use indexmap::IndexMap;
 
 use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanIterator, ScanSource};
-use crate::spectrum::params::{Param, ParamList};
+use super::offset_index::OffsetIndex;
+use crate::params::{Param, ParamList};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
@@ -20,8 +20,33 @@ pub type Bytes = Vec<u8>;
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum MzMLParserState {
     Start = 0,
-
     Resume,
+
+    // Top-level metadata
+    CVList,
+    FileDescription,
+    FileContents,
+    SourceFileList,
+    SourceFile,
+
+    ReferenceParamGroupList,
+    ReferenceParamGroup,
+
+    SoftwareList,
+    Software,
+
+    InstrumentConfigurationList,
+    InstrumentConfiguration,
+    ComponentList,
+    Source,
+    Analyzer,
+    Detector,
+
+    DataProcessingList,
+    DataProcessing,
+    ProcessingMethod,
+
+    // Spectrum and Chromatogram List Elements
 
     Spectrum,
     SpectrumDone,
@@ -629,7 +654,7 @@ pub struct MzMLReader<R: Read> {
     pub handle: BufReader<R>,
     pub error: MzMLParserError,
     buffer: Bytes,
-    pub index: IndexMap<String, u64>,
+    pub index: OffsetIndex,
 }
 
 impl<R: Read> MzMLReader<R> {
@@ -640,7 +665,7 @@ impl<R: Read> MzMLReader<R> {
             state: MzMLParserState::Start,
             error: MzMLParserError::default(),
             buffer: Bytes::new(),
-            index: IndexMap::new(),
+            index: OffsetIndex::new("spectrum".to_owned()),
         }
     }
 
@@ -778,7 +803,7 @@ impl<R: io::Read + io::Seek> ScanSource<RawSpectrum> for MzMLReader<R> {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<RawSpectrum> {
         let offset_ref = self.index.get(id);
-        let offset = *offset_ref.expect("Failed to retrieve offset");
+        let offset = offset_ref.expect("Failed to retrieve offset");
         let start = self
             .handle
             .stream_position()
@@ -794,7 +819,7 @@ impl<R: io::Read + io::Seek> ScanSource<RawSpectrum> for MzMLReader<R> {
     /// Retrieve a spectrum by it's integer index
     fn get_spectrum_by_index(&mut self, index: usize) -> Option<RawSpectrum> {
         let (_id, offset) = self.index.get_index(index)?;
-        let byte_offset = *offset;
+        let byte_offset = offset;
         let start = self
             .handle
             .stream_position()
@@ -813,7 +838,7 @@ impl<R: io::Read + io::Seek> ScanSource<RawSpectrum> for MzMLReader<R> {
         self
     }
 
-    fn get_index(&self) -> &IndexMap<String, u64> {
+    fn get_index(&self) -> &OffsetIndex {
         &self.index
     }
 }
@@ -921,5 +946,58 @@ impl<R: io::Read + io::Seek> MzMLReader<R> {
             .seek(SeekFrom::Start(start))
             .expect("Failed to restore location");
         offset
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use std::fs;
+    use std::path;
+    use super::*;
+    use crate::spectrum::spectrum::SpectrumBehavior;
+
+    #[test]
+    fn reader_from_file() {
+        let path = path::Path::new("./test/data/small.mzML");
+        let file = fs::File::open(path).expect("Test file doesn't exist");
+        let reader = MzMLReader::new(file);
+        let mut ms1_count = 0;
+        let mut msn_count = 0;
+        for scan in reader {
+            let level = scan.ms_level();
+            if level == 1 {
+                ms1_count += 1;
+            } else {
+                msn_count += 1;
+            }
+        }
+        assert_eq!(ms1_count, 14);
+        assert_eq!(msn_count, 34);
+    }
+
+    #[test]
+    fn reader_from_file_indexed() {
+        let path = path::Path::new("./test/data/small.mzML");
+        let file = fs::File::open(path).expect("Test file doesn't exist");
+        let mut reader = MzMLReader::new_indexed(file);
+
+        let n = reader.len();
+        assert_eq!(n, 48);
+
+        let mut ms1_count = 0;
+        let mut msn_count = 0;
+
+        for i in (0..n).rev() {
+            let scan = reader.get_spectrum_by_index(i).expect("Missing spectrum");
+            let level = scan.ms_level();
+            if level == 1 {
+                ms1_count += 1;
+            } else {
+                msn_count += 1;
+            }
+        }
+        assert_eq!(ms1_count, 14);
+        assert_eq!(msn_count, 34);
     }
 }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::params;
+use crate::params;
 
 #[derive(Debug, Clone, Copy)]
 pub enum IsolationWindowState {
