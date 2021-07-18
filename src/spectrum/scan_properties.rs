@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::params;
 
 #[derive(Debug, Clone, Copy)]
+#[repr(i8)]
 pub enum IsolationWindowState {
     Unknown = 0,
     Offset,
@@ -17,10 +18,15 @@ impl Default for IsolationWindowState {
 }
 
 #[derive(Default, Debug, Clone)]
+/// The interval around the precursor ion that was isolated in the precursor scan.
+/// Although an isolation window may be specified either with explicit bounds or
+/// offsets from the target, this data structure always uses explicit bounds.
 pub struct IsolationWindow {
     pub target: f64,
     pub lower_bound: f64,
     pub upper_bound: f64,
+    /// Describes the decision making process used to establish the bounds of the
+    /// window from the source file.
     pub flags: IsolationWindowState,
 }
 
@@ -33,6 +39,8 @@ pub struct ScanWindow {
 pub type ScanWindowList = Vec<ScanWindow>;
 
 #[derive(Default, Debug, Clone)]
+/// Describes a single scan event. Unless additional post-processing is done,
+/// there is usually only one event per spectrum.
 pub struct ScanEvent {
     pub start_time: f64,
     pub injection_time: f32,
@@ -44,6 +52,8 @@ pub struct ScanEvent {
 pub type ScanEventList = Vec<ScanEvent>;
 
 #[derive(Default, Debug, Clone)]
+/// Describe the series of acquisition events that constructed the spectrum
+/// being described.
 pub struct Acquisition {
     pub scans: ScanEventList,
     pub params: params::ParamList,
@@ -63,14 +73,19 @@ impl Acquisition {
 }
 
 #[derive(Debug, Clone, Default)]
+/// Describes a single selected ion from a precursor isolation
 pub struct SelectedIon {
+    /// The selected ion's m/z as reported, may not be the monoisotopic peak.
     pub mz: f64,
     pub intensity: f32,
-    pub charge: i32,
+    /// The reported precursor ion's charge state. May be absent in
+    /// some source files.
+    pub charge: Option<i32>,
     pub params: params::ParamList,
 }
 
 #[derive(Debug, Default, Clone)]
+/// Describes the activation method used to dissociate the precursor ion
 pub struct Activation {
     pub method: String,
     pub energy: f32,
@@ -78,13 +93,20 @@ pub struct Activation {
 }
 
 #[derive(Debug, Default, Clone)]
+/// Describes the precursor ion of the owning spectrum.
 pub struct Precursor {
+    /// Describes the selected ion's properties
     pub ion: SelectedIon,
+    /// Describes the isolation window around the selected ion
     pub isolation_window: IsolationWindow,
+    /// The precursor scan ID, if given
     pub precursor_id: String,
+    /// The product scan ID, if given
     pub product_id: String,
-    pub params: params::ParamList,
+    /// The activation process applied to the precursor ion
     pub activation: Activation,
+    /// Additional parameters describing this precursor ion
+    pub params: params::ParamList,
 }
 
 #[repr(i8)]

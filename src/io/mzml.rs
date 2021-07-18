@@ -337,7 +337,7 @@ impl MzMLSpectrumBuilder {
                     param.coerce().expect("Failed to parse peak intensity");
             }
             "charge state" => {
-                self.precursor.ion.charge = param.coerce().expect("Failed to parse ion charge");
+                self.precursor.ion.charge = Some(param.coerce().expect("Failed to parse ion charge"));
             }
             &_ => {
                 self.precursor.ion.params.push(param);

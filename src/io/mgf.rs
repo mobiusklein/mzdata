@@ -96,10 +96,10 @@ impl<R: io::Read> MGFReader<R> {
                     let parts: Vec<&str> = value.split_ascii_whitespace().collect();
                     let mz: f64 = parts[0].parse().unwrap();
                     let intensity: f32 = parts[1].parse().unwrap();
-                    let mut charge: i32 = 0;
+                    let mut charge: Option<i32> = None;
 
                     if parts.len() > 2 {
-                        charge = parts[2].parse().unwrap();
+                        charge = Some(parts[2].parse().unwrap());
                     }
                     description.precursor = Some(Precursor {
                         ion: SelectedIon {
