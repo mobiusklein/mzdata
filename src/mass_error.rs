@@ -4,10 +4,10 @@ pub enum MassErrorType {
 }
 
 impl MassErrorType {
-    pub fn lower_bound(&self, query: f64, alt: f64) -> f64 {
+    pub fn lower_bound(&self, query: f64, tolerance: f64) -> f64 {
         match self {
-            Self::Exact => query - alt,
-            Self::PPM => (query - alt) / alt,
+            Self::Exact => query - tolerance,
+            Self::PPM => query - (query * tolerance * 1e-6),
         }
     }
 

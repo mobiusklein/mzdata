@@ -1,3 +1,14 @@
+//! mzdata provides basic access to raw and processed mass spectrometry data formats in
+//! Rust.
+//!
+//! The library currently supports reading:
+//!   1. MGF files using [`MGFReader`]
+//!   2. mzML files using [`MzMLReader`]
+//!
+//! It also provides a sorted data structure for representing peak lists, [`PeakSet`]
+//! and a trait implementing the majority of the logic, [`PeakCollection`].
+//!
+//!
 pub mod io;
 pub mod mass_error;
 pub mod peaks;

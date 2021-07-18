@@ -358,9 +358,19 @@ mod test {
         assert_eq!(peaks.len(), 485);
         assert!((peaks[0].mz - 231.3888).abs() < 1e-3);
 
-        for peak in &peaks {
-            assert!(peak.mz > 231.0);
+        for (i, peak) in peaks.iter().enumerate() {
+            if i > 0 {
+                assert!(peak.mz > peaks[i - 1].mz);
+            }
         }
+
+        let part = peaks.search(773.4414, 0.01, MassErrorType::Exact);
+        assert_eq!(part.expect("Match peak"), 300);
+        let part = peaks.has_peak(773.4414, 10.0, MassErrorType::PPM);
+        assert_eq!(part.expect("Match peak").index, 300);
+        let part = peaks.all_peaks_for(773.4414, 10.0, MassErrorType::PPM);
+        assert_eq!(part.len(), 1);
+        assert_eq!(part[0].index, 300);
     }
 
 

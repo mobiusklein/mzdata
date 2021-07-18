@@ -1,3 +1,6 @@
+//! Implements a parser for the PSI-MS mzML and indexedmzML XML file formats
+//! for representing raw and processed mass spectra.
+
 use std::io;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 
@@ -648,7 +651,12 @@ impl MzMLSpectrumBuilder {
     }
 }
 
-/// An mzML parser that supports iteration and random access
+/// An mzML parser that supports iteration and random access. The parser produces
+/// [`RawSpectrum`] instances, which may be converted up to [`Spectrum`](crate::spectrum::spectrum::Spectrum)
+/// or forward to [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum) as is appropriate to the data.
+///
+/// When the readable stream the parser is wrapped around supports [`io::Seek`],
+/// additional random access operations are available.
 pub struct MzMLReader<R: Read> {
     pub state: MzMLParserState,
     pub handle: BufReader<R>,
@@ -766,6 +774,9 @@ impl<R: Read> MzMLReader<R> {
         }
     }
 
+    /// Populate a new [`RawSpectrum`] in-place on the next available spectrum data.
+    /// This allocates memory to build the spectrum's attributes but then moves it
+    /// into `spectrum` rather than copying it.
     pub fn read_into(&mut self, spectrum: &mut RawSpectrum) -> Result<usize, MzMLParserError> {
         let mut accumulator = MzMLSpectrumBuilder::new();
         if self.state == MzMLParserState::SpectrumDone {
@@ -780,6 +791,7 @@ impl<R: Read> MzMLReader<R> {
         }
     }
 
+    /// Read the next spectrum directly. Used to implement iteration.
     pub fn read_next(&mut self) -> Option<RawSpectrum> {
         let mut spectrum = RawSpectrum::default();
         match self.read_into(&mut spectrum) {
@@ -789,6 +801,7 @@ impl<R: Read> MzMLReader<R> {
     }
 }
 
+/// [`MzMLReader`] instances are [`Iterator`]s over [`RawSpectrum`]
 impl<R: io::Read> Iterator for MzMLReader<R> {
     type Item = RawSpectrum;
 
@@ -799,6 +812,8 @@ impl<R: io::Read> Iterator for MzMLReader<R> {
 
 impl<R: io::Read + io::Seek> ScanIterator<RawSpectrum> for MzMLReader<R> {}
 
+/// They can also be used to fetch specific spectra by ID, index, or start
+/// time when the underlying file stream supports [`io::Seek`].
 impl<R: io::Read + io::Seek> ScanSource<RawSpectrum> for MzMLReader<R> {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<RawSpectrum> {
@@ -843,6 +858,8 @@ impl<R: io::Read + io::Seek> ScanSource<RawSpectrum> for MzMLReader<R> {
     }
 }
 
+/// The iterator can also be updated to move to a different location in the
+/// stream efficiently.
 impl<R: io::Read + io::Seek> RandomAccessScanIterator<RawSpectrum> for MzMLReader<R> {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         match self._offset_of_id(id) {
@@ -888,7 +905,8 @@ impl<R: io::Read + io::Seek> MzMLReader<R> {
         self.handle.seek(pos)
     }
 
-    /// Build
+    /// Builds an offset index to each `<spectrum>` XML element
+    /// by doing a fast pre-scan of the XML file.
     pub fn build_index(&mut self) -> u64 {
         let start = self
             .handle
