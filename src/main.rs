@@ -3,8 +3,6 @@ use std::fs;
 use std::path;
 use std::env;
 
-use rayon::prelude::*;
-
 use mzdata::io::{mgf, mzml, ScanSource};
 use mzdata::io::prelude::*;
 use mzdata::peaks::PeakCollection;

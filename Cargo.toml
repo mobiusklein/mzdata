@@ -40,7 +40,6 @@ base64 = "0.13.0"
 flate2 = "1.0.20"
 num-traits = "0.2"
 indexmap = { version = "1.7.0", features = [ "serde" ] }
-rayon = "1.5.1"
 
 [dev-dependencies]
 criterion = { version = "0.3.4", features = [ "html_reports" ] }
