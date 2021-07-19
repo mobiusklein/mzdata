@@ -1,12 +1,11 @@
 use std::io;
+use std::marker::PhantomData;
 
 use crate::spectrum::SpectrumBehavior;
 
 use super::OffsetIndex;
 
-pub trait ScanIterator<S: SpectrumBehavior>: Iterator<Item = S> {}
-
-pub trait ScanSource<S: SpectrumBehavior>: ScanIterator<S> {
+pub trait ScanSource<S: SpectrumBehavior>: Iterator<Item=S> + Sized {
     fn reset(&mut self) -> &Self;
 
     /// Retrieve the number of spectra in source file
@@ -70,7 +69,58 @@ pub trait ScanSource<S: SpectrumBehavior>: ScanIterator<S> {
         }
         best_match
     }
+
+    fn iter(&mut self) -> ScanIterator<Self, S> {
+        ScanIterator::new(self)
+    }
 }
+
+pub struct ScanIterator<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> {
+    source: &'lifespan mut R,
+    phantom: PhantomData<S>,
+    index: usize,
+    back_index: usize
+}
+
+impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> ScanIterator<'lifespan, R, S> {
+    pub fn new(source: &mut R) -> ScanIterator<R, S> {
+        ScanIterator {
+            source, index: 0, back_index: 0, phantom: PhantomData
+        }
+    }
+}
+
+impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> Iterator for ScanIterator<'lifespan, R, S> {
+    type Item = S;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index + self.back_index >= self.len() {
+            return None;
+        }
+        let result = self.source.get_spectrum_by_index(self.index);
+        self.index += 1;
+        result
+    }
+}
+
+impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> ExactSizeIterator for ScanIterator<'lifespan, R, S> {
+    fn len(&self) -> usize {
+        self.source.len()
+    }
+}
+
+impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> DoubleEndedIterator for ScanIterator<'lifespan, R, S> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.index + self.back_index >= self.len() {
+            return None;
+        };
+        let i = self.len() - (self.back_index + 1);
+        let result = self.source.get_spectrum_by_index(i);
+        self.back_index += 1;
+        result
+    }
+}
+
 
 #[derive(Debug)]
 pub enum ScanAccessError {

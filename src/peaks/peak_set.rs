@@ -1,9 +1,12 @@
-use super::coordinate::{CoordinateLike, IndexedCoordinate, MZ};
-use super::peak::CentroidPeak;
-use crate::mass_error::MassErrorType;
 use std::fmt;
+use std::iter::{Extend, FromIterator};
 use std::marker;
 use std::ops;
+
+use crate::mass_error::MassErrorType;
+
+use super::coordinate::{CoordinateLike, IndexedCoordinate, MZ, Mass};
+use super::peak::{CentroidPeak, DeconvolutedPeak};
 
 /// A trait for an ordered container of mass spectral peaks. The trait
 /// interoperates with [`CoordinateLike`] to make searching efficient.
@@ -169,7 +172,7 @@ impl<P: IndexedCoordinate<C>, C> PeakSetVec<P, C> {
         Self::with_capacity(0)
     }
 
-    pub fn from<V: Iterator>(peaks: V, sort: bool) -> Self
+    pub fn from_iter<V: Iterator>(peaks: V, sort: bool) -> Self
     where
         V: Iterator<Item = P>,
     {
@@ -201,6 +204,10 @@ impl<P: IndexedCoordinate<C>, C> PeakSetVec<P, C> {
 
     pub fn iter_mut(&mut self) -> PeakSetIterMut<P, C> {
         PeakSetIterMut::new(self)
+    }
+
+    fn _push(&mut self, peak: P) {
+        self.peaks.push(peak);
     }
 }
 
@@ -256,6 +263,12 @@ impl<P: IndexedCoordinate<C>, C> ops::Index<usize> for PeakSetVec<P, C> {
     }
 }
 
+impl<P: IndexedCoordinate<C>, C> ops::IndexMut<usize> for PeakSetVec<P, C> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.peaks[index]
+    }
+}
+
 impl<P: IndexedCoordinate<C>, C> fmt::Display for PeakSetVec<P, C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "PeakSetVec(<{} Peaks>)", self.len())?;
@@ -266,6 +279,48 @@ impl<P: IndexedCoordinate<C>, C> fmt::Display for PeakSetVec<P, C> {
 impl<P: IndexedCoordinate<C>, C> From<Vec<P>> for PeakSetVec<P, C> {
     fn from(v: Vec<P>) -> PeakSetVec<P, C> {
         PeakSetVec::wrap(v)
+    }
+}
+
+impl<P: IndexedCoordinate<C>, C> FromIterator<P> for PeakSetVec<P, C> {
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = P>,
+    {
+        let mut result = Self::empty();
+        result.extend(iter);
+        result
+    }
+}
+
+impl<P: IndexedCoordinate<C>, C> Extend<P> for PeakSetVec<P, C> {
+    fn extend<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = P>,
+    {
+        let mut last_coord = 0.0;
+        let last_index = self.len();
+        if let Some(last_peak) = self.peaks.last() {
+            last_coord = last_peak.get_coordinate()
+        }
+
+        let mut valid = true;
+        for p in iter {
+            let coord = p.get_coordinate();
+            if coord < last_coord {
+                valid = false
+            } else {
+                last_coord = coord;
+            }
+            self._push(p);
+        }
+        if valid {
+            for i in last_index..self.len() {
+                self[i].set_index(i as u32);
+            }
+        } else {
+            self.sort()
+        }
     }
 }
 
@@ -338,20 +393,19 @@ impl<'a, P, C> Iterator for PeakSetIterMut<'a, P, C> {
 }
 
 pub type PeakSet = PeakSetVec<CentroidPeak, MZ>;
-
+pub type DeconvolutedPeakSet = PeakSetVec<DeconvolutedPeak, Mass>;
 
 #[cfg(test)]
 mod test {
+    use crate::io::MGFReader;
     use std::fs;
-    use crate::io::{MGFReader};
 
     use super::*;
 
     #[test]
     fn test_sequence_behavior() {
-        let mut reader = MGFReader::new(
-            fs::File::open("./test/data/small.mgf").expect(
-                "Missing test file"));
+        let mut reader =
+            MGFReader::new(fs::File::open("./test/data/small.mgf").expect("Missing test file"));
         let scan = reader.next().expect("Failed to read first spectrum");
         let peaks = scan.peaks;
 
@@ -372,6 +426,4 @@ mod test {
         assert_eq!(part.len(), 1);
         assert_eq!(part[0].index, 300);
     }
-
-
 }

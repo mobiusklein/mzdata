@@ -1,13 +1,11 @@
-
-use crate::params::{ParamList};
-
+use crate::params::ParamList;
 
 #[derive(Debug)]
 pub enum ComponentType {
     Analyzer,
     IonSource,
     Detector,
-    Unknown
+    Unknown,
 }
 
 impl Default for ComponentType {
@@ -16,19 +14,17 @@ impl Default for ComponentType {
     }
 }
 
-
 #[derive(Default, Debug)]
 pub struct Component {
     pub component_type: ComponentType,
     pub order: u8,
-    pub params: ParamList
+    pub params: ParamList,
 }
-
 
 #[derive(Default, Debug)]
 pub struct InstrumentConfiguration {
     pub components: Vec<Component>,
     pub params: ParamList,
     pub software_reference: String,
-    pub id: String
+    pub id: String,
 }

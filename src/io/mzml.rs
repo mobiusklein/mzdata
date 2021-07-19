@@ -8,9 +8,8 @@ use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
 use quick_xml::Reader;
 
-
-use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanIterator, ScanSource};
 use super::offset_index::OffsetIndex;
+use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanSource};
 use crate::params::{Param, ParamList};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
@@ -50,7 +49,6 @@ pub enum MzMLParserState {
     ProcessingMethod,
 
     // Spectrum and Chromatogram List Elements
-
     Spectrum,
     SpectrumDone,
 
@@ -337,7 +335,8 @@ impl MzMLSpectrumBuilder {
                     param.coerce().expect("Failed to parse peak intensity");
             }
             "charge state" => {
-                self.precursor.ion.charge = Some(param.coerce().expect("Failed to parse ion charge"));
+                self.precursor.ion.charge =
+                    Some(param.coerce().expect("Failed to parse ion charge"));
             }
             &_ => {
                 self.precursor.ion.params.push(param);
@@ -810,7 +809,6 @@ impl<R: io::Read> Iterator for MzMLReader<R> {
     }
 }
 
-impl<R: io::Read + io::Seek> ScanIterator<RawSpectrum> for MzMLReader<R> {}
 
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
@@ -967,13 +965,12 @@ impl<R: io::Read + io::Seek> MzMLReader<R> {
     }
 }
 
-
 #[cfg(test)]
 mod test {
-    use std::fs;
-    use std::path;
     use super::*;
     use crate::spectrum::spectrum::SpectrumBehavior;
+    use std::fs;
+    use std::path;
 
     #[test]
     fn reader_from_file() {

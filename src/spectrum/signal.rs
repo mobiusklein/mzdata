@@ -13,7 +13,7 @@ use base64;
 use flate2::write::ZlibDecoder;
 
 use crate::params::ParamList;
-use crate::peaks::{PeakCollection, PeakSet};
+use crate::peaks::{CentroidPeak, PeakCollection, PeakSet};
 
 type Bytes = Vec<u8>;
 
@@ -351,8 +351,10 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
             .expect("Failed to decode intensity array");
         intensities
     }
+}
 
-    pub fn from(peaks: PeakSet) -> BinaryArrayMap {
+impl From<PeakSet> for BinaryArrayMap {
+    fn from(peaks: PeakSet) -> BinaryArrayMap {
         let mut arrays = BinaryArrayMap::new();
 
         let mut mz_array = DataArray::from_name_type_size(
@@ -384,5 +386,41 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         arrays.add(mz_array);
         arrays.add(intensity_array);
         arrays
+    }
+}
+
+impl From<BinaryArrayMap> for PeakSet {
+    fn from(arrays: BinaryArrayMap) -> PeakSet {
+        let mz_array = arrays.mzs();
+        let intensity_array = arrays.intensities();
+        let mut peaks = Vec::with_capacity(mz_array.len());
+
+        for (i, (mz, intensity)) in mz_array.iter().zip(intensity_array.iter()).enumerate() {
+            peaks.push(CentroidPeak {
+                mz: *mz,
+                intensity: *intensity,
+                index: i as u32,
+            })
+        }
+
+        PeakSet::new(peaks)
+    }
+}
+
+impl From<&BinaryArrayMap> for PeakSet {
+    fn from(arrays: &BinaryArrayMap) -> PeakSet {
+        let mz_array = arrays.mzs();
+        let intensity_array = arrays.intensities();
+        let mut peaks = Vec::with_capacity(mz_array.len());
+
+        for (i, (mz, intensity)) in mz_array.iter().zip(intensity_array.iter()).enumerate() {
+            peaks.push(CentroidPeak {
+                mz: *mz,
+                intensity: *intensity,
+                index: i as u32,
+            })
+        }
+
+        PeakSet::new(peaks)
     }
 }

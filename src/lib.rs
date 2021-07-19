@@ -15,7 +15,7 @@
 //!
 //! let mut ms1_count = 0;
 //! let mut msn_count = 0;
-//! let mut reader = MzMLReader::new_indexed(fs::File.open("./test/data/small.mzML").unwrap());
+//! let mut reader = MzMLReader::new_indexed(fs::File::open("./test/data/small.mzML").unwrap());
 //! for scan in reader {
 //!     if scan.ms_level() == 1 {
 //!         ms1_count += 1;
@@ -24,16 +24,18 @@
 //!     }
 //! }
 //! println!("MS1 Count: {}\nMSn Count: {}", ms1_count, msn_count);
+//! assert_eq!(ms1_count, 14);
+//! assert_eq!(msn_count, 34);
 //! ```
 //!
 //! It also provides a sorted data structure for representing peak lists, [`PeakSet`]
 //! and a trait implementing the majority of the logic, [`PeakCollection`].
 pub mod io;
 pub mod mass_error;
-pub mod peaks;
-pub mod spectrum;
 pub mod meta;
 pub mod params;
+pub mod peaks;
+pub mod spectrum;
 
 pub use crate::peaks::coordinate::{CoordinateDimension, CoordinateLike, Mass, MZ};
 

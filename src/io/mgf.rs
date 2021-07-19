@@ -11,9 +11,8 @@ use crate::spectrum::{
     scan_properties, CentroidSpectrum, Precursor, SelectedIon, SpectrumDescription,
 };
 
-use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanIterator, ScanSource};
 use super::offset_index::OffsetIndex;
-
+use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanSource};
 
 #[derive(PartialEq, Debug)]
 pub enum MGFParserState {
@@ -319,8 +318,6 @@ impl<R: io::Read + io::Seek> MGFReader<R> {
     }
 }
 
-impl<R: io::Read + io::Seek> ScanIterator<CentroidSpectrum> for MGFReader<R> {}
-
 impl<R: io::Read + io::Seek> ScanSource<CentroidSpectrum> for MGFReader<R> {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<CentroidSpectrum> {
@@ -397,12 +394,60 @@ impl<R: io::Read + io::Seek> RandomAccessScanIterator<CentroidSpectrum> for MGFR
     }
 }
 
+pub struct MGFIterator<'lifespan, R: io::Read + io::Seek> {
+    source: &'lifespan mut MGFReader<R>,
+    index: usize,
+    back_index: usize,
+}
+
+impl<'lifespan, R: io::Read + io::Seek> MGFIterator<'lifespan, R> {
+    pub fn new(source: &'lifespan mut MGFReader<R>) -> MGFIterator<R>{
+        MGFIterator {
+            source,
+            index: 0,
+            back_index: 0,
+        }
+    }
+}
+
+impl<'lifespan, R: io::Read + io::Seek> Iterator for MGFIterator<'lifespan, R> {
+    type Item = CentroidSpectrum;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index + self.back_index >= self.len() {
+            return None;
+        }
+        let result = self.source.get_spectrum_by_index(self.index);
+        self.index += 1;
+        result
+    }
+}
+
+impl<'lifespan, R: io::Read + io::Seek> ExactSizeIterator for MGFIterator<'lifespan, R> {
+    fn len(&self) -> usize {
+        self.source.len()
+    }
+}
+
+impl<'lifespan, R: io::Read + io::Seek> DoubleEndedIterator for MGFIterator<'lifespan, R> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.index + self.back_index >= self.len() {
+            return None;
+        };
+        let i = self.len() - (self.back_index + 1);
+        let result = self.source.get_spectrum_by_index(i);
+        self.back_index += 1;
+        result
+    }
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::path;
-    use std::fs;
     use crate::spectrum::spectrum::SpectrumBehavior;
+    use std::fs;
+    use std::path;
 
     #[test]
     fn test_reader() {

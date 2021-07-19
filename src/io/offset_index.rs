@@ -1,6 +1,5 @@
+use indexmap::map::Keys;
 use indexmap::IndexMap;
-use indexmap::map::{Keys};
-
 
 #[derive(Default, Debug)]
 pub struct OffsetIndex {
@@ -8,14 +7,14 @@ pub struct OffsetIndex {
     // If using serde_json to save this, use
     // https://docs.rs/indexmap/1.7.0/indexmap/serde_seq/index.html
     // #[serde(with="indexmap::serde_seq")]
-    pub offsets: IndexMap<String, u64>
+    pub offsets: IndexMap<String, u64>,
 }
-
 
 impl OffsetIndex {
     pub fn new(name: String) -> OffsetIndex {
         OffsetIndex {
-            name, ..Default::default()
+            name,
+            ..Default::default()
         }
     }
 
