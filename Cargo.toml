@@ -8,8 +8,14 @@ keywords = [
     'mgf'
 ]
 
+categories = [
+    "science",
+    "parser-implementations",
+    "data-structures"
+]
+
 description = "A library to read mass spectrometry data formats"
-license = "Apache2"
+license = "Apache-2.0"
 repository = "https://github.com/mobiusklein/mzdata"
 
 

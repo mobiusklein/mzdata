@@ -3,6 +3,7 @@ pub mod mzml;
 pub mod offset_index;
 pub mod prelude;
 pub mod traits;
+mod utils;
 
 pub use crate::io::mgf::MGFReader;
 pub use crate::io::mzml::MzMLReader;
