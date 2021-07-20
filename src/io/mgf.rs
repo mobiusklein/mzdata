@@ -3,6 +3,8 @@ use std::io::prelude::*;
 use std::io::SeekFrom;
 use std::str;
 
+use log::warn;
+
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -12,7 +14,7 @@ use crate::spectrum::{
 };
 
 use super::offset_index::OffsetIndex;
-use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanSource};
+use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead};
 
 #[derive(PartialEq, Debug)]
 pub enum MGFParserState {
@@ -279,7 +281,7 @@ impl<R: io::Read> Iterator for MGFReader<R> {
     }
 }
 
-impl<R: io::Read + io::Seek> MGFReader<R> {
+impl<R: SeekRead> MGFReader<R> {
     /// Construct a new MGFReader and build an offset index
     /// using [`Self::build_index`]
     pub fn new_indexed(file: R) -> MGFReader<R> {
@@ -338,11 +340,15 @@ impl<R: io::Read + io::Seek> MGFReader<R> {
         }
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore location");
+        self.index.init = true;
+        if self.index.len() == 0 {
+            warn!("An index was built but no entries were found")
+        }
         offset
     }
 }
 
-impl<R: io::Read + io::Seek> ScanSource<CentroidSpectrum> for MGFReader<R> {
+impl<R: SeekRead> ScanSource<CentroidSpectrum> for MGFReader<R> {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<CentroidSpectrum> {
         let offset_ref = self.index.get(id);
@@ -382,11 +388,14 @@ impl<R: io::Read + io::Seek> ScanSource<CentroidSpectrum> for MGFReader<R> {
     }
 
     fn get_index(&self) -> &OffsetIndex {
+        if !self.index.init {
+            warn!("Attempting to use an uninitialized offset index on MGFReader")
+        }
         &self.index
     }
 }
 
-impl<R: io::Read + io::Seek> RandomAccessScanIterator<CentroidSpectrum> for MGFReader<R> {
+impl<R: SeekRead> RandomAccessScanIterator<CentroidSpectrum> for MGFReader<R> {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
@@ -415,53 +424,6 @@ impl<R: io::Read + io::Seek> RandomAccessScanIterator<CentroidSpectrum> for MGFR
             },
             None => Err(ScanAccessError::ScanNotFound),
         }
-    }
-}
-
-pub struct MGFIterator<'lifespan, R: io::Read + io::Seek> {
-    source: &'lifespan mut MGFReader<R>,
-    index: usize,
-    back_index: usize,
-}
-
-impl<'lifespan, R: io::Read + io::Seek> MGFIterator<'lifespan, R> {
-    pub fn new(source: &'lifespan mut MGFReader<R>) -> MGFIterator<R>{
-        MGFIterator {
-            source,
-            index: 0,
-            back_index: 0,
-        }
-    }
-}
-
-impl<'lifespan, R: io::Read + io::Seek> Iterator for MGFIterator<'lifespan, R> {
-    type Item = CentroidSpectrum;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index + self.back_index >= self.len() {
-            return None;
-        }
-        let result = self.source.get_spectrum_by_index(self.index);
-        self.index += 1;
-        result
-    }
-}
-
-impl<'lifespan, R: io::Read + io::Seek> ExactSizeIterator for MGFIterator<'lifespan, R> {
-    fn len(&self) -> usize {
-        self.source.len()
-    }
-}
-
-impl<'lifespan, R: io::Read + io::Seek> DoubleEndedIterator for MGFIterator<'lifespan, R> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.index + self.back_index >= self.len() {
-            return None;
-        };
-        let i = self.len() - (self.back_index + 1);
-        let result = self.source.get_spectrum_by_index(i);
-        self.back_index += 1;
-        result
     }
 }
 

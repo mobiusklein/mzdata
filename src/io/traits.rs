@@ -5,6 +5,10 @@ use crate::spectrum::SpectrumBehavior;
 
 use super::OffsetIndex;
 
+pub trait SeekRead : io::Read + io::Seek {}
+impl<T: io::Read + io::Seek> SeekRead for T {}
+
+
 pub trait ScanSource<S: SpectrumBehavior>: Iterator<Item=S> + Sized {
     fn reset(&mut self) -> &Self;
 

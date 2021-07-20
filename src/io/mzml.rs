@@ -4,12 +4,14 @@
 use std::io;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 
-use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::Error as XMLError;
+use log::warn;
+
 use quick_xml::Reader;
+use quick_xml::Error as XMLError;
+use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 
 use super::offset_index::OffsetIndex;
-use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanSource};
+use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead};
 use crate::params::{Param, ParamList};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
@@ -812,7 +814,7 @@ impl<R: io::Read> Iterator for MzMLReader<R> {
 
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
-impl<R: io::Read + io::Seek> ScanSource<RawSpectrum> for MzMLReader<R> {
+impl<R: SeekRead> ScanSource<RawSpectrum> for MzMLReader<R> {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<RawSpectrum> {
         let offset_ref = self.index.get(id);
@@ -852,13 +854,16 @@ impl<R: io::Read + io::Seek> ScanSource<RawSpectrum> for MzMLReader<R> {
     }
 
     fn get_index(&self) -> &OffsetIndex {
+        if !self.index.init {
+            warn!("Attempting to use an uninitialized offset index on MzMLReader")
+        }
         &self.index
     }
 }
 
 /// The iterator can also be updated to move to a different location in the
 /// stream efficiently.
-impl<R: io::Read + io::Seek> RandomAccessScanIterator<RawSpectrum> for MzMLReader<R> {
+impl<R: SeekRead> RandomAccessScanIterator<RawSpectrum> for MzMLReader<R> {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
@@ -890,7 +895,7 @@ impl<R: io::Read + io::Seek> RandomAccessScanIterator<RawSpectrum> for MzMLReade
     }
 }
 
-impl<R: io::Read + io::Seek> MzMLReader<R> {
+impl<R: SeekRead> MzMLReader<R> {
     /// Construct a new MzMLReader and build an offset index
     /// using [`Self::build_index`]
     pub fn new_indexed(file: R) -> MzMLReader<R> {
@@ -961,6 +966,10 @@ impl<R: io::Read + io::Seek> MzMLReader<R> {
         self.handle
             .seek(SeekFrom::Start(start))
             .expect("Failed to restore location");
+        self.index.init = true;
+        if self.index.len() == 0 {
+            warn!("An index was built but no entries were found")
+        }
         offset
     }
 }

@@ -39,6 +39,21 @@ where
             .call(self.get_item(j).get_coordinate(), query)
             .abs();
         let n = self.len();
+        // search backwards
+        while j > 0 && j < n {
+            let err = error_type
+                .call(self.get_item(j).get_coordinate(), query)
+                .abs();
+            if err < best_err && err < error_tolerance {
+                best_err = err;
+                best = j;
+            } else if err > best_err {
+                break
+            }
+            j -= 1;
+        }
+        j = i;
+        // search forwards
         while j < n {
             let err = error_type
                 .call(self.get_item(j).get_coordinate(), query)
@@ -87,14 +102,14 @@ where
             return &self.get_slice(0..0);
         }
 
-        let mut lower_index = match self._search_by(lower_bound) {
-            Ok(j) => j,
-            Err(j) => j,
+        let mut lower_index = match self.search(lower_bound, error_tolerance, error_type) {
+            Some(j) => j,
+            None => 0
         };
 
-        let mut upper_index = match self._search_by(upper_bound) {
-            Ok(j) => j,
-            Err(j) => j,
+        let mut upper_index = match self.search(upper_bound, error_tolerance, error_type) {
+            Some(j) => j,
+            None => 0,
         };
 
         if lower_index < n {
@@ -113,6 +128,7 @@ where
         subset
     }
 
+    /// Find all peaks which could match `query` within the specified error tolerances,
     fn all_peaks_for(&self, query: f64, error_tolerance: f64, error_type: MassErrorType) -> &[T] {
         let lower_bound = error_type.lower_bound(query, error_tolerance);
         let upper_bound = error_type.upper_bound(query, error_tolerance);
@@ -122,10 +138,11 @@ where
             return &self.get_slice(0..0);
         }
 
-        let mut lower_index = match self._search_by(lower_bound) {
-            Ok(j) => j,
-            Err(j) => j,
+        let mut lower_index = match self.search(lower_bound, error_tolerance, error_type) {
+            Some(j) => j,
+            None => 0
         };
+
         if lower_index < n {
             if self[lower_index].get_coordinate() < lower_bound {
                 lower_index += 1;

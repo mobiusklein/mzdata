@@ -339,6 +339,7 @@ dependencies = [
  "flate2",
  "indexmap",
  "lazy_static",
+ "log",
  "num-traits",
  "quick-xml",
  "regex",

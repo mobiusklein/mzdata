@@ -8,6 +8,7 @@ pub struct OffsetIndex {
     // https://docs.rs/indexmap/1.7.0/indexmap/serde_seq/index.html
     // #[serde(with="indexmap::serde_seq")]
     pub offsets: IndexMap<String, u64>,
+    pub init: bool,
 }
 
 impl OffsetIndex {
