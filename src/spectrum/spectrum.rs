@@ -20,7 +20,7 @@ use crate::spectrum::scan_properties::{
     Acquisition, Precursor, SignalContinuity, SpectrumDescription,
 };
 use crate::spectrum::signal::BinaryArrayMap;
-
+use crate::mass_error::MassErrorType;
 
 #[derive(Debug)]
 /// An variant for dispatching to different strategies of computing
@@ -54,6 +54,57 @@ impl<'lifespan> PeakDataLevel<'lifespan> {
                 } else {
                     (0, 0.0, 0.0)
                 }
+            }
+        }
+    }
+
+    pub fn tic(&self) -> f32 {
+        match self {
+            PeakDataLevel::Missing => {
+                0.0
+            },
+            PeakDataLevel::RawData(arrays) => {
+                let intensities = arrays.intensities();
+                intensities.iter().sum()
+            },
+            PeakDataLevel::Centroid(peaks) => {
+                peaks.iter().map(|p|p.intensity).sum()
+            }
+        }
+    }
+
+    pub fn search(&self, query: f64, error_tolerance: f64, error_type: MassErrorType) -> Option<usize> {
+
+        match self {
+            PeakDataLevel::Missing => {
+                None
+            },
+            PeakDataLevel::RawData(arrays) => {
+                let mzs = arrays.mzs();
+                let lower = error_type.lower_bound(query, error_tolerance);
+                match mzs[..].binary_search_by(|m| m.partial_cmp(&lower).unwrap()) {
+                    Ok(i) => {
+                        let mut best_error = error_type.call(query, mzs[i]).abs();
+                        let mut best_index = i;
+                        let mut index = i + 1;
+                        while index < mzs.len() {
+                            let error = error_type.call(query, mzs[index]).abs();
+                            if error < best_error {
+                                best_index = index;
+                                best_error = error;
+                            }
+                            index += 1;
+                        }
+                        if best_error < error_tolerance {
+                            return Some(best_index)
+                        }
+                        None
+                    },
+                    Err(_err) => None
+                }
+            },
+            PeakDataLevel::Centroid(peaks) => {
+                peaks.search(query, error_tolerance, error_type)
             }
         }
     }

@@ -47,3 +47,7 @@ criterion = { version = "0.3.4", features = [ "html_reports" ] }
 [[bench]]
 name = "mzml"
 harness = false
+
+[[bench]]
+name ="peak_set"
+harness = false

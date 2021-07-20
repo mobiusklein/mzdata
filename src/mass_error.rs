@@ -1,3 +1,5 @@
+
+#[derive(Debug)]
 pub enum MassErrorType {
     Exact,
     PPM,

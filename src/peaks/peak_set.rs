@@ -46,6 +46,8 @@ where
             if err < best_err && err < error_tolerance {
                 best_err = err;
                 best = j;
+            } else if err > best_err {
+                break
             }
             j += 1;
         }
@@ -425,5 +427,8 @@ mod test {
         let part = peaks.all_peaks_for(773.4414, 10.0, MassErrorType::PPM);
         assert_eq!(part.len(), 1);
         assert_eq!(part[0].index, 300);
+
+        let part = peaks.search(773.4414, 50.0, MassErrorType::Exact);
+        assert_eq!(part.expect("Match peak"), 300);
     }
 }
