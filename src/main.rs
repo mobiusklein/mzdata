@@ -5,6 +5,7 @@ use std::env;
 
 use mzdata::io::{mgf, mzml, ScanSource};
 use mzdata::io::prelude::*;
+use mzdata::MassErrorType;
 use mzdata::peaks::PeakCollection;
 use mzdata::spectrum::{SignalContinuity, SpectrumBehavior, CentroidSpectrum};
 
@@ -21,6 +22,10 @@ fn main() {
     let mut parser = mzml::MzMLReader::new_indexed(file);
     let iter = parser.iter();
     for scan in iter {
-        println!("Scan {} => TIC {}", scan.id(), scan.intensities().iter().sum::<f32>())
+        println!("Scan {} => BP {}", scan.id(), scan.peaks().base_peak().1);
+        if scan.signal_continuity() < SignalContinuity::Profile {
+            let peak_picked = scan.into_centroid().unwrap();
+            println!("Matches for 579.155: {:?}", peak_picked.peaks.all_peaks_for(579.155, 0.02, MassErrorType::Exact));
+        }
     }
 }

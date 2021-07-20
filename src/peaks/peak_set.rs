@@ -141,7 +141,10 @@ where
                 upper_index = i;
             }
         }
-
+        let v = self.get_item(lower_index).get_coordinate();
+        if v <= lower_bound || v >= upper_bound {
+            lower_index += 1;
+        }
         return &self.get_slice(lower_index..upper_index + 1);
     }
 }
@@ -430,5 +433,10 @@ mod test {
 
         let part = peaks.search(773.4414, 50.0, MassErrorType::Exact);
         assert_eq!(part.expect("Match peak"), 300);
+
+        let part = peaks.all_peaks_for(736.637, 10.0, MassErrorType::PPM);
+        assert_eq!(part.len(), 1);
+        let part = peaks.all_peaks_for(736.237, 10.0, MassErrorType::PPM);
+        assert_eq!(part.len(), 0);
     }
 }

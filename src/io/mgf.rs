@@ -25,11 +25,23 @@ pub enum MGFParserState {
     Error,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum MGFError {
+    NoError,
+    MalformedPeakLine,
+    MalformedHeaderLine,
+    TooManyColumnsForPeakLine,
+    IOError,
+}
+
+/// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
+/// The parser produces [`CentroidSpectrum`] instances that represent the pre-processed
+/// nature of this type of file's data.
 pub struct MGFReader<R: io::Read> {
     pub handle: io::BufReader<R>,
     pub state: MGFParserState,
     pub offset: usize,
-    pub error: String,
+    pub error: MGFError,
     pub index: OffsetIndex,
 }
 
@@ -46,7 +58,7 @@ impl<R: io::Read> MGFReader<R> {
             let nparts = parts.len();
             if nparts < 2 {
                 self.state = MGFParserState::Error;
-                self.error = String::from("Incorrect number of numerical columns");
+                self.error = MGFError::TooManyColumnsForPeakLine;
             }
             let mz: f64 = parts[0].parse().unwrap();
             let intensity: f32 = parts[1].parse().unwrap();
@@ -120,7 +132,7 @@ impl<R: io::Read> MGFReader<R> {
             true
         } else {
             self.state = MGFParserState::Error;
-            self.error = format!("Unexpected content {} in scan header", line);
+            self.error = MGFError::MalformedHeaderLine;
             false
         }
     }
@@ -140,7 +152,7 @@ impl<R: io::Read> MGFReader<R> {
             false
         } else {
             self.state = MGFParserState::Error;
-            self.error = format!("Unexpected content {} in peak list", line);
+            self.error = MGFError::MalformedPeakLine;
             false
         }
     }
@@ -160,6 +172,8 @@ impl<R: io::Read> MGFReader<R> {
         true
     }
 
+    /// Make a new, empty scan with the appropriate default values set
+    /// for this type of file.
     pub fn new_scan(&self) -> CentroidSpectrum {
         let description: SpectrumDescription = SpectrumDescription {
             ms_level: 2,
@@ -176,6 +190,7 @@ impl<R: io::Read> MGFReader<R> {
         self.handle.read_line(buffer)
     }
 
+    /// Read the next spectrum from the file, if there is one.
     pub fn read_next(&mut self) -> Option<CentroidSpectrum> {
         let mut scan = self.new_scan();
         match self.read_into(&mut scan) {
@@ -186,13 +201,15 @@ impl<R: io::Read> MGFReader<R> {
                     None
                 }
             }
-            Err(message) => {
-                panic!("{}", message);
+            Err(err) => {
+                println!("An error was encountered: {:?}", err);
+                None
             }
         }
     }
 
-    pub fn read_into(&mut self, spectrum: &mut CentroidSpectrum) -> Result<usize, String> {
+    /// Read the next spectrum's contents directly into the passed struct.
+    pub fn read_into(&mut self, spectrum: &mut CentroidSpectrum) -> Result<usize, MGFError> {
         let mut buffer = String::new();
         let mut work = true;
         let mut offset: usize = 0;
@@ -208,8 +225,10 @@ impl<R: io::Read> MGFReader<R> {
                     }
                     b
                 }
-                Err(err) => {
-                    return Err(format!("Error while reading file: {}", err));
+                Err(_err) => {
+                    self.error = MGFError::IOError;
+                    self.state = MGFParserState::Error;
+                    return Err(self.error);
                 }
             };
             offset += b;
@@ -232,19 +251,20 @@ impl<R: io::Read> MGFReader<R> {
                 work = self.handle_peak(line, peaks);
             }
             if matches!(self.state, MGFParserState::Error) {
-                panic!("MGF Parsing Error: {}", self.error);
+                panic!("MGF Parsing Error: {:?}", self.error);
             }
         }
         Ok(offset)
     }
 
+    /// Create a new, unindexed MGF parser
     pub fn new(file: R) -> MGFReader<R> {
         let handle = io::BufReader::with_capacity(500, file);
         MGFReader {
             handle,
             state: MGFParserState::Start,
             offset: 0,
-            error: String::new(),
+            error: MGFError::NoError,
             index: OffsetIndex::new("spectrum".to_owned()),
         }
     }
@@ -253,13 +273,14 @@ impl<R: io::Read> MGFReader<R> {
 impl<R: io::Read> Iterator for MGFReader<R> {
     type Item = CentroidSpectrum;
 
+    /// Read the next spectrum from the file.
     fn next(&mut self) -> Option<Self::Item> {
         self.read_next()
     }
 }
 
 impl<R: io::Read + io::Seek> MGFReader<R> {
-    /// Construct a new MzMLReader and build an offset index
+    /// Construct a new MGFReader and build an offset index
     /// using [`Self::build_index`]
     pub fn new_indexed(file: R) -> MGFReader<R> {
         let mut reader = Self::new(file);
@@ -271,6 +292,9 @@ impl<R: io::Read + io::Seek> MGFReader<R> {
         self.handle.seek(pos)
     }
 
+
+    /// Builds an offset index to each `BEGIN IONS` line
+    /// by doing a fast pre-scan of the text file.
     pub fn build_index(&mut self) -> u64 {
         let mut offset: u64 = 0;
         let mut last_start: u64 = 0;

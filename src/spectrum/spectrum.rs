@@ -156,6 +156,12 @@ pub trait SpectrumBehavior {
         self.description().index
     }
 
+    /// Access a description of how raw the signal is, whether a
+    /// profile spectrum is available or only centroids are present.
+    fn signal_continuity(&self) -> SignalContinuity {
+        self.description().signal_continuity
+    }
+
     /// Retrieve the most processed representation of the mass spectrum's
     /// signal
     fn peaks(&'_ self) -> PeakDataLevel<'_>;
