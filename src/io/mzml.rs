@@ -17,7 +17,7 @@ use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
 };
-use crate::spectrum::RawSpectrum;
+use crate::spectrum::{RawSpectrum, CentroidSpectrum, Spectrum};
 
 pub type Bytes = Vec<u8>;
 
@@ -649,6 +649,31 @@ impl MzMLSpectrumBuilder {
             self.current_array.data = Bytes::from(&*bin);
         }
         Ok(state)
+    }
+}
+
+
+impl Into<CentroidSpectrum> for MzMLSpectrumBuilder {
+    fn into(self) -> CentroidSpectrum {
+        let mut spec = RawSpectrum::default();
+        self.into_spectrum(&mut spec);
+        spec.into_centroid().unwrap()
+    }
+}
+
+impl Into<Spectrum> for MzMLSpectrumBuilder {
+    fn into(self) -> Spectrum {
+        let mut spec = RawSpectrum::default();
+        self.into_spectrum(&mut spec);
+        spec.into_spectrum().unwrap()
+    }
+}
+
+impl Into<RawSpectrum> for MzMLSpectrumBuilder {
+    fn into(self) -> RawSpectrum {
+        let mut spec = RawSpectrum::default();
+        self.into_spectrum(&mut spec);
+        spec
     }
 }
 

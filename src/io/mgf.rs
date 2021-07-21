@@ -11,6 +11,7 @@ use regex::Regex;
 use crate::peaks::{CentroidPeak, PeakCollection, PeakSet};
 use crate::spectrum::{
     scan_properties, CentroidSpectrum, Precursor, SelectedIon, SpectrumDescription,
+    Spectrum, RawSpectrum
 };
 
 use super::offset_index::OffsetIndex;
@@ -35,6 +36,64 @@ pub enum MGFError {
     TooManyColumnsForPeakLine,
     IOError,
 }
+
+
+#[derive(Debug, Clone)]
+struct SpectrumBuilder {
+    pub peaks: PeakSet,
+    pub description: SpectrumDescription,
+}
+
+impl Default for SpectrumBuilder {
+    fn default() -> SpectrumBuilder {
+        SpectrumBuilder {
+            peaks: PeakSet::default(),
+            description: SpectrumDescription {
+                ms_level: 2,
+                signal_continuity: scan_properties::SignalContinuity::Centroid,
+                polarity: scan_properties::ScanPolarity::Unknown,
+                ..Default::default()
+            }
+        }
+    }
+}
+
+impl SpectrumBuilder {
+    pub fn into_centroid_spectrum(self) -> CentroidSpectrum {
+        CentroidSpectrum {
+            description: self.description,
+            peaks: self.peaks
+        }
+    }
+
+    pub fn into_spectrum(self) -> Spectrum {
+        Spectrum {
+            description: self.description,
+            peaks: Some(self.peaks),
+            .. Default::default()
+        }
+    }
+}
+
+impl Into<CentroidSpectrum> for SpectrumBuilder {
+    fn into(self) -> CentroidSpectrum {
+        self.into_centroid_spectrum()
+    }
+}
+
+impl Into<Spectrum> for SpectrumBuilder {
+    fn into(self) -> Spectrum {
+        self.into_spectrum()
+    }
+}
+
+impl Into<RawSpectrum> for SpectrumBuilder {
+    fn into(self) -> RawSpectrum {
+        self.into_spectrum().into_raw().unwrap()
+    }
+}
+
+
 
 /// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
 /// The parser produces [`CentroidSpectrum`] instances that represent the pre-processed
