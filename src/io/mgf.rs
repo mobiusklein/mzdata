@@ -294,7 +294,6 @@ impl<R: SeekRead> MGFReader<R> {
         self.handle.seek(pos)
     }
 
-
     /// Builds an offset index to each `BEGIN IONS` line
     /// by doing a fast pre-scan of the text file.
     pub fn build_index(&mut self) -> u64 {
@@ -400,7 +399,7 @@ impl<R: SeekRead> RandomAccessScanIterator<CentroidSpectrum> for MGFReader<R> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
-                Err(err) => Err(ScanAccessError::IOError(err)),
+                Err(err) => Err(ScanAccessError::IOError(Some(err))),
             },
             None => Err(ScanAccessError::ScanNotFound),
         }
@@ -410,7 +409,7 @@ impl<R: SeekRead> RandomAccessScanIterator<CentroidSpectrum> for MGFReader<R> {
         match self._offset_of_index(index) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
-                Err(err) => Err(ScanAccessError::IOError(err)),
+                Err(err) => Err(ScanAccessError::IOError(Some(err))),
             },
             None => Err(ScanAccessError::ScanNotFound),
         }
@@ -420,13 +419,12 @@ impl<R: SeekRead> RandomAccessScanIterator<CentroidSpectrum> for MGFReader<R> {
         match self._offset_of_time(time) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
-                Err(err) => Err(ScanAccessError::IOError(err)),
+                Err(err) => Err(ScanAccessError::IOError(Some(err))),
             },
             None => Err(ScanAccessError::ScanNotFound),
         }
     }
 }
-
 
 #[cfg(test)]
 mod test {

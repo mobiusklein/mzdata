@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use super::SpectrumBehavior;
+use crate::io::traits::ScanSource;
 use crate::params;
 
 #[derive(Debug, Clone, Copy)]
@@ -107,6 +109,31 @@ pub struct Precursor {
     pub activation: Activation,
     /// Additional parameters describing this precursor ion
     pub params: params::ParamList,
+}
+
+impl Precursor {
+    /// Given a ScanSource object, look up the precursor scan in it.
+    /// This is useful when examining the area *around* where the precursor
+    /// ion was or to obtain a snapshot of the retention time when the spectrum
+    /// was scheduled.
+    pub fn precursor_spectrum<R, S>(&self, source: &mut R) -> Option<S>
+    where
+        R: ScanSource<S>,
+        S: SpectrumBehavior,
+    {
+        source.get_spectrum_by_id(&self.precursor_id)
+    }
+
+    /// Given a ScanSource object, look up the product scan in it.
+    /// This is rarely needed unless you have manually separated [`Precursor`]
+    /// objects from their spectra.
+    pub fn product_spectrum<R, S>(&self, source: &mut R) -> Option<S>
+    where
+        R: ScanSource<S>,
+        S: SpectrumBehavior,
+    {
+        source.get_spectrum_by_id(&self.product_id)
+    }
 }
 
 #[repr(i8)]

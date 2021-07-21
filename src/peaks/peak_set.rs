@@ -5,7 +5,7 @@ use std::ops;
 
 use crate::mass_error::MassErrorType;
 
-use super::coordinate::{CoordinateLike, IndexedCoordinate, MZ, Mass};
+use super::coordinate::{CoordinateLike, IndexedCoordinate, Mass, MZ};
 use super::peak::{CentroidPeak, DeconvolutedPeak};
 
 /// A trait for an ordered container of mass spectral peaks. The trait
@@ -48,7 +48,7 @@ where
                 best_err = err;
                 best = j;
             } else if err > best_err {
-                break
+                break;
             }
             j -= 1;
         }
@@ -62,7 +62,7 @@ where
                 best_err = err;
                 best = j;
             } else if err > best_err {
-                break
+                break;
             }
             j += 1;
         }
@@ -104,7 +104,7 @@ where
 
         let mut lower_index = match self.search(lower_bound, error_tolerance, error_type) {
             Some(j) => j,
-            None => 0
+            None => 0,
         };
 
         let mut upper_index = match self.search(upper_bound, error_tolerance, error_type) {
@@ -140,7 +140,7 @@ where
 
         let mut lower_index = match self.search(lower_bound, error_tolerance, error_type) {
             Some(j) => j,
-            None => 0
+            None => 0,
         };
 
         if lower_index < n {

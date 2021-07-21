@@ -6,9 +6,9 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 
 use log::warn;
 
-use quick_xml::Reader;
-use quick_xml::Error as XMLError;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::Error as XMLError;
+use quick_xml::Reader;
 
 use super::offset_index::OffsetIndex;
 use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead};
@@ -811,7 +811,6 @@ impl<R: io::Read> Iterator for MzMLReader<R> {
     }
 }
 
-
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
 impl<R: SeekRead> ScanSource<RawSpectrum> for MzMLReader<R> {
@@ -868,7 +867,7 @@ impl<R: SeekRead> RandomAccessScanIterator<RawSpectrum> for MzMLReader<R> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
-                Err(err) => Err(ScanAccessError::IOError(err)),
+                Err(err) => Err(ScanAccessError::IOError(Some(err))),
             },
             None => Err(ScanAccessError::ScanNotFound),
         }
@@ -878,7 +877,7 @@ impl<R: SeekRead> RandomAccessScanIterator<RawSpectrum> for MzMLReader<R> {
         match self._offset_of_index(index) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
-                Err(err) => Err(ScanAccessError::IOError(err)),
+                Err(err) => Err(ScanAccessError::IOError(Some(err))),
             },
             None => Err(ScanAccessError::ScanNotFound),
         }
@@ -888,7 +887,7 @@ impl<R: SeekRead> RandomAccessScanIterator<RawSpectrum> for MzMLReader<R> {
         match self._offset_of_time(time) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
-                Err(err) => Err(ScanAccessError::IOError(err)),
+                Err(err) => Err(ScanAccessError::IOError(Some(err))),
             },
             None => Err(ScanAccessError::ScanNotFound),
         }

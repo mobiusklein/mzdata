@@ -10,7 +10,6 @@ pub struct SourceFile {
     pub params: ParamList,
 }
 
-
 #[derive(Debug, Clone, Default)]
 pub struct FileDescription {
     pub contents: ParamList,

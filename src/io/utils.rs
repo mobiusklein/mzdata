@@ -1,10 +1,9 @@
 #![allow(dead_code)]
 
-use std::path;
 use std::io;
+use std::path;
 
 type ByteBuffer = io::Cursor<Vec<u8>>;
-
 
 #[derive(Debug, Clone)]
 pub enum FileSource<T: io::Read> {
@@ -19,24 +18,24 @@ impl<T: io::Read> Default for FileSource<T> {
     }
 }
 
-
 #[derive(Debug, Clone, Default)]
 pub struct FileDescription<T: io::Read> {
-    pub source: FileSource<T>
+    pub source: FileSource<T>,
 }
 
-
 impl<'lifespan, T: io::Read> FileDescription<T> {
-
-    pub fn from_path<P>(path: P) -> FileDescription<T> where P: Into<path::PathBuf> {
+    pub fn from_path<P>(path: P) -> FileDescription<T>
+    where
+        P: Into<path::PathBuf>,
+    {
         FileDescription {
-            source: FileSource::FileSystem(path.into())
+            source: FileSource::FileSystem(path.into()),
         }
     }
 
     pub fn from_stream(stream: T) -> FileDescription<T> {
         FileDescription {
-            source: FileSource::Stream(stream)
+            source: FileSource::Stream(stream),
         }
     }
 

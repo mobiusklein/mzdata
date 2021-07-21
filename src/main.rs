@@ -1,13 +1,13 @@
 #![allow(unused)]
+use std::env;
 use std::fs;
 use std::path;
-use std::env;
 
-use mzdata::io::{mgf, mzml, ScanSource};
 use mzdata::io::prelude::*;
-use mzdata::MassErrorType;
+use mzdata::io::{mgf, mzml, ScanSource};
 use mzdata::peaks::PeakCollection;
-use mzdata::spectrum::{SignalContinuity, SpectrumBehavior, CentroidSpectrum};
+use mzdata::spectrum::{CentroidSpectrum, SignalContinuity, SpectrumBehavior};
+use mzdata::MassErrorType;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -25,7 +25,12 @@ fn main() {
         println!("Scan {} => BP {}", scan.id(), scan.peaks().base_peak().1);
         if scan.signal_continuity() < SignalContinuity::Profile {
             let peak_picked = scan.into_centroid().unwrap();
-            println!("Matches for 579.155: {:?}", peak_picked.peaks.all_peaks_for(579.155, 0.02, MassErrorType::Exact));
+            println!(
+                "Matches for 579.155: {:?}",
+                peak_picked
+                    .peaks
+                    .all_peaks_for(579.155, 0.02, MassErrorType::Exact)
+            );
         }
     }
 }

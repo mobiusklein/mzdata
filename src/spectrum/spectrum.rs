@@ -14,13 +14,13 @@
 //! These structures all implement the [`SpectrumBehavior`] trait
 use std::borrow;
 
+use crate::mass_error::MassErrorType;
 use crate::peaks::CentroidPeak;
 use crate::peaks::{PeakCollection, PeakSet};
 use crate::spectrum::scan_properties::{
     Acquisition, Precursor, SignalContinuity, SpectrumDescription,
 };
 use crate::spectrum::signal::BinaryArrayMap;
-use crate::mass_error::MassErrorType;
 
 #[derive(Debug)]
 /// An variant for dispatching to different strategies of computing
@@ -35,20 +35,24 @@ impl<'lifespan> PeakDataLevel<'lifespan> {
     /// Compute the base peak of a spectrum
     pub fn base_peak(&self) -> (usize, f64, f32) {
         match self {
-            PeakDataLevel::Missing => {
-                (0, 0.0, 0.0)
-            },
+            PeakDataLevel::Missing => (0, 0.0, 0.0),
             PeakDataLevel::RawData(arrays) => {
                 let intensities = arrays.intensities();
-                let result = intensities.iter().enumerate().max_by(|ia, ib| ia.1.partial_cmp(&ib.1).unwrap());
+                let result = intensities
+                    .iter()
+                    .enumerate()
+                    .max_by(|ia, ib| ia.1.partial_cmp(&ib.1).unwrap());
                 if let Some((i, inten)) = result {
                     (i, arrays.mzs()[i], *inten)
                 } else {
                     (0, 0.0, 0.0)
                 }
-            },
+            }
             PeakDataLevel::Centroid(peaks) => {
-                let result = peaks.iter().enumerate().max_by(|ia, ib| ia.1.intensity.partial_cmp(&ib.1.intensity).unwrap());
+                let result = peaks
+                    .iter()
+                    .enumerate()
+                    .max_by(|ia, ib| ia.1.intensity.partial_cmp(&ib.1.intensity).unwrap());
                 if let Some((i, peak)) = result {
                     (i, peak.mz, peak.intensity)
                 } else {
@@ -60,25 +64,23 @@ impl<'lifespan> PeakDataLevel<'lifespan> {
 
     pub fn tic(&self) -> f32 {
         match self {
-            PeakDataLevel::Missing => {
-                0.0
-            },
+            PeakDataLevel::Missing => 0.0,
             PeakDataLevel::RawData(arrays) => {
                 let intensities = arrays.intensities();
                 intensities.iter().sum()
-            },
-            PeakDataLevel::Centroid(peaks) => {
-                peaks.iter().map(|p|p.intensity).sum()
             }
+            PeakDataLevel::Centroid(peaks) => peaks.iter().map(|p| p.intensity).sum(),
         }
     }
 
-    pub fn search(&self, query: f64, error_tolerance: f64, error_type: MassErrorType) -> Option<usize> {
-
+    pub fn search(
+        &self,
+        query: f64,
+        error_tolerance: f64,
+        error_type: MassErrorType,
+    ) -> Option<usize> {
         match self {
-            PeakDataLevel::Missing => {
-                None
-            },
+            PeakDataLevel::Missing => None,
             PeakDataLevel::RawData(arrays) => {
                 let mzs = arrays.mzs();
                 let lower = error_type.lower_bound(query, error_tolerance);
@@ -96,16 +98,14 @@ impl<'lifespan> PeakDataLevel<'lifespan> {
                             index += 1;
                         }
                         if best_error < error_tolerance {
-                            return Some(best_index)
+                            return Some(best_index);
                         }
                         None
-                    },
-                    Err(_err) => None
+                    }
+                    Err(_err) => None,
                 }
-            },
-            PeakDataLevel::Centroid(peaks) => {
-                peaks.search(query, error_tolerance, error_type)
             }
+            PeakDataLevel::Centroid(peaks) => peaks.search(query, error_tolerance, error_type),
         }
     }
 }
@@ -306,7 +306,6 @@ impl<'lifespan> SpectrumBehavior for Spectrum {
             PeakDataLevel::Missing
         }
     }
-
 }
 
 impl Spectrum {
