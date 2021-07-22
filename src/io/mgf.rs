@@ -10,8 +10,8 @@ use regex::Regex;
 
 use crate::peaks::{CentroidPeak, PeakCollection, PeakSet};
 use crate::spectrum::{
-    scan_properties, CentroidSpectrum, Precursor, SelectedIon, SpectrumDescription,
-    Spectrum, RawSpectrum
+    scan_properties, Spectrum, Precursor, SelectedIon,
+    SpectrumDescription, CentroidSpectrum, RawSpectrum
 };
 
 use super::offset_index::OffsetIndex;
@@ -59,39 +59,33 @@ impl Default for SpectrumBuilder {
 }
 
 impl SpectrumBuilder {
-    pub fn into_centroid_spectrum(self) -> CentroidSpectrum {
-        CentroidSpectrum {
-            description: self.description,
-            peaks: self.peaks
+    pub fn into_spectrum(self, spectrum: &mut Spectrum) {
+        spectrum.description = self.description;
+        spectrum.peaks = Some(self.peaks);
+    }
+}
+
+
+impl From<SpectrumBuilder> for Spectrum {
+    fn from(builder: SpectrumBuilder) -> Spectrum {
+        let mut spectrum = Spectrum::default();
+        builder.into_spectrum(&mut spectrum);
+        spectrum
+    }
+}
+
+macro_rules! impl_from_spectrum_builder_for_spec {
+    ($($t:ty), +) => {$(
+        impl From<SpectrumBuilder> for $t {
+            fn from(builder: SpectrumBuilder) -> $t {
+                let spec: Spectrum = builder.into();
+                spec.into()
+            }
         }
-    }
-
-    pub fn into_spectrum(self) -> Spectrum {
-        Spectrum {
-            description: self.description,
-            peaks: Some(self.peaks),
-            .. Default::default()
-        }
-    }
+    )+};
 }
 
-impl Into<CentroidSpectrum> for SpectrumBuilder {
-    fn into(self) -> CentroidSpectrum {
-        self.into_centroid_spectrum()
-    }
-}
-
-impl Into<Spectrum> for SpectrumBuilder {
-    fn into(self) -> Spectrum {
-        self.into_spectrum()
-    }
-}
-
-impl Into<RawSpectrum> for SpectrumBuilder {
-    fn into(self) -> RawSpectrum {
-        self.into_spectrum().into_raw().unwrap()
-    }
-}
+impl_from_spectrum_builder_for_spec!(CentroidSpectrum, RawSpectrum);
 
 
 
@@ -233,31 +227,17 @@ impl<R: io::Read> MGFReader<R> {
         true
     }
 
-    /// Make a new, empty scan with the appropriate default values set
-    /// for this type of file.
-    pub fn new_scan(&self) -> CentroidSpectrum {
-        let description: SpectrumDescription = SpectrumDescription {
-            ms_level: 2,
-            signal_continuity: scan_properties::SignalContinuity::Centroid,
-            polarity: scan_properties::ScanPolarity::Unknown,
-            ..Default::default()
-        };
-
-        let peaks: PeakSet = PeakSet::empty();
-        CentroidSpectrum { description, peaks }
-    }
-
     fn read_line(&mut self, buffer: &mut String) -> io::Result<usize> {
         self.handle.read_line(buffer)
     }
 
     /// Read the next spectrum from the file, if there is one.
-    pub fn read_next(&mut self) -> Option<CentroidSpectrum> {
-        let mut scan = self.new_scan();
-        match self.read_into(&mut scan) {
+    pub fn read_next(&mut self) -> Option<Spectrum> {
+        let mut builder = SpectrumBuilder::default();
+        match self._parse_into(&mut builder) {
             Ok(offset) => {
                 if offset > 0 {
-                    Some(scan)
+                    Some(builder.into())
                 } else {
                     None
                 }
@@ -270,7 +250,7 @@ impl<R: io::Read> MGFReader<R> {
     }
 
     /// Read the next spectrum's contents directly into the passed struct.
-    pub fn read_into(&mut self, spectrum: &mut CentroidSpectrum) -> Result<usize, MGFError> {
+    fn _parse_into(&mut self, spectrum: &mut SpectrumBuilder) -> Result<usize, MGFError> {
         let mut buffer = String::new();
         let mut work = true;
         let mut offset: usize = 0;
@@ -317,7 +297,16 @@ impl<R: io::Read> MGFReader<R> {
         }
         Ok(offset)
     }
-
+    pub fn read_into(&mut self, spectrum: &mut Spectrum) -> Result<usize, MGFError> {
+        let mut accumulator = SpectrumBuilder::default();
+        match self._parse_into(&mut accumulator) {
+            Ok(sz) => {
+                accumulator.into_spectrum(spectrum);
+                Ok(sz)
+            }
+            Err(err) => Err(err),
+        }
+    }
     /// Create a new, unindexed MGF parser
     pub fn new(file: R) -> MGFReader<R> {
         let handle = io::BufReader::with_capacity(500, file);
@@ -332,7 +321,7 @@ impl<R: io::Read> MGFReader<R> {
 }
 
 impl<R: io::Read> Iterator for MGFReader<R> {
-    type Item = CentroidSpectrum;
+    type Item = Spectrum;
 
     /// Read the next spectrum from the file.
     fn next(&mut self) -> Option<Self::Item> {
@@ -406,9 +395,9 @@ impl<R: SeekRead> MGFReader<R> {
     }
 }
 
-impl<R: SeekRead> ScanSource<CentroidSpectrum> for MGFReader<R> {
+impl<R: SeekRead> ScanSource<Spectrum> for MGFReader<R> {
     /// Retrieve a spectrum by it's native ID
-    fn get_spectrum_by_id(&mut self, id: &str) -> Option<CentroidSpectrum> {
+    fn get_spectrum_by_id(&mut self, id: &str) -> Option<Spectrum> {
         let offset_ref = self.index.get(id);
         let offset = offset_ref.expect("Failed to retrieve offset");
         let start = self
@@ -424,7 +413,7 @@ impl<R: SeekRead> ScanSource<CentroidSpectrum> for MGFReader<R> {
     }
 
     /// Retrieve a spectrum by it's integer index
-    fn get_spectrum_by_index(&mut self, index: usize) -> Option<CentroidSpectrum> {
+    fn get_spectrum_by_index(&mut self, index: usize) -> Option<Spectrum> {
         let (_id, offset) = self.index.get_index(index)?;
         let byte_offset = offset;
         let start = self
@@ -453,7 +442,7 @@ impl<R: SeekRead> ScanSource<CentroidSpectrum> for MGFReader<R> {
     }
 }
 
-impl<R: SeekRead> RandomAccessScanIterator<CentroidSpectrum> for MGFReader<R> {
+impl<R: SeekRead> RandomAccessScanIterator<Spectrum> for MGFReader<R> {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {

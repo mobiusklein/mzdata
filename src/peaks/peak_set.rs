@@ -8,13 +8,19 @@ use crate::mass_error::MassErrorType;
 use super::coordinate::{CoordinateLike, IndexedCoordinate, Mass, MZ};
 use super::peak::{CentroidPeak, DeconvolutedPeak};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrderUpdateEvent {
+    TailAppend,
+    InsertResorted,
+}
+
 /// A trait for an ordered container of mass spectral peaks. The trait
 /// interoperates with [`CoordinateLike`] to make searching efficient.
 pub trait PeakCollection<T: CoordinateLike<C>, C>: ops::Index<usize>
 where
     <Self as ops::Index<usize>>::Output: CoordinateLike<C>,
 {
-    fn push(&mut self, peak: T);
+    fn push(&mut self, peak: T) -> OrderUpdateEvent;
     fn sort(&mut self);
 
     fn len(&self) -> usize;
@@ -238,7 +244,7 @@ impl<P: IndexedCoordinate<C>, C> PeakCollection<P, C> for PeakSetVec<P, C> {
         Self::_sort(&mut self.peaks);
     }
 
-    fn push(&mut self, peak: P) {
+    fn push(&mut self, peak: P) -> OrderUpdateEvent {
         let n = self.len();
         match self.peaks.last() {
             Some(p) => {
@@ -246,15 +252,18 @@ impl<P: IndexedCoordinate<C>, C> PeakCollection<P, C> for PeakSetVec<P, C> {
                     self.peaks.push(peak);
                     let fin = &mut self.peaks[n];
                     fin.set_index(n as u32);
+                    OrderUpdateEvent::TailAppend
                 } else {
                     self.peaks.push(peak);
                     self.sort();
+                    OrderUpdateEvent::InsertResorted
                 }
             }
             None => {
                 self.peaks.push(peak);
                 let fin = &mut self.peaks[n];
                 fin.set_index(n as u32);
+                OrderUpdateEvent::TailAppend
             }
         }
     }
@@ -429,7 +438,7 @@ mod test {
         let mut reader =
             MGFReader::new(fs::File::open("./test/data/small.mgf").expect("Missing test file"));
         let scan = reader.next().expect("Failed to read first spectrum");
-        let peaks = scan.peaks;
+        let peaks = scan.into_centroid().unwrap().peaks;
 
         assert_eq!(peaks.len(), 485);
         assert!((peaks[0].mz - 231.3888).abs() < 1e-3);

@@ -136,7 +136,7 @@ impl MzMLSpectrumBuilder {
         self.polarity = ScanPolarity::Unknown;
     }
 
-    pub fn _to_spectrum(&self, spectrum: &mut RawSpectrum) {
+    pub fn _to_spectrum(&self, spectrum: &mut Spectrum) {
         let description = &mut spectrum.description;
 
         description.id = self.scan_id.clone();
@@ -153,10 +153,10 @@ impl MzMLSpectrumBuilder {
             description.precursor = None;
         }
 
-        spectrum.arrays = self.arrays.clone();
+        spectrum.arrays = Some(self.arrays.clone());
     }
 
-    pub fn into_spectrum(self, spectrum: &mut RawSpectrum) {
+    pub fn into_spectrum(self, spectrum: &mut Spectrum) {
         let description = &mut spectrum.description;
 
         description.id = self.scan_id;
@@ -173,7 +173,7 @@ impl MzMLSpectrumBuilder {
             description.precursor = None;
         }
 
-        spectrum.arrays = self.arrays;
+        spectrum.arrays = Some(self.arrays);
     }
 
     fn handle_param<B: io::BufRead>(
@@ -655,30 +655,30 @@ impl MzMLSpectrumBuilder {
 
 impl Into<CentroidSpectrum> for MzMLSpectrumBuilder {
     fn into(self) -> CentroidSpectrum {
-        let mut spec = RawSpectrum::default();
+        let mut spec = Spectrum::default();
         self.into_spectrum(&mut spec);
-        spec.into_centroid().unwrap()
+        spec.into()
     }
 }
 
 impl Into<Spectrum> for MzMLSpectrumBuilder {
     fn into(self) -> Spectrum {
-        let mut spec = RawSpectrum::default();
-        self.into_spectrum(&mut spec);
-        spec.into_spectrum().unwrap()
-    }
-}
-
-impl Into<RawSpectrum> for MzMLSpectrumBuilder {
-    fn into(self) -> RawSpectrum {
-        let mut spec = RawSpectrum::default();
+        let mut spec = Spectrum::default();
         self.into_spectrum(&mut spec);
         spec
     }
 }
 
+impl Into<RawSpectrum> for MzMLSpectrumBuilder {
+    fn into(self) -> RawSpectrum {
+        let mut spec = Spectrum::default();
+        self.into_spectrum(&mut spec);
+        spec.into()
+    }
+}
+
 /// An mzML parser that supports iteration and random access. The parser produces
-/// [`RawSpectrum`] instances, which may be converted up to [`Spectrum`](crate::spectrum::spectrum::Spectrum)
+/// [`Spectrum`] instances, which may be converted up to [`Spectrum`](crate::spectrum::spectrum::Spectrum)
 /// or forward to [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum) as is appropriate to the data.
 ///
 /// When the readable stream the parser is wrapped around supports [`io::Seek`],
@@ -800,10 +800,10 @@ impl<R: Read> MzMLReader<R> {
         }
     }
 
-    /// Populate a new [`RawSpectrum`] in-place on the next available spectrum data.
+    /// Populate a new [`Spectrum`] in-place on the next available spectrum data.
     /// This allocates memory to build the spectrum's attributes but then moves it
     /// into `spectrum` rather than copying it.
-    pub fn read_into(&mut self, spectrum: &mut RawSpectrum) -> Result<usize, MzMLParserError> {
+    pub fn read_into(&mut self, spectrum: &mut Spectrum) -> Result<usize, MzMLParserError> {
         let mut accumulator = MzMLSpectrumBuilder::new();
         if self.state == MzMLParserState::SpectrumDone {
             self.state = MzMLParserState::Resume;
@@ -818,18 +818,18 @@ impl<R: Read> MzMLReader<R> {
     }
 
     /// Read the next spectrum directly. Used to implement iteration.
-    pub fn read_next(&mut self) -> Option<RawSpectrum> {
-        let mut spectrum = RawSpectrum::default();
+    pub fn read_next(&mut self) -> Option<Spectrum> {
+        let mut spectrum = Spectrum::default();
         match self.read_into(&mut spectrum) {
-            Ok(_sz) => Some(spectrum),
+            Ok(_sz) => Some(spectrum.into()),
             Err(_err) => None,
         }
     }
 }
 
-/// [`MzMLReader`] instances are [`Iterator`]s over [`RawSpectrum`]
+/// [`MzMLReader`] instances are [`Iterator`]s over [`Spectrum`]
 impl<R: io::Read> Iterator for MzMLReader<R> {
-    type Item = RawSpectrum;
+    type Item = Spectrum;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.read_next()
@@ -838,9 +838,9 @@ impl<R: io::Read> Iterator for MzMLReader<R> {
 
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
-impl<R: SeekRead> ScanSource<RawSpectrum> for MzMLReader<R> {
+impl<R: SeekRead> ScanSource<Spectrum> for MzMLReader<R> {
     /// Retrieve a spectrum by it's native ID
-    fn get_spectrum_by_id(&mut self, id: &str) -> Option<RawSpectrum> {
+    fn get_spectrum_by_id(&mut self, id: &str) -> Option<Spectrum> {
         let offset_ref = self.index.get(id);
         let offset = offset_ref.expect("Failed to retrieve offset");
         let start = self
@@ -856,7 +856,7 @@ impl<R: SeekRead> ScanSource<RawSpectrum> for MzMLReader<R> {
     }
 
     /// Retrieve a spectrum by it's integer index
-    fn get_spectrum_by_index(&mut self, index: usize) -> Option<RawSpectrum> {
+    fn get_spectrum_by_index(&mut self, index: usize) -> Option<Spectrum> {
         let (_id, offset) = self.index.get_index(index)?;
         let byte_offset = offset;
         let start = self
@@ -887,7 +887,7 @@ impl<R: SeekRead> ScanSource<RawSpectrum> for MzMLReader<R> {
 
 /// The iterator can also be updated to move to a different location in the
 /// stream efficiently.
-impl<R: SeekRead> RandomAccessScanIterator<RawSpectrum> for MzMLReader<R> {
+impl<R: SeekRead> RandomAccessScanIterator<Spectrum> for MzMLReader<R> {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {

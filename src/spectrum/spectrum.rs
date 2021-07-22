@@ -199,7 +199,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         let intensity_array = self.intensities();
 
         if mz_array.len() != intensity_array.len() {
-            return Err(SpectrumConversionError::NotCentroided);
+            return Err(SpectrumConversionError::MZIntensityArraySizeMismatch);
         }
 
         let mut peaks = PeakSet::empty();
@@ -318,14 +318,25 @@ impl Spectrum {
             };
             result.description.signal_continuity = SignalContinuity::Centroid;
             return Ok(result);
-        } else if let Some(arrays) = &self.arrays {
-            let peaks = PeakSet::from(arrays);
-            let mut centroid = CentroidSpectrum {
-                description: self.description,
-                peaks,
-            };
-            centroid.description.signal_continuity = SignalContinuity::Centroid;
-            return Ok(centroid);
+        } else {
+            if self.signal_continuity() == SignalContinuity::Centroid {
+                if let Some(arrays) = &self.arrays {
+                    let peaks = PeakSet::from(arrays);
+                    let mut centroid = CentroidSpectrum {
+                        description: self.description,
+                        peaks,
+                    };
+                    centroid.description.signal_continuity = SignalContinuity::Centroid;
+                    return Ok(centroid);
+                } else {
+                    let mut result = CentroidSpectrum {
+                        peaks: PeakSet::empty(),
+                        description: self.description,
+                    };
+                    result.description.signal_continuity = SignalContinuity::Centroid;
+                    return Ok(result);
+                }
+            }
         }
         Err(SpectrumConversionError::NotCentroided)
     }
@@ -347,7 +358,80 @@ impl Spectrum {
             result.description.signal_continuity = SignalContinuity::Centroid;
             Ok(result)
         } else {
-            Err(SpectrumConversionError::NoPeakData)
+            let arrays = BinaryArrayMap::from(PeakSet::empty());
+            Ok(RawSpectrum {
+                arrays, description: self.description
+            })
+        }
+    }
+}
+
+
+impl From<Spectrum> for CentroidSpectrum {
+    fn from(spectrum: Spectrum) -> CentroidSpectrum {
+        spectrum.into_centroid().unwrap()
+    }
+}
+
+impl From<CentroidSpectrum> for Spectrum {
+    fn from(spectrum: CentroidSpectrum) -> Spectrum {
+        spectrum.into_spectrum().unwrap()
+    }
+}
+
+impl From<RawSpectrum> for Spectrum {
+    fn from(spectrum: RawSpectrum) -> Spectrum {
+        spectrum.into_spectrum().unwrap()
+    }
+}
+
+impl From<Spectrum> for RawSpectrum {
+    fn from(spectrum: Spectrum) -> RawSpectrum {
+        spectrum.into_raw().unwrap()
+    }
+}
+
+impl From<RawSpectrum> for CentroidSpectrum {
+    fn from(spectrum: RawSpectrum) -> CentroidSpectrum {
+        spectrum.into_centroid().unwrap()
+    }
+}
+
+pub struct SpectrumView<'lifespan> {
+    pub description: borrow::Cow<'lifespan, SpectrumDescription>,
+    pub peaks: Option<borrow::Cow<'lifespan, PeakSet>>,
+    pub arrays: Option<borrow::Cow<'lifespan, BinaryArrayMap>>,
+}
+
+impl<'lifespan> SpectrumBehavior for SpectrumView<'lifespan> {
+    fn description(&self) -> &SpectrumDescription {
+        &self.description
+    }
+
+    fn peaks(&'_ self) -> PeakDataLevel<'_> {
+        if let Some(peaks) = &self.peaks {
+            PeakDataLevel::Centroid(&peaks)
+        } else if let Some(arrays) = &self.arrays {
+            PeakDataLevel::RawData(&arrays)
+        } else {
+            PeakDataLevel::Missing
+        }
+    }
+}
+
+
+impl<'lifespan> SpectrumView<'lifespan> {
+    pub fn as_ref(spectrum: &'lifespan Spectrum) -> SpectrumView<'lifespan> {
+        SpectrumView {
+            description: borrow::Cow::Borrowed(spectrum.description()),
+            peaks: match &spectrum.peaks {
+                Some(peaks) => Some(borrow::Cow::Borrowed(peaks)),
+                None => None
+            },
+            arrays: match &spectrum.arrays {
+                Some(arrays) => Some(borrow::Cow::Borrowed(arrays)),
+                None => None
+            }
         }
     }
 }
