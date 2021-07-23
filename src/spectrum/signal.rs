@@ -9,11 +9,14 @@ use std::slice;
 use num_traits::cast::AsPrimitive;
 use num_traits::Num;
 
+use log::warn;
+
 use base64;
 use flate2::write::ZlibDecoder;
 
 use crate::params::ParamList;
-use crate::peaks::{CentroidPeak, PeakCollection, PeakSet};
+use crate::peaks::{CentroidPeak, DeconvolutedPeak, PeakCollection, PeakSet, DeconvolutedPeakSet};
+use crate::utils::neutral_mass;
 
 type Bytes = Vec<u8>;
 
@@ -330,6 +333,10 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         self.byte_buffer_map.get(array_type)
     }
 
+    pub fn has_array(&self, array_type: &ArrayType) -> bool {
+        self.byte_buffer_map.contains_key(array_type)
+    }
+
     pub fn clear(&mut self) {
         self.byte_buffer_map.clear();
     }
@@ -350,6 +357,19 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
             .to_f32()
             .expect("Failed to decode intensity array");
         intensities
+    }
+
+    pub fn charges(&'lifespan self) -> Option<Cow<'transient, [i32]>> {
+        match self.get(&ArrayType::ChargeArray) {
+            Some(data_array) => match data_array.to_i32() {
+                Ok(array) => Some(array),
+                Err(err) => {
+                    warn!("Failed to decode charge state array: {:?}", err);
+                    None
+                }
+            },
+            None => None
+        }
     }
 }
 
@@ -422,5 +442,26 @@ impl From<&BinaryArrayMap> for PeakSet {
         }
 
         PeakSet::new(peaks)
+    }
+}
+
+
+impl From<&BinaryArrayMap> for DeconvolutedPeakSet {
+    fn from(arrays: &BinaryArrayMap) -> DeconvolutedPeakSet {
+        let mz_array = arrays.mzs();
+        let intensity_array = arrays.intensities();
+        let charge_array = arrays.charges().expect(
+            "Charge state array is required for deconvoluted peaks");
+        let mut peaks = Vec::with_capacity(mz_array.len());
+        for (i, ((mz, intensity), charge)) in mz_array.iter().zip(intensity_array.iter()).zip(charge_array.iter()).enumerate() {
+            peaks.push(DeconvolutedPeak {
+                neutral_mass: neutral_mass(*mz, *charge),
+                intensity: *intensity,
+                charge: *charge,
+                index: i as u32
+            })
+        }
+
+        DeconvolutedPeakSet::new(peaks)
     }
 }

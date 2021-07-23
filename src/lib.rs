@@ -15,7 +15,7 @@
 //!
 //! let mut ms1_count = 0;
 //! let mut msn_count = 0;
-//! let mut reader = MzMLReader::new_indexed(fs::File::open("./test/data/small.mzML").unwrap());
+//! let mut reader = MzMLReader::open_path("./test/data/small.mzML").unwrap();
 //! for scan in reader {
 //!     if scan.ms_level() == 1 {
 //!         ms1_count += 1;
@@ -36,6 +36,7 @@ pub mod meta;
 pub mod params;
 pub mod peaks;
 pub mod spectrum;
+mod utils;
 
 pub use crate::peaks::coordinate::{CoordinateDimension, CoordinateLike, Mass, MZ};
 

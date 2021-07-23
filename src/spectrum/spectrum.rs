@@ -13,14 +13,14 @@
 //!
 //! These structures all implement the [`SpectrumBehavior`] trait
 use std::borrow;
-
+use std::convert::TryFrom;
 use crate::mass_error::MassErrorType;
-use crate::peaks::CentroidPeak;
-use crate::peaks::{PeakCollection, PeakSet};
+use crate::peaks::{CentroidPeak};
+use crate::peaks::{PeakCollection, PeakSet, DeconvolutedPeakSet};
 use crate::spectrum::scan_properties::{
     Acquisition, Precursor, SignalContinuity, SpectrumDescription,
 };
-use crate::spectrum::signal::BinaryArrayMap;
+use crate::spectrum::signal::{BinaryArrayMap, ArrayType};
 
 #[derive(Debug)]
 /// An variant for dispatching to different strategies of computing
@@ -29,6 +29,7 @@ pub enum PeakDataLevel<'lifespan> {
     Missing,
     RawData(&'lifespan BinaryArrayMap),
     Centroid(&'lifespan PeakSet),
+    Deconvoluted(&'lifespan DeconvolutedPeakSet),
 }
 
 impl<'lifespan> PeakDataLevel<'lifespan> {
@@ -58,6 +59,17 @@ impl<'lifespan> PeakDataLevel<'lifespan> {
                 } else {
                     (0, 0.0, 0.0)
                 }
+            },
+            PeakDataLevel::Deconvoluted(peaks) => {
+                let result = peaks
+                    .iter()
+                    .enumerate()
+                    .max_by(|ia, ib| ia.1.intensity.partial_cmp(&ib.1.intensity).unwrap());
+                if let Some((i, peak)) = result {
+                    (i, peak.neutral_mass, peak.intensity)
+                } else {
+                    (0, 0.0, 0.0)
+                }
             }
         }
     }
@@ -70,6 +82,7 @@ impl<'lifespan> PeakDataLevel<'lifespan> {
                 intensities.iter().sum()
             }
             PeakDataLevel::Centroid(peaks) => peaks.iter().map(|p| p.intensity).sum(),
+            PeakDataLevel::Deconvoluted(peaks) => peaks.iter().map(|p| p.intensity).sum()
         }
     }
 
@@ -106,6 +119,7 @@ impl<'lifespan> PeakDataLevel<'lifespan> {
                 }
             }
             PeakDataLevel::Centroid(peaks) => peaks.search(query, error_tolerance, error_type),
+            PeakDataLevel::Deconvoluted(peaks) => peaks.search(query, error_tolerance, error_type)
         }
     }
 }
@@ -181,6 +195,7 @@ pub struct RawSpectrum {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SpectrumConversionError {
     MZIntensityArraySizeMismatch,
+    NotDeconvoluted,
     NotCentroided,
     NoPeakData,
 }
@@ -274,6 +289,24 @@ impl CentroidSpectrum {
             description: self.description,
             ..Default::default()
         })
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+struct DeconvolutedSpectrum {
+    /// The spectrum metadata describing acquisition conditions and details.
+    pub description: SpectrumDescription,
+    /// The deisotoped and charge state deconvolved peaks
+    pub deconvoluted_peaks: DeconvolutedPeakSet,
+}
+
+impl<'lifespan> SpectrumBehavior for DeconvolutedSpectrum {
+    fn description(&self) -> &SpectrumDescription {
+        &self.description
+    }
+
+    fn peaks(&'_ self) -> PeakDataLevel<'_> {
+        PeakDataLevel::Deconvoluted(&self.deconvoluted_peaks)
     }
 }
 
@@ -394,5 +427,26 @@ impl From<Spectrum> for RawSpectrum {
 impl From<RawSpectrum> for CentroidSpectrum {
     fn from(spectrum: RawSpectrum) -> CentroidSpectrum {
         spectrum.into_centroid().unwrap()
+    }
+}
+
+impl TryFrom<Spectrum> for DeconvolutedSpectrum {
+    type Error = SpectrumConversionError;
+
+    fn try_from(spectrum: Spectrum) -> Result<Self, Self::Error> {
+        if spectrum.signal_continuity() == SignalContinuity::Profile {
+            return Err(SpectrumConversionError::NotCentroided);
+        }
+        if let Some(arrays) = &spectrum.arrays {
+            if arrays.has_array(&ArrayType::ChargeArray) {
+                let peaks: DeconvolutedPeakSet = DeconvolutedPeakSet::from(arrays);
+                return Ok(DeconvolutedSpectrum {
+                    description: spectrum.description,
+                    deconvoluted_peaks: peaks
+                })
+            }
+            return Err(Self::Error::NotDeconvoluted)
+        }
+        return Err(Self::Error::NoPeakData)
     }
 }
