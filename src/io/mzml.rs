@@ -1077,7 +1077,16 @@ mod test {
         let mut msn_count = 0;
 
         for i in (0..n).rev() {
-            let scan = reader.get_spectrum_by_index(i).expect("Missing spectrum");
+            let scan = match reader.get_spectrum_by_index(i) {
+                Some(scan) => scan,
+                None => {
+                    if let Some(offset) = reader._offset_of_index(i) {
+                        panic!("Failed to locate spectrum {} at offset {}", i, offset);
+                    } else {
+                        panic!("Failed to locate spectrum or offset {}", i);
+                    }
+                }
+            };
             let level = scan.ms_level();
             if level == 1 {
                 ms1_count += 1;
