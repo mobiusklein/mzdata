@@ -1081,7 +1081,8 @@ mod test {
                 Some(scan) => scan,
                 None => {
                     if let Some(offset) = reader._offset_of_index(i) {
-                        panic!("Failed to locate spectrum {} at offset {}", i, offset);
+                        panic!("Failed to locate spectrum {} at offset {}, parser state {:?}",
+                               i, offset, reader.state, );
                     } else {
                         panic!("Failed to locate spectrum or offset {}", i);
                     }
