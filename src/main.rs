@@ -19,13 +19,7 @@ fn main() -> io::Result<()> {
         path = path::Path::new("./test/data/small.mzML");
     }
     let start = time::Instant::now();
-    let fh = fs::File::open(path)?;
-    // let mut reader = mzml::MzMLReader::open_path(path)?;
-    let mut reader = mzml::MzMLReader::new(fh);
-    let index_path = path.with_extension("index.json");
-    println!("Index Path: {}", index_path.display());
-    let index_fh = fs::File::open(index_path)?;
-    reader.read_index(index_fh);
+    let mut reader = mzml::MzMLReader::open_path(path)?;
     let end = time::Instant::now();
     println!(
         "Loaded in {} seconds",

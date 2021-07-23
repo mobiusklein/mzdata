@@ -124,11 +124,11 @@ pub trait MZFileReader<S: SpectrumBehavior>: ScanSource<S> + Sized {
                 if let Some(index_path) = &index_file_name {
                     if index_path.exists() {
                         let index_stream = fs::File::open(index_path).unwrap();
-                        match reader.read_index(&index_stream) {
+                        match reader.read_index(io::BufReader::new(&index_stream)) {
                             Ok(_) => {}
                             Err(_err) => {
                                 reader.construct_index_from_stream();
-                                match reader.write_index(index_stream) {
+                                match reader.write_index(io::BufWriter::new(index_stream)) {
                                     Ok(_) => {}
                                     Err(err) => {
                                         warn!(
@@ -143,7 +143,7 @@ pub trait MZFileReader<S: SpectrumBehavior>: ScanSource<S> + Sized {
                     } else {
                         reader.construct_index_from_stream();
                         let index_stream = fs::File::create(index_path).unwrap();
-                        match reader.write_index(index_stream) {
+                        match reader.write_index(io::BufWriter::new(index_stream)) {
                             Ok(_) => {}
                             Err(err) => {
                                 warn!(
