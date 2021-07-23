@@ -1,50 +1,96 @@
 #![allow(dead_code)]
 
 use std::io;
+
+use std::fs;
 use std::path;
 
 type ByteBuffer = io::Cursor<Vec<u8>>;
 
 #[derive(Debug, Clone)]
-pub enum FileSource<T: io::Read> {
+pub enum FileWrapper<T: io::Read> {
     FileSystem(path::PathBuf),
     Stream(T),
     Empty,
 }
 
-impl<T: io::Read> Default for FileSource<T> {
-    fn default() -> FileSource<T> {
-        FileSource::Empty
+impl<T: io::Read> Default for FileWrapper<T> {
+    fn default() -> FileWrapper<T> {
+        FileWrapper::Empty
     }
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct FileDescription<T: io::Read> {
-    pub source: FileSource<T>,
+pub struct FileSource<T: io::Read> {
+    pub source: FileWrapper<T>,
 }
 
-impl<'lifespan, T: io::Read> FileDescription<T> {
-    pub fn from_path<P>(path: P) -> FileDescription<T>
+/// This really should be a full file-like object abstraction, but that
+/// feels like it is beyond the scope of this crate. Something like
+/// https://github.com/bnjjj/chicon-rs
+impl<'lifespan, T: io::Read> FileSource<T> {
+    pub fn from_path<P>(path: P) -> FileSource<T>
     where
         P: Into<path::PathBuf>,
     {
-        FileDescription {
-            source: FileSource::FileSystem(path.into()),
+        FileSource {
+            source: FileWrapper::FileSystem(path.into()),
         }
     }
 
-    pub fn from_stream(stream: T) -> FileDescription<T> {
-        FileDescription {
-            source: FileSource::Stream(stream),
+    pub fn from_stream(stream: T) -> FileSource<T> {
+        FileSource {
+            source: FileWrapper::Stream(stream),
         }
     }
 
     pub fn file_name(&self) -> Option<&path::Path> {
         match &self.source {
-            FileSource::FileSystem(path) => Some(path),
-            FileSource::Stream(_stream) => None,
-            FileSource::Empty => None,
+            FileWrapper::FileSystem(path) => Some(path),
+            FileWrapper::Stream(_stream) => None,
+            FileWrapper::Empty => None,
         }
+    }
+
+    pub fn index_file_name(&self) -> Option<path::PathBuf> {
+        match &self.source {
+            FileWrapper::Empty => None,
+            FileWrapper::Stream(_stream) => None,
+            FileWrapper::FileSystem(path) => {
+                if let Some(stem) = path.file_name() {
+                    if let Some(parent) = path.parent() {
+                        let base = parent.join(stem);
+                        let name = base.with_extension("index.json");
+                        return Some(name);
+                    }
+                }
+                None
+            }
+        }
+    }
+
+    pub fn has_index_file(&self) -> bool {
+        match self.index_file_name() {
+            Some(path) => path.exists(),
+            None => false,
+        }
+    }
+}
+
+pub fn from_path<P>(path: P) -> FileSource<fs::File>
+where
+    P: Into<path::PathBuf>,
+{
+    FileSource::from_path(path)
+}
+
+impl<T, P> From<P> for FileSource<T>
+where
+    P: Into<path::PathBuf>,
+    T: io::Read,
+{
+    fn from(path: P) -> FileSource<T> {
+        FileSource::from_path(path)
     }
 }
 
@@ -59,9 +105,9 @@ mod test {
         buff.extend(b"foobar");
         let stream = ByteBuffer::new(buff);
         let mut out: Vec<u8> = Vec::new();
-        let desc = FileDescription::<ByteBuffer>::from_stream(stream);
+        let desc = FileSource::<ByteBuffer>::from_stream(stream);
         assert!(matches!(desc.file_name(), None));
-        if let FileSource::Stream(mut buff) = desc.source {
+        if let FileWrapper::Stream(mut buff) = desc.source {
             buff.read_to_end(&mut out).unwrap();
             assert_eq!(out, b"foobar");
         }

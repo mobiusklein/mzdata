@@ -14,4 +14,4 @@ pub mod spectrum;
 
 pub use crate::spectrum::scan_properties::*;
 pub use crate::spectrum::signal::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray};
-pub use crate::spectrum::spectrum::{CentroidSpectrum, RawSpectrum, SpectrumBehavior, Spectrum};
+pub use crate::spectrum::spectrum::{CentroidSpectrum, RawSpectrum, Spectrum, SpectrumBehavior};

@@ -268,18 +268,22 @@ impl<P: IndexedCoordinate<C>, C> PeakCollection<P, C> for PeakSetVec<P, C> {
         }
     }
 
+    #[inline]
     fn len(&self) -> usize {
         self.peaks.len()
     }
 
+    #[inline]
     fn get_item(&self, i: usize) -> &P {
         &self[i]
     }
 
+    #[inline]
     fn get_slice(&self, i: ops::Range<usize>) -> &[P] {
         &self.peaks[i]
     }
 
+    #[inline]
     fn _search_by(&self, query: f64) -> Result<usize, usize> {
         self.peaks
             .binary_search_by(|peak| peak.get_coordinate().partial_cmp(&query).unwrap())

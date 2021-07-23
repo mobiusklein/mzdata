@@ -40,7 +40,9 @@ fn peak_set_find_inline(peak_set: &PeakSet, queries: &Vec<f64>) {
 fn peak_search(c: &mut Criterion) {
     let peaks = MGFReader::new(fs::File::open("./test/data/small.mgf").unwrap())
         .next()
-        .unwrap().into_centroid().unwrap()
+        .unwrap()
+        .into_centroid()
+        .unwrap()
         .peaks;
     let queries: Vec<f64> = peaks.iter().map(|p| p.mz).collect();
     c.bench_function("peak_set_search", |b| {

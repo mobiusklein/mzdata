@@ -1,15 +1,16 @@
 #![allow(unused)]
 use std::env;
-use std::fs;
+use std::io;
 use std::path;
+use std::time;
+use std::fs;
 
 use mzdata::io::prelude::*;
-use mzdata::io::{mgf, mzml, ScanSource};
+use mzdata::io::{mgf, mzml, offset_index, ScanSource};
 use mzdata::peaks::PeakCollection;
 use mzdata::spectrum::{CentroidSpectrum, SignalContinuity, SpectrumBehavior};
-use mzdata::MassErrorType;
 
-fn main() {
+fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let path: &path::Path;
     if args.len() > 1 {
@@ -17,20 +18,20 @@ fn main() {
     } else {
         path = path::Path::new("./test/data/small.mzML");
     }
-    println!("Path: {}", path.to_str().unwrap());
-    let file = fs::File::open(path).unwrap();
-    let mut parser = mzml::MzMLReader::new_indexed(file);
-    let iter = parser.iter();
-    for scan in iter {
-        println!("Scan {} => BP {}", scan.id(), scan.peaks().base_peak().1);
-        if scan.signal_continuity() < SignalContinuity::Profile {
-            let peak_picked = scan.into_centroid().unwrap();
-            println!(
-                "Matches for 579.155: {:?}",
-                peak_picked
-                    .peaks
-                    .all_peaks_for(579.155, 0.02, MassErrorType::Exact)
-            );
-        }
-    }
+    let start = time::Instant::now();
+    let fh = fs::File::open(path)?;
+    // let mut reader = mzml::MzMLReader::open_path(path)?;
+    let mut reader = mzml::MzMLReader::new(fh);
+    let index_path = path.with_extension("index.json");
+    println!("Index Path: {}", index_path.display());
+    let index_fh = fs::File::open(index_path)?;
+    reader.read_index(index_fh);
+    let end = time::Instant::now();
+    println!(
+        "Loaded in {} seconds",
+        (end - start).as_secs()
+    );
+    println!("{} spectra", reader.len());
+
+    Ok(())
 }

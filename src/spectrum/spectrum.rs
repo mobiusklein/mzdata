@@ -360,12 +360,12 @@ impl Spectrum {
         } else {
             let arrays = BinaryArrayMap::from(PeakSet::empty());
             Ok(RawSpectrum {
-                arrays, description: self.description
+                arrays,
+                description: self.description,
             })
         }
     }
 }
-
 
 impl From<Spectrum> for CentroidSpectrum {
     fn from(spectrum: Spectrum) -> CentroidSpectrum {
@@ -394,44 +394,5 @@ impl From<Spectrum> for RawSpectrum {
 impl From<RawSpectrum> for CentroidSpectrum {
     fn from(spectrum: RawSpectrum) -> CentroidSpectrum {
         spectrum.into_centroid().unwrap()
-    }
-}
-
-pub struct SpectrumView<'lifespan> {
-    pub description: borrow::Cow<'lifespan, SpectrumDescription>,
-    pub peaks: Option<borrow::Cow<'lifespan, PeakSet>>,
-    pub arrays: Option<borrow::Cow<'lifespan, BinaryArrayMap>>,
-}
-
-impl<'lifespan> SpectrumBehavior for SpectrumView<'lifespan> {
-    fn description(&self) -> &SpectrumDescription {
-        &self.description
-    }
-
-    fn peaks(&'_ self) -> PeakDataLevel<'_> {
-        if let Some(peaks) = &self.peaks {
-            PeakDataLevel::Centroid(&peaks)
-        } else if let Some(arrays) = &self.arrays {
-            PeakDataLevel::RawData(&arrays)
-        } else {
-            PeakDataLevel::Missing
-        }
-    }
-}
-
-
-impl<'lifespan> SpectrumView<'lifespan> {
-    pub fn as_ref(spectrum: &'lifespan Spectrum) -> SpectrumView<'lifespan> {
-        SpectrumView {
-            description: borrow::Cow::Borrowed(spectrum.description()),
-            peaks: match &spectrum.peaks {
-                Some(peaks) => Some(borrow::Cow::Borrowed(peaks)),
-                None => None
-            },
-            arrays: match &spectrum.arrays {
-                Some(arrays) => Some(borrow::Cow::Borrowed(arrays)),
-                None => None
-            }
-        }
     }
 }

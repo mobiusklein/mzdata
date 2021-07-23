@@ -1,6 +1,7 @@
 //! Implements a parser for the PSI-MS mzML and indexedmzML XML file formats
 //! for representing raw and processed mass spectra.
 
+use std::fs;
 use std::io;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 
@@ -11,13 +12,15 @@ use quick_xml::Error as XMLError;
 use quick_xml::Reader;
 
 use super::offset_index::OffsetIndex;
-use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead};
+use super::traits::{
+    MZFileReader, RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead,
+};
 use crate::params::{Param, ParamList};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
 };
-use crate::spectrum::{RawSpectrum, CentroidSpectrum, Spectrum};
+use crate::spectrum::{CentroidSpectrum, RawSpectrum, Spectrum};
 
 pub type Bytes = Vec<u8>;
 
@@ -652,7 +655,6 @@ impl MzMLSpectrumBuilder {
     }
 }
 
-
 impl Into<CentroidSpectrum> for MzMLSpectrumBuilder {
     fn into(self) -> CentroidSpectrum {
         let mut spec = Spectrum::default();
@@ -883,6 +885,10 @@ impl<R: SeekRead> ScanSource<Spectrum> for MzMLReader<R> {
         }
         &self.index
     }
+
+    fn set_index(&mut self, index: OffsetIndex) {
+        self.index = index
+    }
 }
 
 /// The iterator can also be updated to move to a different location in the
@@ -998,6 +1004,16 @@ impl<R: SeekRead> MzMLReader<R> {
     }
 }
 
+impl MZFileReader<Spectrum> for MzMLReader<fs::File> {
+    fn open_file(source: fs::File) -> Self {
+        Self::new(source)
+    }
+
+    fn construct_index_from_stream(&mut self) -> u64 {
+        self.build_index()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1029,6 +1045,30 @@ mod test {
         let path = path::Path::new("./test/data/small.mzML");
         let file = fs::File::open(path).expect("Test file doesn't exist");
         let mut reader = MzMLReader::new_indexed(file);
+
+        let n = reader.len();
+        assert_eq!(n, 48);
+
+        let mut ms1_count = 0;
+        let mut msn_count = 0;
+
+        for i in (0..n).rev() {
+            let scan = reader.get_spectrum_by_index(i).expect("Missing spectrum");
+            let level = scan.ms_level();
+            if level == 1 {
+                ms1_count += 1;
+            } else {
+                msn_count += 1;
+            }
+        }
+        assert_eq!(ms1_count, 14);
+        assert_eq!(msn_count, 34);
+    }
+
+    #[test]
+    fn reader_from_path() {
+        let path = path::Path::new("./test/data/small.mzML");
+        let mut reader = MzMLReader::open_path(path).expect("Test file doesn't exist?");
 
         let n = reader.len();
         assert_eq!(n, 48);

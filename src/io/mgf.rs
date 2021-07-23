@@ -1,3 +1,4 @@
+use std::fs;
 use std::io;
 use std::io::prelude::*;
 use std::io::SeekFrom;
@@ -10,12 +11,14 @@ use regex::Regex;
 
 use crate::peaks::{CentroidPeak, PeakCollection, PeakSet};
 use crate::spectrum::{
-    scan_properties, Spectrum, Precursor, SelectedIon,
-    SpectrumDescription, CentroidSpectrum, RawSpectrum
+    scan_properties, CentroidSpectrum, Precursor, RawSpectrum, SelectedIon, Spectrum,
+    SpectrumDescription,
 };
 
 use super::offset_index::OffsetIndex;
-use super::traits::{RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead};
+use super::traits::{
+    MZFileReader, RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead,
+};
 
 #[derive(PartialEq, Debug)]
 pub enum MGFParserState {
@@ -37,7 +40,6 @@ pub enum MGFError {
     IOError,
 }
 
-
 #[derive(Debug, Clone)]
 struct SpectrumBuilder {
     pub peaks: PeakSet,
@@ -53,7 +55,7 @@ impl Default for SpectrumBuilder {
                 signal_continuity: scan_properties::SignalContinuity::Centroid,
                 polarity: scan_properties::ScanPolarity::Unknown,
                 ..Default::default()
-            }
+            },
         }
     }
 }
@@ -64,7 +66,6 @@ impl SpectrumBuilder {
         spectrum.peaks = Some(self.peaks);
     }
 }
-
 
 impl From<SpectrumBuilder> for Spectrum {
     fn from(builder: SpectrumBuilder) -> Spectrum {
@@ -87,11 +88,10 @@ macro_rules! impl_from_spectrum_builder_for_spec {
 
 impl_from_spectrum_builder_for_spec!(CentroidSpectrum, RawSpectrum);
 
-
-
 /// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
-/// The parser produces [`CentroidSpectrum`] instances that represent the pre-processed
-/// nature of this type of file's data.
+/// The parser produces [`Spectrum`] instances. These may be converted directly into [`CentroidSpectrum`]
+/// instances using [`Spectrum.into_centroid`] or the [`From`] trait which better represent
+/// the nature of this preprocessed data type.
 pub struct MGFReader<R: io::Read> {
     pub handle: io::BufReader<R>,
     pub state: MGFParserState,
@@ -440,6 +440,10 @@ impl<R: SeekRead> ScanSource<Spectrum> for MGFReader<R> {
         }
         &self.index
     }
+
+    fn set_index(&mut self, index: OffsetIndex) {
+        self.index = index;
+    }
 }
 
 impl<R: SeekRead> RandomAccessScanIterator<Spectrum> for MGFReader<R> {
@@ -471,6 +475,16 @@ impl<R: SeekRead> RandomAccessScanIterator<Spectrum> for MGFReader<R> {
             },
             None => Err(ScanAccessError::ScanNotFound),
         }
+    }
+}
+
+impl MZFileReader<Spectrum> for MGFReader<fs::File> {
+    fn open_file(source: fs::File) -> Self {
+        Self::new(source)
+    }
+
+    fn construct_index_from_stream(&mut self) -> u64 {
+        self.build_index()
     }
 }
 
