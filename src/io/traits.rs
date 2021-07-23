@@ -13,6 +13,8 @@ use super::OffsetIndex;
 pub trait SeekRead: io::Read + io::Seek {}
 impl<T: io::Read + io::Seek> SeekRead for T {}
 
+
+/// A base trait defining the behaviors of a source of spectra.
 pub trait ScanSource<S: SpectrumBehavior>: Iterator<Item = S> + Sized {
     fn reset(&mut self) -> &Self;
 
@@ -52,6 +54,8 @@ pub trait ScanSource<S: SpectrumBehavior>: Iterator<Item = S> + Sized {
 
     fn set_index(&mut self, index: OffsetIndex);
 
+    /// Re-construct an offset index from this readable object, assuming
+    /// it is a JSON stream over the serialized index.
     fn read_index<R: io::Read>(&mut self, reader: R) -> Result<&Self, serde_json::Error> {
         match OffsetIndex::from_reader(reader) {
             Ok(index) => {
@@ -108,9 +112,22 @@ pub trait ScanSource<S: SpectrumBehavior>: Iterator<Item = S> + Sized {
     }
 }
 
+
+/// A trait defining some helper methods to make efficient use of indices
+/// automatic when opening a file from a path-like object.
 pub trait MZFileReader<S: SpectrumBehavior>: ScanSource<S> + Sized {
+
+    /// An on-trait method of constructing an index. Assumed
+    /// to be a trivial wrapper.
     fn construct_index_from_stream(&mut self) -> u64;
 
+    /// The preferred method of opening a file from a path-like object.
+    /// This method will open the file at the provided path, test whether
+    /// there is an accompanied index file next to it on the file system,
+    /// and if not, build one and save it or otherwise read in the index.
+    ///
+    /// The index building process is usually neglible on "regular" IO file
+    /// systems.
     fn open_path<P>(path: P) -> io::Result<Self>
     where
         P: Into<path::PathBuf> + Clone,
@@ -163,9 +180,14 @@ pub trait MZFileReader<S: SpectrumBehavior>: ScanSource<S> + Sized {
         }
     }
 
+    /// Given a regular file, construct a new instance without indexing.
     fn open_file(source: fs::File) -> Self;
 }
 
+
+/// A generic iterator over a [`ScanSource`] implementer that assumes the
+/// source has already been indexed. Otherwise, the source's own iterator
+/// behavior should be used.
 pub struct ScanIterator<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> {
     source: &'lifespan mut R,
     phantom: PhantomData<S>,
