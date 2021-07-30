@@ -9,9 +9,10 @@ use log::warn;
 use lazy_static::lazy_static;
 use regex::Regex;
 
+use crate::params::{Param, ParamDescribed};
 use crate::peaks::{CentroidPeak, PeakCollection, PeakSet};
 use crate::spectrum::{
-    scan_properties, CentroidSpectrum, Precursor, RawSpectrum, SelectedIon, Spectrum,
+    scan_properties, CentroidSpectrum, Precursor, SelectedIon, Spectrum,
     SpectrumDescription,
 };
 
@@ -86,7 +87,7 @@ macro_rules! impl_from_spectrum_builder_for_spec {
     )+};
 }
 
-impl_from_spectrum_builder_for_spec!(CentroidSpectrum, RawSpectrum);
+impl_from_spectrum_builder_for_spec!(CentroidSpectrum);
 
 /// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
 /// The parser produces [`Spectrum`] instances. These may be converted directly into [`CentroidSpectrum`]
@@ -100,15 +101,16 @@ pub struct MGFReader<R: io::Read> {
     pub index: OffsetIndex,
 }
 
+// A lazily created static regular expression to parse peak separators
+lazy_static! {
+    static ref PEAK_SEPERATOR: Regex = Regex::new(r"\t|\s+").unwrap();
+}
+
 impl<R: io::Read> MGFReader<R> {
     fn parse_peak_from_line(&mut self, line: &str) -> Option<CentroidPeak> {
         let mut chars = line.chars();
         let first = chars.next().unwrap();
         if first.is_numeric() {
-            // A lazily created static regular expression to parse peak separators
-            lazy_static! {
-                static ref PEAK_SEPERATOR: Regex = Regex::new(r"\t|\s+").unwrap();
-            }
             let parts: Vec<&str> = PEAK_SEPERATOR.split(line).collect();
             let nparts = parts.len();
             if nparts < 2 {
@@ -178,9 +180,7 @@ impl<R: io::Read> MGFReader<R> {
                     });
                 }
                 &_ => {
-                    description
-                        .annotations
-                        .insert(String::from(key.to_lowercase()), String::from(value));
+                    description.add_param(Param::key_value(String::from(key.to_lowercase()), String::from(value)));
                 }
             };
 
@@ -400,6 +400,7 @@ impl<R: SeekRead> ScanSource<Spectrum> for MGFReader<R> {
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<Spectrum> {
         let offset_ref = self.index.get(id);
         let offset = offset_ref.expect("Failed to retrieve offset");
+        let index = self.index.index_of(id).unwrap();
         let start = self
             .handle
             .stream_position()
@@ -409,7 +410,13 @@ impl<R: SeekRead> ScanSource<Spectrum> for MGFReader<R> {
         let result = self.read_next();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
-        result
+        match result {
+            Some(mut scan) => {
+                scan.description.index = index;
+                Some(scan)
+            },
+            None => None
+        }
     }
 
     /// Retrieve a spectrum by it's integer index
@@ -424,7 +431,13 @@ impl<R: SeekRead> ScanSource<Spectrum> for MGFReader<R> {
         let result = self.read_next();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
-        result
+        match result {
+            Some(mut scan) => {
+                scan.description.index = index;
+                Some(scan)
+            },
+            None => None
+        }
     }
 
     /// Return the data stream to the beginning

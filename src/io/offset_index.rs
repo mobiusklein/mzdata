@@ -43,6 +43,11 @@ impl OffsetIndex {
     }
 
     #[inline]
+    pub fn index_of(&self, key: &str) -> Option<usize> {
+        self.offsets.get_index_of(key)
+    }
+
+    #[inline]
     pub fn insert(&mut self, key: String, offset: u64) -> Option<u64> {
         self.offsets.insert(key, offset)
     }

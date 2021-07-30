@@ -1,4 +1,6 @@
-use crate::params::{Param, ParamList};
+use crate::params::{ParamList, Param, ParamDescribed};
+use crate::impl_param_described;
+
 
 #[derive(Debug, Clone, Default)]
 pub struct SourceFile {
@@ -14,4 +16,17 @@ pub struct SourceFile {
 pub struct FileDescription {
     pub contents: ParamList,
     pub source_files: Vec<SourceFile>,
+}
+
+impl_param_described!(SourceFile);
+
+
+impl ParamDescribed for FileDescription {
+    fn params(&self) -> &ParamList {
+        &self.contents
+    }
+
+    fn params_mut(&mut self) -> &mut ParamList {
+        &mut self.contents
+    }
 }

@@ -5,6 +5,7 @@ pub enum MassErrorType {
 }
 
 impl MassErrorType {
+    #[inline]
     pub fn lower_bound(&self, query: f64, tolerance: f64) -> f64 {
         match self {
             Self::Exact => query - tolerance,
@@ -12,6 +13,7 @@ impl MassErrorType {
         }
     }
 
+    #[inline]
     pub fn call(&self, query: f64, alt: f64) -> f64 {
         match self {
             Self::Exact => query - alt,
@@ -19,6 +21,7 @@ impl MassErrorType {
         }
     }
 
+    #[inline]
     pub fn upper_bound(&self, query: f64, alt: f64) -> f64 {
         self.lower_bound(query, -alt)
     }

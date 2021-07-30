@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use super::SpectrumBehavior;
 use crate::io::traits::ScanSource;
 use crate::params;
+use crate::impl_param_described;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(i8)]
@@ -136,6 +135,37 @@ impl Precursor {
     }
 }
 
+pub trait PrecursorSelection : params::ParamDescribed {
+    fn ion(&self) -> &SelectedIon;
+    fn isolation_window(&self) -> &IsolationWindow;
+    fn precursor_id(&self) -> &str;
+    fn product_id(&self) -> &str;
+    fn activation(&self) -> &Activation;
+}
+
+impl PrecursorSelection for Precursor {
+    fn ion(&self) -> &SelectedIon {
+        &self.ion
+    }
+
+    fn isolation_window(&self) -> &IsolationWindow {
+        &self.isolation_window
+    }
+
+    fn precursor_id(&self) -> &str {
+        &self.precursor_id
+    }
+
+    fn product_id(&self) -> &str {
+        &self.product_id
+    }
+
+    fn activation(&self) -> &Activation {
+        &self.activation
+    }
+}
+
+
 #[repr(i8)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum ScanPolarity {
@@ -176,5 +206,7 @@ pub struct SpectrumDescription {
     pub params: params::ParamList,
     pub acquisition: Acquisition,
     pub precursor: Option<Precursor>,
-    pub annotations: HashMap<String, String>,
 }
+
+
+impl_param_described!(Acquisition, Activation, Precursor, SelectedIon, ScanEvent, SpectrumDescription);

@@ -1,4 +1,5 @@
 use crate::params::ParamList;
+use crate::impl_param_described;
 
 #[derive(Debug)]
 pub enum ComponentType {
@@ -28,3 +29,5 @@ pub struct InstrumentConfiguration {
     pub software_reference: String,
     pub id: String,
 }
+
+impl_param_described!(InstrumentConfiguration, Component);
