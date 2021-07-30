@@ -15,7 +15,7 @@ pub enum CoordinateDimension {
 }
 
 pub trait CoordinateLike<T>: PartialOrd {
-    fn get_coordinate(&self) -> f64;
+    fn coordinate(&self) -> f64;
 }
 
 pub trait IndexedCoordinate<T>: CoordinateLike<T> {

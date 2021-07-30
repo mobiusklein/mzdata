@@ -42,13 +42,13 @@ where
         let mut j = i;
         let mut best = j;
         let mut best_err = error_type
-            .call(self.get_item(j).get_coordinate(), query)
+            .call(self.get_item(j).coordinate(), query)
             .abs();
         let n = self.len();
         // search backwards
         while j > 0 && j < n {
             let err = error_type
-                .call(self.get_item(j).get_coordinate(), query)
+                .call(self.get_item(j).coordinate(), query)
                 .abs();
             if err < best_err && err < error_tolerance {
                 best_err = err;
@@ -62,7 +62,7 @@ where
         // search forwards
         while j < n {
             let err = error_type
-                .call(self.get_item(j).get_coordinate(), query)
+                .call(self.get_item(j).coordinate(), query)
                 .abs();
             if err < best_err && err < error_tolerance {
                 best_err = err;
@@ -119,13 +119,13 @@ where
         };
 
         if lower_index < n {
-            if self[lower_index].get_coordinate() < lower_bound {
+            if self[lower_index].coordinate() < lower_bound {
                 lower_index += 1;
             }
         }
 
         if upper_index < n {
-            if self[upper_index].get_coordinate() > upper_bound {
+            if self[upper_index].coordinate() > upper_bound {
                 upper_index -= 1;
             }
         }
@@ -150,7 +150,7 @@ where
         };
 
         if lower_index < n {
-            if self[lower_index].get_coordinate() < lower_bound {
+            if self[lower_index].coordinate() < lower_bound {
                 lower_index += 1;
             }
         }
@@ -158,13 +158,13 @@ where
         let mut upper_index = lower_index;
 
         for i in lower_index + 1..n {
-            if self[i].get_coordinate() >= upper_bound {
+            if self[i].coordinate() >= upper_bound {
                 break;
             } else {
                 upper_index = i;
             }
         }
-        let v = self.get_item(lower_index).get_coordinate();
+        let v = self.get_item(lower_index).coordinate();
         if v <= lower_bound || v >= upper_bound {
             lower_index += 1;
         }
@@ -286,7 +286,7 @@ impl<P: IndexedCoordinate<C>, C> PeakCollection<P, C> for PeakSetVec<P, C> {
     #[inline]
     fn _search_by(&self, query: f64) -> Result<usize, usize> {
         self.peaks
-            .binary_search_by(|peak| peak.get_coordinate().partial_cmp(&query).unwrap())
+            .binary_search_by(|peak| peak.coordinate().partial_cmp(&query).unwrap())
     }
 }
 
@@ -336,12 +336,12 @@ impl<P: IndexedCoordinate<C>, C> Extend<P> for PeakSetVec<P, C> {
         let mut last_coord = 0.0;
         let last_index = self.len();
         if let Some(last_peak) = self.peaks.last() {
-            last_coord = last_peak.get_coordinate()
+            last_coord = last_peak.coordinate()
         }
 
         let mut valid = true;
         for p in iter {
-            let coord = p.get_coordinate();
+            let coord = p.coordinate();
             if coord < last_coord {
                 valid = false
             } else {
@@ -429,6 +429,10 @@ impl<'a, P, C> Iterator for PeakSetIterMut<'a, P, C> {
 
 pub type PeakSet = PeakSetVec<CentroidPeak, MZ>;
 pub type DeconvolutedPeakSet = PeakSetVec<DeconvolutedPeak, Mass>;
+
+pub type MZPeakSetType<P> = PeakSetVec<P, MZ>;
+pub type MassPeakSetType<D> = PeakSetVec<D, Mass>;
+
 
 #[cfg(test)]
 mod test {

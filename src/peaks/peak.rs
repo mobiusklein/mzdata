@@ -1,7 +1,6 @@
 use std::cmp;
 use std::fmt;
 use std::hash;
-use std::option::Option;
 
 use crate::peaks::coordinate::{CoordinateLike, IndexedCoordinate, Mass, MZ};
 
@@ -46,7 +45,7 @@ impl cmp::PartialEq<CentroidPeak> for CentroidPeak {
 
 impl CoordinateLike<MZ> for CentroidPeak {
     #[inline]
-    fn get_coordinate(&self) -> f64 {
+    fn coordinate(&self) -> f64 {
         self.mz
     }
 }
@@ -60,6 +59,24 @@ impl IndexedCoordinate<MZ> for CentroidPeak {
         self.index = index;
     }
 }
+
+pub trait IntensityMeasurement {
+    fn intensity(&self) -> f32;
+}
+
+impl IntensityMeasurement for CentroidPeak {
+    fn intensity(&self) -> f32 {self.intensity}
+}
+
+pub trait CentroidLike : IndexedCoordinate<MZ> + IntensityMeasurement {
+    fn as_centroid(&self) -> CentroidPeak {
+        CentroidPeak { mz: self.coordinate(), intensity: self.intensity(), index: self.get_index() }
+    }
+}
+
+impl<T: IndexedCoordinate<MZ> + IntensityMeasurement> CentroidLike for T {}
+
+
 
 #[derive(Default, Clone, Debug)]
 pub struct DeconvolutedPeak {
@@ -106,7 +123,7 @@ impl cmp::PartialEq<DeconvolutedPeak> for DeconvolutedPeak {
 
 impl CoordinateLike<Mass> for DeconvolutedPeak {
     #[inline]
-    fn get_coordinate(&self) -> f64 {
+    fn coordinate(&self) -> f64 {
         self.neutral_mass
     }
 }
@@ -123,9 +140,34 @@ impl IndexedCoordinate<Mass> for DeconvolutedPeak {
 
 impl CoordinateLike<MZ> for DeconvolutedPeak {
     #[inline]
-    fn get_coordinate(&self) -> f64 {
+    fn coordinate(&self) -> f64 {
         let charge_carrier: f64 = 1.007276;
         let charge = self.charge as f64;
         (self.neutral_mass - charge_carrier * charge) / charge
     }
 }
+
+impl IntensityMeasurement for DeconvolutedPeak {
+    fn intensity(&self) -> f32 {self.intensity}
+}
+
+pub trait KnownCharge {
+    fn charge(&self) -> i32;
+}
+
+impl KnownCharge for DeconvolutedPeak {
+    fn charge(&self) -> i32 {self.charge}
+}
+
+pub trait DeconvolutedCentroid : IndexedCoordinate<Mass> + IntensityMeasurement + KnownCharge {
+    fn as_centroid(&self) -> DeconvolutedPeak {
+        DeconvolutedPeak {
+            neutral_mass: self.coordinate(),
+            intensity: self.intensity(),
+            charge: self.charge(),
+            index: self.get_index()
+        }
+    }
+}
+
+impl<T: IndexedCoordinate<Mass> + IntensityMeasurement + KnownCharge> DeconvolutedCentroid for T {}

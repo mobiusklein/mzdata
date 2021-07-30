@@ -14,14 +14,15 @@ pub trait SeekRead: io::Read + io::Seek {}
 impl<T: io::Read + io::Seek> SeekRead for T {}
 
 
-/// A base trait defining the behaviors of a source of spectra.
-pub trait ScanSource<S: SpectrumBehavior>: Iterator<Item = S> + Sized {
-    fn reset(&mut self) -> &Self;
-
-    /// Retrieve the number of spectra in source file
+trait IndexedScanSource<S: SpectrumBehavior> {
+        /// Retrieve the number of spectra in source file
     fn len(&self) -> usize {
         self.get_index().len()
     }
+
+    fn get_index(&self) -> &OffsetIndex;
+
+    fn set_index(&mut self, index: OffsetIndex);
 
     /// Helper method to support seeking to an ID
     fn _offset_of_id(&self, id: &str) -> Option<u64> {
@@ -37,22 +38,12 @@ pub trait ScanSource<S: SpectrumBehavior>: Iterator<Item = S> + Sized {
 
     /// Helper method to support seeking to a specific time.
     /// Considerably more complex than seeking by ID or index.
-    fn _offset_of_time(&mut self, time: f64) -> Option<u64> {
+    fn _offset_of_time(&mut self, time: f64) -> Option<u64>; /*{
         match self.get_spectrum_by_time(time) {
             Some(scan) => self._offset_of_index(scan.index()),
             None => None,
         }
-    }
-
-    /// Retrieve a spectrum by it's native ID
-    fn get_spectrum_by_id(&mut self, id: &str) -> Option<S>;
-
-    /// Retrieve a spectrum by it's integer index
-    fn get_spectrum_by_index(&mut self, index: usize) -> Option<S>;
-
-    fn get_index(&self) -> &OffsetIndex;
-
-    fn set_index(&mut self, index: OffsetIndex);
+    }*/
 
     /// Re-construct an offset index from this readable object, assuming
     /// it is a JSON stream over the serialized index.
@@ -72,6 +63,19 @@ pub trait ScanSource<S: SpectrumBehavior>: Iterator<Item = S> + Sized {
             Err(err) => Err(err),
         }
     }
+
+}
+
+
+pub trait RandomAccessScanSource<S: SpectrumBehavior> {
+
+    fn len(&self) -> usize;
+
+    /// Retrieve a spectrum by it's native ID
+    fn get_spectrum_by_id(&mut self, id: &str) -> Option<S>;
+
+    /// Retrieve a spectrum by it's integer index
+    fn get_spectrum_by_index(&mut self, index: usize) -> Option<S>;
 
     /// Retrieve a spectrum by its scan start time
     /// Considerably more complex than seeking by ID or index.
@@ -104,6 +108,100 @@ pub trait ScanSource<S: SpectrumBehavior>: Iterator<Item = S> + Sized {
             }
         }
         best_match
+    }
+}
+
+
+/// A base trait defining the behaviors of a source of spectra.
+pub trait ScanSource<S: SpectrumBehavior>: Iterator<Item = S> + Sized {
+    fn reset(&mut self) -> &Self;
+
+    /// Retrieve a spectrum by it's native ID
+    fn get_spectrum_by_id(&mut self, id: &str) -> Option<S>;
+
+    /// Retrieve a spectrum by it's integer index
+    fn get_spectrum_by_index(&mut self, index: usize) -> Option<S>;
+
+    /// Retrieve a spectrum by its scan start time
+    /// Considerably more complex than seeking by ID or index.
+    fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {
+        let n = self.len();
+        let mut lo: usize = 0;
+        let mut hi: usize = n;
+
+        let mut best_error: f64 = f64::INFINITY;
+        let mut best_match: Option<S> = None;
+
+        if lo == hi {
+            return None;
+        }
+        while hi != lo {
+            let mid = (hi + lo) / 2;
+            let scan = self.get_spectrum_by_index(mid)?;
+            let scan_time = scan.start_time();
+            let err = (scan_time - time).abs();
+
+            if err < best_error {
+                best_error = err;
+                best_match = Some(scan);
+            } else if (scan_time - time).abs() < 1e-3 {
+                return Some(scan);
+            } else if scan_time > time {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        best_match
+    }
+
+    /// Retrieve the number of spectra in source file
+    fn len(&self) -> usize {
+        self.get_index().len()
+    }
+
+    fn get_index(&self) -> &OffsetIndex;
+
+    fn set_index(&mut self, index: OffsetIndex);
+
+    /// Helper method to support seeking to an ID
+    fn _offset_of_id(&self, id: &str) -> Option<u64> {
+        self.get_index().get(id).map(|offset| offset)
+    }
+
+    /// Helper method to support seeking to an index
+    fn _offset_of_index(&self, index: usize) -> Option<u64> {
+        self.get_index()
+            .get_index(index)
+            .map(|(_id, offset)| offset)
+    }
+
+    /// Helper method to support seeking to a specific time.
+    /// Considerably more complex than seeking by ID or index.
+    fn _offset_of_time(&mut self, time: f64) -> Option<u64> {
+        match self.get_spectrum_by_time(time) {
+            Some(scan) => self._offset_of_index(scan.index()),
+            None => None,
+        }
+    }
+
+    /// Re-construct an offset index from this readable object, assuming
+    /// it is a JSON stream over the serialized index.
+    fn read_index<R: io::Read>(&mut self, reader: R) -> Result<&Self, serde_json::Error> {
+        match OffsetIndex::from_reader(reader) {
+            Ok(index) => {
+                self.set_index(index);
+                Ok(self)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    fn write_index<W: io::Write>(&self, writer: W) -> Result<&Self, serde_json::Error> {
+        match self.get_index().to_writer(writer) {
+            Ok(_) => Ok(self),
+            Err(err) => Err(err),
+        }
     }
 
     /// Open a new iterator over this stream.

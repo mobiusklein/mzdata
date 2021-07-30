@@ -680,8 +680,8 @@ impl Into<RawSpectrum> for MzMLSpectrumBuilder {
 }
 
 /// An mzML parser that supports iteration and random access. The parser produces
-/// [`Spectrum`] instances, which may be converted up to [`Spectrum`](crate::spectrum::spectrum::Spectrum)
-/// or forward to [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum) as is appropriate to the data.
+/// [`Spectrum`] instances, which may be converted to [`RawSpectrum`](crate::spectrum::spectrum::RawSpectrum)
+/// or [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum) as is appropriate to the data.
 ///
 /// When the readable stream the parser is wrapped around supports [`io::Seek`],
 /// additional random access operations are available.
