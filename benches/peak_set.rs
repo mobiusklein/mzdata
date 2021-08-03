@@ -3,8 +3,8 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::fs;
 
 use mzdata::io::MGFReader;
-use mzdata::peaks::{PeakCollection, PeakSet};
 use mzdata::MassErrorType;
+use mzpeaks::{PeakCollection, PeakSet};
 
 fn find_with_search(peak_set: &PeakSet, queries: &Vec<f64>) {
     for q in queries.iter() {

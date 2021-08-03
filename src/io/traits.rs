@@ -5,7 +5,11 @@ use std::path;
 
 use log::warn;
 
-use crate::spectrum::SpectrumBehavior;
+use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
+
+use crate::spectrum::spectrum::{
+    MultiLayerSpectrum, Spectrum, SpectrumBehavior,
+};
 
 use super::utils::FileSource;
 use super::OffsetIndex;
@@ -13,9 +17,8 @@ use super::OffsetIndex;
 pub trait SeekRead: io::Read + io::Seek {}
 impl<T: io::Read + io::Seek> SeekRead for T {}
 
-
 trait IndexedScanSource<S: SpectrumBehavior> {
-        /// Retrieve the number of spectra in source file
+    /// Retrieve the number of spectra in source file
     fn len(&self) -> usize {
         self.get_index().len()
     }
@@ -39,11 +42,11 @@ trait IndexedScanSource<S: SpectrumBehavior> {
     /// Helper method to support seeking to a specific time.
     /// Considerably more complex than seeking by ID or index.
     fn _offset_of_time(&mut self, time: f64) -> Option<u64>; /*{
-        match self.get_spectrum_by_time(time) {
-            Some(scan) => self._offset_of_index(scan.index()),
-            None => None,
-        }
-    }*/
+                                                                 match self.get_spectrum_by_time(time) {
+                                                                     Some(scan) => self._offset_of_index(scan.index()),
+                                                                     None => None,
+                                                                 }
+                                                             }*/
 
     /// Re-construct an offset index from this readable object, assuming
     /// it is a JSON stream over the serialized index.
@@ -63,12 +66,9 @@ trait IndexedScanSource<S: SpectrumBehavior> {
             Err(err) => Err(err),
         }
     }
-
 }
 
-
 pub trait RandomAccessScanSource<S: SpectrumBehavior> {
-
     fn len(&self) -> usize;
 
     /// Retrieve a spectrum by it's native ID
@@ -111,9 +111,13 @@ pub trait RandomAccessScanSource<S: SpectrumBehavior> {
     }
 }
 
-
 /// A base trait defining the behaviors of a source of spectra.
-pub trait ScanSource<S: SpectrumBehavior>: Iterator<Item = S> + Sized {
+pub trait ScanSource<
+    C: CentroidLike + Default = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+>: Iterator<Item = S> + Sized
+{
     fn reset(&mut self) -> &Self;
 
     /// Retrieve a spectrum by it's native ID
@@ -205,106 +209,59 @@ pub trait ScanSource<S: SpectrumBehavior>: Iterator<Item = S> + Sized {
     }
 
     /// Open a new iterator over this stream.
-    fn iter(&mut self) -> ScanIterator<Self, S> {
+    fn iter(&mut self) -> ScanIterator<C, D, S, Self> {
         ScanIterator::new(self)
     }
 }
 
 
-/// A trait defining some helper methods to make efficient use of indices
-/// automatic when opening a file from a path-like object.
-pub trait MZFileReader<S: SpectrumBehavior>: ScanSource<S> + Sized {
-
-    /// An on-trait method of constructing an index. Assumed
-    /// to be a trivial wrapper.
-    fn construct_index_from_stream(&mut self) -> u64;
-
-    /// The preferred method of opening a file from a path-like object.
-    /// This method will open the file at the provided path, test whether
-    /// there is an accompanied index file next to it on the file system,
-    /// and if not, build one and save it or otherwise read in the index.
-    ///
-    /// The index building process is usually neglible on "regular" IO file
-    /// systems.
-    fn open_path<P>(path: P) -> io::Result<Self>
-    where
-        P: Into<path::PathBuf> + Clone,
-    {
-        let source: FileSource<fs::File> = FileSource::from(path.clone());
-        let index_file_name = source.index_file_name();
-
-        match fs::File::open(path.clone().into()) {
-            Ok(file) => {
-                let mut reader = Self::open_file(file);
-                if let Some(index_path) = &index_file_name {
-                    if index_path.exists() {
-                        let index_stream = fs::File::open(index_path).expect(
-                            &format!("Failed to open index file {}", index_path.display()));
-                        match reader.read_index(io::BufReader::new(&index_stream)) {
-                            Ok(_) => {}
-                            Err(_err) => {
-                                reader.construct_index_from_stream();
-                                match reader.write_index(io::BufWriter::new(index_stream)) {
-                                    Ok(_) => {}
-                                    Err(err) => {
-                                        warn!(
-                                            "Failed to write index to {} because {:?}",
-                                            index_path.display(),
-                                            err
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        reader.construct_index_from_stream();
-                        let index_stream = fs::File::create(index_path).expect(
-                            &format!("Failed to create index file {}", index_path.display()));
-                        match reader.write_index(io::BufWriter::new(index_stream)) {
-                            Ok(_) => {}
-                            Err(err) => {
-                                warn!(
-                                    "Failed to write index to {} because {:?}",
-                                    index_path.display(),
-                                    err
-                                );
-                            }
-                        }
-                    }
-                }
-                Ok(reader)
-            }
-            Err(err) => Err(err),
-        }
-    }
-
-    /// Given a regular file, construct a new instance without indexing.
-    fn open_file(source: fs::File) -> Self;
-}
-
 
 /// A generic iterator over a [`ScanSource`] implementer that assumes the
 /// source has already been indexed. Otherwise, the source's own iterator
 /// behavior should be used.
-pub struct ScanIterator<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> {
+pub struct ScanIterator<
+    'lifespan,
+    C: CentroidLike + Default,
+    D: DeconvolutedCentroidLike + Default,
+    S: SpectrumBehavior<C, D>,
+    R: ScanSource<C, D, S>,
+> {
     source: &'lifespan mut R,
     phantom: PhantomData<S>,
+    centroid_type: PhantomData<C>,
+    deconvoluted_type: PhantomData<D>,
     index: usize,
     back_index: usize,
 }
 
-impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> ScanIterator<'lifespan, R, S> {
-    pub fn new(source: &mut R) -> ScanIterator<R, S> {
-        ScanIterator {
+impl<
+        'lifespan,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        R: ScanSource<C, D, S>,
+        S: SpectrumBehavior<C, D>,
+    > ScanIterator<'lifespan, C, D, S, R>
+{
+    pub fn new(source: &mut R) -> ScanIterator<C, D, S, R> {
+        ScanIterator::<C, D, S, R> {
             source,
             index: 0,
             back_index: 0,
             phantom: PhantomData,
+            centroid_type: PhantomData,
+            deconvoluted_type: PhantomData,
         }
     }
 }
 
-impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> Iterator for ScanIterator<'lifespan, R, S> {
+impl<
+        'lifespan,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        R: ScanSource<C, D, S>,
+        S: SpectrumBehavior<C, D>,
+    > Iterator for ScanIterator<'lifespan, C, D, S, R>
+{
     type Item = S;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -317,16 +274,24 @@ impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> Iterator for ScanIterator
     }
 }
 
-impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> ExactSizeIterator
-    for ScanIterator<'lifespan, R, S>
+impl<'lifespan,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        R: ScanSource<C, D, S>,
+        S: SpectrumBehavior<C, D>,> ExactSizeIterator
+    for ScanIterator<'lifespan, C, D, S, R>
 {
     fn len(&self) -> usize {
         self.source.len()
     }
 }
 
-impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> DoubleEndedIterator
-    for ScanIterator<'lifespan, R, S>
+impl<'lifespan,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        R: ScanSource<C, D, S>,
+        S: SpectrumBehavior<C, D>> DoubleEndedIterator
+    for ScanIterator<'lifespan, C, D, S, R>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.index + self.back_index >= self.len() {
@@ -339,8 +304,13 @@ impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> DoubleEndedIterator
     }
 }
 
-impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> ScanSource<S>
-    for ScanIterator<'lifespan, R, S>
+impl<
+        'lifespan,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumBehavior<C, D>,
+        R: ScanSource<C, D, S>,
+    > ScanSource<C, D, S> for ScanIterator<'lifespan, C, D, S, R>
 {
     fn reset(&mut self) -> &Self {
         self.index = 0;
@@ -369,20 +339,100 @@ impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> ScanSource<S>
     }
 }
 
+
+/// A trait defining some helper methods to make efficient use of indices
+/// automatic when opening a file from a path-like object.
+pub trait MZFileReader<
+    C: CentroidLike + Default,
+    D: DeconvolutedCentroidLike + Default,
+    S: SpectrumBehavior<C, D>,
+>: ScanSource<C, D, S> + Sized
+{
+    /// An on-trait method of constructing an index. Assumed
+    /// to be a trivial wrapper.
+    fn construct_index_from_stream(&mut self) -> u64;
+
+    /// The preferred method of opening a file from a path-like object.
+    /// This method will open the file at the provided path, test whether
+    /// there is an accompanied index file next to it on the file system,
+    /// and if not, build one and save it or otherwise read in the index.
+    ///
+    /// The index building process is usually neglible on "regular" IO file
+    /// systems.
+    fn open_path<P>(path: P) -> io::Result<Self>
+    where
+        P: Into<path::PathBuf> + Clone,
+    {
+        let source: FileSource<fs::File> = FileSource::from(path.clone());
+        let index_file_name = source.index_file_name();
+
+        match fs::File::open(path.clone().into()) {
+            Ok(file) => {
+                let mut reader = Self::open_file(file);
+                if let Some(index_path) = &index_file_name {
+                    if index_path.exists() {
+                        let index_stream = fs::File::open(index_path).expect(&format!(
+                            "Failed to open index file {}",
+                            index_path.display()
+                        ));
+                        match reader.read_index(io::BufReader::new(&index_stream)) {
+                            Ok(_) => {}
+                            Err(_err) => {
+                                reader.construct_index_from_stream();
+                                match reader.write_index(io::BufWriter::new(index_stream)) {
+                                    Ok(_) => {}
+                                    Err(err) => {
+                                        warn!(
+                                            "Failed to write index to {} because {:?}",
+                                            index_path.display(),
+                                            err
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        reader.construct_index_from_stream();
+                        let index_stream = fs::File::create(index_path).expect(&format!(
+                            "Failed to create index file {}",
+                            index_path.display()
+                        ));
+                        match reader.write_index(io::BufWriter::new(index_stream)) {
+                            Ok(_) => {}
+                            Err(err) => {
+                                warn!(
+                                    "Failed to write index to {} because {:?}",
+                                    index_path.display(),
+                                    err
+                                );
+                            }
+                        }
+                    }
+                }
+                Ok(reader)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    /// Given a regular file, construct a new instance without indexing.
+    fn open_file(source: fs::File) -> Self;
+}
+
 #[derive(Debug)]
 pub enum ScanAccessError {
     ScanNotFound,
     IOError(Option<io::Error>),
 }
 
-pub trait RandomAccessScanIterator<S: SpectrumBehavior>: ScanSource<S> {
+pub trait RandomAccessScanIterator<C: CentroidLike + Default=CentroidPeak, D: DeconvolutedCentroidLike + Default=DeconvolutedPeak, S: SpectrumBehavior<C,D>=MultiLayerSpectrum<C,D>>: ScanSource<C, D, S> {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError>;
     fn start_from_index(&mut self, id: usize) -> Result<&Self, ScanAccessError>;
     fn start_from_time(&mut self, time: f64) -> Result<&Self, ScanAccessError>;
 }
 
-impl<'lifespan, R: ScanSource<S>, S: SpectrumBehavior> RandomAccessScanIterator<S>
-    for ScanIterator<'lifespan, R, S>
+impl<'lifespan, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default, S: SpectrumBehavior<C,D>, R: ScanSource<C, D, S>> RandomAccessScanIterator<C, D, S>
+    for ScanIterator<'lifespan, C, D, S, R>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         if let Some(scan) = self.get_spectrum_by_id(id) {

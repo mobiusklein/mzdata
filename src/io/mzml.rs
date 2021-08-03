@@ -1,9 +1,11 @@
 //! Implements a parser for the PSI-MS mzML and indexedmzML XML file formats
 //! for representing raw and processed mass spectra.
 
+use std::convert::TryInto;
 use std::fs;
 use std::io;
 use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::marker::PhantomData;
 
 use log::warn;
 
@@ -15,12 +17,18 @@ use super::offset_index::OffsetIndex;
 use super::traits::{
     MZFileReader, RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead,
 };
+
+use mzpeaks::{CentroidPeak, DeconvolutedPeak};
+
 use crate::params::{Param, ParamList};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
 };
-use crate::spectrum::{CentroidSpectrum, RawSpectrum, Spectrum};
+use crate::spectrum::spectrum::{
+    CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
+    RawSpectrum, Spectrum,
+};
 
 pub type Bytes = Vec<u8>;
 
@@ -100,7 +108,10 @@ impl Default for MzMLParserError {
 const BUFFER_SIZE: usize = 10000;
 
 #[derive(Default)]
-struct MzMLSpectrumBuilder {
+struct MzMLSpectrumBuilder<
+    C: CentroidPeakAdapting = CentroidPeak,
+    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+> {
     pub params: ParamList,
     pub acquisition: Acquisition,
     pub precursor: Precursor,
@@ -114,12 +125,14 @@ struct MzMLSpectrumBuilder {
     pub polarity: ScanPolarity,
     pub signal_continuity: SignalContinuity,
     pub has_precursor: bool,
+    centroid_type: PhantomData<C>,
+    deconvoluted_type: PhantomData<D>,
 }
 
 pub type ParserResult = Result<MzMLParserState, MzMLParserError>;
 
-impl MzMLSpectrumBuilder {
-    pub fn new() -> MzMLSpectrumBuilder {
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C, D> {
+    pub fn new() -> MzMLSpectrumBuilder<C, D> {
         MzMLSpectrumBuilder {
             ..Default::default()
         }
@@ -139,7 +152,7 @@ impl MzMLSpectrumBuilder {
         self.polarity = ScanPolarity::Unknown;
     }
 
-    pub fn _to_spectrum(&self, spectrum: &mut Spectrum) {
+    pub fn _to_spectrum(&self, spectrum: &mut MultiLayerSpectrum<C, D>) {
         let description = &mut spectrum.description;
 
         description.id = self.scan_id.clone();
@@ -159,7 +172,7 @@ impl MzMLSpectrumBuilder {
         spectrum.arrays = Some(self.arrays.clone());
     }
 
-    pub fn into_spectrum(self, spectrum: &mut Spectrum) {
+    pub fn into_spectrum(self, spectrum: &mut MultiLayerSpectrum<C, D>) {
         let description = &mut spectrum.description;
 
         description.id = self.scan_id;
@@ -655,11 +668,13 @@ impl MzMLSpectrumBuilder {
     }
 }
 
-impl Into<CentroidSpectrum> for MzMLSpectrumBuilder {
-    fn into(self) -> CentroidSpectrum {
-        let mut spec = Spectrum::default();
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<CentroidSpectrumType<C>>
+    for MzMLSpectrumBuilder<C, D>
+{
+    fn into(self) -> CentroidSpectrumType<C> {
+        let mut spec = MultiLayerSpectrum::<C, D>::default();
         self.into_spectrum(&mut spec);
-        spec.into()
+        spec.try_into().unwrap()
     }
 }
 
@@ -685,16 +700,22 @@ impl Into<RawSpectrum> for MzMLSpectrumBuilder {
 ///
 /// When the readable stream the parser is wrapped around supports [`io::Seek`],
 /// additional random access operations are available.
-pub struct MzMLReader<R: Read> {
+pub struct MzMLReader<
+    R: Read,
+    C: CentroidPeakAdapting = CentroidPeak,
+    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+> {
     pub state: MzMLParserState,
     pub handle: BufReader<R>,
     pub error: MzMLParserError,
-    buffer: Bytes,
     pub index: OffsetIndex,
+    buffer: Bytes,
+    centroid_type: PhantomData<C>,
+    deconvoluted_type: PhantomData<D>,
 }
 
-impl<R: Read> MzMLReader<R> {
-    pub fn new(file: R) -> MzMLReader<R> {
+impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReader<R, C, D> {
+    pub fn new(file: R) -> MzMLReader<R, C, D> {
         let handle = BufReader::with_capacity(BUFFER_SIZE, file);
         MzMLReader {
             handle,
@@ -702,12 +723,14 @@ impl<R: Read> MzMLReader<R> {
             error: MzMLParserError::default(),
             buffer: Bytes::new(),
             index: OffsetIndex::new("spectrum".to_owned()),
+            centroid_type: PhantomData,
+            deconvoluted_type: PhantomData,
         }
     }
 
     fn _parse_into(
         &mut self,
-        accumulator: &mut MzMLSpectrumBuilder,
+        accumulator: &mut MzMLSpectrumBuilder<C, D>,
     ) -> Result<usize, MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
@@ -805,8 +828,11 @@ impl<R: Read> MzMLReader<R> {
     /// Populate a new [`Spectrum`] in-place on the next available spectrum data.
     /// This allocates memory to build the spectrum's attributes but then moves it
     /// into `spectrum` rather than copying it.
-    pub fn read_into(&mut self, spectrum: &mut Spectrum) -> Result<usize, MzMLParserError> {
-        let mut accumulator = MzMLSpectrumBuilder::new();
+    pub fn read_into(
+        &mut self,
+        spectrum: &mut MultiLayerSpectrum<C, D>,
+    ) -> Result<usize, MzMLParserError> {
+        let mut accumulator = MzMLSpectrumBuilder::<C, D>::new();
         if self.state == MzMLParserState::SpectrumDone {
             self.state = MzMLParserState::Resume;
         }
@@ -820,8 +846,8 @@ impl<R: Read> MzMLReader<R> {
     }
 
     /// Read the next spectrum directly. Used to implement iteration.
-    pub fn read_next(&mut self) -> Option<Spectrum> {
-        let mut spectrum = Spectrum::default();
+    pub fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
+        let mut spectrum = MultiLayerSpectrum::<C, D>::default();
         match self.read_into(&mut spectrum) {
             Ok(_sz) => Some(spectrum.into()),
             Err(_err) => None,
@@ -830,8 +856,8 @@ impl<R: Read> MzMLReader<R> {
 }
 
 /// [`MzMLReader`] instances are [`Iterator`]s over [`Spectrum`]
-impl<R: io::Read> Iterator for MzMLReader<R> {
-    type Item = Spectrum;
+impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator for MzMLReader<R, C, D> {
+    type Item = MultiLayerSpectrum<C, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.read_next()
@@ -840,9 +866,9 @@ impl<R: io::Read> Iterator for MzMLReader<R> {
 
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
-impl<R: SeekRead> ScanSource<Spectrum> for MzMLReader<R> {
+impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ScanSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReader<R, C, D> {
     /// Retrieve a spectrum by it's native ID
-    fn get_spectrum_by_id(&mut self, id: &str) -> Option<Spectrum> {
+    fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
         let offset_ref = self.index.get(id);
         let offset = offset_ref.expect("Failed to retrieve offset");
         let start = self
@@ -858,7 +884,7 @@ impl<R: SeekRead> ScanSource<Spectrum> for MzMLReader<R> {
     }
 
     /// Retrieve a spectrum by it's integer index
-    fn get_spectrum_by_index(&mut self, index: usize) -> Option<Spectrum> {
+    fn get_spectrum_by_index(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
         let (_id, offset) = self.index.get_index(index)?;
         let byte_offset = offset;
         let start = self
@@ -893,7 +919,7 @@ impl<R: SeekRead> ScanSource<Spectrum> for MzMLReader<R> {
 
 /// The iterator can also be updated to move to a different location in the
 /// stream efficiently.
-impl<R: SeekRead> RandomAccessScanIterator<Spectrum> for MzMLReader<R> {
+impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> RandomAccessScanIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReader<R, C, D> {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
@@ -925,10 +951,10 @@ impl<R: SeekRead> RandomAccessScanIterator<Spectrum> for MzMLReader<R> {
     }
 }
 
-impl<R: SeekRead> MzMLReader<R> {
+impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReader<R, C, D> {
     /// Construct a new MzMLReader and build an offset index
     /// using [`Self::build_index`]
-    pub fn new_indexed(file: R) -> MzMLReader<R> {
+    pub fn new_indexed(file: R) -> MzMLReader<R, C, D> {
         let mut reader = Self::new(file);
         reader.build_index();
         reader
@@ -1004,7 +1030,7 @@ impl<R: SeekRead> MzMLReader<R> {
     }
 }
 
-impl MZFileReader<Spectrum> for MzMLReader<fs::File> {
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReader<fs::File, C, D> {
     fn open_file(source: fs::File) -> Self {
         Self::new(source)
     }
@@ -1025,7 +1051,7 @@ mod test {
     fn reader_from_file() {
         let path = path::Path::new("./test/data/small.mzML");
         let file = fs::File::open(path).expect("Test file doesn't exist");
-        let reader = MzMLReader::new(file);
+        let reader = MzMLReader::<_, CentroidPeak, DeconvolutedPeak>::new(file);
         let mut ms1_count = 0;
         let mut msn_count = 0;
         for scan in reader {
@@ -1044,7 +1070,7 @@ mod test {
     fn reader_from_file_indexed() {
         let path = path::Path::new("./test/data/small.mzML");
         let file = fs::File::open(path).expect("Test file doesn't exist");
-        let mut reader = MzMLReader::new_indexed(file);
+        let mut reader = MzMLReader::<_, CentroidPeak, DeconvolutedPeak>::new_indexed(file);
 
         let n = reader.len();
         assert_eq!(n, 48);
@@ -1068,7 +1094,7 @@ mod test {
     #[test]
     fn reader_from_path() {
         let path = path::Path::new("./test/data/small.mzML");
-        let mut reader = MzMLReader::open_path(path).expect("Test file doesn't exist?");
+        let mut reader = MzMLReader::<_, CentroidPeak, DeconvolutedPeak>::open_path(path).expect("Test file doesn't exist?");
 
         let n = reader.len();
         assert_eq!(n, 48);
@@ -1081,8 +1107,10 @@ mod test {
                 Some(scan) => scan,
                 None => {
                     if let Some(offset) = reader._offset_of_index(i) {
-                        panic!("Failed to locate spectrum {} at offset {}, parser state {:?}",
-                               i, offset, reader.state, );
+                        panic!(
+                            "Failed to locate spectrum {} at offset {}, parser state {:?}",
+                            i, offset, reader.state,
+                        );
                     } else {
                         panic!("Failed to locate spectrum or offset {}", i);
                     }

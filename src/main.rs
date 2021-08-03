@@ -1,14 +1,14 @@
 #![allow(unused)]
+use std::collections::HashMap;
 use std::env;
 use std::io;
 use std::path;
 use std::time;
-use std::collections::HashMap;
 
 use mzdata::io::prelude::*;
 use mzdata::io::{mgf, mzml, offset_index, ScanSource};
-use mzdata::peaks::PeakCollection;
-use mzdata::spectrum::{SpectrumBehavior};
+use mzdata::spectrum::SpectrumBehavior;
+use mzpeaks::PeakCollection;
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -21,10 +21,7 @@ fn main() -> io::Result<()> {
     let start = time::Instant::now();
     let mut reader = mzml::MzMLReader::open_path(path)?;
     let end = time::Instant::now();
-    println!(
-        "Loaded in {} seconds",
-        (end - start).as_secs()
-    );
+    println!("Loaded in {} seconds", (end - start).as_secs());
     println!("{} spectra", reader.len());
     let start = time::Instant::now();
 
@@ -33,7 +30,12 @@ fn main() -> io::Result<()> {
     let mut peak_count: usize = 0;
     for (i, scan) in reader.enumerate() {
         if i % 10000 == 0 {
-            println!("\tScan {}: {} ({} seconds)", i, scan.id(), (time::Instant::now() - start).as_secs());
+            println!(
+                "\tScan {}: {} ({} seconds)",
+                i,
+                scan.id(),
+                (time::Instant::now() - start).as_secs()
+            );
         }
         let level = scan.ms_level();
         *level_table.entry(level).or_default() += 1;
@@ -47,10 +49,7 @@ fn main() -> io::Result<()> {
         peak_count += scan.arrays.unwrap().mzs().len();
     }
     let end = time::Instant::now();
-    println!(
-        "Loaded in {} seconds",
-        (end - start).as_secs()
-    );
+    println!("Loaded in {} seconds", (end - start).as_secs());
     println!("MS Levels:");
     let mut level_set: Vec<(&u8, &usize)> = level_table.iter().collect();
     level_set.sort_by_key(|(a, b)| *a);

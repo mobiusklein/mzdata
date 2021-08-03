@@ -14,8 +14,12 @@ use log::warn;
 use base64;
 use flate2::write::ZlibDecoder;
 
+use mzpeaks::{
+    CentroidLike, CentroidPeak, DeconvolutedPeak, DeconvolutedPeakSet, MZPeakSetType,
+    MassErrorType, PeakCollection,
+};
+
 use crate::params::ParamList;
-use crate::peaks::{CentroidPeak, DeconvolutedPeak, PeakCollection, PeakSet, DeconvolutedPeakSet};
 use crate::utils::neutral_mass;
 
 type Bytes = Vec<u8>;
@@ -341,6 +345,36 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         self.byte_buffer_map.clear();
     }
 
+    pub fn search(
+        &self,
+        query: f64,
+        error_tolerance: f64,
+        error_type: MassErrorType,
+    ) -> Option<usize> {
+        let mzs = self.mzs();
+        let lower = error_type.lower_bound(query, error_tolerance);
+        match mzs[..].binary_search_by(|m| m.partial_cmp(&lower).unwrap()) {
+            Ok(i) => {
+                let mut best_error = error_type.call(query, mzs[i]).abs();
+                let mut best_index = i;
+                let mut index = i + 1;
+                while index < mzs.len() {
+                    let error = error_type.call(query, mzs[index]).abs();
+                    if error < best_error {
+                        best_index = index;
+                        best_error = error;
+                    }
+                    index += 1;
+                }
+                if best_error < error_tolerance {
+                    return Some(best_index);
+                }
+                None
+            }
+            Err(_err) => None,
+        }
+    }
+
     pub fn mzs(&'lifespan self) -> Cow<'transient, [f64]> {
         let mz_array = self
             .get(&ArrayType::MZArray)
@@ -368,13 +402,13 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
                     None
                 }
             },
-            None => None
+            None => None,
         }
     }
 }
 
-impl From<PeakSet> for BinaryArrayMap {
-    fn from(peaks: PeakSet) -> BinaryArrayMap {
+impl<C: CentroidLike> From<MZPeakSetType<C>> for BinaryArrayMap {
+    fn from(peaks: MZPeakSetType<C>) -> BinaryArrayMap {
         let mut arrays = BinaryArrayMap::new();
 
         let mut mz_array = DataArray::from_name_type_size(
@@ -393,8 +427,8 @@ impl From<PeakSet> for BinaryArrayMap {
         intensity_array.compression = BinaryCompressionType::Decoded;
 
         for p in peaks.iter() {
-            let mz: f64 = p.mz;
-            let inten: f32 = p.intensity;
+            let mz: f64 = p.coordinate();
+            let inten: f32 = p.intensity();
 
             let raw_bytes: [u8; mem::size_of::<f64>()] = unsafe { mem::transmute(mz) };
             mz_array.data.extend(raw_bytes);
@@ -409,56 +443,67 @@ impl From<PeakSet> for BinaryArrayMap {
     }
 }
 
-impl From<BinaryArrayMap> for PeakSet {
-    fn from(arrays: BinaryArrayMap) -> PeakSet {
+impl<C: CentroidLike + From<CentroidPeak>> From<BinaryArrayMap> for MZPeakSetType<C> {
+    fn from(arrays: BinaryArrayMap) -> MZPeakSetType<C> {
         let mz_array = arrays.mzs();
         let intensity_array = arrays.intensities();
         let mut peaks = Vec::with_capacity(mz_array.len());
 
         for (i, (mz, intensity)) in mz_array.iter().zip(intensity_array.iter()).enumerate() {
-            peaks.push(CentroidPeak {
-                mz: *mz,
-                intensity: *intensity,
-                index: i as u32,
-            })
+            peaks.push(
+                CentroidPeak {
+                    mz: *mz,
+                    intensity: *intensity,
+                    index: i as u32,
+                }
+                .into(),
+            )
         }
 
-        PeakSet::new(peaks)
+        MZPeakSetType::<C>::new(peaks)
     }
 }
 
-impl From<&BinaryArrayMap> for PeakSet {
-    fn from(arrays: &BinaryArrayMap) -> PeakSet {
+impl<C: CentroidLike + From<CentroidPeak>> From<&BinaryArrayMap> for MZPeakSetType<C> {
+    fn from(arrays: &BinaryArrayMap) -> MZPeakSetType<C> {
         let mz_array = arrays.mzs();
         let intensity_array = arrays.intensities();
         let mut peaks = Vec::with_capacity(mz_array.len());
 
         for (i, (mz, intensity)) in mz_array.iter().zip(intensity_array.iter()).enumerate() {
-            peaks.push(CentroidPeak {
-                mz: *mz,
-                intensity: *intensity,
-                index: i as u32,
-            })
+            peaks.push(
+                CentroidPeak {
+                    mz: *mz,
+                    intensity: *intensity,
+                    index: i as u32,
+                }
+                .into(),
+            )
         }
 
-        PeakSet::new(peaks)
+        MZPeakSetType::<C>::new(peaks)
     }
 }
-
 
 impl From<&BinaryArrayMap> for DeconvolutedPeakSet {
     fn from(arrays: &BinaryArrayMap) -> DeconvolutedPeakSet {
         let mz_array = arrays.mzs();
         let intensity_array = arrays.intensities();
-        let charge_array = arrays.charges().expect(
-            "Charge state array is required for deconvoluted peaks");
+        let charge_array = arrays
+            .charges()
+            .expect("Charge state array is required for deconvoluted peaks");
         let mut peaks = Vec::with_capacity(mz_array.len());
-        for (i, ((mz, intensity), charge)) in mz_array.iter().zip(intensity_array.iter()).zip(charge_array.iter()).enumerate() {
+        for (i, ((mz, intensity), charge)) in mz_array
+            .iter()
+            .zip(intensity_array.iter())
+            .zip(charge_array.iter())
+            .enumerate()
+        {
             peaks.push(DeconvolutedPeak {
                 neutral_mass: neutral_mass(*mz, *charge),
                 intensity: *intensity,
                 charge: *charge,
-                index: i as u32
+                index: i as u32,
             })
         }
 

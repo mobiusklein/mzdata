@@ -1,7 +1,7 @@
-use super::SpectrumBehavior;
+use super::spectrum::{SpectrumBehavior, CentroidPeakAdapting, DeconvolutedPeakAdapting};
+use crate::impl_param_described;
 use crate::io::traits::ScanSource;
 use crate::params;
-use crate::impl_param_described;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(i8)]
@@ -115,10 +115,12 @@ impl Precursor {
     /// This is useful when examining the area *around* where the precursor
     /// ion was or to obtain a snapshot of the retention time when the spectrum
     /// was scheduled.
-    pub fn precursor_spectrum<R, S>(&self, source: &mut R) -> Option<S>
+    pub fn precursor_spectrum<C, D, S, R>(&self, source: &mut R) -> Option<S>
     where
-        R: ScanSource<S>,
-        S: SpectrumBehavior,
+        C: CentroidPeakAdapting,
+        D: DeconvolutedPeakAdapting,
+        S: SpectrumBehavior<C, D>,
+        R: ScanSource<C, D, S>,
     {
         source.get_spectrum_by_id(&self.precursor_id)
     }
@@ -126,16 +128,18 @@ impl Precursor {
     /// Given a ScanSource object, look up the product scan in it.
     /// This is rarely needed unless you have manually separated [`Precursor`]
     /// objects from their spectra.
-    pub fn product_spectrum<R, S>(&self, source: &mut R) -> Option<S>
+    pub fn product_spectrum<C, D, S, R>(&self, source: &mut R) -> Option<S>
     where
-        R: ScanSource<S>,
-        S: SpectrumBehavior,
+        C: CentroidPeakAdapting,
+        D: DeconvolutedPeakAdapting,
+        S: SpectrumBehavior<C, D>,
+        R: ScanSource<C, D, S>,
     {
         source.get_spectrum_by_id(&self.product_id)
     }
 }
 
-pub trait PrecursorSelection : params::ParamDescribed {
+pub trait PrecursorSelection: params::ParamDescribed {
     fn ion(&self) -> &SelectedIon;
     fn isolation_window(&self) -> &IsolationWindow;
     fn precursor_id(&self) -> &str;
@@ -164,7 +168,6 @@ impl PrecursorSelection for Precursor {
         &self.activation
     }
 }
-
 
 #[repr(i8)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -208,5 +211,11 @@ pub struct SpectrumDescription {
     pub precursor: Option<Precursor>,
 }
 
-
-impl_param_described!(Acquisition, Activation, Precursor, SelectedIon, ScanEvent, SpectrumDescription);
+impl_param_described!(
+    Acquisition,
+    Activation,
+    Precursor,
+    SelectedIon,
+    ScanEvent,
+    SpectrumDescription
+);

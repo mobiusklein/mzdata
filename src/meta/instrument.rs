@@ -1,5 +1,5 @@
-use crate::params::ParamList;
 use crate::impl_param_described;
+use crate::params::ParamList;
 
 #[derive(Debug)]
 pub enum ComponentType {

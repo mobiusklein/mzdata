@@ -17,6 +17,7 @@ categories = [
 description = "A library to read mass spectrometry data formats"
 license = "Apache-2.0"
 repository = "https://github.com/mobiusklein/mzdata"
+documentation = "https://docs.rs/mzdata"
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -43,6 +44,8 @@ flate2 = "1.0.20"
 num-traits = "0.2"
 indexmap = { version = "1.7.0", features = [ "serde" ] }
 log = "0.4.14"
+
+mzpeaks = "0.3.0"
 
 [dev-dependencies]
 criterion = { version = "0.3.4", features = [ "html_reports" ] }

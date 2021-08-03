@@ -1,4 +1,3 @@
-
 const PROTON: f64 = 1.00727646677;
 
 #[inline]

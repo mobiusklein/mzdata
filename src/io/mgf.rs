@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use std::fs;
 use std::io;
 use std::io::prelude::*;
@@ -9,11 +10,11 @@ use log::warn;
 use lazy_static::lazy_static;
 use regex::Regex;
 
+use mzpeaks::{CentroidPeak, PeakCollection, PeakSet};
+
 use crate::params::{Param, ParamDescribed};
-use crate::peaks::{CentroidPeak, PeakCollection, PeakSet};
 use crate::spectrum::{
-    scan_properties, CentroidSpectrum, Precursor, SelectedIon, Spectrum,
-    SpectrumDescription,
+    scan_properties, CentroidSpectrum, Precursor, SelectedIon, Spectrum, SpectrumDescription,
 };
 
 use super::offset_index::OffsetIndex;
@@ -81,7 +82,7 @@ macro_rules! impl_from_spectrum_builder_for_spec {
         impl From<SpectrumBuilder> for $t {
             fn from(builder: SpectrumBuilder) -> $t {
                 let spec: Spectrum = builder.into();
-                spec.into()
+                spec.try_into().unwrap()
             }
         }
     )+};
@@ -180,7 +181,10 @@ impl<R: io::Read> MGFReader<R> {
                     });
                 }
                 &_ => {
-                    description.add_param(Param::key_value(String::from(key.to_lowercase()), String::from(value)));
+                    description.add_param(Param::key_value(
+                        String::from(key.to_lowercase()),
+                        String::from(value),
+                    ));
                 }
             };
 
@@ -414,8 +418,8 @@ impl<R: SeekRead> ScanSource<Spectrum> for MGFReader<R> {
             Some(mut scan) => {
                 scan.description.index = index;
                 Some(scan)
-            },
-            None => None
+            }
+            None => None,
         }
     }
 
@@ -435,8 +439,8 @@ impl<R: SeekRead> ScanSource<Spectrum> for MGFReader<R> {
             Some(mut scan) => {
                 scan.description.index = index;
                 Some(scan)
-            },
-            None => None
+            }
+            None => None,
         }
     }
 

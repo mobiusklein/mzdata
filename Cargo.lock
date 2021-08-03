@@ -340,12 +340,19 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "log",
+ "mzpeaks",
  "num-traits",
  "quick-xml",
  "regex",
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "mzpeaks"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "816d2f6fcfe62be30aebc3e4199753885bb94efeb2fd1d60e878a8ac1012449c"
 
 [[package]]
 name = "num-traits"

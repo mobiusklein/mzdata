@@ -14,25 +14,40 @@
 //! These structures all implement the [`SpectrumBehavior`] trait
 use std::borrow;
 use std::convert::TryFrom;
-use crate::mass_error::MassErrorType;
-use crate::peaks::{CentroidPeak};
-use crate::peaks::{PeakCollection, PeakSet, DeconvolutedPeakSet};
+
+use mzpeaks::{
+    CentroidLike, DeconvolutedCentroidLike, DeconvolutedPeakSet, MZPeakSetType, MassPeakSetType,
+    PeakCollection, PeakSet,
+};
+use mzpeaks::{CentroidPeak, DeconvolutedPeak, MassErrorType};
+
 use crate::spectrum::scan_properties::{
     Acquisition, Precursor, SignalContinuity, SpectrumDescription,
 };
-use crate::spectrum::signal::{BinaryArrayMap, ArrayType};
+use crate::spectrum::signal::{ArrayType, BinaryArrayMap};
+
+pub trait CentroidPeakAdapting: CentroidLike + Default + From<CentroidPeak> {}
+impl<C: CentroidLike + Default + From<CentroidPeak>> CentroidPeakAdapting for C {}
+pub trait DeconvolutedPeakAdapting:
+    DeconvolutedCentroidLike + Default + From<DeconvolutedPeak>
+{
+}
+impl<D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak>> DeconvolutedPeakAdapting
+    for D
+{
+}
 
 #[derive(Debug)]
 /// An variant for dispatching to different strategies of computing
 /// common statistics of different levels of peak data.
-pub enum PeakDataLevel<'lifespan> {
+pub enum PeakDataLevel<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> {
     Missing,
     RawData(&'lifespan BinaryArrayMap),
-    Centroid(&'lifespan PeakSet),
-    Deconvoluted(&'lifespan DeconvolutedPeakSet),
+    Centroid(&'lifespan MZPeakSetType<C>),
+    Deconvoluted(&'lifespan MassPeakSetType<D>),
 }
 
-impl<'lifespan> PeakDataLevel<'lifespan> {
+impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lifespan, C, D> {
     /// Compute the base peak of a spectrum
     pub fn base_peak(&self) -> (usize, f64, f32) {
         match self {
@@ -53,20 +68,20 @@ impl<'lifespan> PeakDataLevel<'lifespan> {
                 let result = peaks
                     .iter()
                     .enumerate()
-                    .max_by(|ia, ib| ia.1.intensity.partial_cmp(&ib.1.intensity).unwrap());
+                    .max_by(|ia, ib| ia.1.intensity().partial_cmp(&ib.1.intensity()).unwrap());
                 if let Some((i, peak)) = result {
-                    (i, peak.mz, peak.intensity)
+                    (i, peak.coordinate(), peak.intensity())
                 } else {
                     (0, 0.0, 0.0)
                 }
-            },
+            }
             PeakDataLevel::Deconvoluted(peaks) => {
                 let result = peaks
                     .iter()
                     .enumerate()
-                    .max_by(|ia, ib| ia.1.intensity.partial_cmp(&ib.1.intensity).unwrap());
+                    .max_by(|ia, ib| ia.1.intensity().partial_cmp(&ib.1.intensity()).unwrap());
                 if let Some((i, peak)) = result {
-                    (i, peak.neutral_mass, peak.intensity)
+                    (i, peak.coordinate(), peak.intensity())
                 } else {
                     (0, 0.0, 0.0)
                 }
@@ -81,8 +96,8 @@ impl<'lifespan> PeakDataLevel<'lifespan> {
                 let intensities = arrays.intensities();
                 intensities.iter().sum()
             }
-            PeakDataLevel::Centroid(peaks) => peaks.iter().map(|p| p.intensity).sum(),
-            PeakDataLevel::Deconvoluted(peaks) => peaks.iter().map(|p| p.intensity).sum()
+            PeakDataLevel::Centroid(peaks) => peaks.iter().map(|p| p.intensity()).sum(),
+            PeakDataLevel::Deconvoluted(peaks) => peaks.iter().map(|p| p.intensity()).sum(),
         }
     }
 
@@ -94,38 +109,19 @@ impl<'lifespan> PeakDataLevel<'lifespan> {
     ) -> Option<usize> {
         match self {
             PeakDataLevel::Missing => None,
-            PeakDataLevel::RawData(arrays) => {
-                let mzs = arrays.mzs();
-                let lower = error_type.lower_bound(query, error_tolerance);
-                match mzs[..].binary_search_by(|m| m.partial_cmp(&lower).unwrap()) {
-                    Ok(i) => {
-                        let mut best_error = error_type.call(query, mzs[i]).abs();
-                        let mut best_index = i;
-                        let mut index = i + 1;
-                        while index < mzs.len() {
-                            let error = error_type.call(query, mzs[index]).abs();
-                            if error < best_error {
-                                best_index = index;
-                                best_error = error;
-                            }
-                            index += 1;
-                        }
-                        if best_error < error_tolerance {
-                            return Some(best_index);
-                        }
-                        None
-                    }
-                    Err(_err) => None,
-                }
-            }
+            PeakDataLevel::RawData(arrays) => arrays.search(query, error_tolerance, error_type),
             PeakDataLevel::Centroid(peaks) => peaks.search(query, error_tolerance, error_type),
-            PeakDataLevel::Deconvoluted(peaks) => peaks.search(query, error_tolerance, error_type)
+            PeakDataLevel::Deconvoluted(peaks) => peaks.search(query, error_tolerance, error_type),
         }
     }
 }
 
 /// A trait for providing a uniform delegated access to spectrum metadata
-pub trait SpectrumBehavior {
+pub trait SpectrumBehavior<
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
+>
+{
     /// The method to access the spectrum description itself, which supplies
     /// the data for most other methods on this trait.
     fn description(&self) -> &SpectrumDescription;
@@ -136,6 +132,7 @@ pub trait SpectrumBehavior {
     }
 
     /// Access the precursor information, if it exists.
+    #[inline]
     fn precursor(&self) -> Option<&Precursor> {
         let desc = self.description();
         if let Some(precursor) = &desc.precursor {
@@ -147,6 +144,7 @@ pub trait SpectrumBehavior {
 
     /// A shortcut method to retrieve the scan start time
     /// of a spectrum.
+    #[inline]
     fn start_time(&self) -> f64 {
         let acq = self.acquisition();
         match acq.scans.first() {
@@ -156,29 +154,33 @@ pub trait SpectrumBehavior {
     }
 
     /// Access the MS exponentiation level
+    #[inline]
     fn ms_level(&self) -> u8 {
         self.description().ms_level
     }
 
     /// Access the native ID string for the spectrum
+    #[inline]
     fn id(&self) -> &str {
         &self.description().id
     }
 
     /// Access the index of the spectrum in the source file
+    #[inline]
     fn index(&self) -> usize {
         self.description().index
     }
 
     /// Access a description of how raw the signal is, whether a
     /// profile spectrum is available or only centroids are present.
+    #[inline]
     fn signal_continuity(&self) -> SignalContinuity {
         self.description().signal_continuity
     }
 
     /// Retrieve the most processed representation of the mass spectrum's
     /// signal
-    fn peaks(&'_ self) -> PeakDataLevel<'_>;
+    fn peaks(&'_ self) -> PeakDataLevel<'_, C, D>;
 }
 
 #[derive(Default, Debug, Clone)]
@@ -243,8 +245,10 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
     }
 
     /// Convert a spectrum into a [`Spectrum`]
-    pub fn into_spectrum(self) -> Result<Spectrum, SpectrumConversionError> {
-        Ok(Spectrum {
+    pub fn into_spectrum<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>(
+        self,
+    ) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError> {
+        Ok(MultiLayerSpectrum::<C, D> {
             arrays: Some(self.arrays),
             description: self.description,
             ..Default::default()
@@ -253,44 +257,51 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
 }
 
 impl<'lifespan> SpectrumBehavior for RawSpectrum {
+    #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
     }
 
-    fn peaks(&'_ self) -> PeakDataLevel<'_> {
+    fn peaks(&'_ self) -> PeakDataLevel<'_, CentroidPeak, DeconvolutedPeak> {
         PeakDataLevel::RawData(&self.arrays)
     }
 }
 
 #[derive(Default, Debug, Clone)]
 /// Represents a spectrum that has been centroided
-pub struct CentroidSpectrum {
+pub struct CentroidSpectrumType<C: CentroidLike + Default> {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
     /// The picked centroid peaks
-    pub peaks: PeakSet,
+    pub peaks: MZPeakSetType<C>,
 }
 
-impl<'lifespan> SpectrumBehavior for CentroidSpectrum {
+impl<'lifespan, C: CentroidLike + Default> SpectrumBehavior<C> for CentroidSpectrumType<C> {
+    #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
     }
 
-    fn peaks(&'_ self) -> PeakDataLevel<'_> {
+    fn peaks(&'_ self) -> PeakDataLevel<'_, C, DeconvolutedPeak> {
         PeakDataLevel::Centroid(&self.peaks)
     }
 }
 
-impl CentroidSpectrum {
+impl<C: CentroidLike + Default> CentroidSpectrumType<C> {
     /// Convert a spectrum into a [`Spectrum`]
-    pub fn into_spectrum(self) -> Result<Spectrum, SpectrumConversionError> {
-        Ok(Spectrum {
+    pub fn into_spectrum<D: DeconvolutedPeakAdapting>(
+        self,
+    ) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError> {
+        let val = MultiLayerSpectrum::<C, D> {
             peaks: Some(self.peaks),
             description: self.description,
             ..Default::default()
-        })
+        };
+        Ok(val)
     }
 }
+
+pub type CentroidSpectrum = CentroidSpectrumType<CentroidPeak>;
 
 #[derive(Default, Debug, Clone)]
 struct DeconvolutedSpectrum {
@@ -301,11 +312,12 @@ struct DeconvolutedSpectrum {
 }
 
 impl<'lifespan> SpectrumBehavior for DeconvolutedSpectrum {
+    #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
     }
 
-    fn peaks(&'_ self) -> PeakDataLevel<'_> {
+    fn peaks(&'_ self) -> PeakDataLevel<'_, CentroidPeak, DeconvolutedPeak> {
         PeakDataLevel::Deconvoluted(&self.deconvoluted_peaks)
     }
 }
@@ -313,24 +325,26 @@ impl<'lifespan> SpectrumBehavior for DeconvolutedSpectrum {
 #[derive(Default, Debug, Clone)]
 /// Represent a spectrum with multiple layers of representation of the
 /// peak data.
-///
-/// **Not directly used at this time**
-pub struct Spectrum {
+pub struct MultiLayerSpectrum<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
     /// The (potentially absent) data arrays describing the m/z, intensity,
     /// and potentially other measured properties
     pub arrays: Option<BinaryArrayMap>,
     // The (potentially absent) centroid peaks
-    pub peaks: Option<PeakSet>,
+    pub peaks: Option<MZPeakSetType<C>>,
+    pub deconvoluted_peaks: Option<MassPeakSetType<D>>,
 }
 
-impl<'lifespan> SpectrumBehavior for Spectrum {
+impl<'lifespan, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+    SpectrumBehavior<C, D> for MultiLayerSpectrum<C, D>
+{
+    #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
     }
 
-    fn peaks(&'_ self) -> PeakDataLevel<'_> {
+    fn peaks(&'_ self) -> PeakDataLevel<'_, C, D> {
         if let Some(peaks) = &self.peaks {
             PeakDataLevel::Centroid(peaks)
         } else if let Some(arrays) = &self.arrays {
@@ -341,11 +355,11 @@ impl<'lifespan> SpectrumBehavior for Spectrum {
     }
 }
 
-impl Spectrum {
+impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MultiLayerSpectrum<C, D> {
     /// Convert a spectrum into a [`CentroidSpectrum`]
-    pub fn into_centroid(self) -> Result<CentroidSpectrum, SpectrumConversionError> {
+    pub fn into_centroid(self) -> Result<CentroidSpectrumType<C>, SpectrumConversionError> {
         if let Some(peaks) = self.peaks {
-            let mut result = CentroidSpectrum {
+            let mut result = CentroidSpectrumType::<C> {
                 peaks,
                 description: self.description,
             };
@@ -354,16 +368,16 @@ impl Spectrum {
         } else {
             if self.signal_continuity() == SignalContinuity::Centroid {
                 if let Some(arrays) = &self.arrays {
-                    let peaks = PeakSet::from(arrays);
-                    let mut centroid = CentroidSpectrum {
+                    let peaks = MZPeakSetType::<C>::from(arrays);
+                    let mut centroid = CentroidSpectrumType::<C> {
                         description: self.description,
                         peaks,
                     };
                     centroid.description.signal_continuity = SignalContinuity::Centroid;
                     return Ok(centroid);
                 } else {
-                    let mut result = CentroidSpectrum {
-                        peaks: PeakSet::empty(),
+                    let mut result = CentroidSpectrumType::<C> {
+                        peaks: MZPeakSetType::<C>::empty(),
                         description: self.description,
                     };
                     result.description.signal_continuity = SignalContinuity::Centroid;
@@ -400,20 +414,32 @@ impl Spectrum {
     }
 }
 
-impl From<Spectrum> for CentroidSpectrum {
-    fn from(spectrum: Spectrum) -> CentroidSpectrum {
-        spectrum.into_centroid().unwrap()
+impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    TryFrom<MultiLayerSpectrum<C, D>> for CentroidSpectrumType<C>
+{
+    type Error = SpectrumConversionError;
+
+    fn try_from(
+        spectrum: MultiLayerSpectrum<C, D>,
+    ) -> Result<CentroidSpectrumType<C>, Self::Error> {
+        spectrum.into_centroid()
     }
 }
 
-impl From<CentroidSpectrum> for Spectrum {
-    fn from(spectrum: CentroidSpectrum) -> Spectrum {
+pub type Spectrum = MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>;
+
+impl<C: CentroidPeakAdapting> From<CentroidSpectrumType<C>>
+    for MultiLayerSpectrum<C, DeconvolutedPeak>
+{
+    fn from(spectrum: CentroidSpectrumType<C>) -> MultiLayerSpectrum<C, DeconvolutedPeak> {
         spectrum.into_spectrum().unwrap()
     }
 }
 
-impl From<RawSpectrum> for Spectrum {
-    fn from(spectrum: RawSpectrum) -> Spectrum {
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<RawSpectrum>
+    for MultiLayerSpectrum<C, D>
+{
+    fn from(spectrum: RawSpectrum) -> MultiLayerSpectrum<C, D> {
         spectrum.into_spectrum().unwrap()
     }
 }
@@ -424,9 +450,11 @@ impl From<Spectrum> for RawSpectrum {
     }
 }
 
-impl From<RawSpectrum> for CentroidSpectrum {
-    fn from(spectrum: RawSpectrum) -> CentroidSpectrum {
-        spectrum.into_centroid().unwrap()
+impl TryFrom<RawSpectrum> for CentroidSpectrum {
+    type Error = SpectrumConversionError;
+
+    fn try_from(spectrum: RawSpectrum) -> Result<CentroidSpectrum, Self::Error> {
+        spectrum.into_centroid()
     }
 }
 
@@ -442,11 +470,11 @@ impl TryFrom<Spectrum> for DeconvolutedSpectrum {
                 let peaks: DeconvolutedPeakSet = DeconvolutedPeakSet::from(arrays);
                 return Ok(DeconvolutedSpectrum {
                     description: spectrum.description,
-                    deconvoluted_peaks: peaks
-                })
+                    deconvoluted_peaks: peaks,
+                });
             }
-            return Err(Self::Error::NotDeconvoluted)
+            return Err(Self::Error::NotDeconvoluted);
         }
-        return Err(Self::Error::NoPeakData)
+        return Err(Self::Error::NoPeakData);
     }
 }

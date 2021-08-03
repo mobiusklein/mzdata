@@ -33,7 +33,6 @@ pub type ParamList = Vec<Param>;
 
 pub type ParamMap = HashMap<String, Param>;
 
-
 pub trait ParamDescribed {
     fn params(&self) -> &ParamList;
     fn params_mut(&mut self) -> &mut ParamList;

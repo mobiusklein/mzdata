@@ -1,6 +1,5 @@
-use crate::params::{ParamList, Param, ParamDescribed};
 use crate::impl_param_described;
-
+use crate::params::{Param, ParamDescribed, ParamList};
 
 #[derive(Debug, Clone, Default)]
 pub struct SourceFile {
@@ -19,7 +18,6 @@ pub struct FileDescription {
 }
 
 impl_param_described!(SourceFile);
-
 
 impl ParamDescribed for FileDescription {
     fn params(&self) -> &ParamList {
