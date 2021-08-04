@@ -24,6 +24,21 @@ use crate::utils::neutral_mass;
 
 type Bytes = Vec<u8>;
 
+pub fn to_bytes<T>(data: &[T]) -> Bytes {
+    let n = data.len();
+    let z = mem::size_of::<T>();
+    let m = n * z;
+    unsafe {
+        let byte_buffer = slice::from_raw_parts(
+            data.as_ptr() as *const u8,
+            m,
+        );
+        let mut result = Bytes::new();
+        result.copy_from_slice(byte_buffer);
+        return result
+    };
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 pub enum BinaryDataArrayType {
     Unknown,
@@ -164,6 +179,16 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             dtype,
             name: name.clone(),
             data: Bytes::with_capacity(size),
+            compression: BinaryCompressionType::Decoded,
+            ..Default::default()
+        }
+    }
+
+    pub fn wrap(name: &ArrayType, dtype: BinaryDataArrayType, data: Bytes) -> DataArray {
+        DataArray {
+            dtype,
+            name: name.clone(),
+            data: data,
             compression: BinaryCompressionType::Decoded,
             ..Default::default()
         }

@@ -187,7 +187,7 @@ impl Default for ScanPolarity {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum SignalContinuity {
     Unknown = 0,
-    Centroid = 1,
+    Centroid = 3,
     Profile = 5,
 }
 

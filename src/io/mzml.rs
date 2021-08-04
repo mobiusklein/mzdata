@@ -700,7 +700,7 @@ impl Into<RawSpectrum> for MzMLSpectrumBuilder {
 ///
 /// When the readable stream the parser is wrapped around supports [`io::Seek`],
 /// additional random access operations are available.
-pub struct MzMLReader<
+pub struct MzMLReaderType<
     R: Read,
     C: CentroidPeakAdapting = CentroidPeak,
     D: DeconvolutedPeakAdapting = DeconvolutedPeak,
@@ -714,10 +714,10 @@ pub struct MzMLReader<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReader<R, C, D> {
-    pub fn new(file: R) -> MzMLReader<R, C, D> {
+impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {
+    pub fn new(file: R) -> MzMLReaderType<R, C, D> {
         let handle = BufReader::with_capacity(BUFFER_SIZE, file);
-        MzMLReader {
+        MzMLReaderType {
             handle,
             state: MzMLParserState::Start,
             error: MzMLParserError::default(),
@@ -855,8 +855,8 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReader<R
     }
 }
 
-/// [`MzMLReader`] instances are [`Iterator`]s over [`Spectrum`]
-impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator for MzMLReader<R, C, D> {
+/// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
+impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator for MzMLReaderType<R, C, D> {
     type Item = MultiLayerSpectrum<C, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -866,7 +866,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator
 
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
-impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ScanSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReader<R, C, D> {
+impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ScanSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D> {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
         let offset_ref = self.index.get(id);
@@ -907,7 +907,7 @@ impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdaptin
 
     fn get_index(&self) -> &OffsetIndex {
         if !self.index.init {
-            warn!("Attempting to use an uninitialized offset index on MzMLReader")
+            warn!("Attempting to use an uninitialized offset index on MzMLReaderType")
         }
         &self.index
     }
@@ -919,7 +919,7 @@ impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdaptin
 
 /// The iterator can also be updated to move to a different location in the
 /// stream efficiently.
-impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> RandomAccessScanIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReader<R, C, D> {
+impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> RandomAccessScanIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D> {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
@@ -951,10 +951,10 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> RandomAc
     }
 }
 
-impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReader<R, C, D> {
-    /// Construct a new MzMLReader and build an offset index
+impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {
+    /// Construct a new MzMLReaderType and build an offset index
     /// using [`Self::build_index`]
-    pub fn new_indexed(file: R) -> MzMLReader<R, C, D> {
+    pub fn new_indexed(file: R) -> MzMLReaderType<R, C, D> {
         let mut reader = Self::new(file);
         reader.build_index();
         reader
@@ -1030,7 +1030,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReader<fs::File, C, D> {
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<fs::File, C, D> {
     fn open_file(source: fs::File) -> Self {
         Self::new(source)
     }
@@ -1039,6 +1039,10 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MZFileReader<C, D, Mu
         self.build_index()
     }
 }
+
+
+pub type MzMLReader<R> = MzMLReaderType<R, CentroidPeak, DeconvolutedPeak>;
+
 
 #[cfg(test)]
 mod test {
@@ -1051,7 +1055,7 @@ mod test {
     fn reader_from_file() {
         let path = path::Path::new("./test/data/small.mzML");
         let file = fs::File::open(path).expect("Test file doesn't exist");
-        let reader = MzMLReader::<_, CentroidPeak, DeconvolutedPeak>::new(file);
+        let reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::new(file);
         let mut ms1_count = 0;
         let mut msn_count = 0;
         for scan in reader {
@@ -1070,7 +1074,7 @@ mod test {
     fn reader_from_file_indexed() {
         let path = path::Path::new("./test/data/small.mzML");
         let file = fs::File::open(path).expect("Test file doesn't exist");
-        let mut reader = MzMLReader::<_, CentroidPeak, DeconvolutedPeak>::new_indexed(file);
+        let mut reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::new_indexed(file);
 
         let n = reader.len();
         assert_eq!(n, 48);
@@ -1094,7 +1098,7 @@ mod test {
     #[test]
     fn reader_from_path() {
         let path = path::Path::new("./test/data/small.mzML");
-        let mut reader = MzMLReader::<_, CentroidPeak, DeconvolutedPeak>::open_path(path).expect("Test file doesn't exist?");
+        let mut reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::open_path(path).expect("Test file doesn't exist?");
 
         let n = reader.len();
         assert_eq!(n, 48);

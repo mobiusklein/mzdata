@@ -8,7 +8,7 @@ use log::warn;
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 
 use crate::spectrum::spectrum::{
-    MultiLayerSpectrum, Spectrum, SpectrumBehavior,
+    MultiLayerSpectrum, SpectrumBehavior,
 };
 
 use super::utils::FileSource;
@@ -17,7 +17,11 @@ use super::OffsetIndex;
 pub trait SeekRead: io::Read + io::Seek {}
 impl<T: io::Read + io::Seek> SeekRead for T {}
 
-trait IndexedScanSource<S: SpectrumBehavior> {
+trait IndexedScanSource<
+    C: CentroidLike + Default = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+> {
     /// Retrieve the number of spectra in source file
     fn len(&self) -> usize {
         self.get_index().len()
@@ -68,7 +72,11 @@ trait IndexedScanSource<S: SpectrumBehavior> {
     }
 }
 
-pub trait RandomAccessScanSource<S: SpectrumBehavior> {
+pub trait RandomAccessScanSource<
+    C: CentroidLike + Default = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+> {
     fn len(&self) -> usize;
 
     /// Retrieve a spectrum by it's native ID

@@ -21,6 +21,8 @@ use mzpeaks::{
 };
 use mzpeaks::{CentroidPeak, DeconvolutedPeak, MassErrorType};
 
+use mzsignal::peak_picker::{PeakPicker, PeakPickerError, PeakFitType};
+
 use crate::spectrum::scan_properties::{
     Acquisition, Precursor, SignalContinuity, SpectrumDescription,
 };
@@ -356,7 +358,7 @@ impl<'lifespan, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default
 }
 
 impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MultiLayerSpectrum<C, D> {
-    /// Convert a spectrum into a [`CentroidSpectrum`]
+    /// Convert a spectrum into a [`CentroidSpectrumType<C>`]
     pub fn into_centroid(self) -> Result<CentroidSpectrumType<C>, SpectrumConversionError> {
         if let Some(peaks) = self.peaks {
             let mut result = CentroidSpectrumType::<C> {
@@ -411,6 +413,33 @@ impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MultiLayer
                 description: self.description,
             })
         }
+    }
+
+    pub fn pick_peaks_with(&mut self, peak_picker: &PeakPicker) -> (&Self, Option<PeakPickerError>) {
+        if let Some(arrays) = &self.arrays {
+            let mz_array = arrays.mzs();
+            let intensity_array = arrays.intensities();
+            let mut acc = Vec::new();
+            match peak_picker.discover_peaks(&mz_array, &intensity_array, &mut acc) {
+                Ok(_) => {
+                    let peaks: MZPeakSetType<C> = acc.into_iter().map(|p| C::from(p.into())).collect();
+                    self.peaks = Some(peaks);
+                    (self, None)
+                },
+                Err(err) => {
+                    (self, Some(err))
+                }
+            }
+        } else {
+            (self, Some(PeakPickerError::Unknown))
+        }
+    }
+
+    pub fn pick_peaks(&mut self, signal_to_noise_threshold: f32, fit_type: PeakFitType) -> (&Self, Option<PeakPickerError>) {
+        let mut peak_picker = PeakPicker::default();
+        peak_picker.fit_type = fit_type;
+        peak_picker.signal_to_noise_threshold = signal_to_noise_threshold;
+        self.pick_peaks_with(&peak_picker)
     }
 }
 
