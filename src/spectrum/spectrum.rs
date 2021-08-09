@@ -15,18 +15,22 @@
 use std::borrow;
 use std::convert::TryFrom;
 
+use mzpeaks::prelude::*;
 use mzpeaks::{
     CentroidLike, DeconvolutedCentroidLike, DeconvolutedPeakSet, MZPeakSetType, MassPeakSetType,
-    PeakCollection, PeakSet,
+    PeakSet
 };
 use mzpeaks::{CentroidPeak, DeconvolutedPeak, MassErrorType};
 
 use mzsignal::peak_picker::{PeakPicker, PeakPickerError, PeakFitType};
+use mzsignal::denoise::{DenoisingError, denoise};
+
 
 use crate::spectrum::scan_properties::{
     Acquisition, Precursor, SignalContinuity, SpectrumDescription,
+    ScanPolarity
 };
-use crate::spectrum::signal::{ArrayType, BinaryArrayMap};
+use crate::spectrum::signal::{ArrayType, BinaryArrayMap, BinaryDataArrayType};
 
 pub trait CentroidPeakAdapting: CentroidLike + Default + From<CentroidPeak> {}
 impl<C: CentroidLike + Default + From<CentroidPeak>> CentroidPeakAdapting for C {}
@@ -180,6 +184,11 @@ pub trait SpectrumBehavior<
         self.description().signal_continuity
     }
 
+    #[inline]
+    fn polarity(&self) -> ScanPolarity {
+        self.description().polarity
+    }
+
     /// Retrieve the most processed representation of the mass spectrum's
     /// signal
     fn peaks(&'_ self) -> PeakDataLevel<'_, C, D>;
@@ -202,6 +211,13 @@ pub enum SpectrumConversionError {
     NotDeconvoluted,
     NotCentroided,
     NoPeakData,
+}
+
+#[derive(Debug, Clone)]
+pub enum SpectrumProcessingError {
+    DenoisingError(DenoisingError),
+    PeakPickerError(PeakPickerError),
+    SpectrumConversionError(SpectrumConversionError)
 }
 
 impl<'transient, 'lifespan: 'transient> RawSpectrum {
@@ -255,6 +271,38 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
             description: self.description,
             ..Default::default()
         })
+    }
+
+    pub fn denoise(&mut self, scale: f32) -> Result<(), SpectrumProcessingError> {
+        let mut intensities_copy = self.arrays.intensities().into_owned();
+        let mz_array = self.arrays.mzs();
+        match denoise(&mz_array, &mut intensities_copy, scale) {
+            Ok(_) => {
+                let view = self.arrays.get_mut(&ArrayType::IntensityArray).unwrap();
+                view.store_as(BinaryDataArrayType::Float32).expect("Failed to reformat intensity array");
+                view.update_buffer(&intensities_copy).expect("Failed to update intensity array buffer");
+                Ok(())
+            },
+            Err(err) => {
+                Err(SpectrumProcessingError::DenoisingError(err))
+            }
+        }
+    }
+
+
+    pub fn pick_peaks_with_into(self, peak_picker: &PeakPicker) -> Result<MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>, SpectrumProcessingError> {
+        let mut result = self.into_spectrum().unwrap();
+        match result.pick_peaks_with(peak_picker) {
+            Ok(_) => Ok(result),
+            Err(err) => Err(err)
+        }
+    }
+
+    pub fn pick_peaks_into(self, signal_to_noise_threshold: f32, fit_type: PeakFitType) -> Result<MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>, SpectrumProcessingError> {
+        let mut peak_picker = PeakPicker::default();
+        peak_picker.fit_type = fit_type;
+        peak_picker.signal_to_noise_threshold = signal_to_noise_threshold;
+        self.pick_peaks_with_into(&peak_picker)
     }
 }
 
@@ -330,11 +378,15 @@ impl<'lifespan> SpectrumBehavior for DeconvolutedSpectrum {
 pub struct MultiLayerSpectrum<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
+
     /// The (potentially absent) data arrays describing the m/z, intensity,
     /// and potentially other measured properties
     pub arrays: Option<BinaryArrayMap>,
+
     // The (potentially absent) centroid peaks
     pub peaks: Option<MZPeakSetType<C>>,
+
+    // The (potentially absent) deconvoluted peaks
     pub deconvoluted_peaks: Option<MassPeakSetType<D>>,
 }
 
@@ -415,7 +467,7 @@ impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MultiLayer
         }
     }
 
-    pub fn pick_peaks_with(&mut self, peak_picker: &PeakPicker) -> (&Self, Option<PeakPickerError>) {
+    pub fn pick_peaks_with(&mut self, peak_picker: &PeakPicker) -> Result<(), SpectrumProcessingError> {
         if let Some(arrays) = &self.arrays {
             let mz_array = arrays.mzs();
             let intensity_array = arrays.intensities();
@@ -424,22 +476,45 @@ impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MultiLayer
                 Ok(_) => {
                     let peaks: MZPeakSetType<C> = acc.into_iter().map(|p| C::from(p.into())).collect();
                     self.peaks = Some(peaks);
-                    (self, None)
+                    Ok(())
                 },
                 Err(err) => {
-                    (self, Some(err))
+                    Err(SpectrumProcessingError::PeakPickerError(err))
                 }
             }
         } else {
-            (self, Some(PeakPickerError::Unknown))
+            Err(SpectrumProcessingError::SpectrumConversionError(SpectrumConversionError::NoPeakData))
         }
     }
 
-    pub fn pick_peaks(&mut self, signal_to_noise_threshold: f32, fit_type: PeakFitType) -> (&Self, Option<PeakPickerError>) {
+    pub fn pick_peaks(&mut self, signal_to_noise_threshold: f32, fit_type: PeakFitType) -> Result<(), SpectrumProcessingError> {
         let mut peak_picker = PeakPicker::default();
         peak_picker.fit_type = fit_type;
         peak_picker.signal_to_noise_threshold = signal_to_noise_threshold;
         self.pick_peaks_with(&peak_picker)
+    }
+
+    pub fn denoise(&mut self, scale: f32) -> Result<(), SpectrumProcessingError> {
+        match &mut self.arrays {
+            Some(arrays) => {
+                let mut intensities_copy = arrays.intensities().into_owned();
+                let mz_array = arrays.mzs();
+                match denoise(&mz_array, &mut intensities_copy, scale) {
+                    Ok(_) => {
+                        let view = arrays.get_mut(&ArrayType::IntensityArray).unwrap();
+                        view.store_as(BinaryDataArrayType::Float32).expect("Failed to reformat intensity array");
+                        view.update_buffer(&intensities_copy).expect("Failed to update intensity array buffer");
+                        Ok(())
+                    },
+                    Err(err) => {
+                        Err(SpectrumProcessingError::DenoisingError(err))
+                    }
+                }
+            },
+            None => {
+                Err(SpectrumProcessingError::SpectrumConversionError(SpectrumConversionError::NoPeakData))
+            }
+        }
     }
 }
 
@@ -505,5 +580,59 @@ impl TryFrom<Spectrum> for DeconvolutedSpectrum {
             return Err(Self::Error::NotDeconvoluted);
         }
         return Err(Self::Error::NoPeakData);
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::io::prelude::*;
+    use crate::io::mzml::MzMLReader;
+
+    use mzsignal::plot::*;
+    use mzsignal::plot::{SVGBuilder, RED};
+    use mzsignal::arrayops::ArrayPair;
+
+    #[test]
+    fn test_profile_read() {
+        let mut reader = MzMLReader::open_path("./test/data/three_test_scans.mzML").expect("Failed to open test file");
+        let mut scan = reader.next().unwrap();
+        assert_eq!(scan.signal_continuity(), SignalContinuity::Profile);
+        assert_eq!(scan.ms_level(), 1);
+        assert_eq!(scan.polarity(), ScanPolarity::Positive);
+        assert!(matches!(scan.precursor(), None));
+
+
+
+        match scan.pick_peaks(1.0, PeakFitType::Quadratic) {
+            Err(err) => {
+                panic!("Should not have an error! {:?}", err);
+            },
+            Ok(_) => {}
+        }
+
+        if let Some(peaks) = &scan.peaks {
+            assert_eq!(peaks.len(), 2097);
+            let n = peaks.len();
+            for i in 1..n {
+                let diff = peaks[i].get_index() - peaks[i - 1].get_index();
+                assert_eq!(diff, 1);
+            }
+
+            let mut builder = SVGBuilder::default();
+            let arrays = &scan.arrays.unwrap();
+            let ser = ArrayPair::new(arrays.mzs(), arrays.intensities());
+            let mut ser2 = SpectrumSeries::from(peaks.iter());
+            ser2.color(RED.mix(1.0));
+            builder.path("./test/data/0.svg").size(1028, 512).add_series(
+                ser2
+            ).add_series(&ser).xlim(562f64, 565f64).draw().expect("Failed to draw");
+
+            peaks.has_peak(562.741, 3f64, MassErrorType::PPM).expect("Expected to find peak");
+            peaks.has_peak(563.240, 3f64, MassErrorType::PPM).expect("Expected to find peak");
+            let p = peaks.has_peak(563.739, 1f64, MassErrorType::PPM).expect("Expected to find peak");
+            assert!((p.mz() - 563.739).abs() < 1e-3)
+        }
     }
 }

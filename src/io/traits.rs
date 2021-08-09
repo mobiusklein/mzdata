@@ -485,3 +485,10 @@ impl<'lifespan, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default
         }
     }
 }
+
+
+pub trait ScanWriter<W: io::Write, C: CentroidLike + Default=CentroidPeak, D: DeconvolutedCentroidLike + Default=DeconvolutedPeak, S: SpectrumBehavior<C,D>=MultiLayerSpectrum<C,D>> {
+    fn write(&mut self, spectrum: &S) -> io::Result<usize>;
+
+    fn flush(&mut self) -> io::Result<()>;
+}

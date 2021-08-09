@@ -33,6 +33,15 @@ src = "src/lib.rs"
 [profile.release]
 lto = true
 
+
+[features]
+default = ["intel-mkl", "parallelism"]
+
+openblas = ["mzsignal/openblas"]
+netlib = ["mzsignal/netlib"]
+intel-mkl = ["mzsignal/intel-mkl"]
+parallelism = ["rayon", "mzsignal/parallelism"]
+
 [dependencies]
 regex = "1"
 lazy_static = "1.4.0"
@@ -44,9 +53,9 @@ flate2 = "1.0.20"
 num-traits = "0.2"
 indexmap = { version = "1.7.0", features = [ "serde" ] }
 log = "0.4.14"
-
-mzpeaks = "0.3.0"
-mzsignal = "0.1.1"
+mzpeaks = "0.4.0"
+rayon = { version = "1.5.1", optional = true }
+mzsignal = { version = "0.2.3", default-features = false}
 
 [dev-dependencies]
 criterion = { version = "0.3.4", features = [ "html_reports" ] }
@@ -54,3 +63,8 @@ criterion = { version = "0.3.4", features = [ "html_reports" ] }
 [[bench]]
 name = "mzml"
 harness = false
+
+
+[package.metadata.docs.rs]
+features = ["openblas", "parallelism"]
+no-default-features = true

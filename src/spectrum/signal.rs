@@ -194,6 +194,15 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    pub fn update_buffer<T>(&mut self, data_buffer: &[T]) -> Result<usize, ArrayRetrievalError> {
+        if self.dtype.size_of() != mem::size_of::<T>() {
+            Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        } else {
+            self.data = to_bytes(data_buffer);
+            Ok(self.data.len())
+        }
+    }
+
     fn decompres_zlib(&self, bytestring: &[u8]) -> Bytes {
         let result = Bytes::new();
         let mut decompressor = ZlibDecoder::new(result);
@@ -236,8 +245,26 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    pub fn decode_mut(&'transient mut self) -> Result<&'transient mut Bytes, ArrayRetrievalError> {
+        match self.compression {
+            BinaryCompressionType::Decoded => Ok(&mut self.data),
+            BinaryCompressionType::NoCompression => {
+                let bytestring = base64::decode(&self.data).expect("Failed to decode base64 array");
+                self.data = bytestring;
+                self.compression = BinaryCompressionType::Decoded;
+                Ok(&mut self.data)
+            }
+            BinaryCompressionType::Zlib => {
+                let bytestring = base64::decode(&self.data).expect("Failed to decode base64 array");
+                self.data = bytestring;
+                self.compression = BinaryCompressionType::Decoded;
+                Ok(&mut self.data)
+            }
+            _ => Err(ArrayRetrievalError::DecompressionError),
+        }
+    }
+
     pub fn coerce_from<T: Clone + Sized>(
-        &'lifespan self,
         buffer: Cow<'transient, Bytes>,
     ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
         let n = buffer.len();
@@ -254,11 +281,36 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    pub fn coerce_from_mut<T: Clone + Sized>(buffer: &mut [u8]) -> Result<&'transient mut [T], ArrayRetrievalError> {
+        let n = buffer.len();
+        let z = mem::size_of::<T>();
+        if n % z != 0 {
+            return Err(ArrayRetrievalError::DataTypeSizeMismatch);
+        }
+        let m = n / z;
+        unsafe {
+            Ok(slice::from_raw_parts_mut(
+                buffer.as_ptr() as *mut T,
+                m,
+            ))
+        }
+    }
+
+    pub fn coerce_mut<T: Clone + Sized>(&'lifespan mut self) -> Result<&'transient mut [T], ArrayRetrievalError> {
+        let view = match self.decode_mut() {
+            Ok(data) => data,
+            Err(err) => {
+                return Err(err)
+            }
+        };
+        Self::coerce_from_mut(view)
+    }
+
     pub fn coerce<T: Clone + Sized>(
         &'lifespan self,
     ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
         match self.decode() {
-            Ok(data) => self.coerce_from(data),
+            Ok(data) => Self::coerce_from(data),
             Err(err) => Err(err),
         }
     }
@@ -340,6 +392,69 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
         }
     }
+
+    pub fn to_i64(&'lifespan self) -> Result<Cow<'transient, [i64]>, ArrayRetrievalError> {
+        type D = i64;
+        match self.dtype {
+            BinaryDataArrayType::Float32 => {
+                type S = f32;
+                self.transmute::<S, D>()
+            }
+            BinaryDataArrayType::Float64 => {
+                type S = f64;
+                self.transmute::<S, D>()
+            }
+            BinaryDataArrayType::Int64 => self.coerce::<D>(),
+            BinaryDataArrayType::Int32 => {
+                type S = i32;
+                self.transmute::<S, D>()
+            }
+            _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
+        }
+    }
+
+    pub fn store_as(&mut self, dtype: BinaryDataArrayType) -> Result<usize, ArrayRetrievalError> {
+        if self.dtype == dtype {
+            return Ok(self.data.len());
+        }
+        let result = match dtype {
+            BinaryDataArrayType::Float32 => {
+                let view = match self.to_f32() {
+                    Ok(view) => view,
+                    Err(err) => {return Err(err)}
+                };
+                let recast = to_bytes(&view);
+                self.update_buffer(&recast)
+            },
+            BinaryDataArrayType::Float64 => {
+                let view = match self.to_f64() {
+                    Ok(view) => view,
+                    Err(err) => {return Err(err)}
+                };
+                let recast = to_bytes(&view);
+                self.update_buffer(&recast)
+            },
+            BinaryDataArrayType::Int32 => {
+                let view = match self.to_i32() {
+                    Ok(view) => view,
+                    Err(err) => {return Err(err)}
+                };
+                let recast = to_bytes(&view);
+                self.update_buffer(&recast)
+            },
+            BinaryDataArrayType::Int64 => {
+                let view = match self.to_i64() {
+                    Ok(view) => view,
+                    Err(err) => {return Err(err)}
+                };
+                let recast = to_bytes(&view);
+                self.update_buffer(&recast)
+            }
+            _ => {Ok(0)}
+        };
+        self.dtype = dtype;
+        result
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -358,8 +473,12 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         self.byte_buffer_map.insert(array.name.clone(), array);
     }
 
-    pub fn get(&self, array_type: &ArrayType) -> Option<&DataArray> {
+    pub fn get(&'transient self, array_type: &ArrayType) -> Option<&'transient DataArray> {
         self.byte_buffer_map.get(array_type)
+    }
+
+    pub fn get_mut(&mut self, array_type: &ArrayType) -> Option<&mut DataArray> {
+        self.byte_buffer_map.get_mut(array_type)
     }
 
     pub fn has_array(&self, array_type: &ArrayType) -> bool {
@@ -400,7 +519,7 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         }
     }
 
-    pub fn mzs(&'lifespan self) -> Cow<'transient, [f64]> {
+    pub fn mzs(&'transient self) -> Cow<'transient, [f64]> {
         let mz_array = self
             .get(&ArrayType::MZArray)
             .expect("Did not find m/z array")
@@ -409,7 +528,7 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         mz_array
     }
 
-    pub fn intensities(&'lifespan self) -> Cow<'transient, [f32]> {
+    pub fn intensities(&'transient self) -> Cow<'transient, [f32]> {
         let intensities = self
             .get(&ArrayType::IntensityArray)
             .expect("Did not find intensity array")

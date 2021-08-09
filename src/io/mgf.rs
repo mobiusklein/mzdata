@@ -11,11 +11,12 @@ use log::warn;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use mzpeaks::{CentroidPeak, DeconvolutedPeak, PeakCollection, MZPeakSetType};
+use mzpeaks::{CentroidPeak, DeconvolutedPeak, PeakCollection, MZPeakSetType, MZLocated, IntensityMeasurement};
+use mzpeaks::peak::KnownCharge;
 
 use crate::params::{Param, ParamDescribed};
 use crate::spectrum::{
-    scan_properties, Precursor, SelectedIon, SpectrumDescription, };
+    scan_properties, Precursor, SelectedIon, SpectrumDescription, SpectrumBehavior, PrecursorSelection};
 use crate::spectrum::spectrum::{
     CentroidSpectrumType, MultiLayerSpectrum, CentroidPeakAdapting,
     DeconvolutedPeakAdapting};
@@ -23,6 +24,7 @@ use crate::spectrum::spectrum::{
 use super::offset_index::OffsetIndex;
 use super::traits::{
     MZFileReader, RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead,
+    ScanWriter,
 };
 
 #[derive(PartialEq, Debug)]
@@ -512,10 +514,140 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MZFileReader<C, D, Mu
 pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
 
+pub struct MGFWriterType<R: io::Write, C: CentroidPeakAdapting=CentroidPeak, D: DeconvolutedPeakAdapting=DeconvolutedPeak> {
+    pub handle: io::BufWriter<R>,
+    pub offset: usize,
+    centroid_type: PhantomData<C>,
+    deconvoluted_type: PhantomData<D>
+}
+
+
+impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFWriterType<W, C, D> {
+    pub fn new(file: W) -> MGFWriterType<W, C, D> {
+        let handle = io::BufWriter::with_capacity(500, file);
+        MGFWriterType {
+            handle,
+            offset: 0,
+            centroid_type: PhantomData,
+            deconvoluted_type: PhantomData
+        }
+    }
+
+    pub fn write_header(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {
+        let desc = spectrum.description();
+        if desc.ms_level == 1 {
+            log::warn!("Attempted to write an MS1 spectrum to MGF, {}, skipping.", desc.id);
+            return Ok(0);
+        }
+        let mut count = self.handle.write(br#"BEGIN IONS
+TITLE="#)?;
+        count += self.handle.write(desc.id.as_bytes())?;
+        count += self.handle.write(b"\nRTINSECONDS=")?;
+        // let s = spectrum.start_time().to_string();
+        count += self.handle.write(spectrum.start_time().to_string().as_bytes())?;
+        count += self.handle.write(b"\n")?;
+        match &desc.precursor {
+            Some(precursor) => {
+                let ion = precursor.ion();
+                count += self.handle.write(b"PEPMASS=")?;
+                count += self.handle.write(ion.mz.to_string().as_bytes())?;
+                count += self.handle.write(b" ")?;
+                count += self.handle.write(ion.intensity.to_string().as_bytes())?;
+                match ion.charge {
+                    Some(charge) => {
+                        count += self.handle.write(b" ")?;
+                        count += self.handle.write(charge.to_string().as_bytes())?;
+                    },
+                    None => {}
+                }
+                count += self.handle.write(b"\n")?;
+                for param in precursor.params() {
+                    count += self.handle.write(param.name.to_uppercase().as_bytes())?;
+                    count += self.handle.write(param.value.as_bytes())?;
+                }
+            },
+            None => {}
+        }
+        for param in desc.params() {
+            count += self.handle.write(param.name.to_uppercase().as_bytes())?;
+            count += self.handle.write(param.value.as_bytes())?;
+        }
+
+        Ok(count)
+    }
+
+    pub fn write_deconvoluted_centroids(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {
+        let mut count = 0;
+        match &spectrum.deconvoluted_peaks {
+            Some(centroids) => {
+                for peak in centroids.iter().map(|p|p.as_centroid()) {
+                    count += self.handle.write(
+                        peak.mz().to_string().as_bytes())?;
+                    count += self.handle.write(b" ")?;
+                    count += self.handle.write(peak.intensity().to_string().as_bytes())?;
+                    count += self.handle.write(b" ")?;
+                    count += self.handle.write(peak.charge().to_string().as_bytes())?;
+                    count += self.handle.write(b"\n")?;
+                }
+            },
+            None => {}
+        }
+        Ok(count)
+    }
+
+    pub fn write_centroids(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {
+        let mut count = 0;
+        match &spectrum.peaks {
+            Some(centroids) => {
+                for peak in centroids {
+                    count += self.handle.write(peak.mz().to_string().as_bytes())?;
+                    count += self.handle.write(b" ")?;
+                    count += self.handle.write(peak.intensity().to_string().as_bytes())?;
+                    count += self.handle.write(b"\n")?;
+                }
+            },
+            None => {}
+        }
+        Ok(count)
+    }
+}
+
+impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    ScanWriter<W, C, D> for MGFWriterType<W, C, D> {
+
+    fn write(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {
+        let desc = spectrum.description();
+        if desc.ms_level == 1 {
+            log::warn!("Attempted to write an MS1 spectrum to MGF, {}, skipping.", desc.id);
+            return Ok(0);
+        }
+        let mut count = self.write_header(spectrum)?;
+        if matches!(&spectrum.deconvoluted_peaks, Some(_)) {
+            count += self.write_deconvoluted_centroids(spectrum)?;
+            count += self.handle.write(b"END IONS\n")?;
+        }
+        else if matches!(&spectrum.peaks, Some(_)) {
+            count += self.write_centroids(spectrum)?;
+            count += self.handle.write(b"END IONS\n")?;
+        } else {
+            count += self.handle.write(b"END IONS\n")?;
+        }
+        self.offset += count;
+        Ok(count)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.handle.flush()
+    }
+}
+
+
+pub type MGFWriter<W> = MGFWriterType<W, CentroidPeak, DeconvolutedPeak>;
+
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::spectrum::spectrum::SpectrumBehavior;
     use std::fs;
     use std::path;
 
@@ -559,5 +691,29 @@ mod test {
         }
         assert_eq!(ms1_count, 0);
         assert_eq!(msn_count, 34);
+    }
+
+    #[test]
+    fn test_writer() -> io::Result<()> {
+        let buff: Vec<u8> = Vec::new();
+        let inner_writer = io::Cursor::new(buff);
+        let mut writer = MGFWriter::new(inner_writer);
+
+        let path = path::Path::new("./test/data/small.mgf");
+        let file = fs::File::open(path).expect("Test file doesn't exist");
+        let reader = MGFReader::new(file);
+
+        let mut count = 0;
+        for scan in reader {
+            count += writer.write(&scan)?;
+        }
+        writer.flush()?;
+        let inner_writer = writer.handle.into_inner()?;
+        let buffer = inner_writer.get_ref();
+        let text = str::from_utf8(buffer).unwrap();
+        // Not including platform-specific line endings
+        assert_eq!(count, 548732);
+        assert_eq!(count, text.len());
+        Ok(())
     }
 }

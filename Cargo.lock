@@ -421,6 +421,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30baa043103c9d0c2a57cf537cc2f35623889dc0d405e6c3cccfadbc81c71309"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
 name = "dirs-next"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -665,7 +674,7 @@ dependencies = [
  "anyhow",
  "curl",
  "derive_more",
- "dirs",
+ "dirs 2.0.2",
  "glob",
  "pkg-config",
  "tar",
@@ -749,7 +758,9 @@ dependencies = [
  "cauchy",
  "intel-mkl-src",
  "lapack",
+ "netlib-src",
  "num-traits",
+ "openblas-src",
  "thiserror",
 ]
 
@@ -843,6 +854,7 @@ dependencies = [
  "mzsignal",
  "num-traits",
  "quick-xml",
+ "rayon",
  "regex",
  "serde",
  "serde_json",
@@ -850,15 +862,15 @@ dependencies = [
 
 [[package]]
 name = "mzpeaks"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "816d2f6fcfe62be30aebc3e4199753885bb94efeb2fd1d60e878a8ac1012449c"
+checksum = "4400c2b634e1715bfecb67b8dc5e19d044173a35923e7e425d5c24204339218a"
 
 [[package]]
 name = "mzsignal"
-version = "0.1.1"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c24ab21ba08926246ff9467f12d2815dcfb14ec76bb6337fec1f97f0ea99216"
+checksum = "79bfe4d19f12dd9d11f72b20855c26b57e23ac1927ed54424e6b2021364d5934"
 dependencies = [
  "cfg-if 1.0.0",
  "log",
@@ -899,6 +911,15 @@ dependencies = [
  "num-traits",
  "rand",
  "thiserror",
+]
+
+[[package]]
+name = "netlib-src"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39f41f36bb4d46906d5a72da5b73a804d9de1a7282eb7c89617201acda7b8212"
+dependencies = [
+ "cmake",
 ]
 
 [[package]]
@@ -968,6 +989,27 @@ name = "oorandom"
 version = "11.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
+
+[[package]]
+name = "openblas-build"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59ecb601fc56534b17316cec4a4d8c848840f2c6744538a4e0fd3833d24f2e8f"
+dependencies = [
+ "thiserror",
+ "walkdir",
+]
+
+[[package]]
+name = "openblas-src"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35a0967b308cab5942eb908b4737385719bef9e1b4953614a0e9d26ad5d41c69"
+dependencies = [
+ "dirs 3.0.2",
+ "openblas-build",
+ "vcpkg",
+]
 
 [[package]]
 name = "openssl-probe"
