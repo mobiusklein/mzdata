@@ -3,28 +3,31 @@ use std::fs;
 use std::io;
 use std::io::prelude::*;
 use std::io::SeekFrom;
-use std::str;
 use std::marker::PhantomData;
+use std::str;
 
 use log::warn;
 
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use mzpeaks::{CentroidPeak, DeconvolutedPeak, PeakCollection, MZPeakSetType, MZLocated, IntensityMeasurement};
 use mzpeaks::peak::KnownCharge;
+use mzpeaks::{
+    CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated, MZPeakSetType, PeakCollection,
+};
 
 use crate::params::{Param, ParamDescribed};
-use crate::spectrum::{
-    scan_properties, Precursor, SelectedIon, SpectrumDescription, SpectrumBehavior, PrecursorSelection};
 use crate::spectrum::spectrum::{
-    CentroidSpectrumType, MultiLayerSpectrum, CentroidPeakAdapting,
-    DeconvolutedPeakAdapting};
+    CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
+};
+use crate::spectrum::{
+    scan_properties, Precursor, PrecursorSelection, SelectedIon, SpectrumBehavior,
+    SpectrumDescription,
+};
 
 use super::offset_index::OffsetIndex;
 use super::traits::{
-    MZFileReader, RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead,
-    ScanWriter,
+    MZFileReader, RandomAccessScanIterator, ScanAccessError, ScanSource, ScanWriter, SeekRead,
 };
 
 #[derive(PartialEq, Debug)]
@@ -48,10 +51,13 @@ pub enum MGFError {
 }
 
 #[derive(Debug, Clone)]
-struct SpectrumBuilder<C: CentroidPeakAdapting = CentroidPeak, D: DeconvolutedPeakAdapting = DeconvolutedPeak> {
+struct SpectrumBuilder<
+    C: CentroidPeakAdapting = CentroidPeak,
+    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+> {
     pub peaks: MZPeakSetType<C>,
     pub description: SpectrumDescription,
-    deconvoluted_type: PhantomData<D>
+    deconvoluted_type: PhantomData<D>,
 }
 
 impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Default for SpectrumBuilder<C, D> {
@@ -64,7 +70,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Default for SpectrumB
                 polarity: scan_properties::ScanPolarity::Unknown,
                 ..Default::default()
             },
-            deconvoluted_type: PhantomData
+            deconvoluted_type: PhantomData,
         }
     }
 }
@@ -76,7 +82,9 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> SpectrumBuilder<C, D>
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilder<C, D>> for MultiLayerSpectrum<C, D> {
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilder<C, D>>
+    for MultiLayerSpectrum<C, D>
+{
     fn from(builder: SpectrumBuilder<C, D>) -> MultiLayerSpectrum<C, D> {
         let mut spectrum = MultiLayerSpectrum::<C, D>::default();
         builder.into_spectrum(&mut spectrum);
@@ -84,7 +92,9 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilder<
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilder<C, D>> for CentroidSpectrumType<C> {
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilder<C, D>>
+    for CentroidSpectrumType<C>
+{
     fn from(builder: SpectrumBuilder<C, D>) -> CentroidSpectrumType<C> {
         let spec: MultiLayerSpectrum<C, D> = builder.into();
         spec.try_into().unwrap()
@@ -95,14 +105,18 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilder<
 /// The parser produces [`Spectrum`] instances. These may be converted directly into [`CentroidSpectrum`]
 /// instances using [`Spectrum.into_centroid`] or the [`From`] trait which better represent
 /// the nature of this preprocessed data type.
-pub struct MGFReaderType<R: io::Read, C: CentroidPeakAdapting=CentroidPeak, D: DeconvolutedPeakAdapting=DeconvolutedPeak> {
+pub struct MGFReaderType<
+    R: io::Read,
+    C: CentroidPeakAdapting = CentroidPeak,
+    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+> {
     pub handle: io::BufReader<R>,
     pub state: MGFParserState,
     pub offset: usize,
     pub error: MGFError,
     pub index: OffsetIndex,
     centroid_type: PhantomData<C>,
-    deconvoluted_type: PhantomData<D>
+    deconvoluted_type: PhantomData<D>,
 }
 
 // A lazily created static regular expression to parse peak separators
@@ -123,11 +137,14 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             }
             let mz: f64 = parts[0].parse().unwrap();
             let intensity: f32 = parts[1].parse().unwrap();
-            return Some(CentroidPeak {
-                mz,
-                intensity,
-                ..Default::default()
-            }.into());
+            return Some(
+                CentroidPeak {
+                    mz,
+                    intensity,
+                    ..Default::default()
+                }
+                .into(),
+            );
         }
         None
     }
@@ -184,7 +201,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                     });
                 }
                 &_ => {
-                    description.add_param(Param::key_value(
+                    description.add_param(Param::new_key_value(
                         String::from(key.to_lowercase()),
                         String::from(value),
                     ));
@@ -304,7 +321,10 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
         }
         Ok(offset)
     }
-    pub fn read_into(&mut self, spectrum: &mut MultiLayerSpectrum<C, D>) -> Result<usize, MGFError> {
+    pub fn read_into(
+        &mut self,
+        spectrum: &mut MultiLayerSpectrum<C, D>,
+    ) -> Result<usize, MGFError> {
         let mut accumulator = SpectrumBuilder::default();
         match self._parse_into(&mut accumulator) {
             Ok(sz) => {
@@ -324,12 +344,14 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             error: MGFError::NoError,
             index: OffsetIndex::new("spectrum".to_owned()),
             centroid_type: PhantomData,
-            deconvoluted_type: PhantomData
+            deconvoluted_type: PhantomData,
         }
     }
 }
 
-impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator for MGFReaderType<R, C, D> {
+impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator
+    for MGFReaderType<R, C, D>
+{
     type Item = MultiLayerSpectrum<C, D>;
 
     /// Read the next spectrum from the file.
@@ -404,7 +426,9 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
     }
 }
 
-impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ScanSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D> {
+impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    ScanSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+{
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
         let offset_ref = self.index.get(id);
@@ -468,7 +492,9 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ScanSour
     }
 }
 
-impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> RandomAccessScanIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D> {
+impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    RandomAccessScanIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+{
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
@@ -500,7 +526,9 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> RandomAc
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<fs::File, C, D> {
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<fs::File, C, D>
+{
     fn open_file(source: fs::File) -> Self {
         Self::new(source)
     }
@@ -510,17 +538,18 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MZFileReader<C, D, Mu
     }
 }
 
-
 pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
-
-pub struct MGFWriterType<R: io::Write, C: CentroidPeakAdapting=CentroidPeak, D: DeconvolutedPeakAdapting=DeconvolutedPeak> {
+pub struct MGFWriterType<
+    R: io::Write,
+    C: CentroidPeakAdapting = CentroidPeak,
+    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+> {
     pub handle: io::BufWriter<R>,
     pub offset: usize,
     centroid_type: PhantomData<C>,
-    deconvoluted_type: PhantomData<D>
+    deconvoluted_type: PhantomData<D>,
 }
-
 
 impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFWriterType<W, C, D> {
     pub fn new(file: W) -> MGFWriterType<W, C, D> {
@@ -529,22 +558,29 @@ impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFWrit
             handle,
             offset: 0,
             centroid_type: PhantomData,
-            deconvoluted_type: PhantomData
+            deconvoluted_type: PhantomData,
         }
     }
 
     pub fn write_header(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {
         let desc = spectrum.description();
         if desc.ms_level == 1 {
-            log::warn!("Attempted to write an MS1 spectrum to MGF, {}, skipping.", desc.id);
+            log::warn!(
+                "Attempted to write an MS1 spectrum to MGF, {}, skipping.",
+                desc.id
+            );
             return Ok(0);
         }
-        let mut count = self.handle.write(br#"BEGIN IONS
-TITLE="#)?;
+        let mut count = self.handle.write(
+            br#"BEGIN IONS
+TITLE="#,
+        )?;
         count += self.handle.write(desc.id.as_bytes())?;
         count += self.handle.write(b"\nRTINSECONDS=")?;
         // let s = spectrum.start_time().to_string();
-        count += self.handle.write(spectrum.start_time().to_string().as_bytes())?;
+        count += self
+            .handle
+            .write(spectrum.start_time().to_string().as_bytes())?;
         count += self.handle.write(b"\n")?;
         match &desc.precursor {
             Some(precursor) => {
@@ -557,7 +593,7 @@ TITLE="#)?;
                     Some(charge) => {
                         count += self.handle.write(b" ")?;
                         count += self.handle.write(charge.to_string().as_bytes())?;
-                    },
+                    }
                     None => {}
                 }
                 count += self.handle.write(b"\n")?;
@@ -565,7 +601,7 @@ TITLE="#)?;
                     count += self.handle.write(param.name.to_uppercase().as_bytes())?;
                     count += self.handle.write(param.value.as_bytes())?;
                 }
-            },
+            }
             None => {}
         }
         for param in desc.params() {
@@ -576,20 +612,22 @@ TITLE="#)?;
         Ok(count)
     }
 
-    pub fn write_deconvoluted_centroids(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {
+    pub fn write_deconvoluted_centroids(
+        &mut self,
+        spectrum: &MultiLayerSpectrum<C, D>,
+    ) -> io::Result<usize> {
         let mut count = 0;
         match &spectrum.deconvoluted_peaks {
             Some(centroids) => {
-                for peak in centroids.iter().map(|p|p.as_centroid()) {
-                    count += self.handle.write(
-                        peak.mz().to_string().as_bytes())?;
+                for peak in centroids.iter().map(|p| p.as_centroid()) {
+                    count += self.handle.write(peak.mz().to_string().as_bytes())?;
                     count += self.handle.write(b" ")?;
                     count += self.handle.write(peak.intensity().to_string().as_bytes())?;
                     count += self.handle.write(b" ")?;
                     count += self.handle.write(peak.charge().to_string().as_bytes())?;
                     count += self.handle.write(b"\n")?;
                 }
-            },
+            }
             None => {}
         }
         Ok(count)
@@ -605,28 +643,30 @@ TITLE="#)?;
                     count += self.handle.write(peak.intensity().to_string().as_bytes())?;
                     count += self.handle.write(b"\n")?;
                 }
-            },
+            }
             None => {}
         }
         Ok(count)
     }
 }
 
-impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
-    ScanWriter<W, C, D> for MGFWriterType<W, C, D> {
-
+impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ScanWriter<W, C, D>
+    for MGFWriterType<W, C, D>
+{
     fn write(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {
         let desc = spectrum.description();
         if desc.ms_level == 1 {
-            log::warn!("Attempted to write an MS1 spectrum to MGF, {}, skipping.", desc.id);
+            log::warn!(
+                "Attempted to write an MS1 spectrum to MGF, {}, skipping.",
+                desc.id
+            );
             return Ok(0);
         }
         let mut count = self.write_header(spectrum)?;
         if matches!(&spectrum.deconvoluted_peaks, Some(_)) {
             count += self.write_deconvoluted_centroids(spectrum)?;
             count += self.handle.write(b"END IONS\n")?;
-        }
-        else if matches!(&spectrum.peaks, Some(_)) {
+        } else if matches!(&spectrum.peaks, Some(_)) {
             count += self.write_centroids(spectrum)?;
             count += self.handle.write(b"END IONS\n")?;
         } else {
@@ -641,9 +681,7 @@ impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     }
 }
 
-
 pub type MGFWriter<W> = MGFWriterType<W, CentroidPeak, DeconvolutedPeak>;
-
 
 #[cfg(test)]
 mod test {

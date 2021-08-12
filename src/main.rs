@@ -1,15 +1,15 @@
 #![allow(unused)]
 use std::collections::HashMap;
 use std::env;
+use std::fs;
 use std::io;
 use std::path;
-use std::fs;
 use std::time;
 
 use mzdata::io::prelude::*;
 use mzdata::io::{mgf, mzml, offset_index, ScanSource};
 use mzdata::spectrum::SpectrumBehavior;
-use mzpeaks::{PeakCollection};
+use mzpeaks::PeakCollection;
 
 fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::MzMLReader<fs::File>> {
     let start = time::Instant::now();
@@ -20,8 +20,9 @@ fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::MzMLRe
     Ok(reader)
 }
 
-
-fn scan_file<R: SeekRead>(reader: &mut mzml::MzMLReader<R>) -> (HashMap<u8, usize>, HashMap<i32, usize>, usize) {
+fn scan_file<R: SeekRead>(
+    reader: &mut mzml::MzMLReader<R>,
+) -> (HashMap<u8, usize>, HashMap<i32, usize>, usize) {
     let start = time::Instant::now();
     let mut level_table: HashMap<u8, usize> = HashMap::new();
     let mut charge_table: HashMap<i32, usize> = HashMap::new();
@@ -51,10 +52,13 @@ fn scan_file<R: SeekRead>(reader: &mut mzml::MzMLReader<R>) -> (HashMap<u8, usiz
     (level_table, charge_table, peak_count)
 }
 
-
 fn main() -> io::Result<()> {
     let path = path::PathBuf::from(
-        env::args().skip(1).next().unwrap_or("./test/data/small.mzML".to_owned()));
+        env::args()
+            .skip(1)
+            .next()
+            .unwrap_or("./test/data/small.mzML".to_owned()),
+    );
 
     let mut reader = load_file(path)?;
     let (level_table, charge_table, peak_count) = scan_file(&mut reader);

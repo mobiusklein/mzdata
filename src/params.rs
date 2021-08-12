@@ -17,7 +17,7 @@ impl Param {
         }
     }
 
-    pub fn key_value(name: String, value: String) -> Param {
+    pub fn new_key_value(name: String, value: String) -> Param {
         let mut inst = Self::new();
         inst.name = name;
         inst.value = value;
@@ -26,6 +26,10 @@ impl Param {
 
     pub fn coerce<T: str::FromStr>(&self) -> Result<T, T::Err> {
         self.value.parse::<T>()
+    }
+
+    pub fn is_controlled(&self) -> bool {
+        self.accession.is_empty()
     }
 }
 

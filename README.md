@@ -7,7 +7,6 @@ A Rust library for reading mass spectrometry data file formats.
 ```rust
 use std::fs::File;
 use mzdata::io::prelude::*;
-use mzdata::spectrum;
 use mzdata::MassErrorType;
 use mzdata::io::MzMLReader;
 

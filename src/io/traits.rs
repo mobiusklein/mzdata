@@ -1,15 +1,14 @@
+use log::warn;
+use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io;
 use std::marker::PhantomData;
 use std::path;
 
-use log::warn;
-
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 
-use crate::spectrum::spectrum::{
-    MultiLayerSpectrum, SpectrumBehavior,
-};
+use crate::spectrum::spectrum::{MultiLayerSpectrum, SpectrumBehavior};
 
 use super::utils::FileSource;
 use super::OffsetIndex;
@@ -21,7 +20,8 @@ trait IndexedScanSource<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
-> {
+>
+{
     /// Retrieve the number of spectra in source file
     fn len(&self) -> usize {
         self.get_index().len()
@@ -76,7 +76,8 @@ pub trait RandomAccessScanSource<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
-> {
+>
+{
     fn len(&self) -> usize;
 
     /// Retrieve a spectrum by it's native ID
@@ -220,9 +221,11 @@ pub trait ScanSource<
     fn iter(&mut self) -> ScanIterator<C, D, S, Self> {
         ScanIterator::new(self)
     }
+
+    fn groups(&mut self) -> SpectrumGroupingIterator<Self, C, D, S> {
+        SpectrumGroupingIterator::new(self.iter())
+    }
 }
-
-
 
 /// A generic iterator over a [`ScanSource`] implementer that assumes the
 /// source has already been indexed. Otherwise, the source's own iterator
@@ -282,24 +285,26 @@ impl<
     }
 }
 
-impl<'lifespan,
+impl<
+        'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         R: ScanSource<C, D, S>,
-        S: SpectrumBehavior<C, D>,> ExactSizeIterator
-    for ScanIterator<'lifespan, C, D, S, R>
+        S: SpectrumBehavior<C, D>,
+    > ExactSizeIterator for ScanIterator<'lifespan, C, D, S, R>
 {
     fn len(&self) -> usize {
         self.source.len()
     }
 }
 
-impl<'lifespan,
+impl<
+        'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         R: ScanSource<C, D, S>,
-        S: SpectrumBehavior<C, D>> DoubleEndedIterator
-    for ScanIterator<'lifespan, C, D, S, R>
+        S: SpectrumBehavior<C, D>,
+    > DoubleEndedIterator for ScanIterator<'lifespan, C, D, S, R>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.index + self.back_index >= self.len() {
@@ -346,7 +351,6 @@ impl<
         self.source.set_index(index);
     }
 }
-
 
 /// A trait defining some helper methods to make efficient use of indices
 /// automatic when opening a file from a path-like object.
@@ -433,14 +437,24 @@ pub enum ScanAccessError {
     IOError(Option<io::Error>),
 }
 
-pub trait RandomAccessScanIterator<C: CentroidLike + Default=CentroidPeak, D: DeconvolutedCentroidLike + Default=DeconvolutedPeak, S: SpectrumBehavior<C,D>=MultiLayerSpectrum<C,D>>: ScanSource<C, D, S> {
+pub trait RandomAccessScanIterator<
+    C: CentroidLike + Default = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+>: ScanSource<C, D, S>
+{
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError>;
     fn start_from_index(&mut self, id: usize) -> Result<&Self, ScanAccessError>;
     fn start_from_time(&mut self, time: f64) -> Result<&Self, ScanAccessError>;
 }
 
-impl<'lifespan, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default, S: SpectrumBehavior<C,D>, R: ScanSource<C, D, S>> RandomAccessScanIterator<C, D, S>
-    for ScanIterator<'lifespan, C, D, S, R>
+impl<
+        'lifespan,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumBehavior<C, D>,
+        R: ScanSource<C, D, S>,
+    > RandomAccessScanIterator<C, D, S> for ScanIterator<'lifespan, C, D, S, R>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         if let Some(scan) = self.get_spectrum_by_id(id) {
@@ -486,8 +500,437 @@ impl<'lifespan, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default
     }
 }
 
+pub trait SpectrumGrouping<
+    C: CentroidLike + Default = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+>: Default
+{
+    fn precursor(&self) -> Option<&S>;
+    fn precursor_mut(&mut self) -> Option<&mut S>;
+    fn set_precursor(&mut self, prec: S);
 
-pub trait ScanWriter<W: io::Write, C: CentroidLike + Default=CentroidPeak, D: DeconvolutedCentroidLike + Default=DeconvolutedPeak, S: SpectrumBehavior<C,D>=MultiLayerSpectrum<C,D>> {
+    fn products(&self) -> &Vec<S>;
+    fn products_mut(&mut self) -> &mut Vec<S>;
+}
+
+#[derive(Debug, Clone)]
+pub struct SpectrumGroup<C = CentroidPeak, D = DeconvolutedPeak, S = MultiLayerSpectrum<C, D>>
+where
+    C: CentroidLike + Default,
+    D: DeconvolutedCentroidLike + Default,
+    S: SpectrumBehavior<C, D>,
+{
+    pub precursor: Option<S>,
+    pub products: Vec<S>,
+    centroid_type: PhantomData<C>,
+    deconvoluted_type: PhantomData<D>,
+}
+
+impl<
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumBehavior<C, D>,
+    > Default for SpectrumGroup<C, D, S>
+{
+    fn default() -> Self {
+        Self {
+            precursor: None,
+            products: Vec::new(),
+            centroid_type: PhantomData,
+            deconvoluted_type: PhantomData,
+        }
+    }
+}
+
+impl<C, D, S> SpectrumGrouping<C, D, S> for SpectrumGroup<C, D, S>
+where
+    C: CentroidLike + Default,
+    D: DeconvolutedCentroidLike + Default,
+    S: SpectrumBehavior<C, D>,
+{
+    fn precursor(&self) -> Option<&S> {
+        match &self.precursor {
+            Some(prec) => Some(prec),
+            None => None,
+        }
+    }
+
+    fn precursor_mut(&mut self) -> Option<&mut S> {
+        match &mut self.precursor {
+            Some(prec) => Some(prec),
+            None => None,
+        }
+    }
+
+    fn set_precursor(&mut self, prec: S) {
+        self.precursor = Some(prec)
+    }
+
+    fn products(&self) -> &Vec<S> {
+        &self.products
+    }
+
+    fn products_mut(&mut self) -> &mut Vec<S> {
+        &mut self.products
+    }
+}
+
+#[derive(Default)]
+pub struct GenerationTracker {
+    generation_to_id: HashMap<usize, HashSet<String>>,
+    id_to_generation: HashMap<String, usize>,
+    generations: VecDeque<usize>,
+}
+
+impl GenerationTracker {
+    fn add_generation(&mut self, generation: usize) {
+        match self.generations.binary_search(&generation) {
+            Ok(i) => {
+                self.generations.insert(i, generation);
+            }
+            Err(i) => {
+                self.generations.insert(i, generation);
+            }
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.generation_to_id.clear();
+        self.id_to_generation.clear();
+        self.generations.clear();
+    }
+
+    pub fn add(&mut self, identifier: String, generation: usize) {
+        if !self.generation_to_id.contains_key(&generation) {
+            self.add_generation(generation);
+        }
+        self.generation_to_id
+            .entry(generation)
+            .or_default()
+            .insert(identifier.clone());
+        match self.id_to_generation.entry(identifier) {
+            Entry::Occupied(mut e) => {
+                e.insert(generation);
+            }
+            Entry::Vacant(e) => {
+                e.insert(generation);
+            }
+        }
+    }
+
+    pub fn remove(&mut self, identifier: String) -> bool {
+        match self.id_to_generation.entry(identifier.clone()) {
+            Entry::Occupied(ent) => {
+                let generation = ent.get();
+                let id_set = self.generation_to_id.get_mut(generation).expect(&format!(
+                    "Generation {} did not contain {}",
+                    generation, identifier
+                ));
+                id_set.remove(&identifier);
+                if id_set.is_empty() {
+                    self.generations.remove(*generation);
+                }
+                true
+            }
+            Entry::Vacant(_ent) => false,
+        }
+    }
+
+    pub fn older_than(&mut self, generation: usize) -> Vec<String> {
+        let mut result = Vec::new();
+        for gen in self.generations.iter() {
+            if *gen < generation {
+                if let Some(members) = self.generation_to_id.remove(&gen) {
+                    result.extend(members);
+                }
+            } else {
+                break;
+            }
+        }
+        for r in result.iter() {
+            self.id_to_generation.remove(r);
+        }
+        result
+    }
+}
+
+pub struct SpectrumGroupingIterator<
+    'lifespan,
+    R: ScanSource<C, D, S>,
+    C: CentroidLike + Default = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+    G: SpectrumGrouping<C, D, S> = SpectrumGroup<C, D, S>,
+> {
+    pub source: ScanIterator<'lifespan, C, D, S, R>,
+    pub queue: VecDeque<S>,
+    pub product_scan_mapping: HashMap<String, Vec<S>>,
+    generation_tracker: GenerationTracker,
+    buffering: usize,
+    highest_ms_level: u8,
+    generation: usize,
+    passed_first_ms1: bool,
+    phantom: PhantomData<S>,
+    centroid_type: PhantomData<C>,
+    deconvoluted_type: PhantomData<D>,
+    grouping_type: PhantomData<G>,
+}
+
+const MISSING_SCAN_ID: &str = "___MISSING_PRECURSOR_ID___";
+
+impl<
+        'lifespan,
+        R: ScanSource<C, D, S>,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumBehavior<C, D>,
+        G: SpectrumGrouping<C, D, S>,
+    > SpectrumGroupingIterator<'lifespan, R, C, D, S, G>
+{
+    pub fn new(
+        source: ScanIterator<'lifespan, C, D, S, R>,
+    ) -> SpectrumGroupingIterator<'lifespan, R, C, D, S, G> {
+        SpectrumGroupingIterator::<R, C, D, S, G> {
+            source,
+            generation_tracker: GenerationTracker::default(),
+            phantom: PhantomData,
+            centroid_type: PhantomData,
+            deconvoluted_type: PhantomData,
+            grouping_type: PhantomData,
+            buffering: 3,
+            product_scan_mapping: HashMap::new(),
+            queue: VecDeque::new(),
+            highest_ms_level: 0,
+            generation: 0,
+            passed_first_ms1: false,
+        }
+    }
+
+    fn add_product(&mut self, scan: S) {
+        if let Some(precursor) = scan.precursor() {
+            let ent = self
+                .product_scan_mapping
+                .entry(precursor.precursor_id.clone());
+            self.generation_tracker
+                .add(precursor.precursor_id.clone(), self.generation);
+            ent.or_default().push(scan);
+        } else {
+            if self.queue.len() > 0 {
+                // Consider replacing with normal get_mut to avoid re-copying
+                let last = self.queue.back().unwrap();
+                self.generation_tracker
+                    .add(last.id().to_owned(), self.generation);
+                self.product_scan_mapping
+                    .entry(last.id().to_owned())
+                    .or_default()
+                    .push(scan);
+            } else {
+                let ent = self.product_scan_mapping.entry(MISSING_SCAN_ID.to_owned());
+                ent.or_default().push(scan);
+            }
+        }
+    }
+
+    fn add_precursor(&mut self, scan: S) -> bool {
+        self.queue.push_back(scan);
+        self.queue.len() >= self.buffering
+    }
+
+    fn pop_precursor(&mut self, precursor_id: &str) -> Vec<S> {
+        match self.product_scan_mapping.remove(precursor_id) {
+            Some(v) => v,
+            None => Vec::new(),
+        }
+    }
+
+    fn flush_first_ms1(&mut self, group: &mut G) {
+        let current_ms1_time = group.precursor().unwrap().start_time();
+        let mut ids_to_remove = Vec::new();
+        for (prec_id, prods) in self.product_scan_mapping.iter_mut() {
+            let mut hold = vec![];
+            for prod in prods.drain(..) {
+                if prod.start_time() <= current_ms1_time {
+                    group.products_mut().push(prod);
+                } else {
+                    hold.push(prod);
+                }
+            }
+            if hold.is_empty() {
+                ids_to_remove.push(prec_id.clone());
+            } else {
+                prods.extend(hold);
+            }
+        }
+        for prec_id in ids_to_remove {
+            self.product_scan_mapping.remove(&prec_id);
+        }
+    }
+
+    fn include_higher_msn(&mut self, group: &mut G) {
+        let mut blocks = Vec::new();
+        let mut new_block = Vec::new();
+        for msn_spec in group.products() {
+            new_block.extend(self.pop_precursor(msn_spec.id()));
+        }
+        blocks.push(new_block);
+        for _ in 0..self.highest_ms_level - 2 {
+            if let Some(last_block) = blocks.last() {
+                let mut new_block = Vec::new();
+                for msn_spec in last_block {
+                    new_block.extend(self.pop_precursor(msn_spec.id()));
+                }
+                blocks.push(new_block);
+            }
+        }
+        if !blocks.is_empty() {
+            for block in blocks {
+                group.products_mut().extend(block);
+            }
+        }
+    }
+
+    fn flush_generations(&mut self, group: &mut G) {
+        if self.buffering > self.generation {
+            return;
+        }
+        for prec_id in self
+            .generation_tracker
+            .older_than(self.generation - self.buffering)
+        {
+            if let Some(prods) = self.product_scan_mapping.remove(&prec_id) {
+                group.products_mut().extend(prods);
+            }
+        }
+    }
+
+    fn deque_group(&mut self) -> Option<G> {
+        let mut group = G::default();
+        if let Some(precursor) = self.queue.pop_front() {
+            group.set_precursor(precursor);
+            let mut products = self.pop_precursor(group.precursor().unwrap().id());
+            if self.product_scan_mapping.contains_key(MISSING_SCAN_ID) {
+                products.extend(self.pop_precursor(MISSING_SCAN_ID));
+            }
+            group.products_mut().extend(products);
+
+            self.flush_generations(&mut group);
+
+            // Handle interleaving MS3 and up
+            if self.highest_ms_level > 2 {
+                self.include_higher_msn(&mut group);
+            }
+
+            if !self.passed_first_ms1 && !self.queue.is_empty() {
+                self.flush_first_ms1(&mut group);
+            }
+
+            self.generation += 1;
+            Some(group)
+        } else {
+            None
+        }
+    }
+
+    fn clear(&mut self) {
+        self.product_scan_mapping.clear();
+        self.queue.clear();
+        self.generation_tracker.clear();
+    }
+
+    pub fn next_group(&mut self) -> Option<G> {
+        if let Some(spectrum) = self.source.next() {
+            let level = spectrum.ms_level();
+            if level > self.highest_ms_level {
+                self.highest_ms_level = level;
+            }
+            if level > 1 {
+                self.add_product(spectrum);
+                return self.next_group();
+            } else {
+                if self.add_precursor(spectrum) {
+                    self.deque_group()
+                } else {
+                    self.next_group()
+                }
+            }
+        } else {
+            if self.queue.len() > 1 {
+                self.deque_group()
+            } else if self.queue.len() == 1 {
+                // TODO: Flush all products here
+                self.deque_group()
+            } else {
+                None
+            }
+        }
+    }
+}
+
+impl<
+        'lifespan,
+        R: ScanSource<C, D, S>,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumBehavior<C, D>,
+        G: SpectrumGrouping<C, D, S> + Default,
+    > Iterator for SpectrumGroupingIterator<'lifespan, R, C, D, S, G>
+{
+    type Item = G;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_group()
+    }
+}
+
+impl<
+        'lifespan,
+        R: RandomAccessScanIterator<C, D, S>,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumBehavior<C, D>,
+        G: SpectrumGrouping<C, D, S> + Default,
+    > SpectrumGroupingIterator<'lifespan, R, C, D, S, G>
+{
+    pub fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
+        match self.source.start_from_id(id) {
+            Ok(_) => {
+                self.clear();
+                Ok(self)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    pub fn start_from_index(&mut self, index: usize) -> Result<&Self, ScanAccessError> {
+        match self.source.start_from_index(index) {
+            Ok(_) => {
+                self.clear();
+                Ok(self)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    pub fn start_from_time(&mut self, time: f64) -> Result<&Self, ScanAccessError> {
+        match self.source.start_from_time(time) {
+            Ok(_) => {
+                self.clear();
+                Ok(self)
+            }
+            Err(err) => Err(err),
+        }
+    }
+}
+
+/// A flat spectrum stream writing trait
+pub trait ScanWriter<
+    W: io::Write,
+    C: CentroidLike + Default = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+>
+{
     fn write(&mut self, spectrum: &S) -> io::Result<usize>;
 
     fn flush(&mut self) -> io::Result<()>;

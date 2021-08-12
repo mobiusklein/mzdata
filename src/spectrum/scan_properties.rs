@@ -1,4 +1,4 @@
-use super::spectrum::{SpectrumBehavior, CentroidPeakAdapting, DeconvolutedPeakAdapting};
+use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumBehavior};
 use crate::impl_param_described;
 use crate::io::traits::ScanSource;
 use crate::params;

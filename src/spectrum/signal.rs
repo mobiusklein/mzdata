@@ -29,13 +29,10 @@ pub fn to_bytes<T>(data: &[T]) -> Bytes {
     let z = mem::size_of::<T>();
     let m = n * z;
     unsafe {
-        let byte_buffer = slice::from_raw_parts(
-            data.as_ptr() as *const u8,
-            m,
-        );
+        let byte_buffer = slice::from_raw_parts(data.as_ptr() as *const u8, m);
         let mut result = Bytes::new();
         result.copy_from_slice(byte_buffer);
-        return result
+        return result;
     };
 }
 
@@ -281,27 +278,24 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
-    pub fn coerce_from_mut<T: Clone + Sized>(buffer: &mut [u8]) -> Result<&'transient mut [T], ArrayRetrievalError> {
+    pub fn coerce_from_mut<T: Clone + Sized>(
+        buffer: &mut [u8],
+    ) -> Result<&'transient mut [T], ArrayRetrievalError> {
         let n = buffer.len();
         let z = mem::size_of::<T>();
         if n % z != 0 {
             return Err(ArrayRetrievalError::DataTypeSizeMismatch);
         }
         let m = n / z;
-        unsafe {
-            Ok(slice::from_raw_parts_mut(
-                buffer.as_ptr() as *mut T,
-                m,
-            ))
-        }
+        unsafe { Ok(slice::from_raw_parts_mut(buffer.as_ptr() as *mut T, m)) }
     }
 
-    pub fn coerce_mut<T: Clone + Sized>(&'lifespan mut self) -> Result<&'transient mut [T], ArrayRetrievalError> {
+    pub fn coerce_mut<T: Clone + Sized>(
+        &'lifespan mut self,
+    ) -> Result<&'transient mut [T], ArrayRetrievalError> {
         let view = match self.decode_mut() {
             Ok(data) => data,
-            Err(err) => {
-                return Err(err)
-            }
+            Err(err) => return Err(err),
         };
         Self::coerce_from_mut(view)
     }
@@ -421,36 +415,36 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             BinaryDataArrayType::Float32 => {
                 let view = match self.to_f32() {
                     Ok(view) => view,
-                    Err(err) => {return Err(err)}
-                };
-                let recast = to_bytes(&view);
-                self.update_buffer(&recast)
-            },
-            BinaryDataArrayType::Float64 => {
-                let view = match self.to_f64() {
-                    Ok(view) => view,
-                    Err(err) => {return Err(err)}
-                };
-                let recast = to_bytes(&view);
-                self.update_buffer(&recast)
-            },
-            BinaryDataArrayType::Int32 => {
-                let view = match self.to_i32() {
-                    Ok(view) => view,
-                    Err(err) => {return Err(err)}
-                };
-                let recast = to_bytes(&view);
-                self.update_buffer(&recast)
-            },
-            BinaryDataArrayType::Int64 => {
-                let view = match self.to_i64() {
-                    Ok(view) => view,
-                    Err(err) => {return Err(err)}
+                    Err(err) => return Err(err),
                 };
                 let recast = to_bytes(&view);
                 self.update_buffer(&recast)
             }
-            _ => {Ok(0)}
+            BinaryDataArrayType::Float64 => {
+                let view = match self.to_f64() {
+                    Ok(view) => view,
+                    Err(err) => return Err(err),
+                };
+                let recast = to_bytes(&view);
+                self.update_buffer(&recast)
+            }
+            BinaryDataArrayType::Int32 => {
+                let view = match self.to_i32() {
+                    Ok(view) => view,
+                    Err(err) => return Err(err),
+                };
+                let recast = to_bytes(&view);
+                self.update_buffer(&recast)
+            }
+            BinaryDataArrayType::Int64 => {
+                let view = match self.to_i64() {
+                    Ok(view) => view,
+                    Err(err) => return Err(err),
+                };
+                let recast = to_bytes(&view);
+                self.update_buffer(&recast)
+            }
+            _ => Ok(0),
         };
         self.dtype = dtype;
         result

@@ -29,6 +29,7 @@ use crate::spectrum::spectrum::{
     CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
     RawSpectrum, Spectrum,
 };
+use crate::SpectrumBehavior;
 
 pub type Bytes = Vec<u8>;
 
@@ -129,126 +130,94 @@ struct MzMLSpectrumBuilder<
     deconvoluted_type: PhantomData<D>,
 }
 
-pub type ParserResult = Result<MzMLParserState, MzMLParserError>;
+pub trait SpectrumBuilding<
+    C: CentroidPeakAdapting,
+    D: DeconvolutedPeakAdapting,
+    S: SpectrumBehavior<C, D>,
+>
+{
+    fn isolation_window_mut(&mut self) -> &mut IsolationWindow;
+    fn scan_window_mut(&mut self) -> &mut ScanWindow;
+    fn selected_ion_mut(&mut self) -> &mut SelectedIon;
+    fn current_array_mut(&mut self) -> &mut DataArray;
+    fn into_spectrum(self, spectrum: &mut S);
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C, D> {
-    pub fn new() -> MzMLSpectrumBuilder<C, D> {
-        MzMLSpectrumBuilder {
-            ..Default::default()
-        }
-    }
+    fn fill_binary_data_array(&mut self, param: Param) {
+        match param.name.as_ref() {
+            // Compression types
+            "zlib compression" => {
+                self.current_array_mut().compression = BinaryCompressionType::Zlib;
+            }
+            "no compression" => {
+                self.current_array_mut().compression = BinaryCompressionType::NoCompression;
+            }
 
-    pub fn _reset(&mut self) {
-        self.params.clear();
-        self.acquisition = Acquisition::default();
-        self.arrays.clear();
-        self.current_array.clear();
-        self.scan_id.clear();
+            // Array data types
+            "64-bit float" => {
+                self.current_array_mut().dtype = BinaryDataArrayType::Float64;
+            }
+            "32-bit float" => {
+                self.current_array_mut().dtype = BinaryDataArrayType::Float32;
+            }
+            "64-bit integer" => {
+                self.current_array_mut().dtype = BinaryDataArrayType::Int64;
+            }
+            "32-bit integer" => {
+                self.current_array_mut().dtype = BinaryDataArrayType::Int32;
+            }
+            "null-terminated ASCII string" => {
+                self.current_array_mut().dtype = BinaryDataArrayType::ASCII;
+            }
 
-        self.precursor = Precursor::default();
-        self.index = 0;
-        self.has_precursor = false;
-        self.signal_continuity = SignalContinuity::Unknown;
-        self.polarity = ScanPolarity::Unknown;
-    }
+            // Array types
+            "m/z array" => self.current_array_mut().name = ArrayType::MZArray,
+            "intensity array" => self.current_array_mut().name = ArrayType::IntensityArray,
+            "charge array" => self.current_array_mut().name = ArrayType::ChargeArray,
+            "non-standard data array" => {
+                self.current_array_mut().name =
+                    ArrayType::NonStandardDataArray { name: param.value };
+            }
+            "mean ion mobility array"
+            | "mean drift time array"
+            | "mean inverse reduced ion mobility array" => {
+                self.current_array_mut().name = ArrayType::MeanIonMobilityArray
+            }
+            "ion mobility array" | "drift time array" | "inverse reduced ion mobility array" => {
+                self.current_array_mut().name = ArrayType::IonMobilityArray
+            }
+            "deconvoluted ion mobility array"
+            | "deconvoluted drift time array"
+            | "deconvoluted inverse reduced ion mobility array" => {
+                self.current_array_mut().name = ArrayType::DeconvolutedIonMobilityArray
+            }
 
-    pub fn _to_spectrum(&self, spectrum: &mut MultiLayerSpectrum<C, D>) {
-        let description = &mut spectrum.description;
-
-        description.id = self.scan_id.clone();
-        description.index = self.index;
-        description.signal_continuity = self.signal_continuity;
-        description.ms_level = self.ms_level;
-        description.polarity = self.polarity;
-
-        description.params = self.params.clone();
-        description.acquisition = self.acquisition.clone();
-        if self.has_precursor {
-            description.precursor = Some(self.precursor.clone());
-        } else {
-            description.precursor = None;
-        }
-
-        spectrum.arrays = Some(self.arrays.clone());
-    }
-
-    pub fn into_spectrum(self, spectrum: &mut MultiLayerSpectrum<C, D>) {
-        let description = &mut spectrum.description;
-
-        description.id = self.scan_id;
-        description.index = self.index;
-        description.signal_continuity = self.signal_continuity;
-        description.ms_level = self.ms_level;
-        description.polarity = self.polarity;
-
-        description.params = self.params;
-        description.acquisition = self.acquisition;
-        if self.has_precursor {
-            description.precursor = Some(self.precursor);
-        } else {
-            description.precursor = None;
-        }
-
-        spectrum.arrays = Some(self.arrays);
-    }
-
-    fn handle_param<B: io::BufRead>(
-        &self,
-        event: &BytesStart,
-        reader: &Reader<B>,
-        state: MzMLParserState,
-    ) -> Result<Param, MzMLParserError> {
-        let mut param = Param::new();
-        for attr_parsed in event.attributes() {
-            match attr_parsed {
-                Ok(attr) => match attr.key {
-                    b"name" => {
-                        param.name = attr
-                            .unescape_and_decode_value(reader)
-                            .expect("Error decoding name");
-                    }
-                    b"value" => {
-                        param.value = attr
-                            .unescape_and_decode_value(reader)
-                            .expect("Error decoding value");
-                    }
-                    b"cvRef" => {
-                        param.controlled_vocabulary = Some(
-                            attr.unescape_and_decode_value(reader)
-                                .expect("Error decoding CV Ref"),
-                        );
-                    }
-                    b"accession" => {
-                        param.accession = attr
-                            .unescape_and_decode_value(reader)
-                            .expect("Error decoding accession");
-                    }
-                    b"unitName" => {
-                        param.unit_info = Some(
-                            attr.unescape_and_decode_value(reader)
-                                .expect("Error decoding unit name"),
-                        );
-                    }
-                    b"unitAccession" => {}
-                    b"unitCvRef" => {}
-                    _ => {}
-                },
-                Err(msg) => return Err(self.handle_xml_error(msg, state)),
+            &_ => {
+                self.current_array_mut().params.push(param);
             }
         }
-        Ok(param)
     }
 
-    pub fn handle_xml_error(
-        &self,
-        error: quick_xml::Error,
-        state: MzMLParserState,
-    ) -> MzMLParserError {
-        MzMLParserError::XMLError(state, format!("{:?}", error))
+    fn fill_selected_ion(&mut self, param: Param) {
+        match param.name.as_ref() {
+            "selected ion m/z" => {
+                self.selected_ion_mut().mz = param.coerce().expect("Failed to parse ion m/z");
+            }
+            "peak intensity" => {
+                self.selected_ion_mut().intensity =
+                    param.coerce().expect("Failed to parse peak intensity");
+            }
+            "charge state" => {
+                self.selected_ion_mut().charge =
+                    Some(param.coerce().expect("Failed to parse ion charge"));
+            }
+            &_ => {
+                self.selected_ion_mut().params.push(param);
+            }
+        };
     }
 
-    pub fn fill_isolation_window(&mut self, param: Param) {
-        let window = &mut self.precursor.isolation_window;
+    fn fill_isolation_window(&mut self, param: Param) {
+        let window = self.isolation_window_mut();
         match param.name.as_ref() {
             "isolation window target m/z" => {
                 window.target = param
@@ -323,15 +292,8 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
         }
     }
 
-    pub fn fill_scan_window(&mut self, param: Param) {
-        let window: &mut ScanWindow = self
-            .acquisition
-            .scans
-            .last_mut()
-            .unwrap()
-            .scan_windows
-            .last_mut()
-            .unwrap();
+    fn fill_scan_window(&mut self, param: Param) {
+        let window = self.scan_window_mut();
         match param.name.as_ref() {
             "scan window lower limit" => {
                 window.lower_bound = param.coerce().expect("Failed to parse scan window limit");
@@ -342,78 +304,155 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
             &_ => {}
         }
     }
+}
 
-    pub fn fill_selected_ion(&mut self, param: Param) {
-        match param.name.as_ref() {
-            "selected ion m/z" => {
-                self.precursor.ion.mz = param.coerce().expect("Failed to parse ion m/z");
-            }
-            "peak intensity" => {
-                self.precursor.ion.intensity =
-                    param.coerce().expect("Failed to parse peak intensity");
-            }
-            "charge state" => {
-                self.precursor.ion.charge =
-                    Some(param.coerce().expect("Failed to parse ion charge"));
-            }
-            &_ => {
-                self.precursor.ion.params.push(param);
-            }
-        };
+pub type ParserResult = Result<MzMLParserState, MzMLParserError>;
+
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    SpectrumBuilding<C, D, MultiLayerSpectrum<C, D>> for MzMLSpectrumBuilder<C, D>
+{
+    fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
+        &mut self.precursor.isolation_window
     }
 
-    pub fn fill_binary_data_array(&mut self, param: Param) {
-        match param.name.as_ref() {
-            // Compression types
-            "zlib compression" => {
-                self.current_array.compression = BinaryCompressionType::Zlib;
-            }
-            "no compression" => {
-                self.current_array.compression = BinaryCompressionType::NoCompression;
-            }
+    fn scan_window_mut(&mut self) -> &mut ScanWindow {
+        self.acquisition
+            .scans
+            .last_mut()
+            .unwrap()
+            .scan_windows
+            .last_mut()
+            .unwrap()
+    }
 
-            // Array data types
-            "64-bit float" => {
-                self.current_array.dtype = BinaryDataArrayType::Float64;
-            }
-            "32-bit float" => {
-                self.current_array.dtype = BinaryDataArrayType::Float32;
-            }
-            "64-bit integer" => {
-                self.current_array.dtype = BinaryDataArrayType::Int64;
-            }
-            "32-bit integer" => {
-                self.current_array.dtype = BinaryDataArrayType::Int32;
-            }
-            "null-terminated ASCII string" => {
-                self.current_array.dtype = BinaryDataArrayType::ASCII;
-            }
+    fn selected_ion_mut(&mut self) -> &mut SelectedIon {
+        &mut self.precursor.ion
+    }
 
-            // Array types
-            "m/z array" => self.current_array.name = ArrayType::MZArray,
-            "intensity array" => self.current_array.name = ArrayType::IntensityArray,
-            "charge array" => self.current_array.name = ArrayType::ChargeArray,
-            "non-standard data array" => {
-                self.current_array.name = ArrayType::NonStandardDataArray { name: param.value };
-            }
-            "mean ion mobility array"
-            | "mean drift time array"
-            | "mean inverse reduced ion mobility array" => {
-                self.current_array.name = ArrayType::MeanIonMobilityArray
-            }
-            "ion mobility array" | "drift time array" | "inverse reduced ion mobility array" => {
-                self.current_array.name = ArrayType::IonMobilityArray
-            }
-            "deconvoluted ion mobility array"
-            | "deconvoluted drift time array"
-            | "deconvoluted inverse reduced ion mobility array" => {
-                self.current_array.name = ArrayType::DeconvolutedIonMobilityArray
-            }
+    fn current_array_mut(&mut self) -> &mut DataArray {
+        &mut self.current_array
+    }
 
-            &_ => {
-                self.current_array.params.push(param);
+    fn into_spectrum(self, spectrum: &mut MultiLayerSpectrum<C, D>) {
+        let description = &mut spectrum.description;
+
+        description.id = self.scan_id;
+        description.index = self.index;
+        description.signal_continuity = self.signal_continuity;
+        description.ms_level = self.ms_level;
+        description.polarity = self.polarity;
+
+        description.params = self.params;
+        description.acquisition = self.acquisition;
+        if self.has_precursor {
+            description.precursor = Some(self.precursor);
+        } else {
+            description.precursor = None;
+        }
+
+        spectrum.arrays = Some(self.arrays);
+    }
+}
+
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C, D> {
+    pub fn new() -> MzMLSpectrumBuilder<C, D> {
+        MzMLSpectrumBuilder {
+            ..Default::default()
+        }
+    }
+
+    pub fn _reset(&mut self) {
+        self.params.clear();
+        self.acquisition = Acquisition::default();
+        self.arrays.clear();
+        self.current_array.clear();
+        self.scan_id.clear();
+
+        self.precursor = Precursor::default();
+        self.index = 0;
+        self.has_precursor = false;
+        self.signal_continuity = SignalContinuity::Unknown;
+        self.polarity = ScanPolarity::Unknown;
+    }
+
+    pub fn _to_spectrum(&self, spectrum: &mut MultiLayerSpectrum<C, D>) {
+        let description = &mut spectrum.description;
+
+        description.id = self.scan_id.clone();
+        description.index = self.index;
+        description.signal_continuity = self.signal_continuity;
+        description.ms_level = self.ms_level;
+        description.polarity = self.polarity;
+
+        description.params = self.params.clone();
+        description.acquisition = self.acquisition.clone();
+        if self.has_precursor {
+            description.precursor = Some(self.precursor.clone());
+        } else {
+            description.precursor = None;
+        }
+
+        spectrum.arrays = Some(self.arrays.clone());
+    }
+
+    fn handle_param<B: io::BufRead>(
+        &self,
+        event: &BytesStart,
+        reader: &Reader<B>,
+        state: MzMLParserState,
+    ) -> Result<Param, MzMLParserError> {
+        let mut param = Param::new();
+        for attr_parsed in event.attributes() {
+            match attr_parsed {
+                Ok(attr) => match attr.key {
+                    b"name" => {
+                        param.name = attr.unescape_and_decode_value(reader).expect(&format!(
+                            "Error decoding CV param name at {}",
+                            reader.buffer_position()
+                        ));
+                    }
+                    b"value" => {
+                        param.value = attr.unescape_and_decode_value(reader).expect(&format!(
+                            "Error decoding CV param value at {}",
+                            reader.buffer_position()
+                        ));
+                    }
+                    b"cvRef" => {
+                        param.controlled_vocabulary =
+                            Some(attr.unescape_and_decode_value(reader).expect(&format!(
+                                "Error decoding CV param reference at {}",
+                                reader.buffer_position()
+                            )));
+                    }
+                    b"accession" => {
+                        param.accession = attr.unescape_and_decode_value(reader).expect(&format!(
+                            "Error decoding CV param accession at {}",
+                            reader.buffer_position()
+                        ));
+                    }
+                    b"unitName" => {
+                        param.unit_info =
+                            Some(attr.unescape_and_decode_value(reader).expect(&format!(
+                                "Error decoding CV param unit name at {}",
+                                reader.buffer_position()
+                            )));
+                    }
+                    b"unitAccession" => {}
+                    b"unitCvRef" => {}
+                    _ => {}
+                },
+                Err(msg) => return Err(self.handle_xml_error(msg, state)),
             }
         }
+        Ok(param)
+    }
+
+    pub fn handle_xml_error(
+        &self,
+        error: quick_xml::Error,
+        state: MzMLParserState,
+    ) -> MzMLParserError {
+        MzMLParserError::XMLError(state, format!("{:?}", error))
     }
 
     pub fn fill_spectrum(&mut self, param: Param) {
@@ -856,7 +895,9 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
 }
 
 /// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
-impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator for MzMLReaderType<R, C, D> {
+impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator
+    for MzMLReaderType<R, C, D>
+{
     type Item = MultiLayerSpectrum<C, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -866,7 +907,9 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator
 
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
-impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ScanSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D> {
+impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    ScanSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+{
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
         let offset_ref = self.index.get(id);
@@ -919,7 +962,9 @@ impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdaptin
 
 /// The iterator can also be updated to move to a different location in the
 /// stream efficiently.
-impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> RandomAccessScanIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D> {
+impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    RandomAccessScanIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+{
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
@@ -1030,7 +1075,9 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<fs::File, C, D> {
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<fs::File, C, D>
+{
     fn open_file(source: fs::File) -> Self {
         Self::new(source)
     }
@@ -1040,9 +1087,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MZFileReader<C, D, Mu
     }
 }
 
-
 pub type MzMLReader<R> = MzMLReaderType<R, CentroidPeak, DeconvolutedPeak>;
-
 
 #[cfg(test)]
 mod test {
@@ -1098,7 +1143,8 @@ mod test {
     #[test]
     fn reader_from_path() {
         let path = path::Path::new("./test/data/small.mzML");
-        let mut reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::open_path(path).expect("Test file doesn't exist?");
+        let mut reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::open_path(path)
+            .expect("Test file doesn't exist?");
 
         let n = reader.len();
         assert_eq!(n, 48);
@@ -1126,6 +1172,26 @@ mod test {
             } else {
                 msn_count += 1;
             }
+        }
+        assert_eq!(ms1_count, 14);
+        assert_eq!(msn_count, 34);
+    }
+
+    #[test]
+    fn grouped_iteration() {
+        let path = path::Path::new("./test/data/small.mzML");
+        let mut reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::open_path(path)
+            .expect("Test file doesn't exist?");
+
+        let n = reader.len();
+        assert_eq!(n, 48);
+
+        let mut ms1_count = 0;
+        let mut msn_count = 0;
+
+        for group in reader.groups() {
+            ms1_count += group.precursor.is_some() as usize;
+            msn_count += group.products.len();
         }
         assert_eq!(ms1_count, 14);
         assert_eq!(msn_count, 34);
