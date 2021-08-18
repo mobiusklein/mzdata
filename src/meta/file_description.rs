@@ -1,7 +1,7 @@
 use crate::impl_param_described;
 use crate::params::{Param, ParamDescribed, ParamList};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SourceFile {
     pub name: String,
     pub location: String,
@@ -11,7 +11,7 @@ pub struct SourceFile {
     pub params: ParamList,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FileDescription {
     pub contents: ParamList,
     pub source_files: Vec<SourceFile>,

@@ -1,6 +1,7 @@
 //! Implements a parser for the PSI-MS mzML and indexedmzML XML file formats
 //! for representing raw and processed mass spectra.
 
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fs;
 use std::io;
@@ -20,7 +21,11 @@ use super::traits::{
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
+use crate::ParamDescribed;
 use crate::params::{Param, ParamList};
+use crate::meta::file_description::{FileDescription, SourceFile};
+use crate::meta::instrument::{Component, ComponentType, InstrumentConfiguration};
+use crate::meta::{DataProcessing, ProcessingMethod, Software};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
@@ -62,6 +67,8 @@ pub enum MzMLParserState {
     DataProcessing,
     ProcessingMethod,
 
+    Run,
+
     // Spectrum and Chromatogram List Elements
     Spectrum,
     SpectrumDone,
@@ -89,6 +96,71 @@ pub enum MzMLParserState {
     ChromatogramDone,
 
     ParserError,
+}
+
+
+pub trait XMLParseBase {
+    fn handle_xml_error(
+        &self,
+        error: quick_xml::Error,
+        state: MzMLParserState,
+    ) -> MzMLParserError {
+        MzMLParserError::XMLError(state, format!("{:?}", error))
+    }
+}
+
+pub trait CVParamParse : XMLParseBase {
+    fn handle_param<B: io::BufRead>(
+        &self,
+        event: &BytesStart,
+        reader: &Reader<B>,
+        state: MzMLParserState,
+    ) -> Result<Param, MzMLParserError> {
+        let mut param = Param::new();
+        for attr_parsed in event.attributes() {
+            match attr_parsed {
+                Ok(attr) => match attr.key {
+                    b"name" => {
+                        param.name = attr.unescape_and_decode_value(reader).expect(&format!(
+                            "Error decoding CV param name at {}",
+                            reader.buffer_position()
+                        ));
+                    }
+                    b"value" => {
+                        param.value = attr.unescape_and_decode_value(reader).expect(&format!(
+                            "Error decoding CV param value at {}",
+                            reader.buffer_position()
+                        ));
+                    }
+                    b"cvRef" => {
+                        param.controlled_vocabulary =
+                            Some(attr.unescape_and_decode_value(reader).expect(&format!(
+                                "Error decoding CV param reference at {}",
+                                reader.buffer_position()
+                            )));
+                    }
+                    b"accession" => {
+                        param.accession = attr.unescape_and_decode_value(reader).expect(&format!(
+                            "Error decoding CV param accession at {}",
+                            reader.buffer_position()
+                        ));
+                    }
+                    b"unitName" => {
+                        param.unit_info =
+                            Some(attr.unescape_and_decode_value(reader).expect(&format!(
+                                "Error decoding CV param unit name at {}",
+                                reader.buffer_position()
+                            )));
+                    }
+                    b"unitAccession" => {}
+                    b"unitCvRef" => {}
+                    _ => {}
+                },
+                Err(msg) => return Err(self.handle_xml_error(msg, state)),
+            }
+        }
+        Ok(param)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -129,6 +201,9 @@ struct MzMLSpectrumBuilder<
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
 }
+
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> XMLParseBase for MzMLSpectrumBuilder<C, D> {}
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> CVParamParse for MzMLSpectrumBuilder<C, D> {}
 
 pub trait SpectrumBuilding<
     C: CentroidPeakAdapting,
@@ -393,66 +468,6 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
         }
 
         spectrum.arrays = Some(self.arrays.clone());
-    }
-
-    fn handle_param<B: io::BufRead>(
-        &self,
-        event: &BytesStart,
-        reader: &Reader<B>,
-        state: MzMLParserState,
-    ) -> Result<Param, MzMLParserError> {
-        let mut param = Param::new();
-        for attr_parsed in event.attributes() {
-            match attr_parsed {
-                Ok(attr) => match attr.key {
-                    b"name" => {
-                        param.name = attr.unescape_and_decode_value(reader).expect(&format!(
-                            "Error decoding CV param name at {}",
-                            reader.buffer_position()
-                        ));
-                    }
-                    b"value" => {
-                        param.value = attr.unescape_and_decode_value(reader).expect(&format!(
-                            "Error decoding CV param value at {}",
-                            reader.buffer_position()
-                        ));
-                    }
-                    b"cvRef" => {
-                        param.controlled_vocabulary =
-                            Some(attr.unescape_and_decode_value(reader).expect(&format!(
-                                "Error decoding CV param reference at {}",
-                                reader.buffer_position()
-                            )));
-                    }
-                    b"accession" => {
-                        param.accession = attr.unescape_and_decode_value(reader).expect(&format!(
-                            "Error decoding CV param accession at {}",
-                            reader.buffer_position()
-                        ));
-                    }
-                    b"unitName" => {
-                        param.unit_info =
-                            Some(attr.unescape_and_decode_value(reader).expect(&format!(
-                                "Error decoding CV param unit name at {}",
-                                reader.buffer_position()
-                            )));
-                    }
-                    b"unitAccession" => {}
-                    b"unitCvRef" => {}
-                    _ => {}
-                },
-                Err(msg) => return Err(self.handle_xml_error(msg, state)),
-            }
-        }
-        Ok(param)
-    }
-
-    pub fn handle_xml_error(
-        &self,
-        error: quick_xml::Error,
-        state: MzMLParserState,
-    ) -> MzMLParserError {
-        MzMLParserError::XMLError(state, format!("{:?}", error))
     }
 
     pub fn fill_spectrum(&mut self, param: Param) {
@@ -733,6 +748,425 @@ impl Into<RawSpectrum> for MzMLSpectrumBuilder {
     }
 }
 
+
+#[derive(Debug, Default, Clone)]
+pub struct FileMetadataBuilder {
+    pub file_description: FileDescription,
+    pub instrument_configurations: Vec<InstrumentConfiguration>,
+    pub softwares: Vec<Software>,
+    pub data_processings: Vec<DataProcessing>,
+    pub reference_param_groups: HashMap<String, Vec<Param>>,
+    pub last_group: String
+}
+
+impl XMLParseBase for FileMetadataBuilder {}
+impl CVParamParse for FileMetadataBuilder {}
+
+
+impl FileMetadataBuilder {
+        pub fn start_element<B: io::BufRead>(
+        &mut self,
+        event: &BytesStart,
+        state: MzMLParserState,
+        reader: &Reader<B>,
+    ) -> ParserResult {
+        let elt_name = event.name();
+        match elt_name {
+            b"fileDescription" => {
+                return Ok(MzMLParserState::FileDescription)
+            },
+            b"fileContent" => {
+                return Ok(MzMLParserState::FileContents)
+            },
+            b"sourceFileList" => {
+                return  Ok(MzMLParserState::SourceFileList)
+            }
+            b"sourceFile" => {
+                let mut source_file = SourceFile::default();
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key == b"id" {
+                                source_file.id = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding id");
+                            }
+                            else if attr.key == b"name" {
+                                source_file.name = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding name");
+                            } else if attr.key == b"location" {
+                                source_file.location = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding location");
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg, state));
+                        }
+                    }
+                }
+                self.file_description.source_files.push(source_file);
+                return Ok(MzMLParserState::SourceFile)
+            },
+            b"softwareList" => {
+                return Ok(MzMLParserState::SoftwareList)
+            },
+            b"software" => {
+                let mut software = Software::default();
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key == b"id" {
+                                software.id = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding id");
+                            }
+                            else if attr.key == b"version" {
+                                software.version = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding version");
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg, state));
+                        }
+                    }
+                }
+                self.softwares.push(software);
+                return Ok(MzMLParserState::Software)
+            },
+            b"referenceableParamGroupList" => {
+                return Ok(MzMLParserState::ReferenceParamGroupList);
+            },
+            b"referenceableParamGroup" => {
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key == b"id" {
+                                let key = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding id");
+                                self.reference_param_groups.entry(key.clone()).or_default();
+                                self.last_group = key;
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg, state));
+                        }
+                    }
+                }
+                return Ok(MzMLParserState::ReferenceParamGroup)
+            }
+            b"instrumentConfigurationList" => {
+                return Ok(MzMLParserState::InstrumentConfigurationList)
+            },
+            b"instrumentConfiguration" => {
+                let mut ic = InstrumentConfiguration::default();
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key == b"id" {
+                                ic.id = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding id");
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg, state));
+                        }
+                    }
+                }
+                self.instrument_configurations.push(ic);
+                return Ok(MzMLParserState::InstrumentConfiguration)
+            },
+            b"componentList" => {
+                return Ok(MzMLParserState::ComponentList)
+            },
+            b"source" => {
+                let mut source = Component::default();
+                source.component_type = ComponentType::IonSource;
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key == b"order" {
+                                source.order = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding order").parse().expect(
+                                        "Failed to parse integer from `order`");
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg, state));
+                        }
+                    }
+                }
+                self.instrument_configurations.last_mut().unwrap().components.push(source);
+                return Ok(MzMLParserState::Source)
+            },
+            b"analyzer" => {
+                let mut analyzer = Component::default();
+                analyzer.component_type = ComponentType::Analyzer;
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key == b"order" {
+                                analyzer.order = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding order").parse().expect(
+                                        "Failed to parse integer from `order`");
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg, state));
+                        }
+                    }
+                }
+                self.instrument_configurations.last_mut().unwrap().components.push(analyzer);
+                return Ok(MzMLParserState::Analyzer)
+            },
+            b"detector" => {
+                let mut detector = Component::default();
+                detector.component_type = ComponentType::Detector;
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key == b"order" {
+                                detector.order = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding order").parse().expect(
+                                        "Failed to parse integer from `order`");
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg, state));
+                        }
+                    }
+                }
+                self.instrument_configurations.last_mut().unwrap().components.push(detector);
+                return Ok(MzMLParserState::Detector)
+            },
+            b"dataProcessingList" => {
+                return Ok(MzMLParserState::DataProcessingList)
+            },
+            b"dataProcessing" => {
+                let mut dp = DataProcessing::default();
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key == b"id" {
+                                dp.id = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding id");
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg, state));
+                        }
+                    }
+                }
+                self.data_processings.push(dp);
+                return Ok(MzMLParserState::DataProcessing)
+            },
+            b"processingMethod" => {
+                let mut method = ProcessingMethod::default();
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key == b"order" {
+                                method.order = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding order").parse().expect(
+                                        "Failed to parse order");
+                            }
+                            else if attr.key == b"softwareRef" {
+                                method.software_reference = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding softwareRef");
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg, state));
+                        }
+                    }
+                }
+                self.data_processings.last_mut().unwrap().methods.push(method);
+                return Ok(MzMLParserState::ProcessingMethod)
+            }
+            b"run" => {
+                return Ok(MzMLParserState::Run)
+            }
+            _ => {
+
+            }
+        }
+
+        Ok(state)
+    }
+
+    pub fn fill_param_into(&mut self, param: Param, state: MzMLParserState) {
+        match state {
+            MzMLParserState::SourceFile => {
+                let sf = self.file_description.source_files.last_mut().unwrap();
+                sf.add_param(param)
+            },
+            MzMLParserState::FileContents => {
+                self.file_description.add_param(param);
+            },
+            MzMLParserState::InstrumentConfiguration => {
+                self.instrument_configurations.last_mut().unwrap().add_param(param);
+            },
+            MzMLParserState::Software => {
+                self.softwares.last_mut().unwrap().add_param(param)
+            }
+            MzMLParserState::ProcessingMethod => {
+                self.data_processings.last_mut().unwrap().methods.last_mut().unwrap().add_param(param)
+            },
+            MzMLParserState::Detector | MzMLParserState::Analyzer | MzMLParserState::Source => {
+                self.instrument_configurations.last_mut().unwrap().components.last_mut().unwrap().add_param(param)
+            },
+            MzMLParserState::ReferenceParamGroup => {
+                self.reference_param_groups.get_mut(&self.last_group).unwrap().push(param);
+            }
+            _ => {}
+        }
+    }
+
+    pub fn empty_element<B: io::BufRead>(
+        &mut self,
+        event: &BytesStart,
+        state: MzMLParserState,
+        reader: &Reader<B>,
+    ) -> ParserResult {
+        let elt_name = event.name();
+        match elt_name {
+            b"cvParam" | b"userParam" => match self.handle_param(event, reader, state) {
+                Ok(param) => {
+                    self.fill_param_into(param, state);
+                    return Ok(state);
+                }
+                Err(err) => return Err(err),
+            },
+            b"softwareRef" => {
+                match state {
+                    MzMLParserState::InstrumentConfiguration => {
+                        let ic = self.instrument_configurations.last_mut().unwrap();
+                        for attr_parsed in event.attributes() {
+                            match attr_parsed {
+                                Ok(attr) => {
+                                    if attr.key == b"ref" {
+                                        ic.software_reference = attr
+                                            .unescape_and_decode_value(reader)
+                                            .expect("Error decoding software reference");
+                                    }
+                                }
+                                Err(msg) => {
+                                    return Err(self.handle_xml_error(msg, state));
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            b"referenceableParamGroupRef" => {
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key == b"ref" {
+                                let group_id = attr
+                                    .unescape_and_decode_value(reader)
+                                    .expect("Error decoding reference group");
+
+                                let param_group = match self.reference_param_groups.get(&group_id) {
+                                    Some(params) => {
+                                        params.clone()
+                                    },
+                                    None => {
+                                        panic!("Encountered a referenceableParamGroupRef without a group definition")
+                                    }
+                                };
+
+                                for param in param_group {
+                                    self.fill_param_into(param, state)
+                                }
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg, state));
+                        }
+                    }
+                }
+            }
+            &_ => {}
+        }
+        Ok(state)
+    }
+
+    pub fn end_element(&mut self, event: &BytesEnd, state: MzMLParserState) -> ParserResult {
+        let elt_name = event.name();
+        match elt_name {
+            b"fileDescription" => {
+                return Ok(MzMLParserState::FileDescription)
+            },
+            b"fileContent" => {
+                return Ok(MzMLParserState::FileDescription)
+            },
+            b"sourceFile" => {
+                return Ok(MzMLParserState::SourceFileList)
+            },
+            b"softwareList" => {
+                return Ok(MzMLParserState::SoftwareList)
+            },
+            b"software" => {
+                return Ok(MzMLParserState::SoftwareList)
+            },
+            b"referenceableParamGroupList" => {
+                return Ok(MzMLParserState::ReferenceParamGroupList);
+            },
+            b"instrumentConfigurationList" => {
+                return Ok(MzMLParserState::InstrumentConfigurationList)
+            },
+            b"instrumentConfiguration" => {
+                return Ok(MzMLParserState::InstrumentConfigurationList)
+            },
+            b"componentList" => {
+                return Ok(MzMLParserState::InstrumentConfiguration)
+            },
+            b"source" => {
+                return Ok(MzMLParserState::ComponentList)
+            },
+            b"analyzer" => {
+                return Ok(MzMLParserState::ComponentList)
+            },
+            b"detector" => {
+                return Ok(MzMLParserState::ComponentList)
+            },
+            b"dataProcessingList" => {
+                return Ok(MzMLParserState::DataProcessingList)
+            },
+            b"dataProcessing" => {
+                return Ok(MzMLParserState::DataProcessingList)
+            },
+            b"processingMethod" => {
+                return Ok(MzMLParserState::DataProcessing)
+            }
+            b"run" => {
+                // TODO
+            }
+            _ => {
+
+            }
+        }
+        Ok(state)
+    }
+
+    pub fn text(&mut self, _event: &BytesText, state: MzMLParserState) -> ParserResult {
+        Ok(state)
+    }
+}
+
+
 /// An mzML parser that supports iteration and random access. The parser produces
 /// [`Spectrum`] instances, which may be converted to [`RawSpectrum`](crate::spectrum::spectrum::RawSpectrum)
 /// or [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum) as is appropriate to the data.
@@ -748,6 +1182,11 @@ pub struct MzMLReaderType<
     pub handle: BufReader<R>,
     pub error: MzMLParserError,
     pub index: OffsetIndex,
+    pub file_description: FileDescription,
+    pub instrument_configurations: HashMap<String, InstrumentConfiguration>,
+    pub softwares: Vec<Software>,
+    pub data_processings: Vec<DataProcessing>,
+    pub reference_param_groups: HashMap<String, Vec<Param>>,
     buffer: Bytes,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
@@ -756,14 +1195,133 @@ pub struct MzMLReaderType<
 impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {
     pub fn new(file: R) -> MzMLReaderType<R, C, D> {
         let handle = BufReader::with_capacity(BUFFER_SIZE, file);
-        MzMLReaderType {
+        let mut inst =  MzMLReaderType {
             handle,
             state: MzMLParserState::Start,
             error: MzMLParserError::default(),
             buffer: Bytes::new(),
             index: OffsetIndex::new("spectrum".to_owned()),
+
+            file_description: FileDescription::default(),
+            instrument_configurations: HashMap::new(),
+            softwares: Vec::new(),
+            data_processings: Vec::new(),
+            reference_param_groups: HashMap::new(),
+
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
+        };
+        match inst.parse_metadata() {
+            Ok(()) => {},
+            Err(err) => {
+                warn!("Encountered error {:?} while parsing mzML file metadata", err);
+            }
+        }
+        inst
+    }
+
+    fn parse_metadata(&mut self) -> Result<(), MzMLParserError>{
+        let mut reader = Reader::from_reader(&mut self.handle);
+        reader.trim_text(true);
+        let mut accumulator = FileMetadataBuilder::default();
+        loop {
+            match reader.read_event(&mut self.buffer) {
+                Ok(Event::Start(ref e)) => {
+                    match accumulator.start_element(e, self.state, &reader) {
+                        Ok(state) => {
+                            self.state = state;
+                            match &self.state {
+                                MzMLParserState::Run | MzMLParserState::SpectrumList | MzMLParserState::Spectrum => {
+                                    break
+                                },
+                                _ => {}
+                            }
+                        }
+                        Err(message) => {
+                            self.state = MzMLParserState::ParserError;
+                            self.error = message;
+                        }
+                    };
+                }
+                Ok(Event::End(ref e)) => {
+                    match accumulator.end_element(e, self.state) {
+                        Ok(state) => {
+                            self.state = state;
+                        }
+                        Err(message) => {
+                            self.state = MzMLParserState::ParserError;
+                            self.error = message;
+                        }
+                    };
+                }
+                Ok(Event::Text(ref e)) => {
+                    match accumulator.text(e, self.state) {
+                        Ok(state) => {
+                            self.state = state;
+                        }
+                        Err(message) => {
+                            self.state = MzMLParserState::ParserError;
+                            self.error = message;
+                        }
+                    };
+                }
+                Ok(Event::Empty(ref e)) => {
+                    match accumulator.empty_element(e, self.state, &reader) {
+                        Ok(state) => {
+                            self.state = state;
+                        }
+                        Err(message) => {
+                            self.state = MzMLParserState::ParserError;
+                            self.error = message;
+                        }
+                    }
+                }
+                Ok(Event::Eof) => {
+                    break;
+                }
+                Err(err) => match &err {
+                    XMLError::EndEventMismatch {
+                        expected,
+                        found: _found,
+                    } => {
+                        if expected.is_empty() && self.state == MzMLParserState::Resume {
+                            continue;
+                        } else {
+                            self.error = MzMLParserError::IncompleteElementError(
+                                String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
+                                self.state,
+                            );
+                            self.state = MzMLParserState::ParserError;
+                        }
+                    }
+                    _ => {
+                        self.error = MzMLParserError::IncompleteElementError(
+                            String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
+                            self.state,
+                        );
+                        self.state = MzMLParserState::ParserError;
+                    }
+                },
+                _ => {}
+            };
+            self.buffer.clear();
+            match self.state {
+                MzMLParserState::Run | MzMLParserState::ParserError => {
+                    break;
+                }
+                _ => {}
+            };
+        }
+        self.file_description = accumulator.file_description;
+        self.instrument_configurations = accumulator.instrument_configurations.into_iter().map(|ic| (ic.id.clone(), ic)).collect();
+        self.softwares = accumulator.softwares;
+        self.data_processings = accumulator.data_processings;
+        self.reference_param_groups = accumulator.reference_param_groups;
+
+        match self.state {
+            MzMLParserState::SpectrumDone => Ok(()),
+            MzMLParserState::ParserError => Err(self.error.clone()),
+            _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
 
@@ -1103,6 +1661,16 @@ mod test {
         let reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::new(file);
         let mut ms1_count = 0;
         let mut msn_count = 0;
+
+        assert_eq!(reader.data_processings.len(), 1);
+        assert_eq!(reader.instrument_configurations.len(), 2);
+        assert_eq!(reader.softwares.len(), 2);
+        assert_eq!(reader.file_description.source_files.len(), 1);
+        assert_eq!(reader.file_description.contents.len(), 2);
+
+        assert!(reader.file_description.get_param_by_accession("MS:1000579").is_some());
+        assert_eq!(reader.file_description.source_files[0].name, "small.RAW");
+
         for scan in reader {
             let level = scan.ms_level();
             if level == 1 {
@@ -1138,6 +1706,13 @@ mod test {
         }
         assert_eq!(ms1_count, 14);
         assert_eq!(msn_count, 34);
+
+        assert_eq!(reader.data_processings.len(), 1);
+        assert_eq!(reader.instrument_configurations.len(), 2);
+        assert_eq!(reader.softwares.len(), 2);
+        assert_eq!(reader.file_description.source_files.len(), 1);
+        assert_eq!(reader.file_description.contents.len(), 2);
+
     }
 
     #[test]
@@ -1175,6 +1750,8 @@ mod test {
         }
         assert_eq!(ms1_count, 14);
         assert_eq!(msn_count, 34);
+
+
     }
 
     #[test]
