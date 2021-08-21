@@ -29,13 +29,9 @@ for spectrum in reader {
 
 ## TODO
  1. mzML Implementation
-     1. Interpret file-level metadata (file description, software, instrument configuration,
-        data processing).
-     2. Improve indexing performance, with the ability to store the computed index.
-     3. Improve unit handling.
+    1. Improve unit handling.
  2. Iteration behavior
-    1. Implement a batch iterator to group together related MS1 and MSN spectra.
-    2. Implement a caching strategy for re-using recently yielded spectra.
+    1. Implement a caching strategy for re-using recently yielded spectra.
  3. Other formats?
 
 ### Disclaimer

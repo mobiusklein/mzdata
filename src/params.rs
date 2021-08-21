@@ -7,7 +7,8 @@ pub struct Param {
     pub value: String,
     pub accession: String,
     pub controlled_vocabulary: Option<String>,
-    pub unit_info: Option<String>,
+    pub unit_name: Option<String>,
+    pub unit_accession: Option<String>,
 }
 
 impl Param {
@@ -30,6 +31,42 @@ impl Param {
 
     pub fn is_controlled(&self) -> bool {
         self.accession.is_empty()
+    }
+
+    pub fn with_unit<S: Into<String>, A: Into<String>>(mut self, accession: S, name: A) -> Param {
+        self.unit_accession = Some(accession.into());
+        self.unit_name = Some(name.into());
+        self
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ControlledVocabulary {
+    pub prefix: String,
+}
+
+impl ControlledVocabulary {
+    pub fn new(prefix: String) -> ControlledVocabulary {
+        ControlledVocabulary { prefix }
+    }
+
+    pub fn param<S: Into<String>, A: Into<String>>(&self, accession: A, name: S) -> Param {
+        let mut param = Param::new();
+        param.controlled_vocabulary = Some(self.prefix.clone());
+        param.name = name.into();
+        param.accession = accession.into();
+        param
+    }
+
+    pub fn param_val<S: Into<String>, A: Into<String>, V: ToString>(
+        &self,
+        accession: A,
+        name: S,
+        value: V,
+    ) -> Param {
+        let mut param = self.param(accession, name);
+        param.value = value.to_string();
+        param
     }
 }
 

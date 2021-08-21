@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 
 use std::io;
-
 use std::fs;
 use std::path;
+
+use md5::Context as MD5Context;
+use md5::Digest;
 
 type ByteBuffer = io::Cursor<Vec<u8>>;
 
@@ -93,6 +95,44 @@ where
         FileSource::from_path(path)
     }
 }
+
+
+#[derive(Clone)]
+pub struct MD5HashingStream<T: io::Write> {
+    pub stream: T,
+    pub context: MD5Context
+}
+
+impl<T: io::Write> MD5HashingStream<T> {
+    pub fn new(file: T) -> MD5HashingStream<T> {
+        Self {
+            stream: file,
+            context: MD5Context::new()
+        }
+    }
+
+    pub fn compute(&self) -> Digest {
+        self.context.clone().compute()
+    }
+}
+
+impl<T: io::Write> io::Write for MD5HashingStream<T> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.context.consume(&buf);
+        self.stream.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.stream.flush()
+    }
+}
+
+impl<T: io::Seek + io::Write> io::Seek for MD5HashingStream<T> {
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        self.stream.seek(pos)
+    }
+}
+
 
 #[cfg(test)]
 mod test {

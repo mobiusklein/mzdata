@@ -460,8 +460,21 @@ impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MultiLayer
                 arrays,
                 description: self.description,
             })
+        } else if let Some(peaks) = self.deconvoluted_peaks {
+            let arrays = BinaryArrayMap::from(DeconvolutedPeakSet::wrap(
+                peaks.into_iter().map(|p| p.as_centroid()).collect(),
+            ));
+
+            let mut result = RawSpectrum {
+                arrays,
+                description: self.description,
+            };
+            result.description.signal_continuity = SignalContinuity::Centroid;
+            Ok(result)
         } else if let Some(peaks) = self.peaks {
-            let arrays = BinaryArrayMap::from(peaks);
+            let arrays = BinaryArrayMap::from(PeakSet::wrap(
+                peaks.into_iter().map(|p| p.as_centroid()).collect(),
+            ));
 
             let mut result = RawSpectrum {
                 arrays,

@@ -12,11 +12,11 @@ use num_traits::Num;
 use log::warn;
 
 use base64;
-use flate2::write::ZlibDecoder;
-
+use flate2::write::{ZlibDecoder, ZlibEncoder};
+use flate2::Compression;
+use mzpeaks::prelude::*;
 use mzpeaks::{
-    CentroidLike, CentroidPeak, DeconvolutedPeak, DeconvolutedPeakSet, MZPeakSetType,
-    MassErrorType, PeakCollection,
+    CentroidPeak, DeconvolutedPeak, DeconvolutedPeakSet, MZPeakSetType, MassErrorType, PeakSet,
 };
 
 use crate::params::ParamList;
@@ -200,7 +200,45 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
-    fn decompres_zlib(&self, bytestring: &[u8]) -> Bytes {
+    pub fn encode(&self, compression: BinaryCompressionType) -> DataArray {
+        let mut dup = self.clone();
+        let bytestring = match self.compression {
+            BinaryCompressionType::Decoded => {
+                dup.data
+            },
+            _ => {
+                dup.decode_and_store()
+                    .expect("Failed to decode binary data array");
+                dup.data
+            }
+        };
+        dup.compression = BinaryCompressionType::NoCompression;
+
+        dup.data = match compression {
+            BinaryCompressionType::Zlib => {
+                let compressed = Self::compress_zlib(&bytestring);
+                base64::encode(compressed).into()
+            },
+            BinaryCompressionType::NoCompression => {
+                base64::encode(bytestring).into()
+            },
+            BinaryCompressionType::Decoded => panic!("Should never happen"),
+            _ => {
+                panic!("Compresion type {:?} is unsupported", compression)
+            }
+        };
+        dup.compression = compression;
+        dup
+    }
+
+    fn compress_zlib(bytestring: &[u8]) -> Bytes {
+        let result = Bytes::new();
+        let mut compressor = ZlibEncoder::new(result, Compression::best());
+        compressor.write_all(bytestring).expect("Error compressing");
+        compressor.finish().expect("Error compressing")
+    }
+
+    fn decompres_zlib(bytestring: &[u8]) -> Bytes {
         let result = Bytes::new();
         let mut decompressor = ZlibDecoder::new(result);
         decompressor
@@ -236,7 +274,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             }
             BinaryCompressionType::Zlib => {
                 let bytestring = base64::decode(&self.data).expect("Failed to decode base64 array");
-                Ok(Cow::Owned(self.decompres_zlib(&bytestring)))
+                Ok(Cow::Owned(Self::decompres_zlib(&bytestring)))
             }
             _ => Err(ArrayRetrievalError::DecompressionError),
         }
@@ -463,6 +501,18 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.byte_buffer_map.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.byte_buffer_map.is_empty()
+    }
+
+    pub fn iter(&self) -> std::collections::hash_map::Iter<ArrayType, DataArray> {
+        self.byte_buffer_map.iter()
+    }
+
     pub fn add(&mut self, array: DataArray) {
         self.byte_buffer_map.insert(array.name.clone(), array);
     }
@@ -545,8 +595,14 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
     }
 }
 
-impl<C: CentroidLike> From<MZPeakSetType<C>> for BinaryArrayMap {
-    fn from(peaks: MZPeakSetType<C>) -> BinaryArrayMap {
+impl From<PeakSet> for BinaryArrayMap {
+    fn from(peaks: PeakSet) -> BinaryArrayMap {
+        (&peaks).into()
+    }
+}
+
+impl From<&PeakSet> for BinaryArrayMap {
+    fn from(peaks: &PeakSet) -> BinaryArrayMap {
         let mut arrays = BinaryArrayMap::new();
 
         let mut mz_array = DataArray::from_name_type_size(
@@ -583,22 +639,7 @@ impl<C: CentroidLike> From<MZPeakSetType<C>> for BinaryArrayMap {
 
 impl<C: CentroidLike + From<CentroidPeak>> From<BinaryArrayMap> for MZPeakSetType<C> {
     fn from(arrays: BinaryArrayMap) -> MZPeakSetType<C> {
-        let mz_array = arrays.mzs();
-        let intensity_array = arrays.intensities();
-        let mut peaks = Vec::with_capacity(mz_array.len());
-
-        for (i, (mz, intensity)) in mz_array.iter().zip(intensity_array.iter()).enumerate() {
-            peaks.push(
-                CentroidPeak {
-                    mz: *mz,
-                    intensity: *intensity,
-                    index: i as u32,
-                }
-                .into(),
-            )
-        }
-
-        MZPeakSetType::<C>::new(peaks)
+        (&arrays).into()
     }
 }
 
@@ -646,5 +687,59 @@ impl From<&BinaryArrayMap> for DeconvolutedPeakSet {
         }
 
         DeconvolutedPeakSet::new(peaks)
+    }
+}
+
+impl From<DeconvolutedPeakSet> for BinaryArrayMap {
+    fn from(peaks: DeconvolutedPeakSet) -> BinaryArrayMap {
+        (&peaks).into()
+    }
+}
+
+impl From<&DeconvolutedPeakSet> for BinaryArrayMap {
+    fn from(peaks: &DeconvolutedPeakSet) -> BinaryArrayMap {
+        let mut arrays = BinaryArrayMap::new();
+
+        let mut mz_array = DataArray::from_name_type_size(
+            &ArrayType::MZArray,
+            BinaryDataArrayType::Float64,
+            peaks.len() * BinaryDataArrayType::Float64.size_of(),
+        );
+
+        let mut intensity_array = DataArray::from_name_type_size(
+            &ArrayType::IntensityArray,
+            BinaryDataArrayType::Float32,
+            peaks.len() * BinaryDataArrayType::Float32.size_of(),
+        );
+
+        let mut charge_array = DataArray::from_name_type_size(
+            &ArrayType::ChargeArray,
+            BinaryDataArrayType::Int32,
+            peaks.len() * BinaryDataArrayType::Int32.size_of(),
+        );
+
+        mz_array.compression = BinaryCompressionType::Decoded;
+        intensity_array.compression = BinaryCompressionType::Decoded;
+        charge_array.compression = BinaryCompressionType::Decoded;
+
+        for p in peaks.iter() {
+            let mz: f64 = p.mz();
+            let inten: f32 = p.intensity();
+            let charge = p.charge();
+
+            let raw_bytes: [u8; mem::size_of::<f64>()] = unsafe { mem::transmute(mz) };
+            mz_array.data.extend(raw_bytes);
+
+            let raw_bytes: [u8; mem::size_of::<f32>()] = unsafe { mem::transmute(inten) };
+            intensity_array.data.extend(raw_bytes);
+
+            let raw_bytes: [u8; mem::size_of::<i32>()] = unsafe { mem::transmute(charge) };
+            charge_array.data.extend(raw_bytes);
+        }
+
+        arrays.add(mz_array);
+        arrays.add(intensity_array);
+        arrays.add(charge_array);
+        arrays
     }
 }

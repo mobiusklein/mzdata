@@ -3,29 +3,31 @@
 
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::fmt::Debug;
 use std::fs;
 use std::io;
-use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::marker::PhantomData;
 
 use log::warn;
 
+use quick_xml::events::BytesDecl;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
-use quick_xml::Reader;
+use quick_xml::{Reader, Writer};
 
 use super::offset_index::OffsetIndex;
 use super::traits::{
     MZFileReader, RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead,
 };
+use super::utils::MD5HashingStream;
 
-use mzpeaks::{CentroidPeak, DeconvolutedPeak};
+use mzpeaks::{peak_set::PeakSetVec, CentroidPeak, DeconvolutedPeak, MZ, Mass};
 
-use crate::ParamDescribed;
-use crate::params::{Param, ParamList};
 use crate::meta::file_description::{FileDescription, SourceFile};
 use crate::meta::instrument::{Component, ComponentType, InstrumentConfiguration};
-use crate::meta::{DataProcessing, ProcessingMethod, Software};
+use crate::meta::{DataProcessing, MSDataFileMetadata, ProcessingMethod, Software};
+use crate::params::{ControlledVocabulary, Param, ParamList};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
@@ -34,6 +36,7 @@ use crate::spectrum::spectrum::{
     CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
     RawSpectrum, Spectrum,
 };
+use crate::ParamDescribed;
 use crate::SpectrumBehavior;
 
 pub type Bytes = Vec<u8>;
@@ -98,18 +101,13 @@ pub enum MzMLParserState {
     ParserError,
 }
 
-
 pub trait XMLParseBase {
-    fn handle_xml_error(
-        &self,
-        error: quick_xml::Error,
-        state: MzMLParserState,
-    ) -> MzMLParserError {
+    fn handle_xml_error(&self, error: quick_xml::Error, state: MzMLParserState) -> MzMLParserError {
         MzMLParserError::XMLError(state, format!("{:?}", error))
     }
 }
 
-pub trait CVParamParse : XMLParseBase {
+pub trait CVParamParse: XMLParseBase {
     fn handle_param<B: io::BufRead>(
         &self,
         event: &BytesStart,
@@ -146,13 +144,19 @@ pub trait CVParamParse : XMLParseBase {
                         ));
                     }
                     b"unitName" => {
-                        param.unit_info =
+                        param.unit_name =
                             Some(attr.unescape_and_decode_value(reader).expect(&format!(
                                 "Error decoding CV param unit name at {}",
                                 reader.buffer_position()
                             )));
                     }
-                    b"unitAccession" => {}
+                    b"unitAccession" => {
+                        param.unit_accession =
+                            Some(attr.unescape_and_decode_value(reader).expect(&format!(
+                                "Error decoding CV param unit name at {}",
+                                reader.buffer_position()
+                            )));
+                    }
                     b"unitCvRef" => {}
                     _ => {}
                 },
@@ -202,8 +206,14 @@ struct MzMLSpectrumBuilder<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> XMLParseBase for MzMLSpectrumBuilder<C, D> {}
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> CVParamParse for MzMLSpectrumBuilder<C, D> {}
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> XMLParseBase
+    for MzMLSpectrumBuilder<C, D>
+{
+}
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> CVParamParse
+    for MzMLSpectrumBuilder<C, D>
+{
+}
 
 pub trait SpectrumBuilding<
     C: CentroidPeakAdapting,
@@ -499,13 +509,41 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
                 self.fill_spectrum(param);
             }
             MzMLParserState::ScanList => self.acquisition.params.push(param),
-            MzMLParserState::Scan => self
-                .acquisition
-                .scans
-                .last_mut()
-                .unwrap()
-                .params
-                .push(param),
+            MzMLParserState::Scan => {
+                let event = self
+                    .acquisition
+                    .scans
+                    .last_mut()
+                    .unwrap();
+                match param.name.as_bytes() {
+                    b"scan start time" => {
+                        let value: f64 = param.coerce().expect("Expected floating point number for scan time");
+                        let value = if let Some(unit) = &param.unit_name {
+                            match unit.as_bytes() {
+                                b"minute" => {
+                                    value
+                                },
+                                b"second" => {
+                                    60.0 * value
+                                },
+                                _ => {
+                                    warn!("Could not infer unit for {:?}", param);
+                                    value
+                                }
+                            }
+                        }  else {
+                            value
+                        };
+                        event.start_time = value;
+                    },
+                    b"ion injection time" => {
+                        event.injection_time = param.coerce().expect("Expected floating point number for injection time");
+                    }
+                    _ => {
+                        event.params.push(param)
+                    }
+                }
+            },
             MzMLParserState::ScanWindowList => self
                 .acquisition
                 .scans
@@ -748,7 +786,6 @@ impl Into<RawSpectrum> for MzMLSpectrumBuilder {
     }
 }
 
-
 #[derive(Debug, Default, Clone)]
 pub struct FileMetadataBuilder {
     pub file_description: FileDescription,
@@ -756,15 +793,14 @@ pub struct FileMetadataBuilder {
     pub softwares: Vec<Software>,
     pub data_processings: Vec<DataProcessing>,
     pub reference_param_groups: HashMap<String, Vec<Param>>,
-    pub last_group: String
+    pub last_group: String,
 }
 
 impl XMLParseBase for FileMetadataBuilder {}
 impl CVParamParse for FileMetadataBuilder {}
 
-
 impl FileMetadataBuilder {
-        pub fn start_element<B: io::BufRead>(
+    pub fn start_element<B: io::BufRead>(
         &mut self,
         event: &BytesStart,
         state: MzMLParserState,
@@ -772,15 +808,9 @@ impl FileMetadataBuilder {
     ) -> ParserResult {
         let elt_name = event.name();
         match elt_name {
-            b"fileDescription" => {
-                return Ok(MzMLParserState::FileDescription)
-            },
-            b"fileContent" => {
-                return Ok(MzMLParserState::FileContents)
-            },
-            b"sourceFileList" => {
-                return  Ok(MzMLParserState::SourceFileList)
-            }
+            b"fileDescription" => return Ok(MzMLParserState::FileDescription),
+            b"fileContent" => return Ok(MzMLParserState::FileContents),
+            b"sourceFileList" => return Ok(MzMLParserState::SourceFileList),
             b"sourceFile" => {
                 let mut source_file = SourceFile::default();
                 for attr_parsed in event.attributes() {
@@ -790,8 +820,7 @@ impl FileMetadataBuilder {
                                 source_file.id = attr
                                     .unescape_and_decode_value(reader)
                                     .expect("Error decoding id");
-                            }
-                            else if attr.key == b"name" {
+                            } else if attr.key == b"name" {
                                 source_file.name = attr
                                     .unescape_and_decode_value(reader)
                                     .expect("Error decoding name");
@@ -807,11 +836,9 @@ impl FileMetadataBuilder {
                     }
                 }
                 self.file_description.source_files.push(source_file);
-                return Ok(MzMLParserState::SourceFile)
-            },
-            b"softwareList" => {
-                return Ok(MzMLParserState::SoftwareList)
-            },
+                return Ok(MzMLParserState::SourceFile);
+            }
+            b"softwareList" => return Ok(MzMLParserState::SoftwareList),
             b"software" => {
                 let mut software = Software::default();
                 for attr_parsed in event.attributes() {
@@ -821,8 +848,7 @@ impl FileMetadataBuilder {
                                 software.id = attr
                                     .unescape_and_decode_value(reader)
                                     .expect("Error decoding id");
-                            }
-                            else if attr.key == b"version" {
+                            } else if attr.key == b"version" {
                                 software.version = attr
                                     .unescape_and_decode_value(reader)
                                     .expect("Error decoding version");
@@ -834,11 +860,11 @@ impl FileMetadataBuilder {
                     }
                 }
                 self.softwares.push(software);
-                return Ok(MzMLParserState::Software)
-            },
+                return Ok(MzMLParserState::Software);
+            }
             b"referenceableParamGroupList" => {
                 return Ok(MzMLParserState::ReferenceParamGroupList);
-            },
+            }
             b"referenceableParamGroup" => {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
@@ -856,11 +882,11 @@ impl FileMetadataBuilder {
                         }
                     }
                 }
-                return Ok(MzMLParserState::ReferenceParamGroup)
+                return Ok(MzMLParserState::ReferenceParamGroup);
             }
             b"instrumentConfigurationList" => {
                 return Ok(MzMLParserState::InstrumentConfigurationList)
-            },
+            }
             b"instrumentConfiguration" => {
                 let mut ic = InstrumentConfiguration::default();
                 for attr_parsed in event.attributes() {
@@ -878,11 +904,9 @@ impl FileMetadataBuilder {
                     }
                 }
                 self.instrument_configurations.push(ic);
-                return Ok(MzMLParserState::InstrumentConfiguration)
-            },
-            b"componentList" => {
-                return Ok(MzMLParserState::ComponentList)
-            },
+                return Ok(MzMLParserState::InstrumentConfiguration);
+            }
+            b"componentList" => return Ok(MzMLParserState::ComponentList),
             b"source" => {
                 let mut source = Component::default();
                 source.component_type = ComponentType::IonSource;
@@ -892,8 +916,9 @@ impl FileMetadataBuilder {
                             if attr.key == b"order" {
                                 source.order = attr
                                     .unescape_and_decode_value(reader)
-                                    .expect("Error decoding order").parse().expect(
-                                        "Failed to parse integer from `order`");
+                                    .expect("Error decoding order")
+                                    .parse()
+                                    .expect("Failed to parse integer from `order`");
                             }
                         }
                         Err(msg) => {
@@ -901,9 +926,13 @@ impl FileMetadataBuilder {
                         }
                     }
                 }
-                self.instrument_configurations.last_mut().unwrap().components.push(source);
-                return Ok(MzMLParserState::Source)
-            },
+                self.instrument_configurations
+                    .last_mut()
+                    .unwrap()
+                    .components
+                    .push(source);
+                return Ok(MzMLParserState::Source);
+            }
             b"analyzer" => {
                 let mut analyzer = Component::default();
                 analyzer.component_type = ComponentType::Analyzer;
@@ -913,8 +942,9 @@ impl FileMetadataBuilder {
                             if attr.key == b"order" {
                                 analyzer.order = attr
                                     .unescape_and_decode_value(reader)
-                                    .expect("Error decoding order").parse().expect(
-                                        "Failed to parse integer from `order`");
+                                    .expect("Error decoding order")
+                                    .parse()
+                                    .expect("Failed to parse integer from `order`");
                             }
                         }
                         Err(msg) => {
@@ -922,9 +952,13 @@ impl FileMetadataBuilder {
                         }
                     }
                 }
-                self.instrument_configurations.last_mut().unwrap().components.push(analyzer);
-                return Ok(MzMLParserState::Analyzer)
-            },
+                self.instrument_configurations
+                    .last_mut()
+                    .unwrap()
+                    .components
+                    .push(analyzer);
+                return Ok(MzMLParserState::Analyzer);
+            }
             b"detector" => {
                 let mut detector = Component::default();
                 detector.component_type = ComponentType::Detector;
@@ -934,8 +968,9 @@ impl FileMetadataBuilder {
                             if attr.key == b"order" {
                                 detector.order = attr
                                     .unescape_and_decode_value(reader)
-                                    .expect("Error decoding order").parse().expect(
-                                        "Failed to parse integer from `order`");
+                                    .expect("Error decoding order")
+                                    .parse()
+                                    .expect("Failed to parse integer from `order`");
                             }
                         }
                         Err(msg) => {
@@ -943,12 +978,14 @@ impl FileMetadataBuilder {
                         }
                     }
                 }
-                self.instrument_configurations.last_mut().unwrap().components.push(detector);
-                return Ok(MzMLParserState::Detector)
-            },
-            b"dataProcessingList" => {
-                return Ok(MzMLParserState::DataProcessingList)
-            },
+                self.instrument_configurations
+                    .last_mut()
+                    .unwrap()
+                    .components
+                    .push(detector);
+                return Ok(MzMLParserState::Detector);
+            }
+            b"dataProcessingList" => return Ok(MzMLParserState::DataProcessingList),
             b"dataProcessing" => {
                 let mut dp = DataProcessing::default();
                 for attr_parsed in event.attributes() {
@@ -966,8 +1003,8 @@ impl FileMetadataBuilder {
                     }
                 }
                 self.data_processings.push(dp);
-                return Ok(MzMLParserState::DataProcessing)
-            },
+                return Ok(MzMLParserState::DataProcessing);
+            }
             b"processingMethod" => {
                 let mut method = ProcessingMethod::default();
                 for attr_parsed in event.attributes() {
@@ -976,10 +1013,10 @@ impl FileMetadataBuilder {
                             if attr.key == b"order" {
                                 method.order = attr
                                     .unescape_and_decode_value(reader)
-                                    .expect("Error decoding order").parse().expect(
-                                        "Failed to parse order");
-                            }
-                            else if attr.key == b"softwareRef" {
+                                    .expect("Error decoding order")
+                                    .parse()
+                                    .expect("Failed to parse order");
+                            } else if attr.key == b"softwareRef" {
                                 method.software_reference = attr
                                     .unescape_and_decode_value(reader)
                                     .expect("Error decoding softwareRef");
@@ -990,15 +1027,15 @@ impl FileMetadataBuilder {
                         }
                     }
                 }
-                self.data_processings.last_mut().unwrap().methods.push(method);
-                return Ok(MzMLParserState::ProcessingMethod)
+                self.data_processings
+                    .last_mut()
+                    .unwrap()
+                    .methods
+                    .push(method);
+                return Ok(MzMLParserState::ProcessingMethod);
             }
-            b"run" => {
-                return Ok(MzMLParserState::Run)
-            }
-            _ => {
-
-            }
+            b"run" => return Ok(MzMLParserState::Run),
+            _ => {}
         }
 
         Ok(state)
@@ -1009,24 +1046,38 @@ impl FileMetadataBuilder {
             MzMLParserState::SourceFile => {
                 let sf = self.file_description.source_files.last_mut().unwrap();
                 sf.add_param(param)
-            },
+            }
             MzMLParserState::FileContents => {
                 self.file_description.add_param(param);
-            },
-            MzMLParserState::InstrumentConfiguration => {
-                self.instrument_configurations.last_mut().unwrap().add_param(param);
-            },
-            MzMLParserState::Software => {
-                self.softwares.last_mut().unwrap().add_param(param)
             }
-            MzMLParserState::ProcessingMethod => {
-                self.data_processings.last_mut().unwrap().methods.last_mut().unwrap().add_param(param)
-            },
-            MzMLParserState::Detector | MzMLParserState::Analyzer | MzMLParserState::Source => {
-                self.instrument_configurations.last_mut().unwrap().components.last_mut().unwrap().add_param(param)
-            },
+            MzMLParserState::InstrumentConfiguration => {
+                self.instrument_configurations
+                    .last_mut()
+                    .unwrap()
+                    .add_param(param);
+            }
+            MzMLParserState::Software => self.softwares.last_mut().unwrap().add_param(param),
+            MzMLParserState::ProcessingMethod => self
+                .data_processings
+                .last_mut()
+                .unwrap()
+                .methods
+                .last_mut()
+                .unwrap()
+                .add_param(param),
+            MzMLParserState::Detector | MzMLParserState::Analyzer | MzMLParserState::Source => self
+                .instrument_configurations
+                .last_mut()
+                .unwrap()
+                .components
+                .last_mut()
+                .unwrap()
+                .add_param(param),
             MzMLParserState::ReferenceParamGroup => {
-                self.reference_param_groups.get_mut(&self.last_group).unwrap().push(param);
+                self.reference_param_groups
+                    .get_mut(&self.last_group)
+                    .unwrap()
+                    .push(param);
             }
             _ => {}
         }
@@ -1047,28 +1098,26 @@ impl FileMetadataBuilder {
                 }
                 Err(err) => return Err(err),
             },
-            b"softwareRef" => {
-                match state {
-                    MzMLParserState::InstrumentConfiguration => {
-                        let ic = self.instrument_configurations.last_mut().unwrap();
-                        for attr_parsed in event.attributes() {
-                            match attr_parsed {
-                                Ok(attr) => {
-                                    if attr.key == b"ref" {
-                                        ic.software_reference = attr
-                                            .unescape_and_decode_value(reader)
-                                            .expect("Error decoding software reference");
-                                    }
+            b"softwareRef" => match state {
+                MzMLParserState::InstrumentConfiguration => {
+                    let ic = self.instrument_configurations.last_mut().unwrap();
+                    for attr_parsed in event.attributes() {
+                        match attr_parsed {
+                            Ok(attr) => {
+                                if attr.key == b"ref" {
+                                    ic.software_reference = attr
+                                        .unescape_and_decode_value(reader)
+                                        .expect("Error decoding software reference");
                                 }
-                                Err(msg) => {
-                                    return Err(self.handle_xml_error(msg, state));
-                                }
+                            }
+                            Err(msg) => {
+                                return Err(self.handle_xml_error(msg, state));
                             }
                         }
                     }
-                    _ => {}
                 }
-            }
+                _ => {}
+            },
             b"referenceableParamGroupRef" => {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
@@ -1079,9 +1128,7 @@ impl FileMetadataBuilder {
                                     .expect("Error decoding reference group");
 
                                 let param_group = match self.reference_param_groups.get(&group_id) {
-                                    Some(params) => {
-                                        params.clone()
-                                    },
+                                    Some(params) => params.clone(),
                                     None => {
                                         panic!("Encountered a referenceableParamGroupRef without a group definition")
                                     }
@@ -1106,57 +1153,29 @@ impl FileMetadataBuilder {
     pub fn end_element(&mut self, event: &BytesEnd, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
         match elt_name {
-            b"fileDescription" => {
-                return Ok(MzMLParserState::FileDescription)
-            },
-            b"fileContent" => {
-                return Ok(MzMLParserState::FileDescription)
-            },
-            b"sourceFile" => {
-                return Ok(MzMLParserState::SourceFileList)
-            },
-            b"softwareList" => {
-                return Ok(MzMLParserState::SoftwareList)
-            },
-            b"software" => {
-                return Ok(MzMLParserState::SoftwareList)
-            },
+            b"fileDescription" => return Ok(MzMLParserState::FileDescription),
+            b"fileContent" => return Ok(MzMLParserState::FileDescription),
+            b"sourceFile" => return Ok(MzMLParserState::SourceFileList),
+            b"softwareList" => return Ok(MzMLParserState::SoftwareList),
+            b"software" => return Ok(MzMLParserState::SoftwareList),
             b"referenceableParamGroupList" => {
                 return Ok(MzMLParserState::ReferenceParamGroupList);
-            },
+            }
             b"instrumentConfigurationList" => {
                 return Ok(MzMLParserState::InstrumentConfigurationList)
-            },
-            b"instrumentConfiguration" => {
-                return Ok(MzMLParserState::InstrumentConfigurationList)
-            },
-            b"componentList" => {
-                return Ok(MzMLParserState::InstrumentConfiguration)
-            },
-            b"source" => {
-                return Ok(MzMLParserState::ComponentList)
-            },
-            b"analyzer" => {
-                return Ok(MzMLParserState::ComponentList)
-            },
-            b"detector" => {
-                return Ok(MzMLParserState::ComponentList)
-            },
-            b"dataProcessingList" => {
-                return Ok(MzMLParserState::DataProcessingList)
-            },
-            b"dataProcessing" => {
-                return Ok(MzMLParserState::DataProcessingList)
-            },
-            b"processingMethod" => {
-                return Ok(MzMLParserState::DataProcessing)
             }
+            b"instrumentConfiguration" => return Ok(MzMLParserState::InstrumentConfigurationList),
+            b"componentList" => return Ok(MzMLParserState::InstrumentConfiguration),
+            b"source" => return Ok(MzMLParserState::ComponentList),
+            b"analyzer" => return Ok(MzMLParserState::ComponentList),
+            b"detector" => return Ok(MzMLParserState::ComponentList),
+            b"dataProcessingList" => return Ok(MzMLParserState::DataProcessingList),
+            b"dataProcessing" => return Ok(MzMLParserState::DataProcessingList),
+            b"processingMethod" => return Ok(MzMLParserState::DataProcessing),
             b"run" => {
                 // TODO
             }
-            _ => {
-
-            }
+            _ => {}
         }
         Ok(state)
     }
@@ -1165,7 +1184,6 @@ impl FileMetadataBuilder {
         Ok(state)
     }
 }
-
 
 /// An mzML parser that supports iteration and random access. The parser produces
 /// [`Spectrum`] instances, which may be converted to [`RawSpectrum`](crate::spectrum::spectrum::RawSpectrum)
@@ -1178,14 +1196,25 @@ pub struct MzMLReaderType<
     C: CentroidPeakAdapting = CentroidPeak,
     D: DeconvolutedPeakAdapting = DeconvolutedPeak,
 > {
+    /// The state the parser was in last.
     pub state: MzMLParserState,
     pub handle: BufReader<R>,
+    /// A place to store the last error the parser encountered
     pub error: MzMLParserError,
     pub index: OffsetIndex,
+    /// The description of the file's contents and the previous data files that were
+    /// consumed to produce it.
     pub file_description: FileDescription,
+    /// A mapping of different instrument configurations (source, analyzer, detector) components
+    /// by ID string.
     pub instrument_configurations: HashMap<String, InstrumentConfiguration>,
+    /// The different software components that were involved in the processing and creation of this
+    /// file.
     pub softwares: Vec<Software>,
+    /// The data processing and signal transformation operations performed on the raw data in previous
+    /// source files to produce this file's contents.
     pub data_processings: Vec<DataProcessing>,
+    /// A cache of repeated paramters
     pub reference_param_groups: HashMap<String, Vec<Param>>,
     buffer: Bytes,
     centroid_type: PhantomData<C>,
@@ -1195,7 +1224,7 @@ pub struct MzMLReaderType<
 impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {
     pub fn new(file: R) -> MzMLReaderType<R, C, D> {
         let handle = BufReader::with_capacity(BUFFER_SIZE, file);
-        let mut inst =  MzMLReaderType {
+        let mut inst = MzMLReaderType {
             handle,
             state: MzMLParserState::Start,
             error: MzMLParserError::default(),
@@ -1212,15 +1241,18 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
             deconvoluted_type: PhantomData,
         };
         match inst.parse_metadata() {
-            Ok(()) => {},
+            Ok(()) => {}
             Err(err) => {
-                warn!("Encountered error {:?} while parsing mzML file metadata", err);
+                warn!(
+                    "Encountered error {:?} while parsing mzML file metadata",
+                    err
+                );
             }
         }
         inst
     }
 
-    fn parse_metadata(&mut self) -> Result<(), MzMLParserError>{
+    fn parse_metadata(&mut self) -> Result<(), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         let mut accumulator = FileMetadataBuilder::default();
@@ -1231,9 +1263,9 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
                         Ok(state) => {
                             self.state = state;
                             match &self.state {
-                                MzMLParserState::Run | MzMLParserState::SpectrumList | MzMLParserState::Spectrum => {
-                                    break
-                                },
+                                MzMLParserState::Run
+                                | MzMLParserState::SpectrumList
+                                | MzMLParserState::Spectrum => break,
                                 _ => {}
                             }
                         }
@@ -1313,7 +1345,11 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
             };
         }
         self.file_description = accumulator.file_description;
-        self.instrument_configurations = accumulator.instrument_configurations.into_iter().map(|ic| (ic.id.clone(), ic)).collect();
+        self.instrument_configurations = accumulator
+            .instrument_configurations
+            .into_iter()
+            .map(|ic| (ic.id.clone(), ic))
+            .collect();
         self.softwares = accumulator.softwares;
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
@@ -1645,7 +1681,883 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     }
 }
 
+impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
+    for MzMLReaderType<R, C, D>
+{
+    fn data_processings(&self) -> &Vec<DataProcessing> {
+        &self.data_processings
+    }
+
+    fn instrument_configurations(&self) -> &HashMap<String, InstrumentConfiguration> {
+        &self.instrument_configurations
+    }
+    fn file_description(&self) -> &FileDescription {
+        &self.file_description
+    }
+    fn softwares(&self) -> &Vec<Software> {
+        &self.softwares
+    }
+}
+
 pub type MzMLReader<R> = MzMLReaderType<R, CentroidPeak, DeconvolutedPeak>;
+
+macro_rules! bstart {
+    ($e:tt) => {
+        BytesStart::owned($e.as_bytes().to_vec(), $e.len())
+    };
+}
+
+macro_rules! attrib {
+    ($name:expr, $value:expr, $elt:ident) => {
+        let key = $name.as_bytes();
+        let value = $value.as_bytes();
+        $elt.push_attribute((key, value));
+    };
+}
+
+macro_rules! start_event {
+    ($writer:ident, $target:ident) => {
+        $writer
+            .handle
+            .write_event(Event::Start($target.to_borrowed()))?;
+    };
+}
+
+macro_rules! end_event {
+    ($writer:ident, $target:ident) => {
+        $writer.handle.write_event(Event::End($target.to_end()))?;
+    };
+}
+
+pub type XMLResult = Result<(), XMLError>;
+
+struct InnerXMLWriter<W: io::Write> {
+    pub handle: Writer<BufWriter<MD5HashingStream<W>>>,
+}
+
+impl<W: Write> Debug for InnerXMLWriter<W> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InnerXMLWriter")
+            .field("handle", &"...")
+            .finish()
+    }
+}
+
+impl<W: io::Write> InnerXMLWriter<W> {
+    const INDENT_SIZE: u64 = 2;
+
+    pub fn new(file: W) -> InnerXMLWriter<W> {
+        let handle = BufWriter::with_capacity(
+            BUFFER_SIZE, MD5HashingStream::new(file));
+        Self {
+            handle: Writer::new_with_indent(handle, b' ', 2),
+        }
+    }
+
+    pub fn digest(&mut self) -> String {
+        let digest = self.handle.inner().get_ref().compute();
+        format!("{:x}", digest)
+    }
+
+    pub fn write_param(&mut self, param: &Param) -> XMLResult {
+        let mut elt = if param.accession.is_empty() {
+            bstart!("userParam")
+        } else {
+            let mut elt = bstart!("cvParam");
+            attrib!("accession", param.accession, elt);
+            if let Some(cv_ref) = &param.controlled_vocabulary {
+                attrib!("cvRef", cv_ref, elt);
+            }
+            elt
+        };
+
+        attrib!("name", param.name, elt);
+        if !param.value.is_empty() {
+            attrib!("value", param.value, elt);
+        }
+
+        if param.unit_accession.is_some() || param.unit_name.is_some() {
+            if let Some(unit_acc) = &param.unit_accession {
+                let mut split = unit_acc.split(":");
+                if let Some(prefix) = split.next() {
+                    attrib!("unitCvRef", prefix, elt);
+                } else {
+                    attrib!("unitCvRef", "UO", elt);
+                }
+                attrib!("unitAccession", unit_acc, elt);
+            } else {
+                attrib!("unitCvRef", "UO", elt);
+            }
+            if let Some(unit_name) = &param.unit_name {
+                attrib!("unitName", unit_name, elt);
+            }
+        }
+        self.handle.write_event(Event::Empty(elt))
+    }
+
+    pub fn write_param_list<'a, T: Iterator<Item = &'a Param>>(&mut self, params: T) -> XMLResult {
+        for param in params {
+            self.write_param(param)?
+        }
+        Ok(())
+    }
+
+    pub fn write_event(&mut self, event: Event) -> XMLResult {
+        self.handle.write_event(event)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
+pub enum MzMLWriterState {
+    Start,
+    DocumentOpen,
+    Header,
+    Run,
+    SpectrumList,
+    SpectrumListClosed,
+    ChromatogramList,
+    ChromatogramListClosed,
+    RunClosed,
+    MzMLClosed,
+    IndexList,
+    IndexListClosed,
+    End
+}
+
+#[derive(Debug)]
+pub struct MzMLWriterType<
+    W: Write + Seek,
+    C: CentroidPeakAdapting + 'static = CentroidPeak,
+    D: DeconvolutedPeakAdapting + 'static = DeconvolutedPeak,
+> {
+    pub offset: usize,
+    pub spectrum_count: u64,
+    pub spectrum_counter: u64,
+    pub chromatogram_count: u64,
+
+    pub file_description: FileDescription,
+    pub softwares: Vec<Software>,
+    pub data_processings: Vec<DataProcessing>,
+    pub instrument_configurations: HashMap<String, InstrumentConfiguration>,
+
+    pub state: MzMLWriterState,
+    pub offset_index: OffsetIndex,
+
+    handle: InnerXMLWriter<W>,
+    centroid_type: PhantomData<C>,
+    deconvoluted_type: PhantomData<D>,
+    ms_cv: ControlledVocabulary,
+}
+
+impl<'a, W: Write + Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    MzMLWriterType<W, C, D>
+where
+    &'a PeakSetVec<C, MZ>: Into<BinaryArrayMap>,
+    &'a PeakSetVec<D, Mass>: Into<BinaryArrayMap>,
+{
+    const PSIMS_VERSION: &'static str = "4.1.57";
+    const UNIT_VERSION: &'static str = "releases/2020-03-10";
+
+    pub fn new(file: W) -> MzMLWriterType<W, C, D> {
+        let handle = InnerXMLWriter::new(file);
+        let inst = MzMLWriterType {
+            handle,
+            file_description: FileDescription::default(),
+            instrument_configurations: HashMap::new(),
+            softwares: Vec::new(),
+            data_processings: Vec::new(),
+            offset: 0,
+            offset_index: OffsetIndex::new("spectrum".into()),
+            state: MzMLWriterState::Start,
+            centroid_type: PhantomData,
+            deconvoluted_type: PhantomData,
+            spectrum_count: 0,
+            spectrum_counter: 0,
+            chromatogram_count: 0,
+            ms_cv: ControlledVocabulary::new("MS".to_string()),
+        };
+        inst
+    }
+
+    fn stream_position(&mut self) -> io::Result<u64> {
+        self.handle.handle.inner().stream_position()
+    }
+
+    fn write_cv_list(&mut self) -> XMLResult {
+        let mut cv_list = BytesStart::owned(b"cvList".to_vec(), 6);
+        cv_list.push_attribute(("count", "2"));
+        self.handle.write_event(Event::Start(cv_list))?;
+
+        let mut cv = BytesStart::owned(b"cv".to_vec(), 2);
+        cv.push_attribute(("id", "MS"));
+        cv.push_attribute(("fullName", "PSI-MS"));
+        cv.push_attribute((
+            "URI",
+            "https://raw.githubusercontent.com/HUPO-PSI/psi-ms-CV/master/psi-ms.obo",
+        ));
+        cv.push_attribute(("version", Self::PSIMS_VERSION));
+        self.handle.write_event(Event::Empty(cv))?;
+
+        let mut cv = BytesStart::owned(b"cv".to_vec(), 2);
+        cv.push_attribute(("id", "UO"));
+        cv.push_attribute(("fullName", "UNIT-ONTOLOGY"));
+        cv.push_attribute(("URI", "http://ontologies.berkeleybop.org/uo.obo"));
+        cv.push_attribute(("version", Self::UNIT_VERSION));
+        self.handle.write_event(Event::Empty(cv))?;
+
+        self.handle
+            .write_event(Event::End(BytesEnd::owned(b"cvList".to_vec())))?;
+        Ok(())
+    }
+
+    fn start_document(&mut self) -> XMLResult {
+        self.handle
+            .write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"utf-8"), None)))?;
+        let mut indexed = BytesStart::owned(b"indexedmzML".to_vec(), 11);
+        indexed.push_attribute(("xmlns", "http://psi.hupo.org/ms/mzml"));
+        indexed.push_attribute(("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"));
+        indexed.push_attribute((
+            "xsi:schemaLocation",
+            "http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.2_idx.xsd",
+        ));
+        self.handle.write_event(Event::Start(indexed))?;
+
+        let mut mzml = BytesStart::owned(b"mzML".to_vec(), 4);
+        mzml.push_attribute(("xmlns", "http://psi.hupo.org/ms/mzml"));
+        mzml.push_attribute(("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"));
+        mzml.push_attribute((
+            "xsi:schemaLocation",
+            "http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.0.xsd",
+        ));
+        mzml.push_attribute(("version", "1.1.0"));
+        self.handle.write_event(Event::Start(mzml))?;
+
+        self.state = MzMLWriterState::DocumentOpen;
+        Ok(())
+    }
+
+    pub fn writer_header(&mut self) -> XMLResult {
+        if self.state < MzMLWriterState::DocumentOpen {
+            self.start_document()?;
+        } else {
+            panic!(
+                "Cannot start writing the header of mzML, currently in state {:?} which happens after.", self.state)
+        }
+        self.write_cv_list()?;
+        self.write_file_description()?;
+        self.write_software_list()?;
+        self.write_instrument_configuration()?;
+        self.write_data_processing()?;
+
+        self.state = MzMLWriterState::Header;
+        Ok(())
+    }
+
+    pub fn write_file_description(&mut self) -> XMLResult {
+        let fd = bstart!("fileDescription");
+        start_event!(self, fd);
+
+        let fc_tag = bstart!("fileContents");
+        start_event!(self, fc_tag);
+        for param in self.file_description.params() {
+            self.handle.write_param(&param)?
+        }
+        end_event!(self, fc_tag);
+
+        let mut outer = bstart!("sourceFileList");
+        let count = self.file_description.source_files.len().to_string();
+        attrib!("count", count, outer);
+        self.handle.write_event(Event::Start(outer.to_borrowed()))?;
+        for sf in self.file_description.source_files.iter() {
+            let mut tag = bstart!("sourceFile");
+            attrib!("id", sf.id, tag);
+            attrib!("name", sf.name, tag);
+            attrib!("location", sf.location, tag);
+            self.handle.write_event(Event::Start(tag.to_borrowed()))?;
+            for param in sf.params() {
+                self.handle.write_param(param)?
+            }
+            self.handle.write_event(Event::End(tag.to_end()))?;
+        }
+        self.handle.write_event(Event::End(outer.to_end()))?;
+
+        end_event!(self, fd);
+        Ok(())
+    }
+
+    pub fn write_software_list(&mut self) -> XMLResult {
+        let mut outer = bstart!("softwareList");
+        let count = self.softwares.len().to_string();
+        attrib!("count", count, outer);
+        self.handle.write_event(Event::Start(outer.to_borrowed()))?;
+        for soft in self.softwares.iter() {
+            let mut tag = bstart!("software");
+            attrib!("id", soft.id, tag);
+            attrib!("version", soft.version, tag);
+            self.handle.write_event(Event::Start(tag.to_borrowed()))?;
+            for param in soft.params() {
+                self.handle.write_param(param)?
+            }
+            self.handle.write_event(Event::End(tag.to_end()))?;
+        }
+        self.handle.write_event(Event::End(outer.to_end()))?;
+        Ok(())
+    }
+
+    pub fn write_instrument_configuration(&mut self) -> XMLResult {
+        let mut outer = bstart!("instrumentConfigurationList");
+        let count = self.instrument_configurations.len().to_string();
+        attrib!("count", count, outer);
+        self.handle.write_event(Event::Start(outer.to_borrowed()))?;
+        for (_key, ic) in self.instrument_configurations.iter() {
+            let mut tag = bstart!("instrumentConfiguration");
+            attrib!("id", ic.id, tag);
+            self.handle.write_event(Event::Start(tag.to_borrowed()))?;
+            for param in ic.params() {
+                self.handle.write_param(param)?
+            }
+            for comp in ic.components.iter() {
+                let mut cmp_tag = match comp.component_type {
+                    ComponentType::Analyzer => bstart!("analyzer"),
+                    ComponentType::Detector => bstart!("detector"),
+                    ComponentType::IonSource => bstart!("source"),
+                    ComponentType::Unknown => {
+                        panic!("Could not identify component tag for {:?}", comp)
+                    }
+                };
+                let order = comp.order.to_string();
+                attrib!("order", order, cmp_tag);
+                self.handle
+                    .write_event(Event::Start(cmp_tag.to_borrowed()))?;
+                for param in comp.params() {
+                    self.handle.write_param(param)?
+                }
+                self.handle.write_event(Event::End(cmp_tag.to_end()))?;
+            }
+            let mut sw = bstart!("sofwareRef");
+            attrib!("ref", ic.software_reference, sw);
+            self.handle.write_event(Event::Empty(sw))?;
+            self.handle.write_event(Event::End(tag.to_end()))?;
+        }
+        self.handle.write_event(Event::End(outer.to_end()))?;
+        Ok(())
+    }
+
+    pub fn write_data_processing(&mut self) -> XMLResult {
+        let mut outer = bstart!("dataProcessingList");
+        let count = self.data_processings.len().to_string();
+        attrib!("count", count, outer);
+        self.handle.write_event(Event::Start(outer.to_borrowed()))?;
+        for dp in self.data_processings.iter() {
+            let mut tag = bstart!("dataProcessing");
+            attrib!("id", dp.id, tag);
+            self.handle.write_event(Event::Start(tag.to_borrowed()))?;
+            for proc in dp.methods.iter() {
+                let mut mtag = bstart!("processingMethod");
+                let order = proc.order.to_string();
+                attrib!("order", order, mtag);
+                attrib!("softwareRef", proc.software_reference, mtag);
+                self.handle.write_event(Event::Start(mtag.to_borrowed()))?;
+                for param in proc.params() {
+                    self.handle.write_param(param)?
+                }
+                self.handle.write_event(Event::End(mtag.to_end()))?;
+            }
+            self.handle.write_event(Event::End(tag.to_end()))?;
+        }
+        self.handle.write_event(Event::End(outer.to_end()))?;
+        Ok(())
+    }
+
+    pub fn start_run(&mut self) -> XMLResult {
+        if self.state < MzMLWriterState::Run {
+            self.writer_header()?;
+        } else {
+            panic!(
+                "Cannot start writing the run of mzML, currently in state {:?} which happens after.", self.state)
+        }
+        let mut run = bstart!("run");
+        attrib!("id", "1", run);
+        if let Some(ic_ref) = self.instrument_configurations.keys().next() {
+            attrib!("defaultInstrumentConfigurationRef", ic_ref, run);
+        }
+        if let Some(sf_ref) = self.file_description.source_files.first() {
+            attrib!("defaultSourceFileRef", sf_ref.id, run);
+        };
+        self.handle.write_event(Event::Start(run))?;
+        self.state = MzMLWriterState::Run;
+        Ok(())
+    }
+
+    pub fn start_spectrum_list(&mut self) -> XMLResult {
+        if self.state < MzMLWriterState::SpectrumList {
+            self.start_run()?;
+        } else if MzMLWriterState::SpectrumList > self.state {
+            panic!("Cannot start writing the run of mzML, currently in state {:?} which happens after the run has already begin", self.state)
+        }
+        let mut list = bstart!("spectrumList");
+        let count = self.spectrum_count.to_string();
+        attrib!("count", count, list);
+        if let Some(dp) = self.data_processings.first() {
+            attrib!("defaultDataProcessingRef", dp.id, list);
+        }
+        self.handle.write_event(Event::Start(list))?;
+        self.state = MzMLWriterState::SpectrumList;
+        Ok(())
+    }
+
+    pub fn close_spectrum_list(&mut self) -> XMLResult {
+        let tag = bstart!("spectrumList");
+        end_event!(self, tag);
+        self.state = MzMLWriterState::SpectrumListClosed;
+        Ok(())
+    }
+
+    pub fn close_run(&mut self) -> XMLResult {
+        if self.state < MzMLWriterState::Run {
+            self.start_run()?;
+        } else if self.state == MzMLWriterState::SpectrumList {
+            self.close_spectrum_list()?;
+        } else if self.state == MzMLWriterState::ChromatogramList {
+            // TODO
+        } else if self.state > MzMLWriterState::RunClosed {
+            panic!("Cannot close the run of mzML, currently in state {:?} which happens after the run has already ended", self.state)
+        }
+        let tag = bstart!("run");
+        end_event!(self, tag);
+        self.state = MzMLWriterState::RunClosed;
+        Ok(())
+    }
+
+    pub fn close_mzml(&mut self) -> XMLResult {
+        if self.state < MzMLWriterState::RunClosed {
+            self.close_run()?;
+        }
+        let tag = bstart!("mzML");
+        end_event!(self, tag);
+        Ok(())
+    }
+
+    pub fn close_indexed_mzml(&mut self) -> XMLResult {
+        if self.state < MzMLWriterState::MzMLClosed {
+            self.close_mzml()?;
+        }
+        self.write_index_list()?;
+        let tag = bstart!("indexedmzML");
+        end_event!(self, tag);
+        Ok(())
+    }
+
+    pub fn write_scan_list(&mut self, acq: &Acquisition) -> XMLResult {
+        let mut scan_list_tag = bstart!("scanList");
+        let count = acq.scans.len().to_string();
+        attrib!("count", count, scan_list_tag);
+        start_event!(self, scan_list_tag);
+        self.handle
+            .write_param(&self.ms_cv.param("MS:1000016", "no combination"))?;
+
+        for scan in acq.scans.iter() {
+            let mut scan_tag = bstart!("scan");
+            attrib!(
+                "instrumentConfigurationRef",
+                scan.instrument_configuration_id,
+                scan_tag
+            );
+            self.handle
+                .write_event(Event::Start(scan_tag.to_borrowed()))?;
+
+            self.handle.write_param(
+                &self.ms_cv.param_val("MS:1000016", "scan start time", scan.start_time)
+                .with_unit("UO:0000031", "minute"))?;
+
+            self.handle.write_param(
+                &self.ms_cv.param_val("MS:1000927", "ion injection time", scan.injection_time)
+                .with_unit("UO:0000028", "millisecond"))?;
+
+            for param in scan.params() {
+                self.handle.write_param(param)?
+            }
+
+            let mut scan_window_list_tag = bstart!("scanWindowList");
+            let scan_window_list_count = scan.scan_windows.len().to_string();
+
+            attrib!("count", scan_window_list_count, scan_window_list_tag);
+            self.handle
+                .write_event(Event::Start(scan_window_list_tag.to_borrowed()))?;
+            for window in scan.scan_windows.iter() {
+                let window_tag = bstart!("scanWindow");
+                self.handle
+                    .write_event(Event::Start(window_tag.to_borrowed()))?;
+                self.handle.write_param(
+                    &self
+                        .ms_cv
+                        .param_val(
+                            "MS:1000501",
+                            "scan window lower limit",
+                            window.lower_bound.to_string(),
+                        )
+                        .with_unit("MS:1000040", "m/z"),
+                )?;
+                self.handle.write_param(
+                    &self
+                        .ms_cv
+                        .param_val(
+                            "MS:1000500",
+                            "scan window upper limit",
+                            window.upper_bound.to_string(),
+                        )
+                        .with_unit("MS:1000040", "m/z"),
+                )?;
+                self.handle.write_event(Event::End(window_tag.to_end()))?;
+            }
+            self.handle
+                .write_event(Event::End(scan_window_list_tag.to_end()))?;
+            self.handle.write_event(Event::End(scan_tag.to_end()))?;
+        }
+        end_event!(self, scan_list_tag);
+        Ok(())
+    }
+
+    pub fn write_isolation_window(&mut self, iw: &IsolationWindow) -> XMLResult {
+        let iw_tag = bstart!("isolationWindow");
+        self.handle
+            .write_event(Event::Start(iw_tag.to_borrowed()))?;
+        self.handle.write_param(
+            &self
+                .ms_cv
+                .param_val(
+                    "MS:1000827",
+                    "isolation window target m/z",
+                    iw.target.to_string(),
+                )
+                .with_unit("MS:1000040", "m/z"),
+        )?;
+        self.handle.write_param(
+            &self
+                .ms_cv
+                .param_val(
+                    "MS:1000828",
+                    "isolation window lower offset",
+                    (iw.target - iw.lower_bound).to_string(),
+                )
+                .with_unit("MS:1000040", "m/z"),
+        )?;
+        self.handle.write_param(
+            &self
+                .ms_cv
+                .param_val(
+                    "MS:1000829",
+                    "isolation window upper offset",
+                    (iw.upper_bound - iw.target).to_string(),
+                )
+                .with_unit("MS:1000040", "m/z"),
+        )?;
+        self.handle.write_event(Event::End(iw_tag.to_end()))
+    }
+
+    pub fn write_selected_ions(&mut self, precursor: &Precursor) -> XMLResult {
+        let mut outer = bstart!("selectedIonList");
+        attrib!("count", "1", outer);
+        start_event!(self, outer);
+        let tag = bstart!("selectedIon");
+        start_event!(self, tag);
+
+        let ion = precursor.ion();
+        self.handle.write_param(
+            &self
+                .ms_cv
+                .param_val("MS:1000744", "selected ion m/z", ion.mz)
+                .with_unit("MS:1000040", "m/z"),
+        )?;
+        self.handle.write_param(
+            &self
+                .ms_cv
+                .param_val("MS:1000042", "peak intensity", ion.intensity)
+                .with_unit("MS:1000131", "number of detector counts"),
+        )?;
+        if let Some(charge) = &ion.charge {
+            self.handle
+                .write_param(&self.ms_cv.param_val("MS:1000041", "charge state", charge))?;
+        }
+        for param in ion.params() {
+            self.handle.write_param(param)?
+        }
+        end_event!(self, tag);
+        end_event!(self, outer);
+        Ok(())
+    }
+
+    pub fn write_activation(&mut self, precursor: &Precursor) -> XMLResult {
+        let act = precursor.activation();
+        let tag = bstart!("activation");
+        start_event!(self, tag);
+        self.handle.write_param_list(act.params().iter())?;
+        self.handle.write_param(
+            &self
+                .ms_cv
+                .param_val("MS:1000045", "collision energy", act.energy)
+                .with_unit("UO:0000266", "electronvolt"),
+        )?;
+        end_event!(self, tag);
+        Ok(())
+    }
+
+    pub fn write_precursor(&mut self, precursor: &Precursor) -> XMLResult {
+        let mut precursor_list_tag = bstart!("precursorList");
+        attrib!("count", "1", precursor_list_tag);
+        start_event!(self, precursor_list_tag);
+
+        let mut precursor_tag = bstart!("precursor");
+        attrib!("spectrumRef", precursor.precursor_id, precursor_tag);
+        self.handle
+            .write_event(Event::Start(precursor_tag.to_borrowed()))?;
+
+        let iw = precursor.isolation_window();
+        self.write_isolation_window(iw)?;
+        self.write_selected_ions(precursor)?;
+        self.write_activation(precursor)?;
+        end_event!(self, precursor_tag);
+        end_event!(self, precursor_list_tag);
+        Ok(())
+    }
+
+    pub fn write_binary_data_array(&mut self, array: &DataArray) -> XMLResult {
+        let mut outer = bstart!("binaryDataArray");
+
+        let encoded = array.encode(BinaryCompressionType::Zlib);
+        let encoded_len = encoded.data.len().to_string();
+        attrib!("encodedLength", encoded_len, outer);
+
+        start_event!(self, outer);
+        match &array.dtype {
+            BinaryDataArrayType::Float32 => self
+                .handle
+                .write_param(&self.ms_cv.param("MS:1000521", "32-bit float"))?,
+            BinaryDataArrayType::Float64 => self
+                .handle
+                .write_param(&self.ms_cv.param("MS:1000523", "64-bit float"))?,
+            BinaryDataArrayType::Int32 => self
+                .handle
+                .write_param(&self.ms_cv.param("MS:1000519", "32-bit integer"))?,
+            BinaryDataArrayType::Int64 => self
+                .handle
+                .write_param(&self.ms_cv.param("MS:1000522", "64-bit integer"))?,
+            BinaryDataArrayType::ASCII => self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param("MS:1001479 ", "null-terminated ASCII string"),
+            )?,
+            _ => {
+                panic!(
+                    "Could not determine data type for binary data array. Found {:?}",
+                    array.dtype
+                )
+            }
+        }
+        self.handle
+            .write_param(&self.ms_cv.param("MS:1000574", "zlib compression"))?;
+        match &array.name {
+            ArrayType::MZArray => self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param("MS:1000514", "m/z array")
+                    .with_unit("MS:1000040", "m/z"),
+            )?,
+            ArrayType::IntensityArray => self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param("MS:1000515", "intensity array")
+                    .with_unit("MS:1000131", "number of detector counts"),
+            )?,
+            ArrayType::ChargeArray => self
+                .handle
+                .write_param(&self.ms_cv.param("MS:1000516", "charge array"))?,
+            ArrayType::TimeArray => self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param("MS:1000595", "time array")
+                    .with_unit("UO:0000031", "minute"),
+            )?,
+            ArrayType::RawIonMobilityArray => self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param("MS:1003007", "raw ion mobility array")
+                    .with_unit("UO:0000028", "millisecond"),
+            )?,
+            ArrayType::MeanIonMobilityArray => self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param("MS:1002816", "mean ion mobility array")
+                    .with_unit("UO:0000028", "millisecond"),
+            )?,
+            ArrayType::DeconvolutedIonMobilityArray => self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param("MS:1003154", "deconvoluted ion mobility array")
+                    .with_unit("UO:0000028", "millisecond"),
+            )?,
+            ArrayType::NonStandardDataArray { name } => self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param_val("MS:1000786", "non-standard data array", name)
+                    .with_unit("UO:0000028", "millisecond"),
+            )?,
+            _ => {
+                panic!("Could not determine how to name for {:?}", array.name);
+            }
+        }
+
+        let bin = bstart!("binary");
+        start_event!(self, bin);
+        self.handle
+            .write_event(Event::Text(BytesText::from_plain(&encoded.data)))?;
+        end_event!(self, bin);
+        end_event!(self, outer);
+        Ok(())
+    }
+
+    pub fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap) -> XMLResult {
+        let count = arrays.len().to_string();
+        let mut outer = bstart!("binaryDataArrayList");
+        attrib!("count", count, outer);
+        start_event!(self, outer);
+        for (_tp, array) in arrays.iter() {
+            self.write_binary_data_array(array)?
+        }
+        end_event!(self, outer);
+        Ok(())
+    }
+
+    pub fn write_spectrum(&mut self, spectrum: &'a MultiLayerSpectrum<C, D>) -> XMLResult {
+        if self.state < MzMLWriterState::SpectrumList {
+            self.start_spectrum_list()?;
+        } else if self.state > MzMLWriterState::SpectrumList {
+            panic!("Cannot write spectrum, currently in state {:?} which happens after spectra may be written", self.state)
+        }
+        let pos = self.stream_position()? - (1 + (4 * InnerXMLWriter::<W>::INDENT_SIZE));
+        self.offset_index.insert(spectrum.id().to_string(), pos);
+        let mut outer = bstart!("spectrum");
+        attrib!("id", spectrum.id(), outer);
+        let count = self.spectrum_counter.to_string();
+        attrib!("index", count, outer);
+        self.handle.write_event(Event::Start(outer.to_borrowed()))?;
+        self.spectrum_counter += 1;
+
+        let ms_level = spectrum.ms_level();
+        if ms_level == 1 {
+            self.handle
+                .write_param(&self.ms_cv.param("MS:1000579", "MS1 spectrum"))?;
+        } else {
+            self.handle
+                .write_param(&self.ms_cv.param("MS:1000580", "MSn spectrum"))?;
+        }
+        self.handle.write_param(&self.ms_cv.param_val(
+            "MS:1000511",
+            "ms level",
+            ms_level.to_string(),
+        ))?;
+
+        match spectrum.polarity() {
+            ScanPolarity::Negative => self
+                .handle
+                .write_param(&self.ms_cv.param("MS:1000129", "negative scan"))?,
+            ScanPolarity::Positive => self
+                .handle
+                .write_param(&self.ms_cv.param("MS:1000130", "positive scan"))?,
+            ScanPolarity::Unknown => {
+                warn!(
+                    "Could not determine scan polarity for {}, assuming positive",
+                    spectrum.id()
+                );
+                self.handle
+                    .write_param(&self.ms_cv.param("MS:1000130", "positive scan"))?
+            }
+        }
+
+        match spectrum.signal_continuity() {
+            SignalContinuity::Profile => self
+                .handle
+                .write_param(&self.ms_cv.param("MS:1000128", "profile spectrum"))?,
+            SignalContinuity::Unknown => {
+                warn!(
+                    "Could not determine scan polarity for {}, assuming centroid",
+                    spectrum.id()
+                );
+                self.handle
+                    .write_param(&self.ms_cv.param("MS:1000127", "centroid spectrum"))?;
+            }
+            _ => {
+                self.handle
+                    .write_param(&self.ms_cv.param("MS:1000127", "centroid spectrum"))?;
+            }
+        }
+
+        let acq = spectrum.acquisition();
+
+        self.write_scan_list(acq)?;
+
+        if let Some(precursor) = spectrum.precursor() {
+            self.write_precursor(precursor)?;
+        }
+
+        if let Some(mass_peaks) = &spectrum.deconvoluted_peaks {
+            let arrays: BinaryArrayMap = mass_peaks.into();
+            self.write_binary_data_arrays(&arrays)?
+        } else if let Some(mz_peaks) = &spectrum.peaks {
+            let arrays = mz_peaks.into();
+            self.write_binary_data_arrays(&arrays)?
+        } else if let Some(arrays) = &spectrum.arrays {
+            self.write_binary_data_arrays(&arrays)?
+        }
+
+        end_event!(self, outer);
+        Ok(())
+    }
+
+    fn write_index(&mut self, index: &OffsetIndex) -> XMLResult {
+        let mut outer = bstart!("index");
+        attrib!("name", index.name, outer);
+        start_event!(self, outer);
+        for (id, offset) in index.iter() {
+            let mut tag = bstart!("offset");
+            attrib!("idRef", id, tag);
+            start_event!(self, tag);
+            let content = offset.to_string();
+            let text = BytesText::from_plain_str(&content);
+            self.handle.write_event(Event::Text(text))?;
+            end_event!(self, tag);
+        }
+        end_event!(self, outer);
+        Ok(())
+    }
+
+    fn write_index_list(&mut self) -> XMLResult {
+        if self.state < MzMLWriterState::IndexList {
+            self.close_mzml()?;
+        }
+        let offset = self.stream_position()?;
+        let mut outer = bstart!("indexList");
+        attrib!("count", "1", outer);
+        start_event!(self, outer);
+        self.write_index(&self.offset_index.clone())?;
+        end_event!(self, outer);
+
+        let tag = bstart!("indexListOffset");
+        start_event!(self, tag);
+        let content = offset.to_string();
+        let text = BytesText::from_plain_str(&content);
+        self.handle.write_event(Event::Text(text))?;
+        end_event!(self, tag);
+
+        let tag = bstart!("fileChecksum");
+        start_event!(self, tag);
+        let content = self.handle.digest();
+        let text = BytesText::from_plain_str(&content);
+        self.handle.write_event(Event::Text(text))?;
+        end_event!(self, tag);
+        Ok(())
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -1662,14 +2574,17 @@ mod test {
         let mut ms1_count = 0;
         let mut msn_count = 0;
 
-        assert_eq!(reader.data_processings.len(), 1);
-        assert_eq!(reader.instrument_configurations.len(), 2);
-        assert_eq!(reader.softwares.len(), 2);
-        assert_eq!(reader.file_description.source_files.len(), 1);
-        assert_eq!(reader.file_description.contents.len(), 2);
+        assert_eq!(reader.data_processings().len(), 1);
+        assert_eq!(reader.instrument_configurations().len(), 2);
+        assert_eq!(reader.softwares().len(), 2);
+        assert_eq!(reader.file_description().source_files.len(), 1);
+        assert_eq!(reader.file_description().contents.len(), 2);
 
-        assert!(reader.file_description.get_param_by_accession("MS:1000579").is_some());
-        assert_eq!(reader.file_description.source_files[0].name, "small.RAW");
+        assert!(reader
+            .file_description()
+            .get_param_by_accession("MS:1000579")
+            .is_some());
+        assert_eq!(reader.file_description().source_files[0].name, "small.RAW");
 
         for scan in reader {
             let level = scan.ms_level();
@@ -1707,12 +2622,11 @@ mod test {
         assert_eq!(ms1_count, 14);
         assert_eq!(msn_count, 34);
 
-        assert_eq!(reader.data_processings.len(), 1);
-        assert_eq!(reader.instrument_configurations.len(), 2);
-        assert_eq!(reader.softwares.len(), 2);
-        assert_eq!(reader.file_description.source_files.len(), 1);
-        assert_eq!(reader.file_description.contents.len(), 2);
-
+        assert_eq!(reader.data_processings().len(), 1);
+        assert_eq!(reader.instrument_configurations().len(), 2);
+        assert_eq!(reader.softwares().len(), 2);
+        assert_eq!(reader.file_description().source_files.len(), 1);
+        assert_eq!(reader.file_description().contents.len(), 2);
     }
 
     #[test]
@@ -1750,8 +2664,6 @@ mod test {
         }
         assert_eq!(ms1_count, 14);
         assert_eq!(msn_count, 34);
-
-
     }
 
     #[test]
@@ -1772,5 +2684,39 @@ mod test {
         }
         assert_eq!(ms1_count, 14);
         assert_eq!(msn_count, 34);
+    }
+
+    #[test]
+    fn write_test() -> XMLResult {
+        let path = path::Path::new("./test/data/small.mzML");
+        let mut reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::open_path(path)
+            .expect("Test file doesn't exist?");
+
+        let n = reader.len();
+        assert_eq!(n, 48);
+
+        let dest = fs::File::create("./test/data/duplicate.mzML")?;
+        let mut writer = MzMLWriterType::new(dest);
+        writer.file_description = reader.file_description().clone();
+        writer.instrument_configurations = reader.instrument_configurations().clone();
+        for group in reader.groups() {
+            for prec in group.precursor.iter() {
+                writer.write_spectrum(prec)?
+            }
+            for prod in group.products.iter() {
+                writer.write_spectrum(prod)?
+            }
+        }
+        writer.close_spectrum_list()?;
+        writer.close_run()?;
+        writer.close_mzml()?;
+        writer.close_indexed_mzml()?;
+        match writer.offset_index.to_writer(io::BufWriter::new(fs::File::create("duplicate_index.json")?)) {
+            Ok(()) => {},
+            Err(err) => {
+                panic!("Encountered {:?}", err)
+            }
+        }
+        Ok(())
     }
 }

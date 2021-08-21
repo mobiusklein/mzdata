@@ -33,7 +33,7 @@ fn scan_file<R: SeekRead>(
                 "\tScan {}: {} ({} seconds)",
                 i,
                 scan.id(),
-                (time::Instant::now() - start).as_secs()
+                (time::Instant::now() - start).as_secs_f64()
             );
         }
         let level = scan.ms_level();
@@ -48,7 +48,7 @@ fn scan_file<R: SeekRead>(
         peak_count += scan.arrays.unwrap().mzs().len();
     }
     let end = time::Instant::now();
-    println!("Loaded in {} seconds", (end - start).as_secs());
+    println!("Loaded in {} seconds", (end - start).as_secs_f64());
     (level_table, charge_table, peak_count)
 }
 

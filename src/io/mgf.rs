@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fs;
 use std::io;
@@ -16,6 +17,9 @@ use mzpeaks::{
     CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated, MZPeakSetType, PeakCollection,
 };
 
+use crate::meta::{
+    DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, Software,
+};
 use crate::params::{Param, ParamDescribed};
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
@@ -115,6 +119,10 @@ pub struct MGFReaderType<
     pub offset: usize,
     pub error: MGFError,
     pub index: OffsetIndex,
+    file_description: FileDescription,
+    instrument_configurations: HashMap<String, InstrumentConfiguration>,
+    softwares: Vec<Software>,
+    data_processings: Vec<DataProcessing>,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
 }
@@ -334,6 +342,17 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             Err(err) => Err(err),
         }
     }
+
+    fn default_file_description() -> FileDescription {
+        let mut fd = FileDescription::default();
+        let mut term = Param::new();
+        term.name = "MSn spectrum".to_owned();
+        term.accession = "MS:1000580".to_owned();
+        term.controlled_vocabulary = Some("MS".to_owned());
+        fd.add_param(term);
+        fd
+    }
+
     /// Create a new, unindexed MGF parser
     pub fn new(file: R) -> MGFReaderType<R, C, D> {
         let handle = io::BufReader::with_capacity(500, file);
@@ -345,6 +364,10 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             index: OffsetIndex::new("spectrum".to_owned()),
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
+            instrument_configurations: HashMap::new(),
+            data_processings: Vec::new(),
+            softwares: Vec::new(),
+            file_description: Self::default_file_description(),
         }
     }
 }
@@ -535,6 +558,24 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
 
     fn construct_index_from_stream(&mut self) -> u64 {
         self.build_index()
+    }
+}
+
+impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
+    for MGFReaderType<R, C, D>
+{
+    fn data_processings(&self) -> &Vec<DataProcessing> {
+        &self.data_processings
+    }
+
+    fn instrument_configurations(&self) -> &HashMap<String, InstrumentConfiguration> {
+        &self.instrument_configurations
+    }
+    fn file_description(&self) -> &FileDescription {
+        &self.file_description
+    }
+    fn softwares(&self) -> &Vec<Software> {
+        &self.softwares
     }
 }
 

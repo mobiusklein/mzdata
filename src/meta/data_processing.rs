@@ -1,17 +1,17 @@
 use crate::impl_param_described;
-use crate::params::{ParamList};
+use crate::params::ParamList;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProcessingMethod {
     pub order: i8,
     pub software_reference: String,
-    pub params: ParamList
+    pub params: ParamList,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DataProcessing {
     pub id: String,
-    pub methods: Vec<ProcessingMethod>
+    pub methods: Vec<ProcessingMethod>,
 }
 
 impl_param_described!(ProcessingMethod);

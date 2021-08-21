@@ -3,10 +3,10 @@ use std::io::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json;
 
-use indexmap::map::Keys;
+use indexmap::map::{Keys, Iter};
 use indexmap::IndexMap;
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct OffsetIndex {
     pub name: String,
     // If using serde_json to save this, use
@@ -59,6 +59,10 @@ impl OffsetIndex {
 
     pub fn keys(&self) -> Keys<String, u64> {
         self.offsets.keys()
+    }
+
+    pub fn iter(&self) -> Iter<String, u64> {
+        self.offsets.iter()
     }
 
     #[inline]
