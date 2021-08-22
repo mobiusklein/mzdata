@@ -33,7 +33,7 @@ trait IndexedScanSource<
 
     /// Helper method to support seeking to an ID
     fn _offset_of_id(&self, id: &str) -> Option<u64> {
-        self.get_index().get(id).map(|offset| offset)
+        self.get_index().get(id)
     }
 
     /// Helper method to support seeking to an index
@@ -173,13 +173,17 @@ pub trait ScanSource<
         self.get_index().len()
     }
 
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     fn get_index(&self) -> &OffsetIndex;
 
     fn set_index(&mut self, index: OffsetIndex);
 
     /// Helper method to support seeking to an ID
     fn _offset_of_id(&self, id: &str) -> Option<u64> {
-        self.get_index().get(id).map(|offset| offset)
+        self.get_index().get(id)
     }
 
     /// Helper method to support seeking to an index
@@ -378,7 +382,7 @@ pub trait MZFileReader<
         let source: FileSource<fs::File> = FileSource::from(path.clone());
         let index_file_name = source.index_file_name();
 
-        match fs::File::open(path.clone().into()) {
+        match fs::File::open(path.into()) {
             Ok(file) => {
                 let mut reader = Self::open_file(file);
                 if let Some(index_path) = &index_file_name {
@@ -641,7 +645,7 @@ impl GenerationTracker {
         let mut result = Vec::new();
         for gen in self.generations.iter() {
             if *gen < generation {
-                if let Some(members) = self.generation_to_id.remove(&gen) {
+                if let Some(members) = self.generation_to_id.remove(gen) {
                     result.extend(members);
                 }
             } else {
@@ -716,7 +720,7 @@ impl<
                 .add(precursor.precursor_id.clone(), self.generation);
             ent.or_default().push(scan);
         } else {
-            if self.queue.len() > 0 {
+            if !self.queue.is_empty() {
                 // Consider replacing with normal get_mut to avoid re-copying
                 let last = self.queue.back().unwrap();
                 self.generation_tracker
@@ -767,6 +771,12 @@ impl<
         }
     }
 
+    fn flush_all_products(&mut self, group: &mut G) {
+        for (_prec_id, prods) in self.product_scan_mapping.drain() {
+            group.products_mut().extend(prods);
+        }
+    }
+
     fn include_higher_msn(&mut self, group: &mut G) {
         let mut blocks = Vec::new();
         let mut new_block = Vec::new();
@@ -804,7 +814,7 @@ impl<
         }
     }
 
-    fn deque_group(&mut self) -> Option<G> {
+    fn deque_group(&mut self, flush_all: bool) -> Option<G> {
         let mut group = G::default();
         if let Some(precursor) = self.queue.pop_front() {
             group.set_precursor(precursor);
@@ -824,8 +834,10 @@ impl<
             if !self.passed_first_ms1 && !self.queue.is_empty() {
                 self.flush_first_ms1(&mut group);
             }
-
             self.generation += 1;
+            if flush_all {
+                self.flush_all_products(&mut group);
+            }
             Some(group)
         } else {
             None
@@ -846,20 +858,20 @@ impl<
             }
             if level > 1 {
                 self.add_product(spectrum);
-                return self.next_group();
+                self.next_group()
             } else {
                 if self.add_precursor(spectrum) {
-                    self.deque_group()
+                    self.deque_group(false)
                 } else {
                     self.next_group()
                 }
             }
         } else {
             if self.queue.len() > 1 {
-                self.deque_group()
+                self.deque_group(false)
             } else if self.queue.len() == 1 {
                 // TODO: Flush all products here
-                self.deque_group()
+                self.deque_group(true)
             } else {
                 None
             }
@@ -925,13 +937,14 @@ impl<
 
 /// A flat spectrum stream writing trait
 pub trait ScanWriter<
+    'a,
     W: io::Write,
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
 >
 {
-    fn write(&mut self, spectrum: &S) -> io::Result<usize>;
+    fn write(&mut self, spectrum: &'a S) -> io::Result<usize>;
 
     fn flush(&mut self) -> io::Result<()>;
 }

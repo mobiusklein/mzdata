@@ -3,7 +3,7 @@ use std::io::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json;
 
-use indexmap::map::{Keys, Iter};
+use indexmap::map::{Iter, Keys};
 use indexmap::IndexMap;
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
@@ -26,11 +26,7 @@ impl OffsetIndex {
 
     #[inline]
     pub fn get(&self, key: &str) -> Option<u64> {
-        if let Some(offset) = self.offsets.get(key) {
-            Some(*offset)
-        } else {
-            None
-        }
+        self.offsets.get(key).map(|offset| *offset)
     }
 
     #[inline]
@@ -55,6 +51,10 @@ impl OffsetIndex {
     #[inline]
     pub fn len(&self) -> usize {
         self.offsets.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.offsets.is_empty()
     }
 
     pub fn keys(&self) -> Keys<String, u64> {

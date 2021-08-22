@@ -62,7 +62,7 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
                 let result = intensities
                     .iter()
                     .enumerate()
-                    .max_by(|ia, ib| ia.1.partial_cmp(&ib.1).unwrap());
+                    .max_by(|ia, ib| ia.1.partial_cmp(ib.1).unwrap());
                 if let Some((i, inten)) = result {
                     (i, arrays.mzs()[i], *inten)
                 } else {
@@ -310,9 +310,11 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         signal_to_noise_threshold: f32,
         fit_type: PeakFitType,
     ) -> Result<MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>, SpectrumProcessingError> {
-        let mut peak_picker = PeakPicker::default();
-        peak_picker.fit_type = fit_type;
-        peak_picker.signal_to_noise_threshold = signal_to_noise_threshold;
+        let peak_picker = PeakPicker {
+            fit_type,
+            signal_to_noise_threshold,
+            .. Default::default()
+        };
         self.pick_peaks_with_into(&peak_picker)
     }
 }
@@ -520,9 +522,9 @@ impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MultiLayer
         signal_to_noise_threshold: f32,
         fit_type: PeakFitType,
     ) -> Result<(), SpectrumProcessingError> {
-        let mut peak_picker = PeakPicker::default();
-        peak_picker.fit_type = fit_type;
-        peak_picker.signal_to_noise_threshold = signal_to_noise_threshold;
+        let peak_picker = PeakPicker {
+            fit_type, signal_to_noise_threshold, ..Default::default()
+        };
         self.pick_peaks_with(&peak_picker)
     }
 
@@ -599,9 +601,9 @@ impl TryFrom<Spectrum> for DeconvolutedSpectrum {
 
     fn try_from(spectrum: Spectrum) -> Result<Self, Self::Error> {
         if spectrum.signal_continuity() == SignalContinuity::Profile {
-            return Err(SpectrumConversionError::NotCentroided);
+            Err(SpectrumConversionError::NotCentroided)
         }
-        if let Some(arrays) = &spectrum.arrays {
+        else if let Some(arrays) = &spectrum.arrays {
             if arrays.has_array(&ArrayType::ChargeArray) {
                 let peaks: DeconvolutedPeakSet = DeconvolutedPeakSet::from(arrays);
                 return Ok(DeconvolutedSpectrum {
@@ -609,9 +611,10 @@ impl TryFrom<Spectrum> for DeconvolutedSpectrum {
                     deconvoluted_peaks: peaks,
                 });
             }
-            return Err(Self::Error::NotDeconvoluted);
+            Err(Self::Error::NotDeconvoluted)
+        } else {
+            Err(Self::Error::NoPeakData)
         }
-        return Err(Self::Error::NoPeakData);
     }
 }
 

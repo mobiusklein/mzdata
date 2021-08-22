@@ -32,8 +32,8 @@ pub fn to_bytes<T>(data: &[T]) -> Bytes {
         let byte_buffer = slice::from_raw_parts(data.as_ptr() as *const u8, m);
         let mut result = Bytes::new();
         result.copy_from_slice(byte_buffer);
-        return result;
-    };
+        result
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
@@ -200,12 +200,28 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    pub fn encode_bytestring(&self, compression: BinaryCompressionType) -> Bytes {
+        let bytestring = match self.compression {
+            BinaryCompressionType::Decoded => Cow::Borrowed(&self.data),
+            _ => self.decode().expect("Failed to decode binary data"),
+        };
+        match compression {
+            BinaryCompressionType::Zlib => {
+                let compressed = Self::compress_zlib(&bytestring);
+                base64::encode(compressed).into()
+            }
+            BinaryCompressionType::NoCompression => base64::encode(bytestring.as_ref()).into(),
+            BinaryCompressionType::Decoded => panic!("Should never happen"),
+            _ => {
+                panic!("Compresion type {:?} is unsupported", compression)
+            }
+        }
+    }
+
     pub fn encode(&self, compression: BinaryCompressionType) -> DataArray {
         let mut dup = self.clone();
         let bytestring = match self.compression {
-            BinaryCompressionType::Decoded => {
-                dup.data
-            },
+            BinaryCompressionType::Decoded => dup.data,
             _ => {
                 dup.decode_and_store()
                     .expect("Failed to decode binary data array");
@@ -218,10 +234,8 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             BinaryCompressionType::Zlib => {
                 let compressed = Self::compress_zlib(&bytestring);
                 base64::encode(compressed).into()
-            },
-            BinaryCompressionType::NoCompression => {
-                base64::encode(bytestring).into()
-            },
+            }
+            BinaryCompressionType::NoCompression => base64::encode(bytestring).into(),
             BinaryCompressionType::Decoded => panic!("Should never happen"),
             _ => {
                 panic!("Compresion type {:?} is unsupported", compression)

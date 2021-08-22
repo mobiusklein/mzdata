@@ -18,11 +18,11 @@ use quick_xml::{Reader, Writer};
 
 use super::offset_index::OffsetIndex;
 use super::traits::{
-    MZFileReader, RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead,
+    MZFileReader, RandomAccessScanIterator, ScanAccessError, ScanSource, ScanWriter, SeekRead,
 };
 use super::utils::MD5HashingStream;
 
-use mzpeaks::{peak_set::PeakSetVec, CentroidPeak, DeconvolutedPeak, MZ, Mass};
+use mzpeaks::{peak_set::PeakSetVec, CentroidPeak, DeconvolutedPeak, Mass, MZ};
 
 use crate::meta::file_description::{FileDescription, SourceFile};
 use crate::meta::instrument::{Component, ComponentType, InstrumentConfiguration};
@@ -510,40 +510,34 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
             }
             MzMLParserState::ScanList => self.acquisition.params.push(param),
             MzMLParserState::Scan => {
-                let event = self
-                    .acquisition
-                    .scans
-                    .last_mut()
-                    .unwrap();
+                let event = self.acquisition.scans.last_mut().unwrap();
                 match param.name.as_bytes() {
                     b"scan start time" => {
-                        let value: f64 = param.coerce().expect("Expected floating point number for scan time");
+                        let value: f64 = param
+                            .coerce()
+                            .expect("Expected floating point number for scan time");
                         let value = if let Some(unit) = &param.unit_name {
                             match unit.as_bytes() {
-                                b"minute" => {
-                                    value
-                                },
-                                b"second" => {
-                                    60.0 * value
-                                },
+                                b"minute" => value,
+                                b"second" => 60.0 * value,
                                 _ => {
                                     warn!("Could not infer unit for {:?}", param);
                                     value
                                 }
                             }
-                        }  else {
+                        } else {
                             value
                         };
                         event.start_time = value;
-                    },
+                    }
                     b"ion injection time" => {
-                        event.injection_time = param.coerce().expect("Expected floating point number for injection time");
+                        event.injection_time = param
+                            .coerce()
+                            .expect("Expected floating point number for injection time");
                     }
-                    _ => {
-                        event.params.push(param)
-                    }
+                    _ => event.params.push(param),
                 }
-            },
+            }
             MzMLParserState::ScanWindowList => self
                 .acquisition
                 .scans
@@ -1684,19 +1678,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
 impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
     for MzMLReaderType<R, C, D>
 {
-    fn data_processings(&self) -> &Vec<DataProcessing> {
-        &self.data_processings
-    }
-
-    fn instrument_configurations(&self) -> &HashMap<String, InstrumentConfiguration> {
-        &self.instrument_configurations
-    }
-    fn file_description(&self) -> &FileDescription {
-        &self.file_description
-    }
-    fn softwares(&self) -> &Vec<Software> {
-        &self.softwares
-    }
+    crate::impl_metadata_trait!();
 }
 
 pub type MzMLReader<R> = MzMLReaderType<R, CentroidPeak, DeconvolutedPeak>;
@@ -1747,8 +1729,7 @@ impl<W: io::Write> InnerXMLWriter<W> {
     const INDENT_SIZE: u64 = 2;
 
     pub fn new(file: W) -> InnerXMLWriter<W> {
-        let handle = BufWriter::with_capacity(
-            BUFFER_SIZE, MD5HashingStream::new(file));
+        let handle = BufWriter::with_capacity(BUFFER_SIZE, MD5HashingStream::new(file));
         Self {
             handle: Writer::new_with_indent(handle, b' ', 2),
         }
@@ -1757,6 +1738,10 @@ impl<W: io::Write> InnerXMLWriter<W> {
     pub fn digest(&mut self) -> String {
         let digest = self.handle.inner().get_ref().compute();
         format!("{:x}", digest)
+    }
+
+    pub fn flush(&mut self) -> io::Result<()> {
+        self.handle.inner().flush()
     }
 
     pub fn write_param(&mut self, param: &Param) -> XMLResult {
@@ -1821,7 +1806,7 @@ pub enum MzMLWriterState {
     MzMLClosed,
     IndexList,
     IndexListClosed,
-    End
+    End,
 }
 
 #[derive(Debug)]
@@ -1831,9 +1816,14 @@ pub struct MzMLWriterType<
     D: DeconvolutedPeakAdapting + 'static = DeconvolutedPeak,
 > {
     pub offset: usize,
+
     pub spectrum_count: u64,
     pub spectrum_counter: u64,
+
     pub chromatogram_count: u64,
+    pub chromatogram_counter: u64,
+
+    pub data_array_compression: BinaryCompressionType,
 
     pub file_description: FileDescription,
     pub softwares: Vec<Software>,
@@ -1847,6 +1837,40 @@ pub struct MzMLWriterType<
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
     ms_cv: ControlledVocabulary,
+}
+
+impl<
+        'a,
+        W: Write + Seek,
+        C: CentroidPeakAdapting + 'static,
+        D: DeconvolutedPeakAdapting + 'static,
+    > ScanWriter<'a, W, C, D> for MzMLWriterType<W, C, D>
+where
+    &'a PeakSetVec<C, MZ>: Into<BinaryArrayMap>,
+    &'a PeakSetVec<D, Mass>: Into<BinaryArrayMap>,
+{
+    fn write(&mut self, spectrum: &'a MultiLayerSpectrum<C, D>) -> io::Result<usize> {
+        match self.write_spectrum(spectrum) {
+            Ok(()) => {
+                let pos = self.stream_position()?;
+                Ok(pos as usize)
+            }
+            Err(err) => {
+                let msg = err.to_string();
+                Err(io::Error::new(io::ErrorKind::InvalidData, msg))
+            }
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.handle.flush()
+    }
+}
+
+impl<W: Write + Seek, C: CentroidPeakAdapting + 'static, D: DeconvolutedPeakAdapting + 'static>
+    MSDataFileMetadata for MzMLWriterType<W, C, D>
+{
+    crate::impl_metadata_trait!();
 }
 
 impl<'a, W: Write + Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
@@ -1874,7 +1898,9 @@ where
             spectrum_count: 0,
             spectrum_counter: 0,
             chromatogram_count: 0,
+            chromatogram_counter: 0,
             ms_cv: ControlledVocabulary::new("MS".to_string()),
+            data_array_compression: BinaryCompressionType::Zlib,
         };
         inst
     }
@@ -1936,7 +1962,7 @@ where
         Ok(())
     }
 
-    pub fn writer_header(&mut self) -> XMLResult {
+    fn writer_header(&mut self) -> XMLResult {
         if self.state < MzMLWriterState::DocumentOpen {
             self.start_document()?;
         } else {
@@ -1953,14 +1979,14 @@ where
         Ok(())
     }
 
-    pub fn write_file_description(&mut self) -> XMLResult {
+    fn write_file_description(&mut self) -> XMLResult {
         let fd = bstart!("fileDescription");
         start_event!(self, fd);
 
         let fc_tag = bstart!("fileContents");
         start_event!(self, fc_tag);
         for param in self.file_description.params() {
-            self.handle.write_param(&param)?
+            self.handle.write_param(param)?
         }
         end_event!(self, fc_tag);
 
@@ -1985,7 +2011,7 @@ where
         Ok(())
     }
 
-    pub fn write_software_list(&mut self) -> XMLResult {
+    fn write_software_list(&mut self) -> XMLResult {
         let mut outer = bstart!("softwareList");
         let count = self.softwares.len().to_string();
         attrib!("count", count, outer);
@@ -2004,7 +2030,7 @@ where
         Ok(())
     }
 
-    pub fn write_instrument_configuration(&mut self) -> XMLResult {
+    fn write_instrument_configuration(&mut self) -> XMLResult {
         let mut outer = bstart!("instrumentConfigurationList");
         let count = self.instrument_configurations.len().to_string();
         attrib!("count", count, outer);
@@ -2043,7 +2069,7 @@ where
         Ok(())
     }
 
-    pub fn write_data_processing(&mut self) -> XMLResult {
+    fn write_data_processing(&mut self) -> XMLResult {
         let mut outer = bstart!("dataProcessingList");
         let count = self.data_processings.len().to_string();
         attrib!("count", count, outer);
@@ -2069,7 +2095,7 @@ where
         Ok(())
     }
 
-    pub fn start_run(&mut self) -> XMLResult {
+    fn start_run(&mut self) -> XMLResult {
         if self.state < MzMLWriterState::Run {
             self.writer_header()?;
         } else {
@@ -2089,7 +2115,7 @@ where
         Ok(())
     }
 
-    pub fn start_spectrum_list(&mut self) -> XMLResult {
+    fn start_spectrum_list(&mut self) -> XMLResult {
         if self.state < MzMLWriterState::SpectrumList {
             self.start_run()?;
         } else if MzMLWriterState::SpectrumList > self.state {
@@ -2106,14 +2132,14 @@ where
         Ok(())
     }
 
-    pub fn close_spectrum_list(&mut self) -> XMLResult {
+    fn close_spectrum_list(&mut self) -> XMLResult {
         let tag = bstart!("spectrumList");
         end_event!(self, tag);
         self.state = MzMLWriterState::SpectrumListClosed;
         Ok(())
     }
 
-    pub fn close_run(&mut self) -> XMLResult {
+    fn close_run(&mut self) -> XMLResult {
         if self.state < MzMLWriterState::Run {
             self.start_run()?;
         } else if self.state == MzMLWriterState::SpectrumList {
@@ -2129,26 +2155,36 @@ where
         Ok(())
     }
 
-    pub fn close_mzml(&mut self) -> XMLResult {
+    fn close_mzml(&mut self) -> XMLResult {
         if self.state < MzMLWriterState::RunClosed {
             self.close_run()?;
         }
         let tag = bstart!("mzML");
+        self.state = MzMLWriterState::MzMLClosed;
         end_event!(self, tag);
         Ok(())
     }
 
-    pub fn close_indexed_mzml(&mut self) -> XMLResult {
+    fn close_indexed_mzml(&mut self) -> XMLResult {
         if self.state < MzMLWriterState::MzMLClosed {
             self.close_mzml()?;
         }
         self.write_index_list()?;
         let tag = bstart!("indexedmzML");
         end_event!(self, tag);
+        self.state = MzMLWriterState::End;
         Ok(())
     }
 
-    pub fn write_scan_list(&mut self, acq: &Acquisition) -> XMLResult {
+    pub fn close(&mut self) -> XMLResult {
+        if self.state < MzMLWriterState::End {
+            self.close_indexed_mzml()
+        } else {
+            Ok(())
+        }
+    }
+
+    fn write_scan_list(&mut self, acq: &Acquisition) -> XMLResult {
         let mut scan_list_tag = bstart!("scanList");
         let count = acq.scans.len().to_string();
         attrib!("count", count, scan_list_tag);
@@ -2167,12 +2203,18 @@ where
                 .write_event(Event::Start(scan_tag.to_borrowed()))?;
 
             self.handle.write_param(
-                &self.ms_cv.param_val("MS:1000016", "scan start time", scan.start_time)
-                .with_unit("UO:0000031", "minute"))?;
+                &self
+                    .ms_cv
+                    .param_val("MS:1000016", "scan start time", scan.start_time)
+                    .with_unit("UO:0000031", "minute"),
+            )?;
 
             self.handle.write_param(
-                &self.ms_cv.param_val("MS:1000927", "ion injection time", scan.injection_time)
-                .with_unit("UO:0000028", "millisecond"))?;
+                &self
+                    .ms_cv
+                    .param_val("MS:1000927", "ion injection time", scan.injection_time)
+                    .with_unit("UO:0000028", "millisecond"),
+            )?;
 
             for param in scan.params() {
                 self.handle.write_param(param)?
@@ -2218,7 +2260,7 @@ where
         Ok(())
     }
 
-    pub fn write_isolation_window(&mut self, iw: &IsolationWindow) -> XMLResult {
+    fn write_isolation_window(&mut self, iw: &IsolationWindow) -> XMLResult {
         let iw_tag = bstart!("isolationWindow");
         self.handle
             .write_event(Event::Start(iw_tag.to_borrowed()))?;
@@ -2255,7 +2297,7 @@ where
         self.handle.write_event(Event::End(iw_tag.to_end()))
     }
 
-    pub fn write_selected_ions(&mut self, precursor: &Precursor) -> XMLResult {
+    fn write_selected_ions(&mut self, precursor: &Precursor) -> XMLResult {
         let mut outer = bstart!("selectedIonList");
         attrib!("count", "1", outer);
         start_event!(self, outer);
@@ -2287,7 +2329,7 @@ where
         Ok(())
     }
 
-    pub fn write_activation(&mut self, precursor: &Precursor) -> XMLResult {
+    fn write_activation(&mut self, precursor: &Precursor) -> XMLResult {
         let act = precursor.activation();
         let tag = bstart!("activation");
         start_event!(self, tag);
@@ -2302,7 +2344,7 @@ where
         Ok(())
     }
 
-    pub fn write_precursor(&mut self, precursor: &Precursor) -> XMLResult {
+    fn write_precursor(&mut self, precursor: &Precursor) -> XMLResult {
         let mut precursor_list_tag = bstart!("precursorList");
         attrib!("count", "1", precursor_list_tag);
         start_event!(self, precursor_list_tag);
@@ -2321,11 +2363,11 @@ where
         Ok(())
     }
 
-    pub fn write_binary_data_array(&mut self, array: &DataArray) -> XMLResult {
+    fn write_binary_data_array(&mut self, array: &DataArray) -> XMLResult {
         let mut outer = bstart!("binaryDataArray");
 
-        let encoded = array.encode(BinaryCompressionType::Zlib);
-        let encoded_len = encoded.data.len().to_string();
+        let encoded = array.encode_bytestring(self.data_array_compression);
+        let encoded_len = encoded.len().to_string();
         attrib!("encodedLength", encoded_len, outer);
 
         start_event!(self, outer);
@@ -2354,8 +2396,13 @@ where
                 )
             }
         }
-        self.handle
-            .write_param(&self.ms_cv.param("MS:1000574", "zlib compression"))?;
+        if self.data_array_compression == BinaryCompressionType::NoCompression {
+            self.handle
+                .write_param(&self.ms_cv.param("MS:1000576", "no compression"))?;
+        } else {
+            self.handle
+                .write_param(&self.ms_cv.param("MS:1000574", "zlib compression"))?;
+        }
         match &array.name {
             ArrayType::MZArray => self.handle.write_param(
                 &self
@@ -2410,13 +2457,13 @@ where
         let bin = bstart!("binary");
         start_event!(self, bin);
         self.handle
-            .write_event(Event::Text(BytesText::from_plain(&encoded.data)))?;
+            .write_event(Event::Text(BytesText::from_plain(&encoded)))?;
         end_event!(self, bin);
         end_event!(self, outer);
         Ok(())
     }
 
-    pub fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap) -> XMLResult {
+    fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap) -> XMLResult {
         let count = arrays.len().to_string();
         let mut outer = bstart!("binaryDataArrayList");
         attrib!("count", count, outer);
@@ -2507,7 +2554,7 @@ where
             let arrays = mz_peaks.into();
             self.write_binary_data_arrays(&arrays)?
         } else if let Some(arrays) = &spectrum.arrays {
-            self.write_binary_data_arrays(&arrays)?
+            self.write_binary_data_arrays(arrays)?
         }
 
         end_event!(self, outer);
@@ -2556,6 +2603,21 @@ where
         self.handle.write_event(Event::Text(text))?;
         end_event!(self, tag);
         Ok(())
+    }
+
+    /// Get a reference to the mz m l writer type's spectrum count.
+    pub fn spectrum_count(&self) -> &u64 {
+        &self.spectrum_count
+    }
+
+    /// Set the mz m l writer type's spectrum count.
+    pub fn set_spectrum_count(&mut self, spectrum_count: u64) {
+        self.spectrum_count = spectrum_count;
+    }
+
+    /// Get a mutable reference to the mz m l writer type's spectrum count.
+    pub fn spectrum_count_mut(&mut self) -> &mut u64 {
+        &mut self.spectrum_count
     }
 }
 
@@ -2697,8 +2759,8 @@ mod test {
 
         let dest = fs::File::create("./test/data/duplicate.mzML")?;
         let mut writer = MzMLWriterType::new(dest);
-        writer.file_description = reader.file_description().clone();
-        writer.instrument_configurations = reader.instrument_configurations().clone();
+        writer.copy_metadata_from(&reader);
+        *writer.spectrum_count_mut() = reader.len() as u64;
         for group in reader.groups() {
             for prec in group.precursor.iter() {
                 writer.write_spectrum(prec)?
@@ -2707,16 +2769,26 @@ mod test {
                 writer.write_spectrum(prod)?
             }
         }
-        writer.close_spectrum_list()?;
-        writer.close_run()?;
-        writer.close_mzml()?;
-        writer.close_indexed_mzml()?;
-        match writer.offset_index.to_writer(io::BufWriter::new(fs::File::create("duplicate_index.json")?)) {
-            Ok(()) => {},
-            Err(err) => {
-                panic!("Encountered {:?}", err)
+        writer.close()?;
+
+        let mut reader2 = MzMLReader::open_path(path)?;
+        assert_eq!(reader.file_description(), reader2.file_description());
+
+        for (a, b) in reader.iter().zip(reader2.iter()) {
+            assert_eq!(a.id(), b.id());
+            assert_eq!(a.ms_level(), b.ms_level());
+            assert_eq!(a.index(), b.index());
+            for (x, y) in a
+                .arrays
+                .unwrap()
+                .mzs()
+                .iter()
+                .zip(b.arrays.unwrap().mzs().iter())
+            {
+                assert!((x - y).abs() < 1e-3)
             }
         }
+
         Ok(())
     }
 }

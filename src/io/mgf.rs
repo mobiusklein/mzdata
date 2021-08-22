@@ -564,19 +564,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
 impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
     for MGFReaderType<R, C, D>
 {
-    fn data_processings(&self) -> &Vec<DataProcessing> {
-        &self.data_processings
-    }
-
-    fn instrument_configurations(&self) -> &HashMap<String, InstrumentConfiguration> {
-        &self.instrument_configurations
-    }
-    fn file_description(&self) -> &FileDescription {
-        &self.file_description
-    }
-    fn softwares(&self) -> &Vec<Software> {
-        &self.softwares
-    }
+    crate::impl_metadata_trait!();
 }
 
 pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
@@ -691,7 +679,7 @@ TITLE="#,
     }
 }
 
-impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ScanWriter<W, C, D>
+impl<'a, W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ScanWriter<'a, W, C, D>
     for MGFWriterType<W, C, D>
 {
     fn write(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use std::io;
 use std::fs;
+use std::io;
 use std::path;
 
 use md5::Context as MD5Context;
@@ -96,18 +96,17 @@ where
     }
 }
 
-
 #[derive(Clone)]
 pub struct MD5HashingStream<T: io::Write> {
     pub stream: T,
-    pub context: MD5Context
+    pub context: MD5Context,
 }
 
 impl<T: io::Write> MD5HashingStream<T> {
     pub fn new(file: T) -> MD5HashingStream<T> {
         Self {
             stream: file,
-            context: MD5Context::new()
+            context: MD5Context::new(),
         }
     }
 
@@ -132,7 +131,6 @@ impl<T: io::Seek + io::Write> io::Seek for MD5HashingStream<T> {
         self.stream.seek(pos)
     }
 }
-
 
 #[cfg(test)]
 mod test {
