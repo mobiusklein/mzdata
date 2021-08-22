@@ -2469,7 +2469,7 @@ where
         attrib!("count", count, outer);
         start_event!(self, outer);
         let mut array_pairs: Vec<(&ArrayType, &DataArray)> = arrays.iter().collect();
-        array_pairs.sort_by_key(|f|f.0);
+        array_pairs.sort_by_key(|f| f.0);
         for (_tp, array) in array_pairs {
             self.write_binary_data_array(array)?
         }

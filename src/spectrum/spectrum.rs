@@ -313,7 +313,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         let peak_picker = PeakPicker {
             fit_type,
             signal_to_noise_threshold,
-            .. Default::default()
+            ..Default::default()
         };
         self.pick_peaks_with_into(&peak_picker)
     }
@@ -523,7 +523,9 @@ impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MultiLayer
         fit_type: PeakFitType,
     ) -> Result<(), SpectrumProcessingError> {
         let peak_picker = PeakPicker {
-            fit_type, signal_to_noise_threshold, ..Default::default()
+            fit_type,
+            signal_to_noise_threshold,
+            ..Default::default()
         };
         self.pick_peaks_with(&peak_picker)
     }
@@ -602,8 +604,7 @@ impl TryFrom<Spectrum> for DeconvolutedSpectrum {
     fn try_from(spectrum: Spectrum) -> Result<Self, Self::Error> {
         if spectrum.signal_continuity() == SignalContinuity::Profile {
             Err(SpectrumConversionError::NotCentroided)
-        }
-        else if let Some(arrays) = &spectrum.arrays {
+        } else if let Some(arrays) = &spectrum.arrays {
             if arrays.has_array(&ArrayType::ChargeArray) {
                 let peaks: DeconvolutedPeakSet = DeconvolutedPeakSet::from(arrays);
                 return Ok(DeconvolutedSpectrum {

@@ -941,10 +941,43 @@ pub trait ScanWriter<
     W: io::Write,
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
-    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+    S: SpectrumBehavior<C, D> + 'static = MultiLayerSpectrum<C, D>,
 >
 {
     fn write(&mut self, spectrum: &'a S) -> io::Result<usize>;
 
     fn flush(&mut self) -> io::Result<()>;
+
+    fn write_all<T: Iterator<Item = &'a S>>(&mut self, iterator: T) -> io::Result<usize> {
+        let mut n = 0;
+        for spectrum in iterator {
+            n += self.write(&spectrum)?;
+        }
+        Ok(n)
+    }
+
+    fn write_group<G: SpectrumGrouping<C, D, S> + 'static>(
+        &mut self,
+        group: &'a G,
+    ) -> io::Result<usize> {
+        let mut n = 0;
+        for precursor in group.precursor() {
+            n += self.write(precursor)?;
+        }
+        for product in group.products() {
+            n += self.write(product)?;
+        }
+        Ok(n)
+    }
+
+    fn write_all_groups<G: SpectrumGrouping<C, D, S> + 'static, T: Iterator<Item = &'a G>>(
+        &mut self,
+        iterator: T,
+    ) -> io::Result<usize> {
+        let mut n = 0;
+        for group in iterator {
+            n += self.write_group(group)?;
+        }
+        Ok(n)
+    }
 }
