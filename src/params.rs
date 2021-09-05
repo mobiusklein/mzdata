@@ -116,3 +116,33 @@ macro_rules! impl_param_described {
         }
     )+};
 }
+
+
+/// Units that a term's value might have
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Unit {
+    // Mass
+    MZ,
+    Mass,
+    PartsPerMillion,
+    Nanometer,
+
+    // Time
+    Minute,
+    Second,
+    Hour,
+    Millisecond,
+    VoltSecondPerSquareCentimeter,
+
+    // Intensity
+    DetectorCounts,
+    PercentBasePeak,
+    PercentBasePeakTimes100,
+    AbsorbanceUnit,
+    CountsPerSecond,
+
+    // Collision Energy
+    Electronvolt,
+    PercentElectronVolt,
+    Volt
+}

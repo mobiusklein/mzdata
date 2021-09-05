@@ -15,7 +15,7 @@ fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::MzMLRe
     let start = time::Instant::now();
     let reader = mzml::MzMLReader::open_path(path)?;
     let end = time::Instant::now();
-    println!("Loaded in {} seconds", (end - start).as_secs());
+    println!("Index Loaded/Built in {} seconds", (end - start).as_secs());
     println!("{} spectra", reader.len());
     Ok(reader)
 }
@@ -74,7 +74,11 @@ fn main() -> io::Result<()> {
     let mut charge_set: Vec<(&i32, &usize)> = charge_table.iter().collect();
     charge_set.sort_by_key(|(a, b)| *a);
     for (charge, count) in charge_set.iter() {
-        println!("\t{}: {}", charge, count);
+        if **charge == 0{
+            println!("\tCharge Not Reported: {}", count);
+        } else {
+            println!("\t{}: {}", charge, count);
+        }
     }
 
     println!("{} peaks read", peak_count);

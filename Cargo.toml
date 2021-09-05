@@ -35,15 +35,18 @@ lto = true
 
 
 [features]
-default = ["intel-mkl", "parallelism"]
+default = ["intel-mkl", "parallelism", "zlib"]
 
 openblas = ["mzsignal/openblas"]
 netlib = ["mzsignal/netlib"]
 intel-mkl = ["mzsignal/intel-mkl"]
 parallelism = ["rayon", "mzsignal/parallelism"]
 
-# The zlib feature makes the code faster unoptimized, but with LTO the default algorithm is faster
+# The zlib feature makes the code faster unoptimized, but with LTO the default
+# algorithm is faster on tests
 zlib = ["flate2/zlib"]
+zlib-ng-compat = ["flate2/zlib-ng-compat"]
+miniz_oxide = ["flate2/rust_backend"]
 
 [dependencies]
 regex = "1"

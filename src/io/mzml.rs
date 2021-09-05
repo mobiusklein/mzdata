@@ -780,6 +780,8 @@ impl Into<RawSpectrum> for MzMLSpectrumBuilder {
     }
 }
 
+/**A SAX-style parser for building up the metadata section prior to the `<run>` element
+of an mzML file.*/
 #[derive(Debug, Default, Clone)]
 pub struct FileMetadataBuilder {
     pub file_description: FileDescription,
@@ -1216,6 +1218,8 @@ pub struct MzMLReaderType<
 }
 
 impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {
+    /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
+    /// provided with an `[io::BufReader`] and parses the metadata section of the file.
     pub fn new(file: R) -> MzMLReaderType<R, C, D> {
         let handle = BufReader::with_capacity(BUFFER_SIZE, file);
         let mut inst = MzMLReaderType {
@@ -1246,6 +1250,8 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
         inst
     }
 
+    /**Parse the metadata section of the file using [`FileMetadataBuilder`]
+    */
     fn parse_metadata(&mut self) -> Result<(), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
@@ -2035,7 +2041,12 @@ where
         let count = self.instrument_configurations.len().to_string();
         attrib!("count", count, outer);
         self.handle.write_event(Event::Start(outer.to_borrowed()))?;
-        for (_key, ic) in self.instrument_configurations.iter() {
+
+        // Sort the keys so the ordering is consistent on every run
+        let mut configs: Vec<_> = self.instrument_configurations.keys().collect();
+        configs.sort();
+        for key in configs {
+            let ic = self.instrument_configurations.get(key).unwrap();
             let mut tag = bstart!("instrumentConfiguration");
             attrib!("id", ic.id, tag);
             self.handle.write_event(Event::Start(tag.to_borrowed()))?;
