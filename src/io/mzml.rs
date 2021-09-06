@@ -2115,7 +2115,9 @@ where
         }
         let mut run = bstart!("run");
         attrib!("id", "1", run);
-        if let Some(ic_ref) = self.instrument_configurations.keys().next() {
+        let mut keys: Vec<_> = self.instrument_configurations.keys().collect();
+        keys.sort();
+        if let Some(ic_ref) = keys.first() {
             attrib!("defaultInstrumentConfigurationRef", ic_ref, run);
         }
         if let Some(sf_ref) = self.file_description.source_files.first() {
