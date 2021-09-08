@@ -19,7 +19,7 @@ use mzpeaks::{
     CentroidPeak, DeconvolutedPeak, DeconvolutedPeakSet, MZPeakSetType, MassErrorType, PeakSet,
 };
 
-use crate::params::ParamList;
+use crate::params::{ParamList, Unit};
 use crate::utils::neutral_mass;
 
 type Bytes = Vec<u8>;
@@ -86,10 +86,10 @@ pub enum ArrayType {
     ChargeArray,
     TimeArray,
     WavelengthArray,
-    IonMobilityArray,
-    MeanIonMobilityArray,
-    RawIonMobilityArray,
-    DeconvolutedIonMobilityArray,
+    IonMobilityArray(Unit),
+    MeanIonMobilityArray(Unit),
+    RawIonMobilityArray(Unit),
+    DeconvolutedIonMobilityArray(Unit),
     NonStandardDataArray { name: String },
 }
 
@@ -117,6 +117,15 @@ pub enum ArrayRetrievalError {
     DecodeError,
     DataTypeSizeMismatch,
 }
+
+impl std::fmt::Display for ArrayRetrievalError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for ArrayRetrievalError {}
+
 
 #[derive(Default, Clone)]
 pub struct DataArray {
@@ -525,6 +534,22 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
 
     pub fn iter(&self) -> std::collections::hash_map::Iter<ArrayType, DataArray> {
         self.byte_buffer_map.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> std::collections::hash_map::IterMut<ArrayType, DataArray> {
+        self.byte_buffer_map.iter_mut()
+    }
+
+    pub fn decode(&mut self) -> Result<(), ArrayRetrievalError> {
+        for (_key, value) in self.iter_mut() {
+            match value.compression {
+                BinaryCompressionType::Decoded => {},
+                _ => {
+                    value.decode_and_store()?;
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn add(&mut self, array: DataArray) {

@@ -54,6 +54,15 @@ pub enum MGFError {
     IOError,
 }
 
+impl std::fmt::Display for MGFError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for MGFError {}
+
+
 #[derive(Debug, Clone)]
 struct SpectrumBuilder<
     C: CentroidPeakAdapting = CentroidPeak,

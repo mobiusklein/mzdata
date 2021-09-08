@@ -27,7 +27,7 @@ use mzpeaks::{peak_set::PeakSetVec, CentroidPeak, DeconvolutedPeak, Mass, MZ};
 use crate::meta::file_description::{FileDescription, SourceFile};
 use crate::meta::instrument::{Component, ComponentType, InstrumentConfiguration};
 use crate::meta::{DataProcessing, MSDataFileMetadata, ProcessingMethod, Software};
-use crate::params::{ControlledVocabulary, Param, ParamList};
+use crate::params::{ControlledVocabulary, Param, ParamList, Unit};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
@@ -262,18 +262,37 @@ pub trait SpectrumBuilding<
                 self.current_array_mut().name =
                     ArrayType::NonStandardDataArray { name: param.value };
             }
-            "mean ion mobility array"
-            | "mean drift time array"
-            | "mean inverse reduced ion mobility array" => {
-                self.current_array_mut().name = ArrayType::MeanIonMobilityArray
+            "mean ion mobility array" => {
+                self.current_array_mut().name = ArrayType::MeanIonMobilityArray(Unit::Unknown)
             }
-            "ion mobility array" | "drift time array" | "inverse reduced ion mobility array" => {
-                self.current_array_mut().name = ArrayType::IonMobilityArray
+            "mean drift time array" => {
+                self.current_array_mut().name = ArrayType::MeanIonMobilityArray(Unit::Millisecond)
             }
-            "deconvoluted ion mobility array"
-            | "deconvoluted drift time array"
-            | "deconvoluted inverse reduced ion mobility array" => {
-                self.current_array_mut().name = ArrayType::DeconvolutedIonMobilityArray
+            "mean inverse reduced ion mobility array" => {
+                self.current_array_mut().name =
+                    ArrayType::MeanIonMobilityArray(Unit::VoltSecondPerSquareCentimeter)
+            }
+            "ion mobility array" => {
+                self.current_array_mut().name = ArrayType::IonMobilityArray(Unit::Unknown)
+            }
+            "drift time array" => {
+                self.current_array_mut().name = ArrayType::IonMobilityArray(Unit::Millisecond)
+            }
+            "inverse reduced ion mobility array" => {
+                self.current_array_mut().name =
+                    ArrayType::IonMobilityArray(Unit::VoltSecondPerSquareCentimeter)
+            }
+            "deconvoluted ion mobility array" => {
+                self.current_array_mut().name =
+                    ArrayType::DeconvolutedIonMobilityArray(Unit::Unknown)
+            }
+            "deconvoluted drift time array" => {
+                self.current_array_mut().name =
+                    ArrayType::DeconvolutedIonMobilityArray(Unit::Millisecond)
+            }
+            "deconvoluted inverse reduced ion mobility array" => {
+                self.current_array_mut().name =
+                    ArrayType::DeconvolutedIonMobilityArray(Unit::VoltSecondPerSquareCentimeter)
             }
 
             &_ => {
@@ -1251,7 +1270,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
     }
 
     /**Parse the metadata section of the file using [`FileMetadataBuilder`]
-    */
+     */
     fn parse_metadata(&mut self) -> Result<(), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
@@ -2438,19 +2457,19 @@ where
                     .param("MS:1000595", "time array")
                     .with_unit("UO:0000031", "minute"),
             )?,
-            ArrayType::RawIonMobilityArray => self.handle.write_param(
+            ArrayType::RawIonMobilityArray(_unit) => self.handle.write_param(
                 &self
                     .ms_cv
                     .param("MS:1003007", "raw ion mobility array")
                     .with_unit("UO:0000028", "millisecond"),
             )?,
-            ArrayType::MeanIonMobilityArray => self.handle.write_param(
+            ArrayType::MeanIonMobilityArray(_unit) => self.handle.write_param(
                 &self
                     .ms_cv
                     .param("MS:1002816", "mean ion mobility array")
                     .with_unit("UO:0000028", "millisecond"),
             )?,
-            ArrayType::DeconvolutedIonMobilityArray => self.handle.write_param(
+            ArrayType::DeconvolutedIonMobilityArray(_unit) => self.handle.write_param(
                 &self
                     .ms_cv
                     .param("MS:1003154", "deconvoluted ion mobility array")

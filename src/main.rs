@@ -74,7 +74,7 @@ fn main() -> io::Result<()> {
     let mut charge_set: Vec<(&i32, &usize)> = charge_table.iter().collect();
     charge_set.sort_by_key(|(a, b)| *a);
     for (charge, count) in charge_set.iter() {
-        if **charge == 0{
+        if **charge == 0 {
             println!("\tCharge Not Reported: {}", count);
         } else {
             println!("\t{}: {}", charge, count);

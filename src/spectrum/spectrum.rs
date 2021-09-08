@@ -218,12 +218,29 @@ pub enum SpectrumConversionError {
     NoPeakData,
 }
 
+impl std::fmt::Display for SpectrumConversionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for SpectrumConversionError {}
+
+
 #[derive(Debug, Clone)]
 pub enum SpectrumProcessingError {
     DenoisingError(DenoisingError),
     PeakPickerError(PeakPickerError),
     SpectrumConversionError(SpectrumConversionError),
 }
+
+impl std::fmt::Display for SpectrumProcessingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for SpectrumProcessingError {}
 
 impl<'transient, 'lifespan: 'transient> RawSpectrum {
     /// Convert a spectrum into a [`CentroidSpectrum`]
@@ -367,23 +384,27 @@ impl<C: CentroidLike + Default> CentroidSpectrumType<C> {
 pub type CentroidSpectrum = CentroidSpectrumType<CentroidPeak>;
 
 #[derive(Default, Debug, Clone)]
-struct DeconvolutedSpectrum {
+pub struct DeconvolutedSpectrumType<D: DeconvolutedCentroidLike + Default> {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
     /// The deisotoped and charge state deconvolved peaks
-    pub deconvoluted_peaks: DeconvolutedPeakSet,
+    pub deconvoluted_peaks: MassPeakSetType<D>,
 }
 
-impl<'lifespan> SpectrumBehavior for DeconvolutedSpectrum {
+impl<'lifespan, D: DeconvolutedCentroidLike + Default> SpectrumBehavior<CentroidPeak, D>
+    for DeconvolutedSpectrumType<D>
+{
     #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
     }
 
-    fn peaks(&'_ self) -> PeakDataLevel<'_, CentroidPeak, DeconvolutedPeak> {
+    fn peaks(&'_ self) -> PeakDataLevel<'_, CentroidPeak, D> {
         PeakDataLevel::Deconvoluted(&self.deconvoluted_peaks)
     }
 }
+
+pub type DeconvolutedSpectrum = DeconvolutedSpectrumType<DeconvolutedPeak>;
 
 #[derive(Default, Debug, Clone)]
 /// Represent a spectrum with multiple layers of representation of the

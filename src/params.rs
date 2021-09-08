@@ -117,9 +117,8 @@ macro_rules! impl_param_described {
     )+};
 }
 
-
 /// Units that a term's value might have
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Unit {
     // Mass
     MZ,
@@ -130,7 +129,6 @@ pub enum Unit {
     // Time
     Minute,
     Second,
-    Hour,
     Millisecond,
     VoltSecondPerSquareCentimeter,
 
@@ -144,5 +142,31 @@ pub enum Unit {
     // Collision Energy
     Electronvolt,
     PercentElectronVolt,
-    Volt
+    Volt,
+
+    Unknown,
+}
+
+impl Unit {
+    pub fn for_param(&self) -> (&'static str, &'static str) {
+        match self {
+            Self::Millisecond => ("UO:0000028", "millisecond"),
+            Self::Second => ("UO:0000010", "second"),
+            Self::Minute => ("UO:0000031", "minute"),
+
+            Self::MZ => ("MS:1000040", "m/z"),
+            Self::Mass => ("UO:000221", "dalton"),
+
+            Self::DetectorCounts => ("MS:1000131", "number of detector counts"),
+            Self::PercentBasePeak => ("MS:1000132", "percent of base peak"),
+            Self::PercentBasePeakTimes100 => ("MS:1000905", "percent of base peak times 100"),
+            Self::AbsorbanceUnit => ("UO:0000269", "absorbance unit"),
+            Self::CountsPerSecond => ("MS:1000814", "counts per second"),
+
+            Self::Electronvolt => ("UO:0000266", "electronvolt"),
+            Self::PercentElectronVolt => ("UO:0000187", "percent"),
+
+            _ => ("", ""),
+        }
+    }
 }
