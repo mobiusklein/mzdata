@@ -26,7 +26,7 @@ impl OffsetIndex {
 
     #[inline]
     pub fn get(&self, key: &str) -> Option<u64> {
-        self.offsets.get(key).map(|offset| *offset)
+        self.offsets.get(key).copied()
     }
 
     #[inline]

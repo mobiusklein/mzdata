@@ -126,7 +126,6 @@ impl std::fmt::Display for ArrayRetrievalError {
 
 impl std::error::Error for ArrayRetrievalError {}
 
-
 #[derive(Default, Clone)]
 pub struct DataArray {
     pub data: Bytes,
@@ -194,7 +193,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         DataArray {
             dtype,
             name: name.clone(),
-            data: data,
+            data,
             compression: BinaryCompressionType::Decoded,
             ..Default::default()
         }
@@ -543,7 +542,7 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
     pub fn decode(&mut self) -> Result<(), ArrayRetrievalError> {
         for (_key, value) in self.iter_mut() {
             match value.compression {
-                BinaryCompressionType::Decoded => {},
+                BinaryCompressionType::Decoded => {}
                 _ => {
                     value.decode_and_store()?;
                 }

@@ -80,6 +80,10 @@ pub trait RandomAccessScanSource<
 {
     fn len(&self) -> usize;
 
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<S>;
 
@@ -387,10 +391,9 @@ pub trait MZFileReader<
                 let mut reader = Self::open_file(file);
                 if let Some(index_path) = &index_file_name {
                     if index_path.exists() {
-                        let index_stream = fs::File::open(index_path).expect(&format!(
-                            "Failed to open index file {}",
-                            index_path.display()
-                        ));
+                        let index_stream = fs::File::open(index_path).unwrap_or_else(|e| {
+                            panic!("Failed to open index file {}: {}", index_path.display(), e)
+                        });
                         match reader.read_index(io::BufReader::new(&index_stream)) {
                             Ok(_) => {}
                             Err(_err) => {
@@ -409,10 +412,13 @@ pub trait MZFileReader<
                         }
                     } else {
                         reader.construct_index_from_stream();
-                        let index_stream = fs::File::create(index_path).expect(&format!(
-                            "Failed to create index file {}",
-                            index_path.display()
-                        ));
+                        let index_stream = fs::File::create(index_path).unwrap_or_else(|e| {
+                            panic!(
+                                "Failed to create index file {}: {}",
+                                index_path.display(),
+                                e
+                            )
+                        });
                         match reader.write_index(io::BufWriter::new(index_stream)) {
                             Ok(_) => {}
                             Err(err) => {
@@ -448,7 +454,6 @@ impl std::fmt::Display for ScanAccessError {
 }
 
 impl std::error::Error for ScanAccessError {}
-
 
 pub trait RandomAccessScanIterator<
     C: CentroidLike + Default = CentroidPeak,
@@ -636,10 +641,12 @@ impl GenerationTracker {
         match self.id_to_generation.entry(identifier.clone()) {
             Entry::Occupied(ent) => {
                 let generation = ent.get();
-                let id_set = self.generation_to_id.get_mut(generation).expect(&format!(
-                    "Generation {} did not contain {}",
-                    generation, identifier
-                ));
+                let id_set = self
+                    .generation_to_id
+                    .get_mut(generation)
+                    .unwrap_or_else(|| {
+                        panic!("Generation {} did not contain {}", generation, identifier)
+                    });
                 id_set.remove(&identifier);
                 if id_set.is_empty() {
                     self.generations.remove(*generation);
@@ -876,13 +883,14 @@ impl<
                 }
             }
         } else {
-            if self.queue.len() > 1 {
-                self.deque_group(false)
-            } else if self.queue.len() == 1 {
-                // TODO: Flush all products here
-                self.deque_group(true)
-            } else {
-                None
+            match self.queue.len() {
+                d if d > 1 => {
+                    self.deque_group(false)
+                }
+                1 => {
+                    self.deque_group(true)
+                }
+                _ => None
             }
         }
     }

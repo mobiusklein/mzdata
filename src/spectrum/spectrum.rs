@@ -226,7 +226,6 @@ impl std::fmt::Display for SpectrumConversionError {
 
 impl std::error::Error for SpectrumConversionError {}
 
-
 #[derive(Debug, Clone)]
 pub enum SpectrumProcessingError {
     DenoisingError(DenoisingError),

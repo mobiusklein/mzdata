@@ -62,7 +62,6 @@ impl std::fmt::Display for MGFError {
 
 impl std::error::Error for MGFError {}
 
-
 #[derive(Debug, Clone)]
 struct SpectrumBuilder<
     C: CentroidPeakAdapting = CentroidPeak,
@@ -219,7 +218,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                 }
                 &_ => {
                     description.add_param(Param::new_key_value(
-                        String::from(key.to_lowercase()),
+                        key.to_lowercase(),
                         String::from(value),
                     ));
                 }
@@ -451,7 +450,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore location");
         self.index.init = true;
-        if self.index.len() == 0 {
+        if self.index.is_empty() {
             warn!("An index was built but no entries were found")
         }
         offset
@@ -627,12 +626,9 @@ TITLE="#,
                 count += self.handle.write(ion.mz.to_string().as_bytes())?;
                 count += self.handle.write(b" ")?;
                 count += self.handle.write(ion.intensity.to_string().as_bytes())?;
-                match ion.charge {
-                    Some(charge) => {
-                        count += self.handle.write(b" ")?;
-                        count += self.handle.write(charge.to_string().as_bytes())?;
-                    }
-                    None => {}
+                if let Some(charge) = ion.charge {
+                    count += self.handle.write(b" ")?;
+                    count += self.handle.write(charge.to_string().as_bytes())?;
                 }
                 count += self.handle.write(b"\n")?;
                 for param in precursor.params() {
@@ -707,13 +703,11 @@ impl<
         let mut count = self.write_header(spectrum)?;
         if matches!(&spectrum.deconvoluted_peaks, Some(_)) {
             count += self.write_deconvoluted_centroids(spectrum)?;
-            count += self.handle.write(b"END IONS\n")?;
         } else if matches!(&spectrum.peaks, Some(_)) {
             count += self.write_centroids(spectrum)?;
-            count += self.handle.write(b"END IONS\n")?;
         } else {
-            count += self.handle.write(b"END IONS\n")?;
         }
+        count += self.handle.write(b"END IONS\n")?;
         self.offset += count;
         Ok(count)
     }
