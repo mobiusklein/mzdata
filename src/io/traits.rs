@@ -129,9 +129,9 @@ pub trait ScanSource<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
->: Iterator<Item = S> + Sized
+>: Iterator<Item = S>
 {
-    fn reset(&mut self) -> &Self;
+    fn reset(&mut self);
 
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<S>;
@@ -226,11 +226,11 @@ pub trait ScanSource<
     }
 
     /// Open a new iterator over this stream.
-    fn iter(&mut self) -> ScanIterator<C, D, S, Self> {
+    fn iter(&mut self) -> ScanIterator<C, D, S, Self> where Self : Sized {
         ScanIterator::new(self)
     }
 
-    fn groups(&mut self) -> SpectrumGroupingIterator<Self, C, D, S> {
+    fn groups(&mut self) -> SpectrumGroupingIterator<Self, C, D, S> where Self : Sized {
         SpectrumGroupingIterator::new(self.iter())
     }
 }
@@ -333,10 +333,9 @@ impl<
         R: ScanSource<C, D, S>,
     > ScanSource<C, D, S> for ScanIterator<'lifespan, C, D, S, R>
 {
-    fn reset(&mut self) -> &Self {
+    fn reset(&mut self) {
         self.index = 0;
         self.back_index = 0;
-        self
     }
 
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<S> {
@@ -996,5 +995,18 @@ pub trait ScanWriter<
             n += self.write_group(group)?;
         }
         Ok(n)
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_object_safe() {
+        // If `ScanSource` were not object safe, this code
+        // couldn't compile.
+        let _f = |_x: &dyn ScanSource| {};
     }
 }

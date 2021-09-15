@@ -505,10 +505,9 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     }
 
     /// Return the data stream to the beginning
-    fn reset(&mut self) -> &Self {
+    fn reset(&mut self) {
         self.seek(SeekFrom::Start(0))
             .expect("Failed to reset file stream");
-        self
     }
 
     fn get_index(&self) -> &OffsetIndex {
