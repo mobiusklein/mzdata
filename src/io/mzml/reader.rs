@@ -2151,7 +2151,7 @@ mod test {
 
     #[test]
     fn read_index() -> io::Result<()> {
-        let path = path::Path::new("./test/data/duplicate.mzML");
+        let path = path::Path::new("./test/data/read_index_of.mzML");
         let file = fs::File::open(path)?;
         let mut reader = MzMLReader::new(file);
         match reader.read_index_from_end() {
