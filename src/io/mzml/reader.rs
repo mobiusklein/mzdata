@@ -3,9 +3,9 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 use std::fs;
 use std::io;
-use std::mem;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::marker::PhantomData;
+use std::mem;
 
 use log::warn;
 
@@ -17,7 +17,7 @@ use quick_xml::Reader;
 
 use super::super::offset_index::OffsetIndex;
 use super::super::traits::{
-    MZFileReader, RandomAccessScanIterator, ScanAccessError, ScanSource, SeekRead,
+    MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, ScanSource, SeekRead,
 };
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
@@ -39,6 +39,12 @@ use crate::SpectrumBehavior;
 
 pub type Bytes = Vec<u8>;
 
+/**
+The different states the [`MzMLReaderType`] can enter while parsing
+different phases of the document. This information is really only
+needed by the module consumer to determine where in the document an
+error occurred.
+*/
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum MzMLParserState {
     Start = 0,
@@ -99,12 +105,18 @@ pub enum MzMLParserState {
     ParserError,
 }
 
+/**
+Common XML error handling behaviors
+*/
 pub trait XMLParseBase {
     fn handle_xml_error(&self, error: quick_xml::Error, state: MzMLParserState) -> MzMLParserError {
         MzMLParserError::XMLError(state, error)
     }
 }
 
+/**
+Common `CVParam` parsing behaviors
+*/
 pub trait CVParamParse: XMLParseBase {
     fn handle_param<B: io::BufRead>(
         &self,
@@ -184,14 +196,18 @@ pub trait CVParamParse: XMLParseBase {
     }
 }
 
+/**
+All the ways that mzML parsing can go wrong
+*/
 #[derive(Debug)]
 pub enum MzMLParserError {
+    // TODO factor this out and make usage in reader an Option<>
     NoError,
     UnknownError(MzMLParserState),
     IncompleteSpectrum,
     IncompleteElementError(String, MzMLParserState),
     XMLError(MzMLParserState, XMLError),
-    IOError(MzMLParserState, io::Error)
+    IOError(MzMLParserState, io::Error),
 }
 
 impl std::fmt::Display for MzMLParserError {
@@ -201,7 +217,6 @@ impl std::fmt::Display for MzMLParserError {
 }
 
 impl std::error::Error for MzMLParserError {}
-
 
 impl Default for MzMLParserError {
     fn default() -> MzMLParserError {
@@ -242,16 +257,20 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> CVParamParse
 {
 }
 
+/// Convert mzML spectrum XML into [`Spectrum`](crate::spectrum::Spectrum)
 pub trait SpectrumBuilding<
     C: CentroidPeakAdapting,
     D: DeconvolutedPeakAdapting,
     S: SpectrumBehavior<C, D>,
 >
 {
+    /// Get the last isolation window being constructed
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow;
+    /// Get the last scan window being constructed.
     fn scan_window_mut(&mut self) -> &mut ScanWindow;
     fn selected_ion_mut(&mut self) -> &mut SelectedIon;
     fn current_array_mut(&mut self) -> &mut DataArray;
+    /// Move all the data into the provided `spectrum` reference
     fn into_spectrum(self, spectrum: &mut S);
 
     fn fill_binary_data_array(&mut self, param: Param) {
@@ -441,13 +460,25 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     }
 
     fn scan_window_mut(&mut self) -> &mut ScanWindow {
-        self.acquisition
-            .scans
-            .last_mut()
-            .unwrap()
-            .scan_windows
-            .last_mut()
-            .unwrap()
+        if self.acquisition.scans.is_empty() {
+            let mut event = ScanEvent::default();
+            event.scan_windows.push(ScanWindow::default());
+            self.acquisition.scans.push(event);
+            return self
+                .acquisition
+                .scans
+                .last_mut()
+                .unwrap()
+                .scan_windows
+                .last_mut()
+                .unwrap();
+        }
+
+        let event = self.acquisition.scans.last_mut().unwrap();
+        if event.scan_windows.is_empty() {
+            event.scan_windows.push(ScanWindow::default());
+        }
+        return event.scan_windows.last_mut().unwrap();
     }
 
     fn selected_ion_mut(&mut self) -> &mut SelectedIon {
@@ -1234,7 +1265,7 @@ pub struct IndexedMzMLIndexExtractor {
     spectrum_index: OffsetIndex,
     chromatogram_index: OffsetIndex,
     index_offset: Option<u64>,
-    last_id: String
+    last_id: String,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1242,7 +1273,7 @@ pub enum IndexParserState {
     Start,
     SpectrumIndexList,
     ChromatogramIndexList,
-    Done
+    Done,
 }
 
 impl XMLParseBase for IndexedMzMLIndexExtractor {}
@@ -1257,7 +1288,7 @@ impl IndexedMzMLIndexExtractor {
         }
     }
 
-    pub fn find_offset_from_reader<R: SeekRead>(&self, reader: &mut R) -> io::Result<Option<u64>>{
+    pub fn find_offset_from_reader<R: SeekRead>(&self, reader: &mut R) -> io::Result<Option<u64>> {
         reader.seek(SeekFrom::End(-200))?;
         let mut buf = String::new();
         reader.read_to_string(&mut buf)?;
@@ -1289,7 +1320,7 @@ impl IndexedMzMLIndexExtractor {
                                     .unescape_and_decode_value(reader)
                                     .expect("Error decoding idRef");
                             }
-                        },
+                        }
                         Err(err) => {
                             return Err(err);
                         }
@@ -1305,16 +1336,14 @@ impl IndexedMzMLIndexExtractor {
                                     .unescape_and_decode_value(reader)
                                     .expect("Error decoding idRef");
                                 match index_name.as_ref() {
-                                    "spectrum" => {
-                                        return Ok(IndexParserState::SpectrumIndexList)
-                                    },
+                                    "spectrum" => return Ok(IndexParserState::SpectrumIndexList),
                                     "chromatogram" => {
                                         return Ok(IndexParserState::ChromatogramIndexList)
-                                    },
-                                    _ => {},
+                                    }
+                                    _ => {}
                                 }
                             }
-                        },
+                        }
                         Err(err) => {
                             return Err(err);
                         }
@@ -1338,15 +1367,17 @@ impl IndexedMzMLIndexExtractor {
         match elt_name {
             b"offset" => {}
             b"index" => {}
-            b"indexList" => {
-                return Ok(IndexParserState::Done)
-            }
+            b"indexList" => return Ok(IndexParserState::Done),
             _ => {}
         }
         Ok(state)
     }
 
-    pub fn text(&mut self, event: &BytesText, state: IndexParserState) -> Result<IndexParserState, XMLError> {
+    pub fn text(
+        &mut self,
+        event: &BytesText,
+        state: IndexParserState,
+    ) -> Result<IndexParserState, XMLError> {
         match state {
             IndexParserState::SpectrumIndexList => {
                 let bin = event
@@ -1380,12 +1411,14 @@ impl IndexedMzMLIndexExtractor {
     }
 }
 
-/// An mzML parser that supports iteration and random access. The parser produces
-/// [`Spectrum`] instances, which may be converted to [`RawSpectrum`](crate::spectrum::spectrum::RawSpectrum)
-/// or [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum) as is appropriate to the data.
-///
-/// When the readable stream the parser is wrapped around supports [`io::Seek`],
-/// additional random access operations are available.
+/**
+An mzML parser that supports iteration and random access. The parser produces
+[`Spectrum`] instances, which may be converted to [`RawSpectrum`](crate::spectrum::spectrum::RawSpectrum)
+or [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum) as is appropriate to the data.
+
+When the readable stream the parser is wrapped around supports [`io::Seek`],
+additional random access operations are available.
+*/
 pub struct MzMLReaderType<
     R: Read,
     C: CentroidPeakAdapting = CentroidPeak,
@@ -1393,9 +1426,11 @@ pub struct MzMLReaderType<
 > {
     /// The state the parser was in last.
     pub state: MzMLParserState,
+    /// The raw reader
     pub handle: BufReader<R>,
     /// A place to store the last error the parser encountered
     error: MzMLParserError,
+    /// A spectrum ID to byte offset for fast random access
     pub index: OffsetIndex,
     /// The description of the file's contents and the previous data files that were
     /// consumed to produce it.
@@ -1411,6 +1446,7 @@ pub struct MzMLReaderType<
     pub data_processings: Vec<DataProcessing>,
     /// A cache of repeated paramters
     pub reference_param_groups: HashMap<String, Vec<Param>>,
+
     buffer: Bytes,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
@@ -1559,7 +1595,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
                 let mut error = MzMLParserError::NoError;
                 mem::swap(&mut error, &mut self.error);
                 Err(error)
-            },
+            }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
@@ -1660,7 +1696,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
                 let mut error = MzMLParserError::NoError;
                 mem::swap(&mut error, &mut self.error);
                 Err(error)
-            },
+            }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
@@ -1695,16 +1731,17 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
     }
 }
 
-
 #[derive(Debug)]
 pub enum MzMLIndexingError {
     OffsetNotFound,
     XMLError(XMLError),
-    IOError(io::Error)
+    IOError(io::Error),
 }
 
-impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {}
-
+impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    MzMLReaderType<R, C, D>
+{
+}
 
 /// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
 impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator
@@ -1774,7 +1811,7 @@ impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdaptin
 /// The iterator can also be updated to move to a different location in the
 /// stream efficiently.
 impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
-    RandomAccessScanIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+    RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         match self._offset_of_id(id) {
@@ -1818,7 +1855,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
                 match reader.seek(SeekFrom::Start(0)) {
                     Ok(_) => {
                         reader.build_index();
-                    },
+                    }
                     Err(error) => {
                         panic!("Unrecoverable IO Error during file pointer reset {} while handling {:?}", error, err);
                     }
@@ -1842,21 +1879,15 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
                 if let Some(offset) = offset {
                     offset
                 } else {
-                    return Err(MzMLIndexingError::OffsetNotFound)
+                    return Err(MzMLIndexingError::OffsetNotFound);
                 }
-            },
-            Err(err) => {
-                return Err(MzMLIndexingError::IOError(err))
             }
+            Err(err) => return Err(MzMLIndexingError::IOError(err)),
         };
 
         let current_position = match self.handle.stream_position() {
-            Ok(position) => {
-                position
-            },
-            Err(err) => {
-                return Err(MzMLIndexingError::IOError(err))
-            }
+            Ok(position) => position,
+            Err(err) => return Err(MzMLIndexingError::IOError(err)),
         };
 
         self.handle.seek(SeekFrom::Start(offset)).unwrap();
@@ -1875,9 +1906,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
                                 _ => {}
                             }
                         }
-                        Err(message) => {
-                            return Err(MzMLIndexingError::XMLError(message))
-                        }
+                        Err(message) => return Err(MzMLIndexingError::XMLError(message)),
                     };
                 }
                 Ok(Event::End(ref e)) => {
@@ -1885,9 +1914,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
                         Ok(state) => {
                             indexer_state = state;
                         }
-                        Err(message) => {
-                            return Err(MzMLIndexingError::XMLError(message))
-                        }
+                        Err(message) => return Err(MzMLIndexingError::XMLError(message)),
                     };
                 }
                 Ok(Event::Text(ref e)) => {
@@ -1895,17 +1922,13 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
                         Ok(state) => {
                             indexer_state = state;
                         }
-                        Err(message) => {
-                            return Err(MzMLIndexingError::XMLError(message))
-                        }
+                        Err(message) => return Err(MzMLIndexingError::XMLError(message)),
                     };
                 }
                 Ok(Event::Eof) => {
                     break;
                 }
-                Err(err) => {
-                    return Err(MzMLIndexingError::XMLError(err))
-                }
+                Err(err) => return Err(MzMLIndexingError::XMLError(err)),
                 _ => {}
             }
         }
@@ -1915,7 +1938,6 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
         self.handle.seek(SeekFrom::Start(current_position)).unwrap();
         Ok(())
     }
-
 
     /// Builds an offset index to each `<spectrum>` XML element
     /// by doing a fast pre-scan of the XML file.
@@ -2001,6 +2023,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMe
     crate::impl_metadata_trait!();
 }
 
+/// A specialization of [`MzMLReaderType`] for the default peak types, for common use.
 pub type MzMLReader<R> = MzMLReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
 #[cfg(test)]
@@ -2155,8 +2178,7 @@ mod test {
         let file = fs::File::open(path)?;
         let mut reader = MzMLReader::new(file);
         match reader.read_index_from_end() {
-            Ok(()) => {
-            },
+            Ok(()) => {}
             Err(err) => {
                 panic!("Failed to parse out index {:?}", err);
             }

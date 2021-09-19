@@ -43,7 +43,9 @@ intel-mkl = ["mzsignal/intel-mkl"]
 parallelism = ["rayon", "mzsignal/parallelism"]
 
 # The zlib feature makes the code faster unoptimized, but with LTO the default
-# algorithm is faster on tests
+# algorithm is faster on tests. Odds are on real data, this will vary with the
+# size of the data being shuttled back and forth, and on the quality of the data
+# (de)compression.
 zlib = ["flate2/zlib"]
 zlib-ng-compat = ["flate2/zlib-ng-compat"]
 miniz_oxide = ["flate2/rust_backend"]

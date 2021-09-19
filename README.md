@@ -7,18 +7,16 @@ A Rust library for reading mass spectrometry data file formats.
 ```rust
 use std::fs::File;
 use mzdata::io::prelude::*;
-use mzdata::MassErrorType;
+use mzpeaks::{MassErrorType, prelude::*};
 use mzdata::io::MzMLReader;
+use mzdata::spectrum::{SignalContinuity};
 
 let reader = MzMLReader::new(File::open("./test/data/small.mzML").unwrap());
 for spectrum in reader {
-    println!("Scan ID: {} => {} data points", spectrum.id(), spectrum.mzs().len());
-    for scan in iter {
-        println!("Scan {} => BP {}", scan.id(), scan.peaks().base_peak().1);
-        if scan.signal_continuity() < SignalContinuity::Profile {
-            let peak_picked = scan.into_centroid().unwrap();
-            println!("Matches for 579.155: {:?}", peak_picked.peaks.all_peaks_for(579.155, 0.02, MassErrorType::Exact));
-        }
+    println!("Scan {} => BP {}", spectrum.id(), spectrum.peaks().base_peak().mz);
+    if spectrum.signal_continuity() < SignalContinuity::Profile {
+        let peak_picked = spectrum.into_centroid().unwrap();
+        println!("Matches for 579.155: {:?}", peak_picked.peaks.all_peaks_for(579.155, 0.02, MassErrorType::Absolute));
     }
 }
 ```

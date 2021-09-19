@@ -1,5 +1,5 @@
 pub use super::traits::{
-    MZFileReader, RandomAccessScanIterator, ScanAccessError, ScanIterator, ScanSource, ScanWriter,
+    MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, SpectrumIterator, ScanSource, ScanWriter,
     SeekRead, SpectrumGroup, SpectrumGrouping, SpectrumGroupingIterator,
 };
 pub use crate::meta::MSDataFileMetadata;

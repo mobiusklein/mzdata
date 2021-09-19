@@ -1,21 +1,43 @@
-//! Represent the collection of attributes and data that compose a single mass spectrum.
-//!
-//! Because a mass spectrum may be obtained from sources with varying levels of detail,
-//! several alternative structures are provided with a common set of trait-based methods
-//! to unify access:
-//!
-//! 1. [`RawSpectrum`] for representing a spectrum that has not been decoded into distinct
-//!        peaks yet, but whose data may be continuous or discrete.
-//! 2. [`CentroidSpectrum`] for representing spectra from sources which are guaranteed to
-//!        be pre-centroided, like those from MGF files or other simple text representations.
-//! 3. [`Spectrum`] for representing a multi-layer representation of a spectrum where both
-//!        raw data and a distinct peak list are available.
-//!
-//! These structures all implement the [`SpectrumBehavior`] trait
+/*!
+Represent the collection of attributes and data that compose a single mass spectrum.
+
+Because a mass spectrum may be obtained from sources with varying levels of detail,
+several alternative structures are provided with a common set of trait-based methods
+to unify access:
+
+1. [`RawSpectrum`] for representing a spectrum that has not been decoded into distinct
+       peaks yet, but whose data may be continuous or discrete.
+2. [`CentroidSpectrum`] for representing spectra from sources which are guaranteed to
+       be pre-centroided, like those from MGF files or other simple text representations.
+3. [`Spectrum`] for representing a multi-layer representation of a spectrum where both
+       raw data and a distinct peak list are available.
+
+These structures all implement the [`SpectrumBehavior`] trait
+
+The [`SpectrumBehavior`] trait is included in the crate prelude, and gives the caller
+read-only access to components that describe a spectrum's metadata, and
+```rust
+use std::fs::File;
+use mzdata::io::prelude::*;
+use mzpeaks::{MassErrorType, prelude::*};
+use mzdata::io::MzMLReader;
+use mzdata::spectrum::{SignalContinuity};
+
+let reader = MzMLReader::new(File::open("./test/data/small.mzML").unwrap());
+for spectrum in reader {
+    println!("Scan {} => BP {}", spectrum.id(), spectrum.peaks().base_peak().mz);
+    if spectrum.signal_continuity() < SignalContinuity::Profile {
+        let peak_picked = spectrum.into_centroid().unwrap();
+        println!("Matches for 579.155: {:?}", peak_picked.peaks.all_peaks_for(579.155, 0.02, MassErrorType::Absolute));
+    }
+}
+```
+
+*/
 use std::borrow;
 use std::convert::TryFrom;
 
-use mzpeaks::prelude::*;
+use mzpeaks::{IndexType, prelude::*};
 use mzpeaks::{
     CentroidLike, DeconvolutedCentroidLike, DeconvolutedPeakSet, MZPeakSetType, MassPeakSetType,
     PeakSet,
@@ -54,9 +76,9 @@ pub enum PeakDataLevel<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> 
 
 impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lifespan, C, D> {
     /// Compute the base peak of a spectrum
-    pub fn base_peak(&self) -> (usize, f64, f32) {
+    pub fn base_peak(&self) -> CentroidPeak {
         match self {
-            PeakDataLevel::Missing => (0, 0.0, 0.0),
+            PeakDataLevel::Missing => CentroidPeak::new(0.0, 0.0, 0),
             PeakDataLevel::RawData(arrays) => {
                 let intensities = arrays.intensities();
                 let result = intensities
@@ -64,9 +86,9 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
                     .enumerate()
                     .max_by(|ia, ib| ia.1.partial_cmp(ib.1).unwrap());
                 if let Some((i, inten)) = result {
-                    (i, arrays.mzs()[i], *inten)
+                    CentroidPeak::new(arrays.mzs()[i], *inten, i as IndexType)
                 } else {
-                    (0, 0.0, 0.0)
+                    CentroidPeak::new(0.0, 0.0, 0)
                 }
             }
             PeakDataLevel::Centroid(peaks) => {
@@ -75,9 +97,9 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
                     .enumerate()
                     .max_by(|ia, ib| ia.1.intensity().partial_cmp(&ib.1.intensity()).unwrap());
                 if let Some((i, peak)) = result {
-                    (i, peak.coordinate(), peak.intensity())
+                    CentroidPeak::new(peak.coordinate(), peak.intensity(), i as IndexType)
                 } else {
-                    (0, 0.0, 0.0)
+                    CentroidPeak::new(0.0, 0.0, 0)
                 }
             }
             PeakDataLevel::Deconvoluted(peaks) => {
@@ -86,9 +108,9 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
                     .enumerate()
                     .max_by(|ia, ib| ia.1.intensity().partial_cmp(&ib.1.intensity()).unwrap());
                 if let Some((i, peak)) = result {
-                    (i, peak.coordinate(), peak.intensity())
+                    CentroidPeak::new(crate::utils::mass_charge_ratio(peak.coordinate(), peak.charge()), peak.intensity(), i as IndexType)
                 } else {
-                    (0, 0.0, 0.0)
+                    CentroidPeak::new(0.0, 0.0, 0)
                 }
             }
         }

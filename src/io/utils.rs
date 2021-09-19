@@ -27,9 +27,9 @@ pub struct FileSource<T: io::Read> {
     pub source: FileWrapper<T>,
 }
 
-/// This really should be a full file-like object abstraction, but that
-/// feels like it is beyond the scope of this crate. Something like
-/// https://github.com/bnjjj/chicon-rs
+// This really should be a full file-like object abstraction, but that
+// feels like it is beyond the scope of this crate. Something like
+// https://github.com/bnjjj/chicon-rs
 impl<'lifespan, T: io::Read> FileSource<T> {
     pub fn from_path<P>(path: P) -> FileSource<T>
     where

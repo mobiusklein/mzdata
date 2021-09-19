@@ -31,7 +31,7 @@ use crate::spectrum::{
 
 use super::offset_index::OffsetIndex;
 use super::traits::{
-    MZFileReader, RandomAccessScanIterator, ScanAccessError, ScanSource, ScanWriter, SeekRead,
+    MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, ScanSource, ScanWriter, SeekRead,
 };
 
 #[derive(PartialEq, Debug)]
@@ -114,8 +114,8 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilder<
 }
 
 /// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
-/// The parser produces [`Spectrum`] instances. These may be converted directly into [`CentroidSpectrum`]
-/// instances using [`Spectrum.into_centroid`] or the [`From`] trait which better represent
+/// The parser produces [`crate::spectrum::Spectrum`] instances. These may be converted directly into [`crate::spectrum::CentroidSpectrum`]
+/// instances using [`spectrum::Spectrum.into_centroid`] or the [`From`] trait which better represent
 /// the nature of this preprocessed data type.
 pub struct MGFReaderType<
     R: io::Read,
@@ -523,7 +523,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
 }
 
 impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
-    RandomAccessScanIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+    RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         match self._offset_of_id(id) {

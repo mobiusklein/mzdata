@@ -8,4 +8,4 @@ pub mod utils;
 pub use crate::io::mgf::MGFReader;
 pub use crate::io::mzml::MzMLReader;
 pub use crate::io::offset_index::OffsetIndex;
-pub use crate::io::traits::{RandomAccessScanIterator, ScanAccessError, ScanIterator, ScanSource};
+pub use crate::io::traits::{RandomAccessSpectrumIterator, ScanAccessError, SpectrumIterator, ScanSource};

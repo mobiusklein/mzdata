@@ -61,7 +61,7 @@ macro_rules! end_event {
     };
 }
 
-pub type XMLResult = Result<(), XMLError>;
+pub type WriterResult = Result<(), XMLError>;
 
 struct InnerXMLWriter<W: io::Write> {
     pub handle: Writer<BufWriter<MD5HashingStream<W>>>,
@@ -94,7 +94,7 @@ impl<W: io::Write> InnerXMLWriter<W> {
         self.handle.inner().flush()
     }
 
-    pub fn write_param(&mut self, param: &Param) -> XMLResult {
+    pub fn write_param(&mut self, param: &Param) -> WriterResult {
         let mut elt = if param.accession.is_empty() {
             bstart!("userParam")
         } else {
@@ -130,18 +130,26 @@ impl<W: io::Write> InnerXMLWriter<W> {
         self.handle.write_event(Event::Empty(elt))
     }
 
-    pub fn write_param_list<'a, T: Iterator<Item = &'a Param>>(&mut self, params: T) -> XMLResult {
+    pub fn write_param_list<'a, T: Iterator<Item = &'a Param>>(
+        &mut self,
+        params: T,
+    ) -> WriterResult {
         for param in params {
             self.write_param(param)?
         }
         Ok(())
     }
 
-    pub fn write_event(&mut self, event: Event) -> XMLResult {
+    pub fn write_event(&mut self, event: Event) -> WriterResult {
         self.handle.write_event(event)
     }
 }
 
+/**
+The different states that [`MzMLWriterType`] can enter while
+writing an mzML document. This is only necessary for the module
+consumer when determining where something may have gone wrong.
+*/
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
 pub enum MzMLWriterState {
     Start,
@@ -159,25 +167,47 @@ pub enum MzMLWriterState {
     End,
 }
 
+/**
+An indexed mzML writer that handles [`Spectrum`](crate::spectrum::Spectrum)
+by reference.
+
+Does not buffer spectra in-memory, writing them out immediately.
+
+Currently, no chromatograms are written (including no TIC or base peak chromatograms).
+*/
 #[derive(Debug)]
 pub struct MzMLWriterType<
     W: Write + Seek,
     C: CentroidPeakAdapting + 'static = CentroidPeak,
     D: DeconvolutedPeakAdapting + 'static = DeconvolutedPeak,
 > {
+    /// The current offset from the stream start
     pub offset: usize,
 
+    /// The total number of spectra this mzML document will contain.
+    /// This value will appear in the `spectrumList` element's count attribute
     pub spectrum_count: u64,
+    /// The number of `spectrum` elements written so far.
     pub spectrum_counter: u64,
 
+    /// The total number of chromatograms this mzML document will contain.
+    /// This value will appear in the `chromatogramList` element's count attribute
     pub chromatogram_count: u64,
+    /// The number of chromatograms written so far
     pub chromatogram_counter: u64,
 
+    /// The compression type to use when generating binary data arrays.
     pub data_array_compression: BinaryCompressionType,
 
+    /// The file-level metadata describing the provenance of the original data
     pub file_description: FileDescription,
+    /// The list of software components that were used to process the data into
+    /// its current state
     pub softwares: Vec<Software>,
+    /// The types of data transformations applied to (parts of) the data
     pub data_processings: Vec<DataProcessing>,
+    /// The different instrument configurations that were in use during the
+    /// data acquisition.
     pub instrument_configurations: HashMap<String, InstrumentConfiguration>,
 
     pub state: MzMLWriterState,
@@ -232,6 +262,7 @@ where
     const PSIMS_VERSION: &'static str = "4.1.57";
     const UNIT_VERSION: &'static str = "releases/2020-03-10";
 
+    /// Wrap a new [`std::io::Write`]-able type, constructing a new [`MzMLWriterType`]
     pub fn new(file: W) -> MzMLWriterType<W, C, D> {
         let handle = InnerXMLWriter::new(file);
         MzMLWriterType {
@@ -258,7 +289,7 @@ where
         self.handle.handle.inner().stream_position()
     }
 
-    fn write_cv_list(&mut self) -> XMLResult {
+    fn write_cv_list(&mut self) -> WriterResult {
         let mut cv_list = BytesStart::owned(b"cvList".to_vec(), 6);
         cv_list.push_attribute(("count", "2"));
         self.handle.write_event(Event::Start(cv_list))?;
@@ -285,7 +316,7 @@ where
         Ok(())
     }
 
-    fn start_document(&mut self) -> XMLResult {
+    fn start_document(&mut self) -> WriterResult {
         self.handle
             .write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"utf-8"), None)))?;
         let mut indexed = BytesStart::owned(b"indexedmzML".to_vec(), 11);
@@ -311,7 +342,7 @@ where
         Ok(())
     }
 
-    fn writer_header(&mut self) -> XMLResult {
+    fn writer_header(&mut self) -> WriterResult {
         if self.state < MzMLWriterState::DocumentOpen {
             self.start_document()?;
         } else {
@@ -328,7 +359,7 @@ where
         Ok(())
     }
 
-    fn write_file_description(&mut self) -> XMLResult {
+    fn write_file_description(&mut self) -> WriterResult {
         let fd = bstart!("fileDescription");
         start_event!(self, fd);
 
@@ -360,7 +391,7 @@ where
         Ok(())
     }
 
-    fn write_software_list(&mut self) -> XMLResult {
+    fn write_software_list(&mut self) -> WriterResult {
         let mut outer = bstart!("softwareList");
         let count = self.softwares.len().to_string();
         attrib!("count", count, outer);
@@ -379,7 +410,7 @@ where
         Ok(())
     }
 
-    fn write_instrument_configuration(&mut self) -> XMLResult {
+    fn write_instrument_configuration(&mut self) -> WriterResult {
         let mut outer = bstart!("instrumentConfigurationList");
         let count = self.instrument_configurations.len().to_string();
         attrib!("count", count, outer);
@@ -423,7 +454,7 @@ where
         Ok(())
     }
 
-    fn write_data_processing(&mut self) -> XMLResult {
+    fn write_data_processing(&mut self) -> WriterResult {
         let mut outer = bstart!("dataProcessingList");
         let count = self.data_processings.len().to_string();
         attrib!("count", count, outer);
@@ -449,7 +480,7 @@ where
         Ok(())
     }
 
-    fn start_run(&mut self) -> XMLResult {
+    fn start_run(&mut self) -> WriterResult {
         if self.state < MzMLWriterState::Run {
             self.writer_header()?;
         } else {
@@ -471,11 +502,16 @@ where
         Ok(())
     }
 
-    fn start_spectrum_list(&mut self) -> XMLResult {
-        if self.state < MzMLWriterState::SpectrumList {
-            self.start_run()?;
-        } else if MzMLWriterState::SpectrumList < self.state {
-            panic!("Cannot start writing the run of mzML, currently in state {:?} which happens after the run has already begin", self.state)
+    fn start_spectrum_list(&mut self) -> WriterResult {
+        match self.state {
+            MzMLWriterState::SpectrumList => {}
+            state if state < MzMLWriterState::SpectrumList => {
+                self.start_run()?;
+            }
+            state if state > MzMLWriterState::SpectrumList => {
+                panic!("Cannot start writing the run of mzML, currently in state {:?} which happens after the run has already begin", state)
+            },
+            _ => {}
         }
         let mut list = bstart!("spectrumList");
         let count = self.spectrum_count.to_string();
@@ -488,14 +524,14 @@ where
         Ok(())
     }
 
-    fn close_spectrum_list(&mut self) -> XMLResult {
+    fn close_spectrum_list(&mut self) -> WriterResult {
         let tag = bstart!("spectrumList");
         end_event!(self, tag);
         self.state = MzMLWriterState::SpectrumListClosed;
         Ok(())
     }
 
-    fn close_run(&mut self) -> XMLResult {
+    fn close_run(&mut self) -> WriterResult {
         if self.state < MzMLWriterState::Run {
             self.start_run()?;
         } else if self.state == MzMLWriterState::SpectrumList {
@@ -511,7 +547,7 @@ where
         Ok(())
     }
 
-    fn close_mzml(&mut self) -> XMLResult {
+    fn close_mzml(&mut self) -> WriterResult {
         if self.state < MzMLWriterState::RunClosed {
             self.close_run()?;
         }
@@ -521,7 +557,7 @@ where
         Ok(())
     }
 
-    fn close_indexed_mzml(&mut self) -> XMLResult {
+    fn close_indexed_mzml(&mut self) -> WriterResult {
         if self.state < MzMLWriterState::MzMLClosed {
             self.close_mzml()?;
         }
@@ -532,7 +568,11 @@ where
         Ok(())
     }
 
-    pub fn close(&mut self) -> XMLResult {
+    /**
+    Close the wrapping `<indexedmzML>` document, which will trigger writing
+    out the offset indices and file checksum at the tail of the document.
+    */
+    pub fn close(&mut self) -> WriterResult {
         if self.state < MzMLWriterState::End {
             self.close_indexed_mzml()
         } else {
@@ -540,7 +580,7 @@ where
         }
     }
 
-    fn write_scan_list(&mut self, acq: &Acquisition) -> XMLResult {
+    fn write_scan_list(&mut self, acq: &Acquisition) -> WriterResult {
         let mut scan_list_tag = bstart!("scanList");
         let count = acq.scans.len().to_string();
         attrib!("count", count, scan_list_tag);
@@ -616,7 +656,7 @@ where
         Ok(())
     }
 
-    fn write_isolation_window(&mut self, iw: &IsolationWindow) -> XMLResult {
+    fn write_isolation_window(&mut self, iw: &IsolationWindow) -> WriterResult {
         let iw_tag = bstart!("isolationWindow");
         self.handle
             .write_event(Event::Start(iw_tag.to_borrowed()))?;
@@ -653,7 +693,7 @@ where
         self.handle.write_event(Event::End(iw_tag.to_end()))
     }
 
-    fn write_selected_ions(&mut self, precursor: &Precursor) -> XMLResult {
+    fn write_selected_ions(&mut self, precursor: &Precursor) -> WriterResult {
         let mut outer = bstart!("selectedIonList");
         attrib!("count", "1", outer);
         start_event!(self, outer);
@@ -685,7 +725,7 @@ where
         Ok(())
     }
 
-    fn write_activation(&mut self, precursor: &Precursor) -> XMLResult {
+    fn write_activation(&mut self, precursor: &Precursor) -> WriterResult {
         let act = precursor.activation();
         let tag = bstart!("activation");
         start_event!(self, tag);
@@ -700,7 +740,7 @@ where
         Ok(())
     }
 
-    fn write_precursor(&mut self, precursor: &Precursor) -> XMLResult {
+    fn write_precursor(&mut self, precursor: &Precursor) -> WriterResult {
         let mut precursor_list_tag = bstart!("precursorList");
         attrib!("count", "1", precursor_list_tag);
         start_event!(self, precursor_list_tag);
@@ -719,7 +759,7 @@ where
         Ok(())
     }
 
-    fn write_binary_data_array(&mut self, array: &DataArray) -> XMLResult {
+    fn write_binary_data_array(&mut self, array: &DataArray) -> WriterResult {
         let mut outer = bstart!("binaryDataArray");
 
         let encoded = array.encode_bytestring(self.data_array_compression);
@@ -819,7 +859,7 @@ where
         Ok(())
     }
 
-    fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap) -> XMLResult {
+    fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap) -> WriterResult {
         let count = arrays.len().to_string();
         let mut outer = bstart!("binaryDataArrayList");
         attrib!("count", count, outer);
@@ -833,11 +873,26 @@ where
         Ok(())
     }
 
-    pub fn write_spectrum(&mut self, spectrum: &'a MultiLayerSpectrum<C, D>) -> XMLResult {
-        if self.state < MzMLWriterState::SpectrumList {
-            self.start_spectrum_list()?;
-        } else if self.state > MzMLWriterState::SpectrumList {
-            panic!("Cannot write spectrum, currently in state {:?} which happens after spectra may be written", self.state)
+    /**
+    Write a [`MultiLayerSpectrum`] out to the mzML file, encoding the highest procressing
+    degree peak data present.
+
+    ## Side-Effects
+    If the writer has not already started writing the spectra, this will cause all the metadata
+    to be written out and the `<spectrumList>` element will be opened, preventing no new metadata
+    from being written to this stream. Furthermore, this writes the spectrum count out, so the value
+    may no longer be changed.
+    */
+    pub fn write_spectrum(&mut self, spectrum: &'a MultiLayerSpectrum<C, D>) -> WriterResult {
+        match self.state {
+            MzMLWriterState::SpectrumList => {}
+            state if state < MzMLWriterState::SpectrumList => {
+                self.start_spectrum_list()?;
+            }
+            state if state > MzMLWriterState::SpectrumList => {
+                panic!("Cannot write spectrum, currently in state {:?} which happens after spectra may be written", state)
+            },
+            _ => {}
         }
         let pos = self.stream_position()? - (1 + (4 * InnerXMLWriter::<W>::INDENT_SIZE));
         self.offset_index.insert(spectrum.id().to_string(), pos);
@@ -919,7 +974,7 @@ where
         Ok(())
     }
 
-    fn write_index(&mut self, index: &OffsetIndex) -> XMLResult {
+    fn write_index(&mut self, index: &OffsetIndex) -> WriterResult {
         let mut outer = bstart!("index");
         attrib!("name", index.name, outer);
         start_event!(self, outer);
@@ -936,7 +991,7 @@ where
         Ok(())
     }
 
-    fn write_index_list(&mut self) -> XMLResult {
+    fn write_index_list(&mut self) -> WriterResult {
         if self.state < MzMLWriterState::IndexList {
             self.close_mzml()?;
         }
@@ -963,22 +1018,23 @@ where
         Ok(())
     }
 
-    /// Get a reference to the mz m l writer type's spectrum count.
+    /// Get a reference to the mzML writer's spectrum count.
     pub fn spectrum_count(&self) -> &u64 {
         &self.spectrum_count
     }
 
-    /// Set the mz m l writer type's spectrum count.
+    /// Set the mzML writer's spectrum count.
     pub fn set_spectrum_count(&mut self, spectrum_count: u64) {
         self.spectrum_count = spectrum_count;
     }
 
-    /// Get a mutable reference to the mz m l writer type's spectrum count.
+    /// Get a mutable reference to the mzML writer's spectrum count to modify in-place.
     pub fn spectrum_count_mut(&mut self) -> &mut u64 {
         &mut self.spectrum_count
     }
 }
 
+/// A specialization of [`MzMLWriterType`] for the default peak types, for common use.
 pub type MzMLWriter<W> = MzMLWriterType<CentroidPeak, DeconvolutedPeak, W>;
 
 #[cfg(test)]
@@ -990,7 +1046,7 @@ mod test {
     use std::path;
 
     #[test]
-    fn write_test() -> XMLResult {
+    fn write_test() -> WriterResult {
         let path = path::Path::new("./test/data/small.mzML");
         let mut reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::open_path(path)
             .expect("Test file doesn't exist?");

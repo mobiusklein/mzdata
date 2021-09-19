@@ -6,13 +6,25 @@ use serde_json;
 use indexmap::map::{Iter, Keys};
 use indexmap::IndexMap;
 
+
+/**
+An ordered mapping from entity ID to byte offset into the source
+file it resides in.
+*/
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct OffsetIndex {
+    /// The name of the index. There may potentially be more than one
+    /// index per file
     pub name: String,
+
+    /// The mapping from ID to byte offset, ordered by occurrence
     // If using serde_json to save this, use
     // https://docs.rs/indexmap/1.7.0/indexmap/serde_seq/index.html
     #[serde(with = "indexmap::serde_seq")]
     pub offsets: IndexMap<String, u64>,
+
+    /// Whether the index has been initalized explicitly or not, as
+    /// it may be initially empty or read as empty.
     pub init: bool,
 }
 
