@@ -1,8 +1,12 @@
 use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumBehavior};
-use crate::impl_param_described;
+use crate::{ParamList, impl_param_described};
 use crate::io::traits::ScanSource;
 use crate::params;
 
+
+/**
+Describe the initialization stage of an isolation window
+*/
 #[derive(Debug, Clone, Copy)]
 #[repr(i8)]
 pub enum IsolationWindowState {
@@ -47,7 +51,7 @@ pub struct ScanEvent {
     pub injection_time: f32,
     pub scan_windows: ScanWindowList,
     pub instrument_configuration_id: String,
-    pub params: params::ParamList,
+    pub params: ParamList,
 }
 
 pub type ScanEventList = Vec<ScanEvent>;
@@ -57,7 +61,7 @@ pub type ScanEventList = Vec<ScanEvent>;
 /// being described.
 pub struct Acquisition {
     pub scans: ScanEventList,
-    pub params: params::ParamList,
+    pub params: ParamList,
 }
 
 impl Acquisition {
@@ -82,7 +86,7 @@ pub struct SelectedIon {
     /// The reported precursor ion's charge state. May be absent in
     /// some source files.
     pub charge: Option<i32>,
-    pub params: params::ParamList,
+    pub params: ParamList,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -90,7 +94,7 @@ pub struct SelectedIon {
 pub struct Activation {
     pub method: String,
     pub energy: f32,
-    pub params: params::ParamList,
+    pub params: ParamList,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -107,7 +111,7 @@ pub struct Precursor {
     /// The activation process applied to the precursor ion
     pub activation: Activation,
     /// Additional parameters describing this precursor ion
-    pub params: params::ParamList,
+    pub params: ParamList,
 }
 
 impl Precursor {
@@ -139,11 +143,19 @@ impl Precursor {
     }
 }
 
+/**
+A trait for abstracting over how a precursor ion is described, immutably.
+*/
 pub trait PrecursorSelection: params::ParamDescribed {
+    /// Describes the selected ion's properties
     fn ion(&self) -> &SelectedIon;
+    /// Describes the isolation window around the selected ion
     fn isolation_window(&self) -> &IsolationWindow;
+    /// The precursor scan ID, if given
     fn precursor_id(&self) -> &str;
+    /// The product scan ID, if given
     fn product_id(&self) -> &str;
+    /// The activation process applied to the precursor ion
     fn activation(&self) -> &Activation;
 }
 
@@ -169,6 +181,10 @@ impl PrecursorSelection for Precursor {
     }
 }
 
+/**
+Describes the polarity of a mass spectrum. A spectrum is either `Positive` (1+), `Negative` (-1)
+or `Unknown` (0). The `Unknown` state is the default.
+*/
 #[repr(i8)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum ScanPolarity {
@@ -183,6 +199,12 @@ impl Default for ScanPolarity {
     }
 }
 
+/**
+Describes the initial representation of the signal of a spectrum.
+
+Though most formats explicitly have a method of either conveying a processing level
+or an assumed level, the `Unknown` option is retained for partial initialization.
+*/
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum SignalContinuity {
@@ -197,6 +219,11 @@ impl Default for SignalContinuity {
     }
 }
 
+/**
+The set of descriptive metadata that give context for how a mass spectrum was acquired
+within a particular run. This forms the basis for a large portion of the [`SpectrumBehavior`]
+trait.
+*/
 #[derive(Debug, Default, Clone)]
 pub struct SpectrumDescription {
     pub id: String,
@@ -206,7 +233,7 @@ pub struct SpectrumDescription {
     pub polarity: ScanPolarity,
     pub signal_continuity: SignalContinuity,
 
-    pub params: params::ParamList,
+    pub params: ParamList,
     pub acquisition: Acquisition,
     pub precursor: Option<Precursor>,
 }

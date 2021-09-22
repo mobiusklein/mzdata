@@ -2,10 +2,10 @@
 //! Rust.
 //!
 //! The library currently supports reading:
-//!   1. MGF files using [`MGFReader`] in [`crate::io::mgf`]
-//!   2. mzML files using [`MzMLReader`] in [`crate::io::mzml`]
+//!   1. MGF files using [`MGFReader`] in [`mzdata::io::mgf`](crate::io::mgf)
+//!   2. mzML files using [`MzMLReader`] in [`mzdata::io::mzml`](crate::io::mzml)
 //!
-//! It also includes a set of representation layers for spectra in [`crate::spectrum`]
+//! It also includes a set of representation layers for spectra in [`mzdata::spectrum`](crate::spectrum)
 //!
 //! # Example
 //! ```
@@ -34,7 +34,6 @@ pub mod io;
 pub mod meta;
 #[macro_use]
 pub mod params;
-// pub mod peaks;
 pub mod spectrum;
 mod utils;
 

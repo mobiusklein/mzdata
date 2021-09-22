@@ -28,7 +28,9 @@ for spectrum in reader {
     println!("Scan {} => BP {}", spectrum.id(), spectrum.peaks().base_peak().mz);
     if spectrum.signal_continuity() < SignalContinuity::Profile {
         let peak_picked = spectrum.into_centroid().unwrap();
-        println!("Matches for 579.155: {:?}", peak_picked.peaks.all_peaks_for(579.155, 0.02, MassErrorType::Absolute));
+        println!("Matches for 579.155: {:?}",
+                 peak_picked.peaks.all_peaks_for(
+                     579.155, 0.02, MassErrorType::Absolute));
     }
 }
 ```
