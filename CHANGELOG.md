@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [Unreleased]
+
+### Added
+
+### Changed
+- `RandomAccessScanIterator` methods now return mutable references to self, making them actually useful in a chain.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+
 ## [0.5.0] - 2021-09-22
 
 ### Added

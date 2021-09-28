@@ -1813,7 +1813,7 @@ impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdaptin
 impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
-    fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, ScanAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
@@ -1823,7 +1823,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
         }
     }
 
-    fn start_from_index(&mut self, index: usize) -> Result<&Self, ScanAccessError> {
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, ScanAccessError> {
         match self._offset_of_index(index) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
@@ -1833,7 +1833,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
         }
     }
 
-    fn start_from_time(&mut self, time: f64) -> Result<&Self, ScanAccessError> {
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, ScanAccessError> {
         match self._offset_of_time(time) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
@@ -2184,6 +2184,20 @@ mod test {
             }
         };
         assert!(reader.index.len() > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_random_access_iterator() -> io::Result<()> {
+        let path = path::Path::new("./test/data/small.mzML");
+        let mut reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::open_path(path)?;
+        let mut counter = 0;
+        for scan in reader.iter().start_from_index(30).expect("Seek failed") {
+            counter += 1;
+            assert!(scan.index() >= 30);
+        }
+        let n = reader.len();
+        assert_eq!(n, counter + 30);
         Ok(())
     }
 }

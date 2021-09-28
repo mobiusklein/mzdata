@@ -525,7 +525,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
 impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
-    fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, ScanAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
@@ -535,7 +535,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
         }
     }
 
-    fn start_from_index(&mut self, index: usize) -> Result<&Self, ScanAccessError> {
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, ScanAccessError> {
         match self._offset_of_index(index) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
@@ -545,7 +545,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
         }
     }
 
-    fn start_from_time(&mut self, time: f64) -> Result<&Self, ScanAccessError> {
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, ScanAccessError> {
         match self._offset_of_time(time) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
