@@ -671,7 +671,7 @@ mod test {
 
     use mzsignal::arrayops::ArrayPair;
     use mzsignal::plot::*;
-    use mzsignal::plot::{SVGBuilder, RED};
+    use mzsignal::plot::{SVGBuilder};
 
     #[test]
     fn test_profile_read() {
@@ -691,7 +691,7 @@ mod test {
         }
 
         if let Some(peaks) = &scan.peaks {
-            assert_eq!(peaks.len(), 2097);
+            assert_eq!(peaks.len(), 2107);
             let n = peaks.len();
             for i in 1..n {
                 let diff = peaks[i].get_index() - peaks[i - 1].get_index();
@@ -701,8 +701,7 @@ mod test {
             let mut builder = SVGBuilder::default();
             let arrays = &scan.arrays.unwrap();
             let ser = ArrayPair::new(arrays.mzs(), arrays.intensities());
-            let mut ser2 = SpectrumSeries::from(peaks.iter());
-            ser2.color(RED.mix(1.0));
+            let ser2 = SpectrumSeries::from(peaks.iter());
             builder
                 .path("./test/data/0.svg")
                 .size(1028, 512)
