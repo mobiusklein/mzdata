@@ -16,9 +16,8 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features openblas,parallelism,zlib
+          args: --no-default-features --features intel-mkl,parallelism,zlib
