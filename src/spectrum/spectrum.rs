@@ -670,8 +670,6 @@ mod test {
     use crate::io::prelude::*;
 
     use mzsignal::arrayops::ArrayPair;
-    use mzsignal::plot::*;
-    use mzsignal::plot::{SVGBuilder};
 
     #[test]
     fn test_profile_read() {
@@ -697,19 +695,6 @@ mod test {
                 let diff = peaks[i].get_index() - peaks[i - 1].get_index();
                 assert_eq!(diff, 1);
             }
-
-            let mut builder = SVGBuilder::default();
-            let arrays = &scan.arrays.unwrap();
-            let ser = ArrayPair::new(arrays.mzs(), arrays.intensities());
-            let ser2 = SpectrumSeries::from(peaks.iter());
-            builder
-                .path("./test/data/0.svg")
-                .size(1028, 512)
-                .add_series(ser2)
-                .add_series(&ser)
-                .xlim(562f64, 565f64)
-                .draw()
-                .expect("Failed to draw");
 
             peaks
                 .has_peak(562.741, 3f64, MassErrorType::PPM)
