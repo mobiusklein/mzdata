@@ -19,7 +19,7 @@ read-only access to components that describe a spectrum's metadata, and
 ```rust
 use std::fs::File;
 use mzdata::io::prelude::*;
-use mzpeaks::{MassErrorType, prelude::*};
+use mzpeaks::{Tolerance, prelude::*};
 use mzdata::io::MzMLReader;
 use mzdata::spectrum::{SignalContinuity};
 
@@ -30,7 +30,7 @@ for spectrum in reader {
         let peak_picked = spectrum.into_centroid().unwrap();
         println!("Matches for 579.155: {:?}",
                  peak_picked.peaks.all_peaks_for(
-                     579.155, 0.02, MassErrorType::Absolute));
+                     579.155, Tolerance::Da(0.02)));
     }
 }
 ```
@@ -44,7 +44,7 @@ use mzpeaks::{
     CentroidLike, DeconvolutedCentroidLike, DeconvolutedPeakSet, MZPeakSetType, MassPeakSetType,
     PeakSet,
 };
-use mzpeaks::{CentroidPeak, DeconvolutedPeak, MassErrorType};
+use mzpeaks::{CentroidPeak, DeconvolutedPeak, Tolerance};
 
 use mzsignal::denoise::{denoise, DenoisingError};
 use mzsignal::peak_picker::{PeakFitType, PeakPicker, PeakPickerError};
@@ -133,14 +133,13 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
     pub fn search(
         &self,
         query: f64,
-        error_tolerance: f64,
-        error_type: MassErrorType,
+        error_tolerance: Tolerance,
     ) -> Option<usize> {
         match self {
             PeakDataLevel::Missing => None,
-            PeakDataLevel::RawData(arrays) => arrays.search(query, error_tolerance, error_type),
-            PeakDataLevel::Centroid(peaks) => peaks.search(query, error_tolerance, error_type),
-            PeakDataLevel::Deconvoluted(peaks) => peaks.search(query, error_tolerance, error_type),
+            PeakDataLevel::RawData(arrays) => arrays.search(query, error_tolerance),
+            PeakDataLevel::Centroid(peaks) => peaks.search(query, error_tolerance),
+            PeakDataLevel::Deconvoluted(peaks) => peaks.search(query, error_tolerance),
         }
     }
 }
@@ -669,8 +668,6 @@ mod test {
     use crate::io::mzml::MzMLReader;
     use crate::io::prelude::*;
 
-    use mzsignal::arrayops::ArrayPair;
-
     #[test]
     fn test_profile_read() {
         let mut reader = MzMLReader::open_path("./test/data/three_test_scans.mzML")
@@ -697,13 +694,13 @@ mod test {
             }
 
             peaks
-                .has_peak(562.741, 3f64, MassErrorType::PPM)
+                .has_peak(562.741, Tolerance::PPM(3f64))
                 .expect("Expected to find peak");
             peaks
-                .has_peak(563.240, 3f64, MassErrorType::PPM)
+                .has_peak(563.240, Tolerance::PPM(3f64))
                 .expect("Expected to find peak");
             let p = peaks
-                .has_peak(563.739, 1f64, MassErrorType::PPM)
+                .has_peak(563.739, Tolerance::PPM(1f64))
                 .expect("Expected to find peak");
             assert!((p.mz() - 563.739).abs() < 1e-3)
         }

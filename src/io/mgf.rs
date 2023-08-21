@@ -576,6 +576,16 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFi
 
 pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
+
+pub(crate) fn is_mgf(buf: &[u8]) -> bool {
+    let needle = b"BEGIN IONS";
+    if let Some(_loc) = buf.windows(needle.len()).position(|window| window == needle) {
+        true
+    } else {
+        false
+    }
+}
+
 pub struct MGFWriterType<
     R: io::Write,
     C: CentroidPeakAdapting = CentroidPeak,

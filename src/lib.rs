@@ -37,7 +37,7 @@ pub mod params;
 pub mod spectrum;
 mod utils;
 
-pub use mzpeaks::MassErrorType;
+pub use mzpeaks::Tolerance;
 pub use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 pub use mzpeaks::{PeakCollection, PeakSet};
 

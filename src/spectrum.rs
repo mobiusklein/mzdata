@@ -33,7 +33,7 @@ read-only access to components that describe a spectrum's metadata, and
 ```rust
 use std::fs::File;
 use mzdata::io::prelude::*;
-use mzpeaks::{MassErrorType, prelude::*};
+use mzpeaks::{Tolerance, prelude::*};
 use mzdata::io::MzMLReader;
 use mzdata::spectrum::{SignalContinuity};
 
@@ -44,7 +44,7 @@ for spectrum in reader {
         let peak_picked = spectrum.into_centroid().unwrap();
         println!("Matches for 579.155: {:?}",
                  peak_picked.peaks.all_peaks_for(
-                     579.155, 0.02, MassErrorType::Absolute));
+                     579.155, Tolerance::Da(0.02)));
     }
 }
 ```

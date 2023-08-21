@@ -21,7 +21,9 @@ mod writer;
 
 pub use crate::io::mzml::reader::{
     CVParamParse, FileMetadataBuilder, MzMLParserError, MzMLParserState, MzMLReader,
-    MzMLReaderType, ParserResult, SpectrumBuilding, XMLParseBase,
+    MzMLReaderType, ParserResult, SpectrumBuilding, XMLParseBase
 };
+
+pub(crate) use crate::io::mzml::reader::is_mzml;
 
 pub use crate::io::mzml::writer::{MzMLWriter, MzMLWriterState, MzMLWriterType, WriterResult};

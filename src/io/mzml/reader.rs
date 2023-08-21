@@ -127,69 +127,69 @@ pub trait CVParamParse: XMLParseBase {
         let mut param = Param::new();
         for attr_parsed in event.attributes() {
             match attr_parsed {
-                Ok(attr) => match attr.key {
+                Ok(attr) => match attr.key.as_ref() {
                     b"name" => {
-                        param.name = attr.unescape_and_decode_value(reader).unwrap_or_else(|e| {
+                        param.name = attr.unescape_value().unwrap_or_else(|e| {
                             panic!(
                                 "Error decoding CV param name at {}: {}",
                                 reader.buffer_position(),
                                 e
                             )
-                        });
+                        }).to_string();
                     }
                     b"value" => {
-                        param.value = attr.unescape_and_decode_value(reader).unwrap_or_else(|e| {
+                        param.value = attr.unescape_value().unwrap_or_else(|e| {
                             panic!(
                                 "Error decoding CV param value at {}: {}",
                                 reader.buffer_position(),
                                 e
                             )
-                        });
+                        }).to_string();
                     }
                     b"cvRef" => {
                         param.controlled_vocabulary =
-                            Some(attr.unescape_and_decode_value(reader).unwrap_or_else(|e| {
+                            Some(attr.unescape_value().unwrap_or_else(|e| {
                                 panic!(
                                     "Error decoding CV param reference at {}: {}",
                                     reader.buffer_position(),
                                     e
                                 )
-                            }));
+                            }).to_string());
                     }
                     b"accession" => {
                         param.accession =
-                            attr.unescape_and_decode_value(reader).unwrap_or_else(|e| {
+                            attr.unescape_value().unwrap_or_else(|e| {
                                 panic!(
                                     "Error decoding CV param accession at {}: {}",
                                     reader.buffer_position(),
                                     e
                                 )
-                            });
+                            }).to_string();
                     }
                     b"unitName" => {
                         param.unit_name =
-                            Some(attr.unescape_and_decode_value(reader).unwrap_or_else(|e| {
+                            Some(attr.unescape_value().unwrap_or_else(|e| {
                                 panic!(
                                     "Error decoding CV param unit name at {}: {}",
                                     reader.buffer_position(),
                                     e
                                 )
-                            }));
+                            }).to_string());
                     }
                     b"unitAccession" => {
                         param.unit_accession =
-                            Some(attr.unescape_and_decode_value(reader).unwrap_or_else(|e| {
+                            Some(attr.unescape_value().unwrap_or_else(|e| {
                                 panic!(
                                     "Error decoding CV param unit name at {}: {}",
                                     reader.buffer_position(),
                                     e
                                 )
-                            }));
+                            }).to_string());
                     }
                     b"unitCvRef" => {}
                     _ => {}
                 },
-                Err(msg) => return Err(self.handle_xml_error(msg, state)),
+                Err(msg) => return Err(self.handle_xml_error(msg.into(), state)),
             }
         }
         Ok(param)
@@ -645,22 +645,19 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
         };
     }
 
-    pub fn start_element<B: io::BufRead>(
+    pub fn start_element(
         &mut self,
         event: &BytesStart,
         state: MzMLParserState,
-        reader: &Reader<B>,
     ) -> ParserResult {
         let elt_name = event.name();
-        match elt_name {
+        match elt_name.as_ref() {
             b"spectrum" => {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
-                        Ok(attr) => match attr.key {
+                        Ok(attr) => match attr.key.as_ref() {
                             b"id" => {
-                                self.scan_id = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding id");
+                                self.scan_id = attr.unescape_value().expect("Error decoding id").to_string();
                             }
                             b"index" => {
                                 self.index = (&String::from_utf8_lossy(&attr.value))
@@ -670,7 +667,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
                             _ => {}
                         },
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -687,14 +684,13 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"instrumentConfigurationRef" {
-                                scan_event.instrument_configuration_id = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding id");
+                            if attr.key.as_ref() == b"instrumentConfigurationRef" {
+
+                                scan_event.instrument_configuration_id = attr.unescape_value().expect("Error decoding id").to_string();
                             }
                         }
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -722,14 +718,14 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"spectrumRef" {
+                            if attr.key.as_ref() == b"spectrumRef" {
                                 self.precursor.precursor_id = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding id");
+                                    .unescape_value()
+                                    .expect("Error decoding id").to_string();
                             }
                         }
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -768,7 +764,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
         reader: &Reader<B>,
     ) -> ParserResult {
         let elt_name = event.name();
-        match elt_name {
+        match elt_name.as_ref() {
             b"cvParam" | b"userParam" => match self.handle_param(event, reader, state) {
                 Ok(param) => {
                     self.fill_param_into(param, state);
@@ -783,7 +779,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
 
     pub fn end_element(&mut self, event: &BytesEnd, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
-        match elt_name {
+        match elt_name.as_ref() {
             b"spectrum" => return Ok(MzMLParserState::SpectrumDone),
             b"scanList" => return Ok(MzMLParserState::Spectrum),
             b"scan" => return Ok(MzMLParserState::ScanList),
@@ -817,7 +813,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
     pub fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult {
         if state == MzMLParserState::Binary {
             let bin = event
-                .unescaped()
+                .unescape()
                 .expect("Failed to unescape binary data array content");
             self.current_array.data = Bytes::from(&*bin);
         }
@@ -869,14 +865,13 @@ impl XMLParseBase for FileMetadataBuilder {}
 impl CVParamParse for FileMetadataBuilder {}
 
 impl FileMetadataBuilder {
-    pub fn start_element<B: io::BufRead>(
+    pub fn start_element(
         &mut self,
         event: &BytesStart,
         state: MzMLParserState,
-        reader: &Reader<B>,
     ) -> ParserResult {
         let elt_name = event.name();
-        match elt_name {
+        match elt_name.as_ref() {
             b"fileDescription" => return Ok(MzMLParserState::FileDescription),
             b"fileContent" => return Ok(MzMLParserState::FileContents),
             b"sourceFileList" => return Ok(MzMLParserState::SourceFileList),
@@ -885,22 +880,22 @@ impl FileMetadataBuilder {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"id" {
+                            if attr.key.as_ref() == b"id" {
                                 source_file.id = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding id");
-                            } else if attr.key == b"name" {
+                                    .unescape_value()
+                                    .expect("Error decoding id").to_string();
+                            } else if attr.key.as_ref() == b"name" {
                                 source_file.name = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding name");
-                            } else if attr.key == b"location" {
+                                    .unescape_value()
+                                    .expect("Error decoding name").to_string();
+                            } else if attr.key.as_ref() == b"location" {
                                 source_file.location = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding location");
+                                    .unescape_value()
+                                    .expect("Error decoding location").to_string();
                             }
                         }
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -913,18 +908,18 @@ impl FileMetadataBuilder {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"id" {
+                            if attr.key.as_ref() == b"id" {
                                 software.id = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding id");
-                            } else if attr.key == b"version" {
+                                    .unescape_value()
+                                    .expect("Error decoding id").to_string();
+                            } else if attr.key.as_ref() == b"version" {
                                 software.version = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding version");
+                                    .unescape_value()
+                                    .expect("Error decoding version").to_string();
                             }
                         }
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -938,16 +933,16 @@ impl FileMetadataBuilder {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"id" {
+                            if attr.key.as_ref() == b"id" {
                                 let key = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding id");
+                                    .unescape_value()
+                                    .expect("Error decoding id").to_string();
                                 self.reference_param_groups.entry(key.clone()).or_default();
                                 self.last_group = key;
                             }
                         }
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -961,14 +956,14 @@ impl FileMetadataBuilder {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"id" {
+                            if attr.key.as_ref() == b"id" {
                                 ic.id = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding id");
+                                    .unescape_value()
+                                    .expect("Error decoding id").to_string();
                             }
                         }
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -984,16 +979,16 @@ impl FileMetadataBuilder {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"order" {
+                            if attr.key.as_ref() == b"order" {
                                 source.order = attr
-                                    .unescape_and_decode_value(reader)
+                                    .unescape_value()
                                     .expect("Error decoding order")
                                     .parse()
                                     .expect("Failed to parse integer from `order`");
                             }
                         }
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -1012,16 +1007,16 @@ impl FileMetadataBuilder {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"order" {
+                            if attr.key.as_ref() == b"order" {
                                 analyzer.order = attr
-                                    .unescape_and_decode_value(reader)
+                                    .unescape_value()
                                     .expect("Error decoding order")
                                     .parse()
                                     .expect("Failed to parse integer from `order`");
                             }
                         }
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -1040,16 +1035,16 @@ impl FileMetadataBuilder {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"order" {
+                            if attr.key.as_ref() == b"order" {
                                 detector.order = attr
-                                    .unescape_and_decode_value(reader)
+                                    .unescape_value()
                                     .expect("Error decoding order")
                                     .parse()
                                     .expect("Failed to parse integer from `order`");
                             }
                         }
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -1066,14 +1061,14 @@ impl FileMetadataBuilder {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"id" {
+                            if attr.key.as_ref() == b"id" {
                                 dp.id = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding id");
+                                    .unescape_value()
+                                    .expect("Error decoding id").to_string();
                             }
                         }
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -1085,20 +1080,20 @@ impl FileMetadataBuilder {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"order" {
+                            if attr.key.as_ref() == b"order" {
                                 method.order = attr
-                                    .unescape_and_decode_value(reader)
+                                    .unescape_value()
                                     .expect("Error decoding order")
                                     .parse()
                                     .expect("Failed to parse order");
-                            } else if attr.key == b"softwareRef" {
+                            } else if attr.key.as_ref() == b"softwareRef" {
                                 method.software_reference = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding softwareRef");
+                                    .unescape_value()
+                                    .expect("Error decoding softwareRef").to_string();
                             }
                         }
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -1165,7 +1160,7 @@ impl FileMetadataBuilder {
         reader: &Reader<B>,
     ) -> ParserResult {
         let elt_name = event.name();
-        match elt_name {
+        match elt_name.as_ref() {
             b"cvParam" | b"userParam" => match self.handle_param(event, reader, state) {
                 Ok(param) => {
                     self.fill_param_into(param, state);
@@ -1179,14 +1174,14 @@ impl FileMetadataBuilder {
                     for attr_parsed in event.attributes() {
                         match attr_parsed {
                             Ok(attr) => {
-                                if attr.key == b"ref" {
+                                if attr.key.as_ref() == b"ref" {
                                     ic.software_reference = attr
-                                        .unescape_and_decode_value(reader)
-                                        .expect("Error decoding software reference");
+                                        .unescape_value()
+                                        .expect("Error decoding software reference").to_string();
                                 }
                             }
                             Err(msg) => {
-                                return Err(self.handle_xml_error(msg, state));
+                                return Err(self.handle_xml_error(msg.into(), state));
                             }
                         }
                     }
@@ -1197,10 +1192,10 @@ impl FileMetadataBuilder {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"ref" {
+                            if attr.key.as_ref() == b"ref" {
                                 let group_id = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding reference group");
+                                    .unescape_value()
+                                    .expect("Error decoding reference group").to_string();
 
                                 let param_group = match self.reference_param_groups.get(&group_id) {
                                     Some(params) => params.clone(),
@@ -1215,7 +1210,7 @@ impl FileMetadataBuilder {
                             }
                         }
                         Err(msg) => {
-                            return Err(self.handle_xml_error(msg, state));
+                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
                 }
@@ -1227,7 +1222,7 @@ impl FileMetadataBuilder {
 
     pub fn end_element(&mut self, event: &BytesEnd, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
-        match elt_name {
+        match elt_name.as_ref() {
             b"fileDescription" => return Ok(MzMLParserState::FileDescription),
             b"fileContent" => return Ok(MzMLParserState::FileDescription),
             b"sourceFile" => return Ok(MzMLParserState::SourceFileList),
@@ -1264,7 +1259,6 @@ impl FileMetadataBuilder {
 pub struct IndexedMzMLIndexExtractor {
     spectrum_index: OffsetIndex,
     chromatogram_index: OffsetIndex,
-    index_offset: Option<u64>,
     last_id: String,
 }
 
@@ -1283,7 +1277,6 @@ impl IndexedMzMLIndexExtractor {
         IndexedMzMLIndexExtractor {
             spectrum_index: OffsetIndex::new("spectrum".into()),
             chromatogram_index: OffsetIndex::new("chromatogram".into()),
-            index_offset: None,
             last_id: String::new(),
         }
     }
@@ -1303,26 +1296,25 @@ impl IndexedMzMLIndexExtractor {
         Ok(None)
     }
 
-    pub fn start_element<B: io::BufRead>(
+    pub fn start_element(
         &mut self,
         event: &BytesStart,
         state: IndexParserState,
-        reader: &Reader<B>,
     ) -> Result<IndexParserState, XMLError> {
         let elt_name = event.name();
-        match elt_name {
+        match elt_name.as_ref() {
             b"offset" => {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"idRef" {
+                            if attr.key.as_ref() == b"idRef" {
                                 self.last_id = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding idRef");
+                                    .unescape_value()
+                                    .expect("Error decoding idRef").to_string();
                             }
                         }
                         Err(err) => {
-                            return Err(err);
+                            return Err(err.into());
                         }
                     }
                 }
@@ -1331,10 +1323,10 @@ impl IndexedMzMLIndexExtractor {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key == b"name" {
+                            if attr.key.as_ref() == b"name" {
                                 let index_name = attr
-                                    .unescape_and_decode_value(reader)
-                                    .expect("Error decoding idRef");
+                                    .unescape_value()
+                                    .expect("Error decoding idRef").to_string();
                                 match index_name.as_ref() {
                                     "spectrum" => return Ok(IndexParserState::SpectrumIndexList),
                                     "chromatogram" => {
@@ -1345,7 +1337,7 @@ impl IndexedMzMLIndexExtractor {
                             }
                         }
                         Err(err) => {
-                            return Err(err);
+                            return Err(err.into());
                         }
                     }
                 }
@@ -1357,14 +1349,13 @@ impl IndexedMzMLIndexExtractor {
         Ok(state)
     }
 
-    pub fn end_element<B: io::BufRead>(
+    pub fn end_element(
         &mut self,
         event: &BytesEnd,
         state: IndexParserState,
-        _reader: &Reader<B>,
     ) -> Result<IndexParserState, XMLError> {
         let elt_name = event.name();
-        match elt_name {
+        match elt_name.as_ref() {
             b"offset" => {}
             b"index" => {}
             b"indexList" => return Ok(IndexParserState::Done),
@@ -1381,9 +1372,9 @@ impl IndexedMzMLIndexExtractor {
         match state {
             IndexParserState::SpectrumIndexList => {
                 let bin = event
-                    .unescaped()
+                    .unescape()
                     .expect("Failed to unescape spectrum offset");
-                if let Ok(offset) = String::from_utf8_lossy(&*bin).parse::<u64>() {
+                if let Ok(offset) = bin.parse::<u64>() {
                     if self.last_id != "" {
                         let key = mem::take(&mut self.last_id);
                         self.spectrum_index.insert(key, offset);
@@ -1394,9 +1385,9 @@ impl IndexedMzMLIndexExtractor {
             }
             IndexParserState::ChromatogramIndexList => {
                 let bin = event
-                    .unescaped()
+                    .unescape()
                     .expect("Failed to unescape chromatogram offset");
-                if let Ok(offset) = String::from_utf8_lossy(&*bin).parse::<u64>() {
+                if let Ok(offset) = bin.parse::<u64>() {
                     if self.last_id != "" {
                         let key = mem::take(&mut self.last_id);
                         self.chromatogram_index.insert(key, offset);
@@ -1492,9 +1483,9 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
         reader.trim_text(true);
         let mut accumulator = FileMetadataBuilder::default();
         loop {
-            match reader.read_event(&mut self.buffer) {
+            match reader.read_event_into(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => {
-                    match accumulator.start_element(e, self.state, &reader) {
+                    match accumulator.start_element(e, self.state) {
                         Ok(state) => {
                             self.state = state;
                             match &self.state {
@@ -1608,9 +1599,9 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
         reader.trim_text(true);
         let mut offset: usize = 0;
         loop {
-            match reader.read_event(&mut self.buffer) {
+            match reader.read_event_into(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => {
-                    match accumulator.start_element(e, self.state, &reader) {
+                    match accumulator.start_element(e, self.state) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -1756,7 +1747,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator
 
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
-impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     ScanSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     /// Retrieve a spectrum by it's native ID
@@ -1850,7 +1841,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
     pub fn new_indexed(file: R) -> MzMLReaderType<R, C, D> {
         let mut reader = Self::new(file);
         match reader.read_index_from_end() {
-            Ok(()) => {}
+            Ok(_count) => {}
             Err(err) => {
                 match reader.seek(SeekFrom::Start(0)) {
                     Ok(_) => {
@@ -1871,7 +1862,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
 
     /// Read the offset index at the end of an `<indexedmzML>` document,
     /// though this index may be malformed in some older files.
-    pub fn read_index_from_end(&mut self) -> Result<(), MzMLIndexingError> {
+    pub fn read_index_from_end(&mut self) -> Result<u64, MzMLIndexingError> {
         let mut indexer = IndexedMzMLIndexExtractor::new();
 
         let offset = match indexer.find_offset_from_reader(&mut self.handle) {
@@ -1896,9 +1887,9 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
         reader.trim_text(true);
 
         loop {
-            match reader.read_event(&mut self.buffer) {
+            match reader.read_event_into(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => {
-                    match indexer.start_element(e, indexer_state, &reader) {
+                    match indexer.start_element(e, indexer_state) {
                         Ok(state) => {
                             indexer_state = state;
                             match &indexer_state {
@@ -1910,7 +1901,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
                     };
                 }
                 Ok(Event::End(ref e)) => {
-                    match indexer.end_element(e, indexer_state, &reader) {
+                    match indexer.end_element(e, indexer_state) {
                         Ok(state) => {
                             indexer_state = state;
                         }
@@ -1936,7 +1927,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
         self.index = indexer.spectrum_index;
         self.index.init = true;
         self.handle.seek(SeekFrom::Start(current_position)).unwrap();
-        Ok(())
+        Ok(self.index.len() as u64)
     }
 
     /// Builds an offset index to each `<spectrum>` XML element
@@ -1951,20 +1942,20 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         loop {
-            match reader.read_event(&mut self.buffer) {
+            match reader.read_event_into(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => {
                     let element_name = e.name();
-                    if element_name == b"spectrum" {
+                    if element_name.as_ref() == b"spectrum" {
                         // Hit a spectrum, extract ID and save current offset
 
                         for attr_parsed in e.attributes() {
                             match attr_parsed {
                                 Ok(attr) => {
-                                    match attr.key {
+                                    match attr.key.as_ref() {
                                         b"id" => {
                                             let scan_id = attr
-                                                .unescape_and_decode_value(&reader)
-                                                .expect("Error decoding id");
+                                                .unescape_value()
+                                                .expect("Error decoding id").to_string();
                                             // This count is off by 2 because somehow the < and > bytes are removed?
                                             self.index.insert(
                                                 scan_id,
@@ -1982,7 +1973,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
                 }
                 Ok(Event::End(ref e)) => {
                     let element_name = e.name();
-                    if element_name == b"spectrumList" {
+                    if element_name.as_ref() == b"spectrumList" {
                         break;
                     }
                 }
@@ -2013,7 +2004,11 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     }
 
     fn construct_index_from_stream(&mut self) -> u64 {
-        self.build_index()
+        if let Ok(count) = self.read_index_from_end() {
+            count
+        } else {
+            self.build_index()
+        }
     }
 }
 
@@ -2025,6 +2020,36 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMe
 
 /// A specialization of [`MzMLReaderType`] for the default peak types, for common use.
 pub type MzMLReader<R> = MzMLReaderType<R, CentroidPeak, DeconvolutedPeak>;
+
+
+pub(crate) fn is_mzml(buf: &[u8]) -> bool {
+    let mut bufread = BufReader::new(io::Cursor::new(buf));
+    let mut reader = Reader::from_reader(&mut bufread);
+    let mut buffer = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buffer) {
+            Ok(Event::Start(ref e)) => {
+                let elt_name = e.name();
+                match elt_name.as_ref() {
+                    b"mzML" => {
+                        return true
+                    },
+                    b"indexedmzML" => {
+                        return true
+                    },
+                    _ => {}
+                }
+            },
+            Ok(Event::Eof) => {
+                return false
+            },
+            Ok(_) => {},
+            Err(_) => {
+                return false
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -2178,7 +2203,7 @@ mod test {
         let file = fs::File::open(path)?;
         let mut reader = MzMLReader::new(file);
         match reader.read_index_from_end() {
-            Ok(()) => {}
+            Ok(_count) => {}
             Err(err) => {
                 panic!("Failed to parse out index {:?}", err);
             }

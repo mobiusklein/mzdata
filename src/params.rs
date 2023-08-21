@@ -82,6 +82,10 @@ pub trait ParamDescribed {
         self.params_mut().push(param);
     }
 
+    fn remove_param(&mut self, index: usize) -> Param {
+        self.params_mut().remove(index)
+    }
+
     fn get_param_by_name(&self, name: &str) -> Option<&Param> {
         for param in self.params().iter() {
             if param.name == name {

@@ -1065,15 +1065,15 @@ dependencies = [
 
 [[package]]
 name = "mzpeaks"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4400c2b634e1715bfecb67b8dc5e19d044173a35923e7e425d5c24204339218a"
+checksum = "2005c9b4daf3e653ac283fa2160066c7221de84c350adce70b8a6932407215ed"
 
 [[package]]
 name = "mzsignal"
-version = "0.2.4"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40050872bc5728248e4482d3493b5d416a0bb97b12c3a1dfa9b36ed16be2c7af"
+checksum = "394cc764f515ce803c0d6dcef94f394500a271bb8ad57c04bdf2bd6701f9a2b1"
 dependencies = [
  "cfg-if",
  "log",
@@ -1436,9 +1436,9 @@ checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quick-xml"
-version = "0.22.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8533f14c8382aaad0d592c812ac3b826162128b65662331e1127b45c3d18536b"
+checksum = "eff6510e86862b57b210fd8cbe8ed3f0d7d600b9c2863cd4549a2e033c66e956"
 dependencies = [
  "memchr",
  "serde",

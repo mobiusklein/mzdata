@@ -98,25 +98,6 @@ pub trait ScanSource<
         }
     }
 
-    /// Re-construct an offset index from this readable object, assuming
-    /// it is a JSON stream over the serialized index.
-    fn read_index<R: io::Read>(&mut self, reader: R) -> Result<&Self, serde_json::Error> {
-        match OffsetIndex::from_reader(reader) {
-            Ok(index) => {
-                self.set_index(index);
-                Ok(self)
-            }
-            Err(err) => Err(err),
-        }
-    }
-
-    fn write_index<W: io::Write>(&self, writer: W) -> Result<&Self, serde_json::Error> {
-        match self.get_index().to_writer(writer) {
-            Ok(_) => Ok(self),
-            Err(err) => Err(err),
-        }
-    }
-
     /// Open a new iterator over this stream.
     fn iter(&mut self) -> SpectrumIterator<C, D, S, Self>
     where
@@ -269,6 +250,25 @@ pub trait MZFileReader<
     /// to be a trivial wrapper.
     fn construct_index_from_stream(&mut self) -> u64;
 
+    /// Re-construct an offset index from this readable object, assuming
+    /// it is a JSON stream over the serialized index.
+    fn read_index(&mut self, reader: Box<dyn io::Read>) -> Result<&Self, serde_json::Error> {
+        match OffsetIndex::from_reader(reader) {
+            Ok(index) => {
+                self.set_index(index);
+                Ok(self)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    fn write_index(&self, writer: Box<dyn io::Write>) -> Result<&Self, serde_json::Error> {
+        match self.get_index().to_writer(writer) {
+            Ok(_) => Ok(self),
+            Err(err) => Err(err),
+        }
+    }
+
     /// The preferred method of opening a file from a path-like object.
     /// This method will open the file at the provided path, test whether
     /// there is an accompanied index file next to it on the file system,
@@ -291,11 +291,14 @@ pub trait MZFileReader<
                         let index_stream = fs::File::open(index_path).unwrap_or_else(|e| {
                             panic!("Failed to open index file {}: {}", index_path.display(), e)
                         });
-                        match reader.read_index(io::BufReader::new(&index_stream)) {
+                        match reader.read_index(Box::new(io::BufReader::new(index_stream))) {
                             Ok(_) => {}
                             Err(_err) => {
+                                let index_stream = fs::File::create(index_path).unwrap_or_else(|e| {
+                                    panic!("Failed to open index file {}: {}", index_path.display(), e)
+                                });
                                 reader.construct_index_from_stream();
-                                match reader.write_index(io::BufWriter::new(index_stream)) {
+                                match reader.write_index(Box::new(io::BufWriter::new(index_stream))) {
                                     Ok(_) => {}
                                     Err(err) => {
                                         warn!(
@@ -316,7 +319,7 @@ pub trait MZFileReader<
                                 e
                             )
                         });
-                        match reader.write_index(io::BufWriter::new(index_stream)) {
+                        match reader.write_index(Box::new(io::BufWriter::new(index_stream))) {
                             Ok(_) => {}
                             Err(err) => {
                                 warn!(

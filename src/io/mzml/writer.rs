@@ -35,7 +35,7 @@ const BUFFER_SIZE: usize = 10000;
 
 macro_rules! bstart {
     ($e:tt) => {
-        BytesStart::owned($e.as_bytes().to_vec(), $e.len())
+        BytesStart::from_content($e, $e.len())
     };
 }
 
@@ -51,7 +51,7 @@ macro_rules! start_event {
     ($writer:ident, $target:ident) => {
         $writer
             .handle
-            .write_event(Event::Start($target.to_borrowed()))?;
+            .write_event(Event::Start($target.borrow()))?;
     };
 }
 
@@ -86,12 +86,12 @@ impl<W: io::Write> InnerXMLWriter<W> {
     }
 
     pub fn digest(&mut self) -> String {
-        let digest = self.handle.inner().get_ref().compute();
+        let digest = self.handle.get_mut().get_ref().compute();
         format!("{:x}", digest)
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
-        self.handle.inner().flush()
+        self.handle.get_mut().flush()
     }
 
     pub fn write_param(&mut self, param: &Param) -> WriterResult {
@@ -286,15 +286,15 @@ where
     }
 
     fn stream_position(&mut self) -> io::Result<u64> {
-        self.handle.handle.inner().stream_position()
+        self.handle.handle.get_mut().stream_position()
     }
 
     fn write_cv_list(&mut self) -> WriterResult {
-        let mut cv_list = BytesStart::owned(b"cvList".to_vec(), 6);
+        let mut cv_list = BytesStart::from_content("cvList", 6);
         cv_list.push_attribute(("count", "2"));
         self.handle.write_event(Event::Start(cv_list))?;
 
-        let mut cv = BytesStart::owned(b"cv".to_vec(), 2);
+        let mut cv = BytesStart::from_content("cv", 2);
         cv.push_attribute(("id", "MS"));
         cv.push_attribute(("fullName", "PSI-MS"));
         cv.push_attribute((
@@ -304,7 +304,7 @@ where
         cv.push_attribute(("version", Self::PSIMS_VERSION));
         self.handle.write_event(Event::Empty(cv))?;
 
-        let mut cv = BytesStart::owned(b"cv".to_vec(), 2);
+        let mut cv = BytesStart::from_content("cv", 2);
         cv.push_attribute(("id", "UO"));
         cv.push_attribute(("fullName", "UNIT-ONTOLOGY"));
         cv.push_attribute(("URI", "http://ontologies.berkeleybop.org/uo.obo"));
@@ -312,14 +312,14 @@ where
         self.handle.write_event(Event::Empty(cv))?;
 
         self.handle
-            .write_event(Event::End(BytesEnd::owned(b"cvList".to_vec())))?;
+            .write_event(Event::End(BytesEnd::new("cvList")))?;
         Ok(())
     }
 
     fn start_document(&mut self) -> WriterResult {
         self.handle
-            .write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"utf-8"), None)))?;
-        let mut indexed = BytesStart::owned(b"indexedmzML".to_vec(), 11);
+            .write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
+        let mut indexed = BytesStart::from_content("indexedmzML", 11);
         indexed.push_attribute(("xmlns", "http://psi.hupo.org/ms/mzml"));
         indexed.push_attribute(("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"));
         indexed.push_attribute((
@@ -328,7 +328,7 @@ where
         ));
         self.handle.write_event(Event::Start(indexed))?;
 
-        let mut mzml = BytesStart::owned(b"mzML".to_vec(), 4);
+        let mut mzml = BytesStart::from_content("mzML", 4);
         mzml.push_attribute(("xmlns", "http://psi.hupo.org/ms/mzml"));
         mzml.push_attribute(("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"));
         mzml.push_attribute((
@@ -373,13 +373,13 @@ where
         let mut outer = bstart!("sourceFileList");
         let count = self.file_description.source_files.len().to_string();
         attrib!("count", count, outer);
-        self.handle.write_event(Event::Start(outer.to_borrowed()))?;
+        self.handle.write_event(Event::Start(outer.borrow()))?;
         for sf in self.file_description.source_files.iter() {
             let mut tag = bstart!("sourceFile");
             attrib!("id", sf.id, tag);
             attrib!("name", sf.name, tag);
             attrib!("location", sf.location, tag);
-            self.handle.write_event(Event::Start(tag.to_borrowed()))?;
+            self.handle.write_event(Event::Start(tag.borrow()))?;
             for param in sf.params() {
                 self.handle.write_param(param)?
             }
@@ -395,12 +395,12 @@ where
         let mut outer = bstart!("softwareList");
         let count = self.softwares.len().to_string();
         attrib!("count", count, outer);
-        self.handle.write_event(Event::Start(outer.to_borrowed()))?;
+        self.handle.write_event(Event::Start(outer.borrow()))?;
         for soft in self.softwares.iter() {
             let mut tag = bstart!("software");
             attrib!("id", soft.id, tag);
             attrib!("version", soft.version, tag);
-            self.handle.write_event(Event::Start(tag.to_borrowed()))?;
+            self.handle.write_event(Event::Start(tag.borrow()))?;
             for param in soft.params() {
                 self.handle.write_param(param)?
             }
@@ -414,7 +414,7 @@ where
         let mut outer = bstart!("instrumentConfigurationList");
         let count = self.instrument_configurations.len().to_string();
         attrib!("count", count, outer);
-        self.handle.write_event(Event::Start(outer.to_borrowed()))?;
+        self.handle.write_event(Event::Start(outer.borrow()))?;
 
         // Sort the keys so the ordering is consistent on every run
         let mut configs: Vec<_> = self.instrument_configurations.keys().collect();
@@ -423,7 +423,7 @@ where
             let ic = self.instrument_configurations.get(key).unwrap();
             let mut tag = bstart!("instrumentConfiguration");
             attrib!("id", ic.id, tag);
-            self.handle.write_event(Event::Start(tag.to_borrowed()))?;
+            self.handle.write_event(Event::Start(tag.borrow()))?;
             for param in ic.params() {
                 self.handle.write_param(param)?
             }
@@ -439,7 +439,7 @@ where
                 let order = comp.order.to_string();
                 attrib!("order", order, cmp_tag);
                 self.handle
-                    .write_event(Event::Start(cmp_tag.to_borrowed()))?;
+                    .write_event(Event::Start(cmp_tag.borrow()))?;
                 for param in comp.params() {
                     self.handle.write_param(param)?
                 }
@@ -458,17 +458,17 @@ where
         let mut outer = bstart!("dataProcessingList");
         let count = self.data_processings.len().to_string();
         attrib!("count", count, outer);
-        self.handle.write_event(Event::Start(outer.to_borrowed()))?;
+        self.handle.write_event(Event::Start(outer.borrow()))?;
         for dp in self.data_processings.iter() {
             let mut tag = bstart!("dataProcessing");
             attrib!("id", dp.id, tag);
-            self.handle.write_event(Event::Start(tag.to_borrowed()))?;
+            self.handle.write_event(Event::Start(tag.borrow()))?;
             for proc in dp.methods.iter() {
                 let mut mtag = bstart!("processingMethod");
                 let order = proc.order.to_string();
                 attrib!("order", order, mtag);
                 attrib!("softwareRef", proc.software_reference, mtag);
-                self.handle.write_event(Event::Start(mtag.to_borrowed()))?;
+                self.handle.write_event(Event::Start(mtag.borrow()))?;
                 for param in proc.params() {
                     self.handle.write_param(param)?
                 }
@@ -596,7 +596,7 @@ where
                 scan_tag
             );
             self.handle
-                .write_event(Event::Start(scan_tag.to_borrowed()))?;
+                .write_event(Event::Start(scan_tag.borrow()))?;
 
             self.handle.write_param(
                 &self
@@ -621,11 +621,11 @@ where
 
             attrib!("count", scan_window_list_count, scan_window_list_tag);
             self.handle
-                .write_event(Event::Start(scan_window_list_tag.to_borrowed()))?;
+                .write_event(Event::Start(scan_window_list_tag.borrow()))?;
             for window in scan.scan_windows.iter() {
                 let window_tag = bstart!("scanWindow");
                 self.handle
-                    .write_event(Event::Start(window_tag.to_borrowed()))?;
+                    .write_event(Event::Start(window_tag.borrow()))?;
                 self.handle.write_param(
                     &self
                         .ms_cv
@@ -659,7 +659,7 @@ where
     fn write_isolation_window(&mut self, iw: &IsolationWindow) -> WriterResult {
         let iw_tag = bstart!("isolationWindow");
         self.handle
-            .write_event(Event::Start(iw_tag.to_borrowed()))?;
+            .write_event(Event::Start(iw_tag.borrow()))?;
         self.handle.write_param(
             &self
                 .ms_cv
@@ -748,7 +748,7 @@ where
         let mut precursor_tag = bstart!("precursor");
         attrib!("spectrumRef", precursor.precursor_id, precursor_tag);
         self.handle
-            .write_event(Event::Start(precursor_tag.to_borrowed()))?;
+            .write_event(Event::Start(precursor_tag.borrow()))?;
 
         let iw = precursor.isolation_window();
         self.write_isolation_window(iw)?;
@@ -853,7 +853,7 @@ where
         let bin = bstart!("binary");
         start_event!(self, bin);
         self.handle
-            .write_event(Event::Text(BytesText::from_plain(&encoded)))?;
+            .write_event(Event::Text(BytesText::new(String::from_utf8_lossy(&encoded).as_ref())))?;
         end_event!(self, bin);
         end_event!(self, outer);
         Ok(())
@@ -900,7 +900,7 @@ where
         attrib!("id", spectrum.id(), outer);
         let count = self.spectrum_counter.to_string();
         attrib!("index", count, outer);
-        self.handle.write_event(Event::Start(outer.to_borrowed()))?;
+        self.handle.write_event(Event::Start(outer.borrow()))?;
         self.spectrum_counter += 1;
 
         let ms_level = spectrum.ms_level();
@@ -983,7 +983,7 @@ where
             attrib!("idRef", id, tag);
             start_event!(self, tag);
             let content = offset.to_string();
-            let text = BytesText::from_plain_str(&content);
+            let text = BytesText::new(&content);
             self.handle.write_event(Event::Text(text))?;
             end_event!(self, tag);
         }
@@ -1005,14 +1005,14 @@ where
         let tag = bstart!("indexListOffset");
         start_event!(self, tag);
         let content = offset.to_string();
-        let text = BytesText::from_plain_str(&content);
+        let text = BytesText::new(&content);
         self.handle.write_event(Event::Text(text))?;
         end_event!(self, tag);
 
         let tag = bstart!("fileChecksum");
         start_event!(self, tag);
         let content = self.handle.digest();
-        let text = BytesText::from_plain_str(&content);
+        let text = BytesText::new(&content);
         self.handle.write_event(Event::Text(text))?;
         end_event!(self, tag);
         Ok(())

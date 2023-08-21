@@ -16,7 +16,7 @@ use flate2::write::{ZlibDecoder, ZlibEncoder};
 use flate2::Compression;
 use mzpeaks::prelude::*;
 use mzpeaks::{
-    CentroidPeak, DeconvolutedPeak, DeconvolutedPeakSet, MZPeakSetType, MassErrorType, PeakSet,
+    CentroidPeak, DeconvolutedPeak, DeconvolutedPeakSet, MZPeakSetType, PeakSet,
 };
 
 use crate::params::{ParamList, Unit};
@@ -574,25 +574,24 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
     pub fn search(
         &self,
         query: f64,
-        error_tolerance: f64,
-        error_type: MassErrorType,
+        error_tolerance: Tolerance,
     ) -> Option<usize> {
         let mzs = self.mzs();
-        let lower = error_type.lower_bound(query, error_tolerance);
+        let (lower, _upper) = error_tolerance.bounds(query);
         match mzs[..].binary_search_by(|m| m.partial_cmp(&lower).unwrap()) {
             Ok(i) => {
-                let mut best_error = error_type.call(query, mzs[i]).abs();
+                let mut best_error = error_tolerance.call(query, mzs[i]).abs();
                 let mut best_index = i;
                 let mut index = i + 1;
                 while index < mzs.len() {
-                    let error = error_type.call(query, mzs[index]).abs();
+                    let error = error_tolerance.call(query, mzs[index]).abs();
                     if error < best_error {
                         best_index = index;
                         best_error = error;
                     }
                     index += 1;
                 }
-                if best_error < error_tolerance {
+                if best_error < error_tolerance.tol() {
                     return Some(best_index);
                 }
                 None
