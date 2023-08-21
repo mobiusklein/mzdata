@@ -1716,8 +1716,14 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
     pub fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
         let mut spectrum = MultiLayerSpectrum::<C, D>::default();
         match self.read_into(&mut spectrum) {
-            Ok(_sz) => Some(spectrum),
-            Err(_err) => None,
+            Ok(_sz) => {
+                log::debug!("Read spectrum: {0}", spectrum.id());
+                Some(spectrum)
+            },
+            Err(err) => {
+                log::debug!("Failed to read next spectrum: {err}");
+                None
+            },
         }
     }
 }
