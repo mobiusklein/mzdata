@@ -63,7 +63,7 @@ num-traits = "0.2"
 indexmap = { version = "1.7.0", features = [ "serde" ] }
 log = "0.4.14"
 mzpeaks = { version = "0.6.0" }
-rayon = { version = "1.5.1", optional = true }
+rayon = { version = "1.7.0", optional = true }
 mzsignal = { version = "0.3.0", default-features = false}
 md5 = "0.7.0"
 
