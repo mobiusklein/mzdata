@@ -1466,12 +1466,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
         };
         match inst.parse_metadata() {
             Ok(()) => {}
-            Err(err) => {
-                warn!(
-                    "Encountered error {:?} while parsing mzML file metadata",
-                    err
-                );
-            }
+            Err(_err) => {}
         }
         inst
     }
@@ -2009,7 +2004,6 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
 
     fn construct_index_from_stream(&mut self) -> u64 {
         if let Ok(count) = self.read_index_from_end() {
-            log::debug!("Read index from end of file: {}", self.handle.stream_position().unwrap());
             count
         } else {
             self.build_index()
