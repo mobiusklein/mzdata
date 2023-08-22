@@ -1717,7 +1717,6 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
         let mut spectrum = MultiLayerSpectrum::<C, D>::default();
         match self.read_into(&mut spectrum) {
             Ok(_sz) => {
-                log::debug!("Read spectrum: {0}", spectrum.id());
                 Some(spectrum)
             },
             Err(err) => {
@@ -1870,6 +1869,10 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
     /// though this index may be malformed in some older files.
     pub fn read_index_from_end(&mut self) -> Result<u64, MzMLIndexingError> {
         let mut indexer = IndexedMzMLIndexExtractor::new();
+        let current_position = match self.handle.stream_position() {
+            Ok(position) => position,
+            Err(err) => return Err(MzMLIndexingError::IOError(err)),
+        };
 
         let offset = match indexer.find_offset_from_reader(&mut self.handle) {
             Ok(offset) => {
@@ -1879,11 +1882,6 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
                     return Err(MzMLIndexingError::OffsetNotFound);
                 }
             }
-            Err(err) => return Err(MzMLIndexingError::IOError(err)),
-        };
-
-        let current_position = match self.handle.stream_position() {
-            Ok(position) => position,
             Err(err) => return Err(MzMLIndexingError::IOError(err)),
         };
 
@@ -2011,6 +2009,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
 
     fn construct_index_from_stream(&mut self) -> u64 {
         if let Ok(count) = self.read_index_from_end() {
+            log::debug!("Read index from end of file: {}", self.handle.stream_position().unwrap());
             count
         } else {
             self.build_index()

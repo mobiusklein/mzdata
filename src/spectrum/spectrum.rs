@@ -672,6 +672,7 @@ mod test {
     fn test_profile_read() {
         let mut reader = MzMLReader::open_path("./test/data/three_test_scans.mzML")
             .expect("Failed to open test file");
+        reader.reset();
         let mut scan = reader.next().expect("Failed to read spectrum");
         assert_eq!(scan.signal_continuity(), SignalContinuity::Profile);
         assert_eq!(scan.ms_level(), 1);
