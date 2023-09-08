@@ -730,6 +730,10 @@ pub type MGFWriter<W> = MGFWriterType<W, CentroidPeak, DeconvolutedPeak>;
 
 #[cfg(test)]
 mod test {
+    use mzpeaks::IndexedCoordinate;
+
+    use crate::CentroidSpectrum;
+
     use super::*;
     use std::fs;
     use std::path;
@@ -771,6 +775,10 @@ mod test {
             } else {
                 msn_count += 1;
             }
+            let centroided: CentroidSpectrum = scan.try_into().unwrap();
+            centroided.peaks.iter().for_each(|p| {
+                (centroided.peaks[p.get_index() as usize]).mz();
+            })
         }
         assert_eq!(ms1_count, 0);
         assert_eq!(msn_count, 34);

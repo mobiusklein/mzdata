@@ -12,6 +12,7 @@ use num_traits::Num;
 use log::warn;
 
 use base64;
+use base64::{Engine as _, engine::general_purpose::STANDARD as Base64Std};
 use flate2::write::{ZlibDecoder, ZlibEncoder};
 use flate2::Compression;
 use mzpeaks::prelude::*;
@@ -216,9 +217,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         match compression {
             BinaryCompressionType::Zlib => {
                 let compressed = Self::compress_zlib(&bytestring);
-                base64::encode(compressed).into()
+                Base64Std.encode(compressed).into()
             }
-            BinaryCompressionType::NoCompression => base64::encode(bytestring.as_ref()).into(),
+            BinaryCompressionType::NoCompression => Base64Std.encode(bytestring.as_ref()).into(),
             BinaryCompressionType::Decoded => panic!("Should never happen"),
             _ => {
                 panic!("Compresion type {:?} is unsupported", compression)
@@ -241,9 +242,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         dup.data = match compression {
             BinaryCompressionType::Zlib => {
                 let compressed = Self::compress_zlib(&bytestring);
-                base64::encode(compressed).into()
+                Base64Std.encode(compressed).into()
             }
-            BinaryCompressionType::NoCompression => base64::encode(bytestring).into(),
+            BinaryCompressionType::NoCompression => Base64Std.encode(bytestring).into(),
             BinaryCompressionType::Decoded => panic!("Should never happen"),
             _ => {
                 panic!("Compresion type {:?} is unsupported", compression)
@@ -291,11 +292,11 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         match self.compression {
             BinaryCompressionType::Decoded => Ok(Cow::Borrowed(&self.data)),
             BinaryCompressionType::NoCompression => {
-                let bytestring = base64::decode(&self.data).expect("Failed to decode base64 array");
+                let bytestring = Base64Std.decode(&self.data).expect("Failed to decode base64 array");
                 Ok(Cow::Owned(bytestring))
             }
             BinaryCompressionType::Zlib => {
-                let bytestring = base64::decode(&self.data).expect("Failed to decode base64 array");
+                let bytestring = Base64Std.decode(&self.data).expect("Failed to decode base64 array");
                 Ok(Cow::Owned(Self::decompres_zlib(&bytestring)))
             }
             _ => Err(ArrayRetrievalError::DecompressionError),
@@ -306,13 +307,13 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         match self.compression {
             BinaryCompressionType::Decoded => Ok(&mut self.data),
             BinaryCompressionType::NoCompression => {
-                let bytestring = base64::decode(&self.data).expect("Failed to decode base64 array");
+                let bytestring = Base64Std.decode(&self.data).expect("Failed to decode base64 array");
                 self.data = bytestring;
                 self.compression = BinaryCompressionType::Decoded;
                 Ok(&mut self.data)
             }
             BinaryCompressionType::Zlib => {
-                let bytestring = base64::decode(&self.data).expect("Failed to decode base64 array");
+                let bytestring = Base64Std.decode(&self.data).expect("Failed to decode base64 array");
                 self.data = bytestring;
                 self.compression = BinaryCompressionType::Decoded;
                 Ok(&mut self.data)
