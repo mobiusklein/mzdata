@@ -1,0 +1,9 @@
+* text=auto
+
+*.rs text
+*.md text
+*.sh text eol=lf
+
+*.mzML binary
+*.mzml binary
+*.gz binary

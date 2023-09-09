@@ -2260,7 +2260,7 @@ mod test {
 <offset idRef="controllerType=0 controllerNumber=1 scan=4">409176</offset>
 "#;
         for line in needle.split("\n") {
-            assert!(decoded.contains(&line), "Failed to find {} in {}", decoded, line);
+            assert!(decoded.contains(&line), "Failed to find {} in {}", line, decoded);
         }
 
         Ok(())
