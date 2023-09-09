@@ -8,9 +8,11 @@ and this project adheres to [Semantic Versioning].
 ## [Unreleased]
 
 ### Added
+- Limited async MzML reader support
 
 ### Changed
 - `RandomAccessScanIterator` methods now return mutable references to self, making them actually useful in a chain.
+- Make some window size attributes smaller as they do not require double precision.
 
 ### Deprecated
 

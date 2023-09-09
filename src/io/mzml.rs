@@ -19,6 +19,9 @@ and a complementary reverse conversion for writing.
 mod reader;
 mod writer;
 
+#[cfg(feature = "async")]
+mod r#async;
+
 pub use crate::io::mzml::reader::{
     CVParamParse, FileMetadataBuilder, MzMLParserError, MzMLParserState, MzMLReader,
     MzMLReaderType, ParserResult, SpectrumBuilding, XMLParseBase
@@ -27,3 +30,6 @@ pub use crate::io::mzml::reader::{
 pub(crate) use crate::io::mzml::reader::is_mzml;
 
 pub use crate::io::mzml::writer::{MzMLWriter, MzMLWriterState, MzMLWriterType, WriterResult};
+
+#[cfg(feature = "async")]
+pub use crate::io::mzml::r#async::{MzMLReaderType as AsyncMzMLReaderType, MzMLReader as AsyncMzMLReader};

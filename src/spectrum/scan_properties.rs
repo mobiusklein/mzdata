@@ -27,9 +27,9 @@ impl Default for IsolationWindowState {
 /// Although an isolation window may be specified either with explicit bounds or
 /// offsets from the target, this data structure always uses explicit bounds.
 pub struct IsolationWindow {
-    pub target: f64,
-    pub lower_bound: f64,
-    pub upper_bound: f64,
+    pub target: f32,
+    pub lower_bound: f32,
+    pub upper_bound: f32,
     /// Describes the decision making process used to establish the bounds of the
     /// window from the source file.
     pub flags: IsolationWindowState,
@@ -37,8 +37,8 @@ pub struct IsolationWindow {
 
 #[derive(Default, Debug, Clone)]
 pub struct ScanWindow {
-    pub lower_bound: f64,
-    pub upper_bound: f64,
+    pub lower_bound: f32,
+    pub upper_bound: f32,
 }
 
 pub type ScanWindowList = Vec<ScanWindow>;

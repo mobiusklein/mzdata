@@ -121,10 +121,10 @@ pub trait XMLParseBase {
 Common `CVParam` parsing behaviors
 */
 pub trait CVParamParse: XMLParseBase {
-    fn handle_param<B: io::BufRead>(
+    fn handle_param(
         &self,
         event: &BytesStart,
-        reader: &Reader<B>,
+        reader_position: usize,
         state: MzMLParserState,
     ) -> Result<Param, MzMLParserError> {
         let mut param = Param::new();
@@ -135,7 +135,7 @@ pub trait CVParamParse: XMLParseBase {
                         param.name = attr.unescape_value().unwrap_or_else(|e| {
                             panic!(
                                 "Error decoding CV param name at {}: {}",
-                                reader.buffer_position(),
+                                reader_position,
                                 e
                             )
                         }).to_string();
@@ -144,7 +144,7 @@ pub trait CVParamParse: XMLParseBase {
                         param.value = attr.unescape_value().unwrap_or_else(|e| {
                             panic!(
                                 "Error decoding CV param value at {}: {}",
-                                reader.buffer_position(),
+                                reader_position,
                                 e
                             )
                         }).to_string();
@@ -154,7 +154,7 @@ pub trait CVParamParse: XMLParseBase {
                             Some(attr.unescape_value().unwrap_or_else(|e| {
                                 panic!(
                                     "Error decoding CV param reference at {}: {}",
-                                    reader.buffer_position(),
+                                    reader_position,
                                     e
                                 )
                             }).to_string());
@@ -164,7 +164,7 @@ pub trait CVParamParse: XMLParseBase {
                             attr.unescape_value().unwrap_or_else(|e| {
                                 panic!(
                                     "Error decoding CV param accession at {}: {}",
-                                    reader.buffer_position(),
+                                    reader_position,
                                     e
                                 )
                             }).to_string();
@@ -174,7 +174,7 @@ pub trait CVParamParse: XMLParseBase {
                             Some(attr.unescape_value().unwrap_or_else(|e| {
                                 panic!(
                                     "Error decoding CV param unit name at {}: {}",
-                                    reader.buffer_position(),
+                                    reader_position,
                                     e
                                 )
                             }).to_string());
@@ -184,7 +184,7 @@ pub trait CVParamParse: XMLParseBase {
                             Some(attr.unescape_value().unwrap_or_else(|e| {
                                 panic!(
                                     "Error decoding CV param unit name at {}: {}",
-                                    reader.buffer_position(),
+                                    reader_position,
                                     e
                                 )
                             }).to_string());
@@ -230,7 +230,7 @@ impl Default for MzMLParserError {
 const BUFFER_SIZE: usize = 10000;
 
 #[derive(Default)]
-struct MzMLSpectrumBuilder<
+pub(crate) struct MzMLSpectrumBuilder<
     C: CentroidPeakAdapting = CentroidPeak,
     D: DeconvolutedPeakAdapting = DeconvolutedPeak,
 > {
@@ -388,7 +388,7 @@ pub trait SpectrumBuilding<
                 };
             }
             "isolation window lower offset" => {
-                let lower_bound: f64 = param
+                let lower_bound = param
                     .coerce()
                     .expect("Failed to parse isolation window limit");
                 match window.flags {
@@ -403,7 +403,7 @@ pub trait SpectrumBuilding<
                 }
             }
             "isolation window upper offset" => {
-                let upper_bound: f64 = param
+                let upper_bound = param
                     .coerce()
                     .expect("Failed to parse isolation window limit");
                 match window.flags {
@@ -418,7 +418,7 @@ pub trait SpectrumBuilding<
                 }
             }
             "isolation window lower limit" => {
-                let lower_bound: f64 = param
+                let lower_bound = param
                     .coerce()
                     .expect("Failed to parse isolation window limit");
                 if let IsolationWindowState::Unknown = window.flags {
@@ -427,7 +427,7 @@ pub trait SpectrumBuilding<
                 }
             }
             "isolation window upper limit" => {
-                let upper_bound: f64 = param
+                let upper_bound = param
                     .coerce()
                     .expect("Failed to parse isolation window limit");
                 if let IsolationWindowState::Unknown = window.flags {
@@ -760,15 +760,15 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
         Ok(state)
     }
 
-    pub fn empty_element<B: io::BufRead>(
+    pub fn empty_element(
         &mut self,
         event: &BytesStart,
         state: MzMLParserState,
-        reader: &Reader<B>,
+        reader_position: usize,
     ) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
-            b"cvParam" | b"userParam" => match self.handle_param(event, reader, state) {
+            b"cvParam" | b"userParam" => match self.handle_param(event, reader_position, state) {
                 Ok(param) => {
                     self.fill_param_into(param, state);
                     return Ok(state);
@@ -1156,15 +1156,15 @@ impl FileMetadataBuilder {
         }
     }
 
-    pub fn empty_element<B: io::BufRead>(
+    pub fn empty_element(
         &mut self,
         event: &BytesStart,
         state: MzMLParserState,
-        reader: &Reader<B>,
+        reader_position: usize,
     ) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
-            b"cvParam" | b"userParam" => match self.handle_param(event, reader, state) {
+            b"cvParam" | b"userParam" => match self.handle_param(event, reader_position, state) {
                 Ok(param) => {
                     self.fill_param_into(param, state);
                     return Ok(state);
@@ -1522,7 +1522,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
-                    match accumulator.empty_element(e, self.state, &reader) {
+                    match accumulator.empty_element(e, self.state, reader.buffer_position()) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -1632,7 +1632,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
-                    match accumulator.empty_element(e, self.state, &reader) {
+                    match accumulator.empty_element(e, self.state, reader.buffer_position()) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -1718,7 +1718,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
                 Some(spectrum)
             },
             Err(err) => {
-                log::debug!("Failed to read next spectrum: {err}");
+                debug!("Failed to read next spectrum: {err}");
                 None
             },
         }
@@ -1880,7 +1880,6 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
             Ok(position) => position,
             Err(err) => return Err(MzMLIndexingError::IOError(err)),
         };
-        debug!("Reading index from the end, current position: {}", current_position);
         let offset = match indexer.find_offset_from_reader(&mut self.handle) {
             Ok(offset) => {
                 if let Some(offset) = offset {
@@ -1891,18 +1890,8 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
             }
             Err(err) => return Err(MzMLIndexingError::IOError(err)),
         };
-        debug!("Offset to index: {}", offset);
         let mut indexer_state = IndexParserState::Start;
-        self.handle.rewind().expect("Failed to rewind reader");
-        let stream_pos = self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
-        debug!("Moved stream to position: {}", stream_pos);
-
-        let mut peek_buffer = Bytes::with_capacity(500);
-        peek_buffer.resize(500, 0);
-        self.handle.read_exact(&mut peek_buffer).unwrap();
-        debug!("Peeked: {} buffer of size {}", String::from_utf8_lossy(&peek_buffer), peek_buffer.len());
-        let stream_pos = self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
-        debug!("Moved stream to position: {}", stream_pos);
+        self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
 
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
