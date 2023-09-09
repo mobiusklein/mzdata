@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::error::Error;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fs;
 use std::io;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::marker::PhantomData;
 use std::mem;
 
+use log::debug;
 use log::warn;
 
 use regex;
@@ -1729,6 +1732,14 @@ pub enum MzMLIndexingError {
     IOError(io::Error),
 }
 
+impl Display for MzMLIndexingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("{:?}", self))
+    }
+}
+
+impl Error for MzMLIndexingError {}
+
 impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     MzMLReaderType<R, C, D>
 {
@@ -1843,6 +1854,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
         match reader.read_index_from_end() {
             Ok(_count) => {}
             Err(err) => {
+                debug!("Failed to read index from the end of the file: {}", err);
                 match reader.seek(SeekFrom::Start(0)) {
                     Ok(_) => {
                         reader.build_index();
@@ -1868,7 +1880,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
             Ok(position) => position,
             Err(err) => return Err(MzMLIndexingError::IOError(err)),
         };
-
+        debug!("Reading index from the end, current position: {}", current_position);
         let offset = match indexer.find_offset_from_reader(&mut self.handle) {
             Ok(offset) => {
                 if let Some(offset) = offset {
@@ -1879,9 +1891,14 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
             }
             Err(err) => return Err(MzMLIndexingError::IOError(err)),
         };
-
-        self.handle.seek(SeekFrom::Start(offset)).unwrap();
+        debug!("Offset to index: {}", offset);
+        self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
         let mut indexer_state = IndexParserState::Start;
+        let mut peek_buffer = Vec::with_capacity(100);
+        self.handle.read_exact(&mut peek_buffer).unwrap();
+        debug!("Peeked: {}", String::from_utf8_lossy(&peek_buffer));
+        self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
+
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
 
