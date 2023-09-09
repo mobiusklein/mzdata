@@ -7,3 +7,4 @@
 *.mzML binary
 *.mzml binary
 *.gz binary
+*.mgf binary
