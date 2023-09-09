@@ -1288,7 +1288,6 @@ impl IndexedMzMLIndexExtractor {
         reader.seek(SeekFrom::End(-200))?;
         let mut buf = Bytes::new();
         reader.read_to_end(&mut buf)?;
-        // reader.read_to_string(&mut buf)?;
         let pattern = regex::Regex::new("<indexListOffset>(\\d+)</indexListOffset>").unwrap();
         if let Some(captures) = pattern.captures(&String::from_utf8_lossy(&buf)) {
             if let Some(offset) = captures.get(1) {
@@ -2231,6 +2230,39 @@ mod test {
             }
         };
         assert!(reader.index.len() > 0);
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn read_index_raw() -> io::Result<()> {
+        let path = path::Path::new("./test/data/read_index_of.mzML");
+        let file = fs::File::open(path)?;
+        let mut reader = io::BufReader::new(file);
+
+        let indexer = IndexedMzMLIndexExtractor::new();
+        let offset = indexer.find_offset_from_reader(&mut reader)?.expect("Failed to find index offset");
+
+        assert_eq!(3150039, offset);
+
+        let stream_pos = reader.seek(SeekFrom::Start(offset))?;
+
+        assert_eq!(offset, stream_pos);
+
+        let mut buf = [0u8; 500];
+        reader.read_exact(&mut buf)?;
+
+        let decoded = String::from_utf8_lossy(&buf);
+        let needle = r#"<indexList count="1">
+<index name="spectrum">
+<offset idRef="controllerType=0 controllerNumber=1 scan=1">3861</offset>
+<offset idRef="controllerType=0 controllerNumber=1 scan=2">218656</offset>
+<offset idRef="controllerType=0 controllerNumber=1 scan=3">400186</offset>
+<offset idRef="controllerType=0 controllerNumber=1 scan=4">409176</offset>
+"#;
+        for line in needle.split("\n") {
+            assert!(decoded.contains(&line), "Failed to find {} in {}", decoded, line);
+        }
+
         Ok(())
     }
 
