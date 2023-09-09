@@ -1893,6 +1893,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
         };
         debug!("Offset to index: {}", offset);
         let mut indexer_state = IndexParserState::Start;
+        self.handle.rewind().expect("Failed to rewind reader");
         self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
         debug!("Moved stream to position: {}", self.handle.stream_position().unwrap());
 
