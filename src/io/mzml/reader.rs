@@ -2221,7 +2221,8 @@ mod test {
         match reader.read_index_from_end() {
             Ok(_count) => {}
             Err(err) => {
-                panic!("Failed to parse out index {:?}", err);
+                debug!("Failed to parse out index {:?}", err);
+                assert!(err.to_string() == "");
             }
         };
         assert!(reader.index.len() > 0);
