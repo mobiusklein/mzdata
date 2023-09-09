@@ -1892,13 +1892,16 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
             Err(err) => return Err(MzMLIndexingError::IOError(err)),
         };
         debug!("Offset to index: {}", offset);
-        self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
         let mut indexer_state = IndexParserState::Start;
+        self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
+        debug!("Moved stream to position: {}", self.handle.stream_position().unwrap());
+
         let mut peek_buffer = Bytes::with_capacity(500);
         peek_buffer.resize(500, 0);
         self.handle.read_exact(&mut peek_buffer).unwrap();
         debug!("Peeked: {} buffer of size {}", String::from_utf8_lossy(&peek_buffer), peek_buffer.len());
         self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
+        debug!("Moved stream to position: {}", self.handle.stream_position().unwrap());
 
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
