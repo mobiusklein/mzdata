@@ -2075,7 +2075,7 @@ mod test {
     use std::fs;
     use std::path;
 
-    #[test]
+    #[test_log::test]
     fn reader_from_file() {
         let path = path::Path::new("./test/data/small.mzML");
         let file = fs::File::open(path).expect("Test file doesn't exist");
@@ -2107,7 +2107,7 @@ mod test {
         assert_eq!(msn_count, 34);
     }
 
-    #[test]
+    #[test_log::test]
     fn reader_from_file_indexed() {
         let path = path::Path::new("./test/data/small.mzML");
         let file = fs::File::open(path).expect("Test file doesn't exist");
@@ -2195,7 +2195,7 @@ mod test {
         assert_eq!(msn_count, 34);
     }
 
-    #[test]
+    #[test_log::test]
     fn find_offset() -> io::Result<()> {
         let path = path::Path::new("./test/data/small.mzML");
         let mut f = fs::File::open(path)?;
@@ -2214,7 +2214,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[test_log::test]
     fn read_index() -> io::Result<()> {
         let path = path::Path::new("./test/data/read_index_of.mzML");
         let file = fs::File::open(path)?;
