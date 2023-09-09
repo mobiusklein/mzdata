@@ -27,4 +27,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features intel-mkl,parallelism,zlib -- --nocapture --show-output
+          args: --no-default-features --features intel-mkl,parallelism,zlib -- --nocapture --show-output --test-threads 1
