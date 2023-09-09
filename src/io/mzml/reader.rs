@@ -1286,10 +1286,11 @@ impl IndexedMzMLIndexExtractor {
 
     pub fn find_offset_from_reader<R: SeekRead>(&self, reader: &mut R) -> io::Result<Option<u64>> {
         reader.seek(SeekFrom::End(-200))?;
-        let mut buf = String::new();
-        reader.read_to_string(&mut buf)?;
+        let mut buf = Bytes::new();
+        reader.read_to_end(&mut buf)?;
+        // reader.read_to_string(&mut buf)?;
         let pattern = regex::Regex::new("<indexListOffset>(\\d+)</indexListOffset>").unwrap();
-        if let Some(captures) = pattern.captures(&buf) {
+        if let Some(captures) = pattern.captures(&String::from_utf8_lossy(&buf)) {
             if let Some(offset) = captures.get(1) {
                 if let Ok(offset) = offset.as_str().parse::<u64>() {
                     return Ok(Some(offset));
@@ -1894,15 +1895,15 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
         debug!("Offset to index: {}", offset);
         let mut indexer_state = IndexParserState::Start;
         self.handle.rewind().expect("Failed to rewind reader");
-        self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
-        debug!("Moved stream to position: {}", self.handle.stream_position().unwrap());
+        let stream_pos = self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
+        debug!("Moved stream to position: {}", stream_pos);
 
         let mut peek_buffer = Bytes::with_capacity(500);
         peek_buffer.resize(500, 0);
         self.handle.read_exact(&mut peek_buffer).unwrap();
         debug!("Peeked: {} buffer of size {}", String::from_utf8_lossy(&peek_buffer), peek_buffer.len());
-        self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
-        debug!("Moved stream to position: {}", self.handle.stream_position().unwrap());
+        let stream_pos = self.handle.seek(SeekFrom::Start(offset)).expect("Failed to seek to the index offset");
+        debug!("Moved stream to position: {}", stream_pos);
 
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
