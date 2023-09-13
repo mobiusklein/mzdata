@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<indexedmzML xmlns="http://psi.hupo.org/ms/mzml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.2_idx.xsd">
-  <mzML xmlns="http://psi.hupo.org/ms/mzml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.0.xsd" version="1.1.0">
+<indexedmzML xmlns="http://psi.hupo.org/ms/mzml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.3_idx.xsd">
+  <mzML xmlns="http://psi.hupo.org/ms/mzml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.1.xsd" version="1.1.1">
     <cvList count="2">
       <cv id="MS" fullName="PSI-MS" URI="https://raw.githubusercontent.com/HUPO-PSI/psi-ms-CV/master/psi-ms.obo" version="4.1.57"/>
       <cv id="UO" fullName="UNIT-ONTOLOGY" URI="http://ontologies.berkeleybop.org/uo.obo" version="releases/2020-03-10"/>
@@ -161,7 +161,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=2">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="810.789428710938" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="810.7894" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -216,7 +216,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=2">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.344604492188" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.3446" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -271,7 +271,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=2">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="725.362060546875" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="725.36206" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -326,7 +326,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=2">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="558.868957519531" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="558.86896" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -381,7 +381,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=2">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="812.325317382813" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="812.3253" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -506,7 +506,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=9">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="810.752807617188" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="810.7528" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -561,7 +561,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=9">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.960815429688" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.9608" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -616,7 +616,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=9">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="644.057067871094" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="644.05707" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -671,7 +671,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=9">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="725.233520507813" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="725.2335" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -726,7 +726,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=9">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="559.192749023438" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="559.19275" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -851,7 +851,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=16">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="811.408081054688" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="811.4081" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -906,7 +906,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=16">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.355712890625" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.3557" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -961,7 +961,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=16">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="643.798217773438" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="643.7982" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1016,7 +1016,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=16">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="558.944213867188" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="558.9442" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1071,7 +1071,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=16">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="725.137451171875" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="725.13745" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1196,7 +1196,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=23">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="810.844604492188" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="810.8446" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1251,7 +1251,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=23">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.415771484375" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.4158" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1306,7 +1306,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=23">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="674.638305664063" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="674.6383" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1361,7 +1361,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=23">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="643.739929199219" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="643.7399" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1416,7 +1416,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=23">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="725.3583984375" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="725.3584" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1541,7 +1541,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=30">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.386352539063" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.38635" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1596,7 +1596,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=30">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="643.796508789063" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="643.7965" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1651,7 +1651,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=30">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="558.749389648438" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="558.7494" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1706,7 +1706,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=30">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="882.45263671875" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="882.45264" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1831,7 +1831,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=36">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="810.734497070313" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="810.7345" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1886,7 +1886,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=36">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.346435546875" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.34644" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1941,7 +1941,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=36">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="643.725463867188" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="643.72546" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -1996,7 +1996,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=36">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="725.6767578125" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="725.67676" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -2051,7 +2051,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=36">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="674.698852539063" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="674.69885" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -2176,7 +2176,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=43">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="810.818725585938" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="810.8187" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -2231,7 +2231,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=43">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.778076171875" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="837.7781" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -2286,7 +2286,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=43">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="674.841369628906" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="674.8414" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -2341,7 +2341,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=43">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="558.899841308594" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="558.89984" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -2396,7 +2396,7 @@
           <precursorList count="1">
             <precursor spectrumRef="controllerType=0 controllerNumber=1 scan=43">
               <isolationWindow>
-                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="882.535034179688" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+                <cvParam accession="MS:1000827" cvRef="MS" name="isolation window target m/z" value="882.53503" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000828" cvRef="MS" name="isolation window lower offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
                 <cvParam accession="MS:1000829" cvRef="MS" name="isolation window upper offset" value="1" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
               </isolationWindow>
@@ -2436,53 +2436,53 @@
     <offset idRef="controllerType=0 controllerNumber=1 scan=1">3861</offset>
     <offset idRef="controllerType=0 controllerNumber=1 scan=2">218656</offset>
     <offset idRef="controllerType=0 controllerNumber=1 scan=3">400186</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=4">409176</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=5">423003</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=6">435218</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=7">445736</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=8">457332</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=9">621627</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=10">810923</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=11">820545</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=12">833793</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=13">844148</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=14">855970</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=15">866681</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=16">1054084</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=17">1236182</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=18">1246059</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=19">1259052</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=20">1269754</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=21">1280534</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=22">1293288</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=23">1482850</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=24">1646260</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=25">1656132</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=26">1669310</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=27">1681096</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=28">1691928</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=29">1704444</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=30">1925569</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=31">2103378</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=32">2116587</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=33">2127132</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=34">2138139</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=35">2148079</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=36">2328873</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=37">2494823</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=38">2504622</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=39">2519031</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=40">2529548</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=41">2542148</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=42">2553636</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=43">2910191</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=44">3093821</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=45">3103994</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=46">3117855</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=47">3128950</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=48">3139587</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=4">409168</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=5">422987</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=6">435195</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=7">445706</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=8">457294</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=9">621589</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=10">810885</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=11">820499</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=12">833739</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=13">844087</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=14">855901</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=15">866605</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=16">1054008</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=17">1236106</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=18">1245975</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=19">1258960</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=20">1269654</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=21">1280426</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=22">1293173</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=23">1482735</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=24">1646145</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=25">1656009</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=26">1669179</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=27">1680957</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=28">1691781</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=29">1704291</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=30">1925416</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=31">2103225</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=32">2116427</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=33">2126964</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=34">2137963</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=35">2147897</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=36">2328691</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=37">2494641</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=38">2504432</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=39">2518834</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=40">2529344</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=41">2541939</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=42">2553420</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=43">2909975</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=44">3093605</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=45">3103770</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=46">3117623</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=47">3128710</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=48">3139340</offset>
   </index>
 </indexList>
-<indexListOffset>3150039</indexListOffset>
-<fileChecksum>ad652f12f22cf0f7f3681579e36c0f3a</fileChecksum>
+<indexListOffset>3149785</indexListOffset>
+<fileChecksum>3e706ad23c6df5c9266c27202ead7658</fileChecksum>
 </indexedmzML>

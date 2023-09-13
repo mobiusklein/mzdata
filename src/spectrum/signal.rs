@@ -87,10 +87,10 @@ pub enum ArrayType {
     ChargeArray,
     TimeArray,
     WavelengthArray,
-    IonMobilityArray(Unit),
-    MeanIonMobilityArray(Unit),
-    RawIonMobilityArray(Unit),
-    DeconvolutedIonMobilityArray(Unit),
+    IonMobilityArray,
+    MeanIonMobilityArray,
+    RawIonMobilityArray,
+    DeconvolutedIonMobilityArray,
     NonStandardDataArray { name: String },
 }
 
@@ -134,6 +134,7 @@ pub struct DataArray {
     pub compression: BinaryCompressionType,
     pub name: ArrayType,
     pub params: ParamList,
+    pub unit: Unit
 }
 
 impl Debug for DataArray {
@@ -144,6 +145,7 @@ impl Debug for DataArray {
             .field("dtype", &self.dtype)
             .field("compression", &self.compression)
             .field("params", &self.params)
+            .field("unit", &self.unit)
             .finish()
     }
 }
@@ -633,11 +635,6 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
     }
 }
 
-impl From<PeakSet> for BinaryArrayMap {
-    fn from(peaks: PeakSet) -> BinaryArrayMap {
-        (&peaks).into()
-    }
-}
 
 impl From<&PeakSet> for BinaryArrayMap {
     fn from(peaks: &PeakSet) -> BinaryArrayMap {
@@ -725,12 +722,6 @@ impl From<&BinaryArrayMap> for DeconvolutedPeakSet {
         }
 
         DeconvolutedPeakSet::new(peaks)
-    }
-}
-
-impl From<DeconvolutedPeakSet> for BinaryArrayMap {
-    fn from(peaks: DeconvolutedPeakSet) -> BinaryArrayMap {
-        (&peaks).into()
     }
 }
 

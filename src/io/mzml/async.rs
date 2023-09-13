@@ -20,6 +20,8 @@ use quick_xml::Error as XMLError;
 use quick_xml::Reader;
 
 
+use crate::SpectrumBehavior;
+
 use crate::meta::file_description::FileDescription;
 use crate::meta::instrument::InstrumentConfiguration;
 use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
@@ -44,8 +46,8 @@ const BUFFER_SIZE: usize = 10000;
 
 pub struct MzMLReaderType<
     R: AsyncReadType + Unpin,
-    C: CentroidPeakAdapting = CentroidPeak,
-    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+    C: CentroidPeakAdapting + Send + Sync = CentroidPeak,
+    D: DeconvolutedPeakAdapting + Send + Sync = DeconvolutedPeak,
 > {
     /// The state the parser was in last.
     pub state: MzMLParserState,
@@ -75,7 +77,7 @@ pub struct MzMLReaderType<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<R: AsyncReadType + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {
+impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D: DeconvolutedPeakAdapting + Send + Sync> MzMLReaderType<R, C, D> {
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
     /// provided with an `[io::BufReader`] and parses the metadata section of the file.
     pub async fn new(file: R) -> MzMLReaderType<R, C, D> {
@@ -227,7 +229,8 @@ impl<R: AsyncReadType + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
         reader.trim_text(true);
         let mut offset: usize = 0;
         loop {
-            match reader.read_event_into_async(&mut self.buffer).await {
+            let event = reader.read_event_into_async(&mut self.buffer).await;
+            match event {
                 Ok(Event::Start(ref e)) => {
                     match accumulator.start_element(e, self.state) {
                         Ok(state) => {
@@ -355,7 +358,7 @@ impl<R: AsyncReadType + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
     }
 }
 
-impl<R: AsyncReadType + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
+impl<R: AsyncReadType + Unpin, C: CentroidPeakAdapting + Send + Sync, D: DeconvolutedPeakAdapting + Send + Sync> MSDataFileMetadata
     for MzMLReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
@@ -506,7 +509,7 @@ impl IndexedMzMLIndexExtractor {
 }
 
 
-impl<R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {
+impl<R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Sync, C: CentroidPeakAdapting  + Send + Sync, D: DeconvolutedPeakAdapting  + Send + Sync> MzMLReaderType<R, C, D> {
     pub async fn read_index_from_end(&mut self) -> Result<u64, MzMLIndexingError> {
         let mut indexer = IndexedMzMLIndexExtractor::new();
         let current_position = match self.handle.stream_position().await {
@@ -573,7 +576,114 @@ impl<R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin, C: CentroidPeakAdaptin
         self.handle.seek(SeekFrom::Start(current_position)).await.unwrap();
         Ok(self.index.len() as u64)
     }
+
+    /// Helper method to support seeking to an ID
+    fn _offset_of_id(&self, id: &str) -> Option<u64> {
+        self.get_index().get(id)
+    }
+
+    /// Helper method to support seeking to an index
+    fn _offset_of_index(&self, index: usize) -> Option<u64> {
+        self.get_index()
+            .get_index(index)
+            .map(|(_id, offset)| offset)
+    }
+
+    /// Helper method to support seeking to a specific time.
+    /// Considerably more complex than seeking by ID or index.
+    async fn _offset_of_time(&mut self, time: f64) -> Option<u64> {
+        match self.get_spectrum_by_time(time).await {
+            Some(scan) => self._offset_of_index(scan.index()),
+            None => None,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.index.len()
+    }
+
+    /// Retrieve a spectrum by its scan start time
+    /// Considerably more complex than seeking by ID or index.
+    pub async fn get_spectrum_by_time(&mut self, time: f64) -> Option<MultiLayerSpectrum<C, D>> {
+        let n = self.len();
+        let mut lo: usize = 0;
+        let mut hi: usize = n;
+
+        let mut best_error: f64 = f64::INFINITY;
+        let mut best_match: Option<MultiLayerSpectrum<_, _>> = None;
+
+        if lo == hi {
+            return None;
+        }
+        while hi != lo {
+            let mid = (hi + lo) / 2;
+            let scan = self.get_spectrum_by_index(mid).await?;
+            let scan_time = scan.start_time();
+            let err = (scan_time - time).abs();
+
+            if err < best_error {
+                best_error = err;
+                best_match = Some(scan);
+            } else if (scan_time - time).abs() < 1e-3 {
+                return Some(scan);
+            } else if scan_time > time {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        best_match
+    }
+
+    /// Retrieve a spectrum by it's native ID
+    pub async fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
+        let offset_ref = self.index.get(id);
+        let offset = offset_ref.expect("Failed to retrieve offset");
+        let start = self
+            .handle
+            .stream_position().await
+            .expect("Failed to save checkpoint");
+        self.handle.seek(SeekFrom::Start(offset)).await
+            .expect("Failed to move seek to offset");
+        let result = self.read_next().await;
+        self.handle.seek(SeekFrom::Start(start)).await
+            .expect("Failed to restore offset");
+        result
+    }
+
+    /// Retrieve a spectrum by it's integer index
+    pub async fn get_spectrum_by_index(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
+        let (_id, offset) = self.index.get_index(index)?;
+        let byte_offset = offset;
+        let start = self
+            .handle
+            .stream_position().await
+            .expect("Failed to save checkpoint");
+        self.handle.seek(SeekFrom::Start(byte_offset)).await.ok()?;
+        let result = self.read_next().await;
+        self.handle.seek(SeekFrom::Start(start)).await
+            .expect("Failed to restore offset");
+        result
+    }
+
+    /// Return the data stream to the beginning
+    pub async fn reset(&mut self) {
+        self.handle.seek(SeekFrom::Start(0)).await
+            .expect("Failed to reset file stream");
+    }
+
+    pub fn get_index(&self) -> &OffsetIndex {
+        if !self.index.init {
+            warn!("Attempting to use an uninitialized offset index on MzMLReaderType")
+        }
+        &self.index
+    }
+
+    pub fn set_index(&mut self, index: OffsetIndex) {
+        self.index = index
+    }
 }
+
 
 
 #[cfg(test)]

@@ -506,7 +506,7 @@ impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MultiLayer
                 description: self.description,
             })
         } else if let Some(peaks) = self.deconvoluted_peaks {
-            let arrays = BinaryArrayMap::from(DeconvolutedPeakSet::wrap(
+            let arrays = BinaryArrayMap::from(&DeconvolutedPeakSet::wrap(
                 peaks.into_iter().map(|p| p.as_centroid()).collect(),
             ));
 
@@ -517,7 +517,7 @@ impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MultiLayer
             result.description.signal_continuity = SignalContinuity::Centroid;
             Ok(result)
         } else if let Some(peaks) = self.peaks {
-            let arrays = BinaryArrayMap::from(PeakSet::wrap(
+            let arrays = BinaryArrayMap::from(&PeakSet::wrap(
                 peaks.into_iter().map(|p| p.as_centroid()).collect(),
             ));
 
@@ -528,7 +528,7 @@ impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MultiLayer
             result.description.signal_continuity = SignalContinuity::Centroid;
             Ok(result)
         } else {
-            let arrays = BinaryArrayMap::from(PeakSet::empty());
+            let arrays = BinaryArrayMap::from(&PeakSet::empty());
             Ok(RawSpectrum {
                 arrays,
                 description: self.description,

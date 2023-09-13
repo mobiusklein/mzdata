@@ -97,6 +97,10 @@ fn main() -> io::Result<()> {
 
     let mut peak_charge_levels: Vec<_> = peak_charge_table_by_level.iter().collect();
 
+    peak_charge_levels.sort_by(|(level_a, _), (level_b, _)|{
+        level_a.cmp(level_b)
+    });
+
     for (level, peak_charge_table) in peak_charge_levels {
         if peak_charge_table.len() > 0 {
             println!("Peak Charge States for MS level {}:", level);

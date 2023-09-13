@@ -20,7 +20,7 @@ use mzpeaks::{peak_set::PeakSetVec, CentroidPeak, DeconvolutedPeak, Mass, MZ};
 use crate::meta::file_description::FileDescription;
 use crate::meta::instrument::{ComponentType, InstrumentConfiguration};
 use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
-use crate::params::{ControlledVocabulary, Param};
+use crate::params::{ControlledVocabulary, Param, Unit};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
@@ -95,11 +95,12 @@ impl<W: io::Write> InnerXMLWriter<W> {
     }
 
     pub fn write_param(&mut self, param: &Param) -> WriterResult {
-        let mut elt = if param.accession.is_empty() {
+        let mut elt = if param.accession.is_none() {
             bstart!("userParam")
         } else {
             let mut elt = bstart!("cvParam");
-            attrib!("accession", param.accession, elt);
+            let accession_str = param.curie().unwrap();
+            attrib!("accession", accession_str, elt);
             if let Some(cv_ref) = &param.controlled_vocabulary {
                 attrib!("cvRef", cv_ref, elt);
             }
@@ -110,9 +111,10 @@ impl<W: io::Write> InnerXMLWriter<W> {
         if !param.value.is_empty() {
             attrib!("value", param.value, elt);
         }
-
-        if param.unit_accession.is_some() || param.unit_name.is_some() {
-            if let Some(unit_acc) = &param.unit_accession {
+        match param.unit {
+            Unit::Unknown => {},
+            _ => {
+                let (unit_acc, unit_name) = param.unit.for_param();
                 let mut split = unit_acc.split(':');
                 if let Some(prefix) = split.next() {
                     attrib!("unitCvRef", prefix, elt);
@@ -120,11 +122,8 @@ impl<W: io::Write> InnerXMLWriter<W> {
                     attrib!("unitCvRef", "UO", elt);
                 }
                 attrib!("unitAccession", unit_acc, elt);
-            } else {
-                attrib!("unitCvRef", "UO", elt);
-            }
-            if let Some(unit_name) = &param.unit_name {
                 attrib!("unitName", unit_name, elt);
+
             }
         }
         self.handle.write_event(Event::Empty(elt))
@@ -280,7 +279,7 @@ where
             spectrum_counter: 0,
             chromatogram_count: 0,
             chromatogram_counter: 0,
-            ms_cv: ControlledVocabulary::new("MS".to_string()),
+            ms_cv: ControlledVocabulary::MS,
             data_array_compression: BinaryCompressionType::Zlib,
         }
     }
@@ -324,7 +323,7 @@ where
         indexed.push_attribute(("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"));
         indexed.push_attribute((
             "xsi:schemaLocation",
-            "http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.2_idx.xsd",
+            "http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.3_idx.xsd",
         ));
         self.handle.write_event(Event::Start(indexed))?;
 
@@ -333,9 +332,9 @@ where
         mzml.push_attribute(("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"));
         mzml.push_attribute((
             "xsi:schemaLocation",
-            "http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.0.xsd",
+            "http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.1.xsd",
         ));
-        mzml.push_attribute(("version", "1.1.0"));
+        mzml.push_attribute(("version", "1.1.1"));
         self.handle.write_event(Event::Start(mzml))?;
 
         self.state = MzMLWriterState::DocumentOpen;
@@ -799,56 +798,50 @@ where
             self.handle
                 .write_param(&self.ms_cv.param("MS:1000574", "zlib compression"))?;
         }
-        match &array.name {
-            ArrayType::MZArray => self.handle.write_param(
-                &self
+        let array_name_param = match &array.name {
+            ArrayType::MZArray => self
                     .ms_cv
                     .param("MS:1000514", "m/z array")
                     .with_unit("MS:1000040", "m/z"),
-            )?,
-            ArrayType::IntensityArray => self.handle.write_param(
-                &self
+            ArrayType::IntensityArray =>
+                self
                     .ms_cv
                     .param("MS:1000515", "intensity array")
                     .with_unit("MS:1000131", "number of detector counts"),
-            )?,
-            ArrayType::ChargeArray => self
-                .handle
-                .write_param(&self.ms_cv.param("MS:1000516", "charge array"))?,
-            ArrayType::TimeArray => self.handle.write_param(
-                &self
+            ArrayType::ChargeArray => self.ms_cv.param("MS:1000516", "charge array"),
+            ArrayType::TimeArray => self
                     .ms_cv
                     .param("MS:1000595", "time array")
                     .with_unit("UO:0000031", "minute"),
-            )?,
-            ArrayType::RawIonMobilityArray(_unit) => self.handle.write_param(
-                &self
+            ArrayType::RawIonMobilityArray => self
                     .ms_cv
                     .param("MS:1003007", "raw ion mobility array")
-                    .with_unit("UO:0000028", "millisecond"),
-            )?,
-            ArrayType::MeanIonMobilityArray(_unit) => self.handle.write_param(
-                &self
+                    .with_unit_t(&array.unit),
+            ArrayType::MeanIonMobilityArray => self
                     .ms_cv
                     .param("MS:1002816", "mean ion mobility array")
-                    .with_unit("UO:0000028", "millisecond"),
-            )?,
-            ArrayType::DeconvolutedIonMobilityArray(_unit) => self.handle.write_param(
-                &self
+                    .with_unit_t(&array.unit),
+            ArrayType::DeconvolutedIonMobilityArray => {
+                let p = self
                     .ms_cv
                     .param("MS:1003154", "deconvoluted ion mobility array")
-                    .with_unit("UO:0000028", "millisecond"),
-            )?,
-            ArrayType::NonStandardDataArray { name } => self.handle.write_param(
-                &self
-                    .ms_cv
-                    .param_val("MS:1000786", "non-standard data array", name)
-                    .with_unit("UO:0000028", "millisecond"),
-            )?,
+                    .with_unit_t(&array.unit);
+
+                p
+            },
+            ArrayType::NonStandardDataArray { name } => {
+                // self.handle.write_param()?;
+                let mut p = self
+                        .ms_cv
+                        .param_val("MS:1000786", "non-standard data array", name);
+                p = p.with_unit_t(&array.unit);
+                p
+            },
             _ => {
                 panic!("Could not determine how to name for {:?}", array.name);
             }
-        }
+        };
+        self.handle.write_param(&array_name_param)?;
 
         let bin = bstart!("binary");
         start_event!(self, bin);

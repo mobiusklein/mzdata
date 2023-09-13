@@ -20,6 +20,7 @@ use mzpeaks::{
 use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, Software,
 };
+use crate::params::ControlledVocabulary;
 use crate::params::{Param, ParamDescribed};
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
@@ -355,8 +356,8 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
         let mut fd = FileDescription::default();
         let mut term = Param::new();
         term.name = "MSn spectrum".to_owned();
-        term.accession = "MS:1000580".to_owned();
-        term.controlled_vocabulary = Some("MS".to_owned());
+        term.accession = Some(1000580);
+        term.controlled_vocabulary = Some(ControlledVocabulary::MS);
         fd.add_param(term);
         fd
     }

@@ -1,14 +1,37 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
-use std::str;
+use std::fmt::Display;
+use std::str::{self, FromStr};
+
+pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<u32>) {
+    let mut parts = curie.split(":");
+    let prefix = match parts.next() {
+        Some(v) => {
+            v.parse::<ControlledVocabulary>().unwrap().as_option()
+        },
+        None => {
+            None
+        }
+    };
+    if let Some(k) = curie.split(":").nth(1) {
+        match k.parse() {
+            Ok(v) => (prefix, Some(v)),
+            Err(_) => (prefix, None)
+        }
+    } else {
+        (prefix, None)
+    }
+
+}
+
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Param {
     pub name: String,
     pub value: String,
-    pub accession: String,
-    pub controlled_vocabulary: Option<String>,
-    pub unit_name: Option<String>,
-    pub unit_accession: Option<String>,
+    pub accession: Option<u32>,
+    pub controlled_vocabulary: Option<ControlledVocabulary>,
+    pub unit: Unit,
 }
 
 impl Param {
@@ -30,35 +53,89 @@ impl Param {
     }
 
     pub fn is_controlled(&self) -> bool {
-        self.accession.is_empty()
+        !self.accession.is_none()
     }
 
-    pub fn with_unit<S: Into<String>, A: Into<String>>(mut self, accession: S, name: A) -> Param {
-        self.unit_accession = Some(accession.into());
-        self.unit_name = Some(name.into());
+    pub fn curie(&self) -> Option<String> {
+        if !self.is_controlled() {
+            None
+        } else {
+            let cv = &self.controlled_vocabulary.unwrap();
+            let acc = self.accession.unwrap();
+            let accession_str = format!("{}:{:07}", cv.prefix(), acc);
+            Some(accession_str)
+        }
+    }
+
+    pub fn with_unit<S: AsRef<str>, A: AsRef<str>>(mut self, accession: S, name: A) -> Param {
+        self.unit = Unit::from_accession(accession.as_ref());
+        if matches!(self.unit, Unit::Unknown) {
+            self.unit = Unit::from_name(name.as_ref());
+        }
+        self
+    }
+
+    pub fn with_unit_t(mut self, unit: &Unit) -> Param {
+        self.unit = *unit;
         self
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ControlledVocabulary {
-    pub prefix: String,
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum ControlledVocabulary {
+    MS,
+    UO,
+    Unknown,
 }
 
+const MS_CV: &'static str = "MS";
+const UO_CV: &'static str = "UO";
+const MS_CV_BYTES: &'static [u8] = MS_CV.as_bytes();
+const UO_CV_BYTES: &'static [u8] = UO_CV.as_bytes();
+
 impl ControlledVocabulary {
-    pub fn new(prefix: String) -> ControlledVocabulary {
-        ControlledVocabulary { prefix }
+    pub fn prefix(&self) -> Cow<'static, str> {
+        match &self {
+            Self::MS => Cow::Borrowed(&MS_CV),
+            Self::UO => Cow::Borrowed(&UO_CV),
+            Self::Unknown => panic!("Cannot encode unknown CV"),
+        }
     }
 
-    pub fn param<S: Into<String>, A: Into<String>>(&self, accession: A, name: S) -> Param {
+    pub fn as_bytes(&self) -> &'static [u8] {
+        match &self {
+            Self::MS => MS_CV_BYTES,
+            Self::UO => UO_CV_BYTES,
+            Self::Unknown => panic!("Cannot encode unknown CV"),
+        }
+    }
+
+    pub fn as_option(&self) -> Option<Self> {
+        match self {
+            Self::Unknown => None,
+            _ => Some(*self),
+        }
+    }
+
+    pub fn param<A: AsRef<str>, S: Into<String>>(&self, accession: A, name: S) -> Param {
         let mut param = Param::new();
-        param.controlled_vocabulary = Some(self.prefix.clone());
+        param.controlled_vocabulary = Some(*self);
         param.name = name.into();
-        param.accession = accession.into();
+        if let Some(nb) = accession.as_ref().split(":").nth(1) {
+            param.accession = Some(
+                nb.parse().expect(
+                    format!(
+                        "Expected accession to be numeric, got {}",
+                        accession.as_ref()
+                    )
+                    .as_str(),
+                ),
+            );
+        }
         param
     }
 
-    pub fn param_val<S: Into<String>, A: Into<String>, V: ToString>(
+    pub fn param_val<S: Into<String>, A: AsRef<str>, V: ToString>(
         &self,
         accession: A,
         name: S,
@@ -67,6 +144,27 @@ impl ControlledVocabulary {
         let mut param = self.param(accession, name);
         param.value = value.to_string();
         param
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ControlledVocabularyResolutionError {}
+
+impl Display for ControlledVocabularyResolutionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(format!("{:?}", self).as_str())
+    }
+}
+
+impl FromStr for ControlledVocabulary {
+    type Err = ControlledVocabularyResolutionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "MS" | "PSI-MS" => Ok(Self::MS),
+            "UO" => Ok(Self::UO),
+            _ => Ok(Self::Unknown),
+        }
     }
 }
 
@@ -96,8 +194,9 @@ pub trait ParamDescribed {
     }
 
     fn get_param_by_accession(&self, accession: &str) -> Option<&Param> {
+        let (cv, acc_num) = curie_to_num(accession);
         for param in self.params().iter() {
-            if param.accession == accession {
+            if param.accession == acc_num && param.controlled_vocabulary == cv {
                 return Some(param);
             }
         }
@@ -172,5 +271,57 @@ impl Unit {
 
             _ => ("", ""),
         }
+    }
+
+    pub fn from_name(name: &str) -> Unit {
+        match name {
+            "millisecond" => Self::Millisecond,
+            "second" => Self::Second,
+            "minute" => Self::Minute,
+
+            "m/z" => Self::MZ,
+            "dalton" => Self::Mass,
+
+            "number of detector counts" => Self::DetectorCounts,
+            "percent of base peak" => Self::PercentBasePeak,
+            "percent of base peak times 100" => Self::PercentBasePeakTimes100,
+            "absorbance unit" => Self::AbsorbanceUnit,
+            "counts per second" => Self::CountsPerSecond,
+
+            "electronvolt" => Self::Electronvolt,
+            "percent" => Self::PercentElectronVolt,
+            _ => Unit::Unknown,
+        }
+    }
+
+    pub fn from_accession(acc: &str) -> Unit {
+        match acc {
+            "UO:0000028" => Self::Millisecond,
+            "UO:0000010" => Self::Second,
+            "UO:0000031" => Self::Minute,
+
+            "MS:1000040" => Self::MZ,
+            "UO:000221" => Self::Mass,
+
+            "MS:1000131" => Self::DetectorCounts,
+            "MS:1000132" => Self::PercentBasePeak,
+            "MS:1000905" => Self::PercentBasePeakTimes100,
+            "UO:0000269" => Self::AbsorbanceUnit,
+            "MS:1000814" => Self::CountsPerSecond,
+
+            "UO:0000266" => Self::Electronvolt,
+            "UO:0000187" => Self::PercentElectronVolt,
+            _ => Unit::Unknown,
+        }
+    }
+
+    pub fn from_param(param: &Param) -> Unit {
+        param.unit
+    }
+}
+
+impl Default for Unit {
+    fn default() -> Self {
+        Self::Unknown
     }
 }
