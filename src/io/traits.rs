@@ -653,12 +653,19 @@ impl<
 
     fn add_product(&mut self, scan: S) {
         if let Some(precursor) = scan.precursor() {
-            let ent = self
-                .product_scan_mapping
-                .entry(precursor.precursor_id.clone());
-            self.generation_tracker
-                .add(precursor.precursor_id.clone(), self.generation);
-            ent.or_default().push(scan);
+            match precursor.precursor_id.as_ref() {
+                Some(prec_id) => {
+                    let ent = self
+                        .product_scan_mapping
+                        .entry(prec_id.clone());
+                    self.generation_tracker
+                        .add(prec_id.clone(), self.generation);
+                    ent.or_default().push(scan);
+                },
+                None => {
+                    self.product_scan_mapping.entry(MISSING_SCAN_ID.to_owned()).or_default().push(scan);
+                }
+            }
         } else {
             if !self.queue.is_empty() {
                 // Consider replacing with normal get_mut to avoid re-copying

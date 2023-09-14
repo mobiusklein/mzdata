@@ -745,7 +745,9 @@ where
         start_event!(self, precursor_list_tag);
 
         let mut precursor_tag = bstart!("precursor");
-        attrib!("spectrumRef", precursor.precursor_id, precursor_tag);
+        if let Some(prec_id) = precursor.precursor_id() {
+            attrib!("spectrumRef", prec_id, precursor_tag);
+        }
         self.handle
             .write_event(Event::Start(precursor_tag.borrow()))?;
 

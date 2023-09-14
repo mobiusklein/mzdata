@@ -746,10 +746,10 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"spectrumRef" {
-                                self.precursor.precursor_id = attr
+                                self.precursor.precursor_id = Some(attr
                                     .unescape_value()
                                     .expect("Error decoding id")
-                                    .to_string();
+                                    .to_string());
                             }
                         }
                         Err(msg) => {

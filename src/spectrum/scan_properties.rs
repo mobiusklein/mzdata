@@ -105,9 +105,9 @@ pub struct Precursor {
     /// Describes the isolation window around the selected ion
     pub isolation_window: IsolationWindow,
     /// The precursor scan ID, if given
-    pub precursor_id: String,
+    pub precursor_id: Option<String>,
     /// The product scan ID, if given
-    pub product_id: String,
+    pub product_id: Option<String>,
     /// The activation process applied to the precursor ion
     pub activation: Activation,
     /// Additional parameters describing this precursor ion
@@ -126,7 +126,10 @@ impl Precursor {
         S: SpectrumBehavior<C, D>,
         R: ScanSource<C, D, S>,
     {
-        source.get_spectrum_by_id(&self.precursor_id)
+        match self.precursor_id.as_ref() {
+            Some(id) => source.get_spectrum_by_id(id),
+            None => None
+        }
     }
 
     /// Given a ScanSource object, look up the product scan in it.
@@ -139,7 +142,10 @@ impl Precursor {
         S: SpectrumBehavior<C, D>,
         R: ScanSource<C, D, S>,
     {
-        source.get_spectrum_by_id(&self.product_id)
+        match self.product_id.as_ref() {
+            Some(id) => source.get_spectrum_by_id(id),
+            None => None
+        }
     }
 }
 
@@ -152,9 +158,9 @@ pub trait PrecursorSelection: params::ParamDescribed {
     /// Describes the isolation window around the selected ion
     fn isolation_window(&self) -> &IsolationWindow;
     /// The precursor scan ID, if given
-    fn precursor_id(&self) -> &str;
+    fn precursor_id(&self) -> Option<&String>;
     /// The product scan ID, if given
-    fn product_id(&self) -> &str;
+    fn product_id(&self) -> Option<&String>;
     /// The activation process applied to the precursor ion
     fn activation(&self) -> &Activation;
 }
@@ -168,12 +174,12 @@ impl PrecursorSelection for Precursor {
         &self.isolation_window
     }
 
-    fn precursor_id(&self) -> &str {
-        &self.precursor_id
+    fn precursor_id(&self) -> Option<&String> {
+        self.precursor_id.as_ref()
     }
 
-    fn product_id(&self) -> &str {
-        &self.product_id
+    fn product_id(&self) -> Option<&String> {
+        self.product_id.as_ref()
     }
 
     fn activation(&self) -> &Activation {
