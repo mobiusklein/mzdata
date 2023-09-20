@@ -589,9 +589,10 @@ where
 
         for scan in acq.scans.iter() {
             let mut scan_tag = bstart!("scan");
+            let id = format!("INSTRUMENT_CONFIG_{}", scan.instrument_configuration_id);
             attrib!(
                 "instrumentConfigurationRef",
-                scan.instrument_configuration_id,
+                id,
                 scan_tag
             );
             self.handle

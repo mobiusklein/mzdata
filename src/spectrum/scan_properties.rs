@@ -1,8 +1,7 @@
 use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumBehavior};
-use crate::{ParamList, impl_param_described};
 use crate::io::traits::ScanSource;
 use crate::params;
-
+use crate::{impl_param_described, ParamList};
 
 /**
 Describe the initialization stage of an isolation window
@@ -50,7 +49,7 @@ pub struct ScanEvent {
     pub start_time: f64,
     pub injection_time: f32,
     pub scan_windows: ScanWindowList,
-    pub instrument_configuration_id: String,
+    pub instrument_configuration_id: u32,
     pub params: ParamList,
 }
 
@@ -77,6 +76,14 @@ impl Acquisition {
     }
 }
 
+pub trait IonProperties {
+    fn neutral_mass(&self) -> f64;
+    fn charge(&self) -> Option<i32>;
+    fn has_charge(&self) -> bool {
+        self.charge().is_some()
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 /// Describes a single selected ion from a precursor isolation
 pub struct SelectedIon {
@@ -87,6 +94,20 @@ pub struct SelectedIon {
     /// some source files.
     pub charge: Option<i32>,
     pub params: ParamList,
+}
+
+impl IonProperties for SelectedIon {
+    fn neutral_mass(&self) -> f64 {
+        let charge = match self.charge {
+            Some(z) => z,
+            None => 1,
+        };
+        crate::utils::neutral_mass(self.mz, charge)
+    }
+
+    fn charge(&self) -> Option<i32> {
+        self.charge
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -128,7 +149,7 @@ impl Precursor {
     {
         match self.precursor_id.as_ref() {
             Some(id) => source.get_spectrum_by_id(id),
-            None => None
+            None => None,
         }
     }
 
@@ -144,7 +165,7 @@ impl Precursor {
     {
         match self.product_id.as_ref() {
             Some(id) => source.get_spectrum_by_id(id),
-            None => None
+            None => None,
         }
     }
 }
@@ -184,6 +205,19 @@ impl PrecursorSelection for Precursor {
 
     fn activation(&self) -> &Activation {
         &self.activation
+    }
+}
+
+impl<T> IonProperties for T
+where
+    T: PrecursorSelection,
+{
+    fn neutral_mass(&self) -> f64 {
+        self.ion().neutral_mass()
+    }
+
+    fn charge(&self) -> Option<i32> {
+        self.ion().charge()
     }
 }
 

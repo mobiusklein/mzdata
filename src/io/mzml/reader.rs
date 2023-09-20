@@ -249,6 +249,26 @@ impl Default for MzMLParserError {
     }
 }
 
+
+#[derive(Debug, Default, Clone)]
+struct IncrementingIdMap {
+    id_map: HashMap<String, u32>,
+    next_id: u32
+}
+
+impl IncrementingIdMap {
+    pub fn get(&mut self, key: &str) -> u32 {
+        if let Some(value) = self.id_map.get(key) {
+            return *value;
+        } else {
+            let value = self.next_id;
+            self.id_map.insert(key.to_string(), self.next_id);
+            self.next_id += 1;
+            return value
+        }
+    }
+}
+
 const BUFFER_SIZE: usize = 10000;
 
 #[derive(Default)]
@@ -269,6 +289,8 @@ pub(crate) struct MzMLSpectrumBuilder<
     pub polarity: ScanPolarity,
     pub signal_continuity: SignalContinuity,
     pub has_precursor: bool,
+
+    instrument_id_map: IncrementingIdMap,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
 }
@@ -710,10 +732,10 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"instrumentConfigurationRef" {
-                                scan_event.instrument_configuration_id = attr
+                                scan_event.instrument_configuration_id = self.instrument_id_map.get(&attr
                                     .unescape_value()
                                     .expect("Error decoding id")
-                                    .to_string();
+                                );
                             }
                         }
                         Err(msg) => {

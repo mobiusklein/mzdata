@@ -4,6 +4,6 @@ pub use super::traits::{
 };
 pub use crate::meta::MSDataFileMetadata;
 pub use crate::params::ParamDescribed;
-pub use crate::spectrum::{PrecursorSelection, SpectrumBehavior};
+pub use crate::spectrum::{PrecursorSelection, SpectrumBehavior, IonProperties};
 pub use std::convert::TryInto;
 pub use std::io::prelude::*;
