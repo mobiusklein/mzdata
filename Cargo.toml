@@ -72,8 +72,8 @@ tokio = {version = "1.32.0", optional = true, features = ["macros", "rt", "fs", 
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = [ "html_reports" ] }
-test-log = "*"
-env_logger = "*"
+test-log = "0.2.12 "
+env_logger = "0.10.0"
 
 [[bench]]
 name = "mzml"
