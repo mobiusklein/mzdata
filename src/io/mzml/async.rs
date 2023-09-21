@@ -7,7 +7,8 @@ use std::pin::Pin;
 use super::reader::{
     MzMLParserError, MzMLParserState, SpectrumBuilding,
     Bytes, FileMetadataBuilder, MzMLSpectrumBuilder,
-    IndexParserState, XMLParseBase, MzMLIndexingError
+    IndexParserState, XMLParseBase, MzMLIndexingError,
+    IncrementingIdMap
 };
 
 use tokio::{self, io};
@@ -62,7 +63,7 @@ pub struct MzMLReaderType<
     pub file_description: FileDescription,
     /// A mapping of different instrument configurations (source, analyzer, detector) components
     /// by ID string.
-    pub instrument_configurations: HashMap<String, InstrumentConfiguration>,
+    pub instrument_configurations: HashMap<u32, InstrumentConfiguration>,
     /// The different software components that were involved in the processing and creation of this
     /// file.
     pub softwares: Vec<Software>,
@@ -72,9 +73,11 @@ pub struct MzMLReaderType<
     /// A cache of repeated paramters
     pub reference_param_groups: HashMap<String, Vec<Param>>,
 
+    pub(crate) instrument_id_map: IncrementingIdMap,
     buffer: Bytes,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
+
 }
 
 impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D: DeconvolutedPeakAdapting + Send + Sync> MzMLReaderType<R, C, D> {
@@ -97,6 +100,7 @@ impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D:
 
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
+            instrument_id_map: IncrementingIdMap::default()
         };
         match inst.parse_metadata().await {
             Ok(()) => {}
@@ -111,6 +115,7 @@ impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D:
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         let mut accumulator = FileMetadataBuilder::default();
+        accumulator.instrument_id_map.copy_from(&self.instrument_id_map);
         loop {
             match reader.read_event_into_async(&mut self.buffer).await {
                 Ok(Event::Start(ref e)) => {
@@ -208,7 +213,7 @@ impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D:
         self.softwares = accumulator.softwares;
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
-
+        self.instrument_id_map.copy_from(&accumulator.instrument_id_map);
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
             MzMLParserState::ParserError => {
@@ -227,6 +232,7 @@ impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D:
     ) -> Result<usize, MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
+        accumulator.instrument_id_map.copy_from(&self.instrument_id_map);
         let mut offset: usize = 0;
         loop {
             let event = reader.read_event_into_async(&mut self.buffer).await;
@@ -305,6 +311,7 @@ impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D:
             };
             offset += self.buffer.len();
             self.buffer.clear();
+            self.instrument_id_map.copy_from(&accumulator.instrument_id_map);
             match self.state {
                 MzMLParserState::SpectrumDone | MzMLParserState::ParserError => {
                     break;
@@ -690,7 +697,7 @@ impl<R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Sync, C: CentroidPeak
 mod test {
     use std::path;
 
-    use crate::SpectrumBehavior;
+    use crate::{SpectrumBehavior, ParamDescribed};
 
     use super::*;
     use tokio::{fs, io};
@@ -705,11 +712,22 @@ mod test {
         let mut ms1_counter = 0;
         let mut msn_counter = 0;
         while let Some(spec) = reader.read_next().await {
+            let filter_string = spec.acquisition().first_scan().unwrap().get_param_by_accession("MS:1000512").unwrap();
+            let configs = spec.acquisition().instrument_configuration_ids();
+            let conf = configs[0];
+            println!("Processing scan {}", spec.index());
+            dbg!(configs, &filter_string.value);
+            if filter_string.value.contains("ITMS") {
+                assert_eq!(conf, 1);
+            } else {
+                assert_eq!(conf, 0);
+            }
             if spec.ms_level() > 1 {
                 msn_counter += 1;
             } else {
                 ms1_counter += 1;
             }
+
         }
 
         assert_eq!(ms1_counter, 14);

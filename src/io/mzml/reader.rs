@@ -267,6 +267,13 @@ impl IncrementingIdMap {
             return value
         }
     }
+
+    pub fn copy_from(&mut self, other: &IncrementingIdMap) {
+        other.id_map.iter().for_each(|(k, v)| {
+            self.id_map.insert(k.clone(), *v);
+            self.next_id = (*v) + 1;
+        });
+    }
 }
 
 const BUFFER_SIZE: usize = 10000;
@@ -673,13 +680,19 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
             MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
                 self.fill_selected_ion(param);
             }
-            MzMLParserState::Activation => match param.name.as_ref() {
-                "collision energy" | "activation energy" => {
-                    self.precursor.activation.energy =
-                        param.coerce().expect("Failed to parse collision energy");
-                }
-                &_ => {
-                    self.precursor.activation.params.push(param);
+            MzMLParserState::Activation => {
+                if Activation::is_param_activation(&param) {
+                    *self.precursor.activation.method_mut() = Some(param);
+                } else {
+                    match param.name.as_ref() {
+                        "collision energy" | "activation energy" => {
+                            self.precursor.activation.energy =
+                                param.coerce().expect("Failed to parse collision energy");
+                        }
+                        &_ => {
+                            self.precursor.activation.params.push(param);
+                        }
+                    }
                 }
             },
             MzMLParserState::BinaryDataArrayList => {}
@@ -1538,7 +1551,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         let mut accumulator = FileMetadataBuilder::default();
-        mem::swap(&mut self.instrument_id_map, &mut accumulator.instrument_id_map);
+        accumulator.instrument_id_map.copy_from(&self.instrument_id_map);
         loop {
             match reader.read_event_into(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => {
@@ -1636,7 +1649,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
         self.softwares = accumulator.softwares;
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
-        mem::swap(&mut self.instrument_id_map, &mut accumulator.instrument_id_map);
+        self.instrument_id_map.copy_from(&accumulator.instrument_id_map);
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
             MzMLParserState::ParserError => {
@@ -1654,7 +1667,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
     ) -> Result<usize, MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
-        mem::swap(&mut self.instrument_id_map, &mut accumulator.instrument_id_map);
+        accumulator.instrument_id_map.copy_from(&self.instrument_id_map);
         let mut offset: usize = 0;
         loop {
             match reader.read_event_into(&mut self.buffer) {
@@ -1739,7 +1752,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
                 _ => {}
             };
         }
-        mem::swap(&mut self.instrument_id_map, &mut accumulator.instrument_id_map);
+        self.instrument_id_map.copy_from(&accumulator.instrument_id_map);
         match self.state {
             MzMLParserState::SpectrumDone => Ok(offset),
             MzMLParserState::ParserError => {
@@ -2286,7 +2299,7 @@ mod test {
             .find_offset_from_reader(&mut reader)?
             .expect("Failed to find index offset");
 
-        assert_eq!(3150039, offset);
+        assert_eq!(3548711, offset);
 
         let stream_pos = reader.seek(SeekFrom::Start(offset))?;
 
@@ -2296,12 +2309,13 @@ mod test {
         reader.read_exact(&mut buf)?;
 
         let decoded = String::from_utf8_lossy(&buf);
-        let needle = r#"<indexList count="1">
+        let needle = r#"<indexList count="2">
 <index name="spectrum">
-<offset idRef="controllerType=0 controllerNumber=1 scan=1">3861</offset>
-<offset idRef="controllerType=0 controllerNumber=1 scan=2">218656</offset>
-<offset idRef="controllerType=0 controllerNumber=1 scan=3">400186</offset>
-<offset idRef="controllerType=0 controllerNumber=1 scan=4">409176</offset>
+<offset idRef="controllerType=0 controllerNumber=1 scan=1">5003</offset>
+<offset idRef="controllerType=0 controllerNumber=1 scan=2">260791</offset>
+<offset idRef="controllerType=0 controllerNumber=1 scan=3">451106</offset>
+<offset idRef="controllerType=0 controllerNumber=1 scan=4">461270</offset>
+<offset idRef="controllerType=0 controllerNumber=1 scan=5">476248</offset>
 "#;
         for line in needle.split("\n") {
             assert!(

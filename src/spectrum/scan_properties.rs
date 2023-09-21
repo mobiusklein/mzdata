@@ -1,7 +1,8 @@
 use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumBehavior};
 use crate::io::traits::ScanSource;
-use crate::params;
+use crate::params::ControlledVocabulary;
 use crate::{impl_param_described, ParamList};
+use crate::{params, Param};
 
 /**
 Describe the initialization stage of an isolation window
@@ -34,7 +35,15 @@ pub struct IsolationWindow {
     pub flags: IsolationWindowState,
 }
 
-#[derive(Default, Debug, Clone)]
+impl PartialEq for IsolationWindow {
+    fn eq(&self, other: &Self) -> bool {
+        self.target == other.target
+            && self.lower_bound == other.lower_bound
+            && self.upper_bound == other.upper_bound
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct ScanWindow {
     pub lower_bound: f32,
     pub upper_bound: f32,
@@ -42,7 +51,7 @@ pub struct ScanWindow {
 
 pub type ScanWindowList = Vec<ScanWindow>;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 /// Describes a single scan event. Unless additional post-processing is done,
 /// there is usually only one event per spectrum.
 pub struct ScanEvent {
@@ -55,7 +64,7 @@ pub struct ScanEvent {
 
 pub type ScanEventList = Vec<ScanEvent>;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 /// Describe the series of acquisition events that constructed the spectrum
 /// being described.
 pub struct Acquisition {
@@ -74,6 +83,12 @@ impl Acquisition {
         }
         self.scans.first_mut()
     }
+
+    pub fn instrument_configuration_ids(&self) -> Vec<u32> {
+        self.scans.iter().map(|s| {
+            s.instrument_configuration_id
+        }).collect()
+    }
 }
 
 pub trait IonProperties {
@@ -84,7 +99,7 @@ pub trait IonProperties {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 /// Describes a single selected ion from a precursor isolation
 pub struct SelectedIon {
     /// The selected ion's m/z as reported, may not be the monoisotopic peak.
@@ -110,15 +125,88 @@ impl IonProperties for SelectedIon {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 /// Describes the activation method used to dissociate the precursor ion
 pub struct Activation {
-    pub method: String,
+    _method: Option<Param>,
     pub energy: f32,
     pub params: ParamList,
 }
 
-#[derive(Debug, Default, Clone)]
+impl Activation {
+    pub fn method(&self) -> Option<&Param> {
+        if self._method.is_some() {
+            self._method.as_ref()
+        } else {
+            None
+        }
+    }
+
+    pub fn method_mut(&mut self) -> &mut Option<Param> {
+        &mut self._method
+    }
+
+    pub fn is_param_activation(p: &Param) -> bool {
+        if p.is_controlled() && p.controlled_vocabulary.unwrap() == ControlledVocabulary::MS {
+            Self::accession_to_activation(p.accession.unwrap())
+        } else {
+            false
+        }
+    }
+
+    pub fn accession_to_activation(accession: u32) -> bool {
+        match accession {
+            1000133 => true,
+            1000134 => true,
+            1000135 => true,
+            1000136 => true,
+            1000242 => true,
+            1000250 => true,
+            1000282 => true,
+            1000433 => true,
+            1000435 => true,
+            1000598 => true,
+            1000599 => true,
+            1001880 => true,
+            1002000 => true,
+            1003181 => true,
+            1003247 => true,
+            1000422 => true,
+            1002472 => true,
+            1002679 => true,
+            1003294 => true,
+            1000262 => true,
+            1003246 => true,
+            1002631 => true,
+            1003182 => true,
+            1002481 => true,
+            1002678 => true,
+            _ => false,
+        }
+    }
+
+    pub fn _set_method(&mut self) {
+        let found = self
+            .params
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| {
+                if p.is_controlled() && p.controlled_vocabulary.unwrap() == ControlledVocabulary::MS
+                {
+                    Self::accession_to_activation(p.accession.unwrap())
+                } else {
+                    false
+                }
+            })
+            .map(|(i, _)| i)
+            .next();
+        if let Some(hit) = found {
+            self._method = Some(self.params.remove(hit));
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq)]
 /// Describes the precursor ion of the owning spectrum.
 pub struct Precursor {
     /// Describes the selected ion's properties
@@ -226,7 +314,7 @@ Describes the polarity of a mass spectrum. A spectrum is either `Positive` (1+),
 or `Unknown` (0). The `Unknown` state is the default.
 */
 #[repr(i8)]
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq)]
 pub enum ScanPolarity {
     Unknown = 0,
     Positive = 1,
@@ -264,7 +352,7 @@ The set of descriptive metadata that give context for how a mass spectrum was ac
 within a particular run. This forms the basis for a large portion of the [`SpectrumBehavior`]
 trait.
 */
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct SpectrumDescription {
     pub id: String,
     pub index: usize,

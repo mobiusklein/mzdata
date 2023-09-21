@@ -736,6 +736,12 @@ where
         let act = precursor.activation();
         let tag = bstart!("activation");
         start_event!(self, tag);
+        match act.method() {
+            Some(meth) => {
+                self.handle.write_param(meth)?;
+            },
+            None => {}
+        }
         self.handle.write_param_list(act.params().iter())?;
         self.handle.write_param(
             &self
