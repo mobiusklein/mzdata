@@ -5,13 +5,13 @@ use super::{DataProcessing, FileDescription, InstrumentConfiguration, Software};
 pub trait MSDataFileMetadata {
     fn data_processings(&self) -> &Vec<DataProcessing>;
     // TODO: Switch this to an IndexMap
-    fn instrument_configurations(&self) -> &HashMap<String, InstrumentConfiguration>;
+    fn instrument_configurations(&self) -> &HashMap<u32, InstrumentConfiguration>;
     fn file_description(&self) -> &FileDescription;
     fn softwares(&self) -> &Vec<Software>;
 
     fn data_processings_mut(&mut self) -> &mut Vec<DataProcessing>;
     // TODO: Switch this to an IndexMap
-    fn instrument_configurations_mut(&mut self) -> &mut HashMap<String, InstrumentConfiguration>;
+    fn instrument_configurations_mut(&mut self) -> &mut HashMap<u32, InstrumentConfiguration>;
     fn file_description_mut(&mut self) -> &mut FileDescription;
     fn softwares_mut(&mut self) -> &mut Vec<Software>;
 
@@ -30,7 +30,7 @@ macro_rules! impl_metadata_trait {
             &self.data_processings
         }
 
-        fn instrument_configurations(&self) -> &HashMap<String, InstrumentConfiguration> {
+        fn instrument_configurations(&self) -> &HashMap<u32, InstrumentConfiguration> {
             &self.instrument_configurations
         }
         fn file_description(&self) -> &FileDescription {
@@ -46,7 +46,7 @@ macro_rules! impl_metadata_trait {
 
         fn instrument_configurations_mut(
             &mut self,
-        ) -> &mut HashMap<String, InstrumentConfiguration> {
+        ) -> &mut HashMap<u32, InstrumentConfiguration> {
             &mut self.instrument_configurations
         }
 

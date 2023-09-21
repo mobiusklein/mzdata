@@ -61,6 +61,11 @@ macro_rules! end_event {
     };
 }
 
+
+fn instrument_id(id: &u32) -> String {
+    format!("IC{}", *id + 1)
+}
+
 pub type WriterResult = Result<(), XMLError>;
 
 struct InnerXMLWriter<W: io::Write> {
@@ -207,7 +212,7 @@ pub struct MzMLWriterType<
     pub data_processings: Vec<DataProcessing>,
     /// The different instrument configurations that were in use during the
     /// data acquisition.
-    pub instrument_configurations: HashMap<String, InstrumentConfiguration>,
+    pub instrument_configurations: HashMap<u32, InstrumentConfiguration>,
 
     pub state: MzMLWriterState,
     pub offset_index: OffsetIndex,
@@ -421,7 +426,8 @@ where
         for key in configs {
             let ic = self.instrument_configurations.get(key).unwrap();
             let mut tag = bstart!("instrumentConfiguration");
-            attrib!("id", ic.id, tag);
+            let inst_id = instrument_id(&ic.id);
+            attrib!("id", inst_id, tag);
             self.handle.write_event(Event::Start(tag.borrow()))?;
             for param in ic.params() {
                 self.handle.write_param(param)?
@@ -491,7 +497,8 @@ where
         let mut keys: Vec<_> = self.instrument_configurations.keys().collect();
         keys.sort();
         if let Some(ic_ref) = keys.first() {
-            attrib!("defaultInstrumentConfigurationRef", ic_ref, run);
+            let inst_id = instrument_id(&ic_ref);
+            attrib!("defaultInstrumentConfigurationRef", inst_id, run);
         }
         if let Some(sf_ref) = self.file_description.source_files.first() {
             attrib!("defaultSourceFileRef", sf_ref.id, run);
@@ -589,7 +596,7 @@ where
 
         for scan in acq.scans.iter() {
             let mut scan_tag = bstart!("scan");
-            let id = format!("INSTRUMENT_CONFIG_{}", scan.instrument_configuration_id);
+            let id = instrument_id(&scan.instrument_configuration_id);
             attrib!(
                 "instrumentConfigurationRef",
                 id,

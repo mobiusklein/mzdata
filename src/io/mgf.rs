@@ -129,7 +129,7 @@ pub struct MGFReaderType<
     pub error: MGFError,
     pub index: OffsetIndex,
     file_description: FileDescription,
-    instrument_configurations: HashMap<String, InstrumentConfiguration>,
+    instrument_configurations: HashMap<u32, InstrumentConfiguration>,
     softwares: Vec<Software>,
     data_processings: Vec<DataProcessing>,
     centroid_type: PhantomData<C>,

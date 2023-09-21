@@ -251,7 +251,7 @@ impl Default for MzMLParserError {
 
 
 #[derive(Debug, Default, Clone)]
-struct IncrementingIdMap {
+pub(crate) struct IncrementingIdMap {
     id_map: HashMap<String, u32>,
     next_id: u32
 }
@@ -290,7 +290,7 @@ pub(crate) struct MzMLSpectrumBuilder<
     pub signal_continuity: SignalContinuity,
     pub has_precursor: bool,
 
-    instrument_id_map: IncrementingIdMap,
+    pub(crate) instrument_id_map: IncrementingIdMap,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
 }
@@ -909,6 +909,7 @@ pub struct FileMetadataBuilder {
     pub data_processings: Vec<DataProcessing>,
     pub reference_param_groups: HashMap<String, Vec<Param>>,
     pub last_group: String,
+    pub(crate) instrument_id_map: IncrementingIdMap,
 }
 
 impl XMLParseBase for FileMetadataBuilder {}
@@ -1009,10 +1010,9 @@ impl FileMetadataBuilder {
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"id" {
-                                ic.id = attr
+                                ic.id = self.instrument_id_map.get(attr
                                     .unescape_value()
-                                    .expect("Error decoding id")
-                                    .to_string();
+                                    .expect("Error decoding id").as_ref());
                             }
                         }
                         Err(msg) => {
@@ -1487,7 +1487,7 @@ pub struct MzMLReaderType<
     pub file_description: FileDescription,
     /// A mapping of different instrument configurations (source, analyzer, detector) components
     /// by ID string.
-    pub instrument_configurations: HashMap<String, InstrumentConfiguration>,
+    pub instrument_configurations: HashMap<u32, InstrumentConfiguration>,
     /// The different software components that were involved in the processing and creation of this
     /// file.
     pub softwares: Vec<Software>,
@@ -1500,6 +1500,7 @@ pub struct MzMLReaderType<
     buffer: Bytes,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
+    instrument_id_map: IncrementingIdMap,
 }
 
 impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {
@@ -1522,6 +1523,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
 
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
+            instrument_id_map: IncrementingIdMap::default()
         };
         match inst.parse_metadata() {
             Ok(()) => {}
@@ -1536,6 +1538,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         let mut accumulator = FileMetadataBuilder::default();
+        mem::swap(&mut self.instrument_id_map, &mut accumulator.instrument_id_map);
         loop {
             match reader.read_event_into(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => {
@@ -1633,7 +1636,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
         self.softwares = accumulator.softwares;
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
-
+        mem::swap(&mut self.instrument_id_map, &mut accumulator.instrument_id_map);
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
             MzMLParserState::ParserError => {
@@ -1651,6 +1654,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
     ) -> Result<usize, MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
+        mem::swap(&mut self.instrument_id_map, &mut accumulator.instrument_id_map);
         let mut offset: usize = 0;
         loop {
             match reader.read_event_into(&mut self.buffer) {
@@ -1735,6 +1739,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
                 _ => {}
             };
         }
+        mem::swap(&mut self.instrument_id_map, &mut accumulator.instrument_id_map);
         match self.state {
             MzMLParserState::SpectrumDone => Ok(offset),
             MzMLParserState::ParserError => {

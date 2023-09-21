@@ -74,7 +74,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC1">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.004935" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="68.227486" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="FTMS + p ESI Full ms [200.00-2000.00]"/>
@@ -109,7 +109,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.007896666667" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="2.07659" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + p ESI Full ms [200.00-2000.00]"/>
@@ -144,7 +144,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.011218333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="7.9930053" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 810.79@cid35.00 [210.00-1635.00]"/>
@@ -199,7 +199,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.022838333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="15.5505" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 837.34@cid35.00 [220.00-1685.00]"/>
@@ -254,7 +254,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.034925" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="57.430832" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 725.36@cid35.00 [185.00-1465.00]"/>
@@ -309,7 +309,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.04862" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="66.47864" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 558.87@cid35.00 [140.00-1130.00]"/>
@@ -364,7 +364,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.061923333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="38.11757" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 812.33@cid35.00 [210.00-1635.00]"/>
@@ -419,7 +419,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC1">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.075015" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="61.132187" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="FTMS + p ESI Full ms [200.00-2000.00]"/>
@@ -454,7 +454,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.077788333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="5.8026667" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + p ESI Full ms [200.00-2000.00]"/>
@@ -489,7 +489,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.081203333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="9.611607" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 810.75@cid35.00 [210.00-1635.00]"/>
@@ -544,7 +544,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.092903333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="11.561431" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 837.96@cid35.00 [220.00-1690.00]"/>
@@ -599,7 +599,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.104803333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="40.509495" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 644.06@cid35.00 [165.00-1300.00]"/>
@@ -654,7 +654,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.117215" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="39.692757" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 725.23@cid35.00 [185.00-1465.00]"/>
@@ -709,7 +709,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.130021666667" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="69.12831" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 559.19@cid35.00 [140.00-1130.00]"/>
@@ -764,7 +764,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC1">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.143451666667" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="72.053024" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="FTMS + p ESI Full ms [200.00-2000.00]"/>
@@ -799,7 +799,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.146408333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="2.5213284" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + p ESI Full ms [200.00-2000.00]"/>
@@ -834,7 +834,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.149755" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="9.879236" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 811.41@cid35.00 [210.00-1635.00]"/>
@@ -889,7 +889,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.161441666667" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="11.8777075" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 837.36@cid35.00 [220.00-1685.00]"/>
@@ -944,7 +944,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.17337" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="57.966053" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 643.80@cid35.00 [165.00-1300.00]"/>
@@ -999,7 +999,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.186658333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="80.53118" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 558.94@cid35.00 [140.00-1130.00]"/>
@@ -1054,7 +1054,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.200695" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="43.36063" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 725.14@cid35.00 [185.00-1465.00]"/>
@@ -1109,7 +1109,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC1">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.213673333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="78.40964" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="FTMS + p ESI Full ms [200.00-2000.00]"/>
@@ -1144,7 +1144,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.216746666667" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="2.6525393" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + p ESI Full ms [200.00-2000.00]"/>
@@ -1179,7 +1179,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.220073333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="33.14059" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 810.84@cid35.00 [210.00-1635.00]"/>
@@ -1234,7 +1234,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.232923333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="10.273739" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 837.42@cid35.00 [220.00-1685.00]"/>
@@ -1289,7 +1289,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.244745" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="77.485275" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 674.64@cid35.00 [175.00-1360.00]"/>
@@ -1344,7 +1344,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.259171666667" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="62.06552" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 643.74@cid35.00 [165.00-1300.00]"/>
@@ -1399,7 +1399,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.272663333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="40.76653" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 725.36@cid35.00 [185.00-1465.00]"/>
@@ -1454,7 +1454,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC1">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.285483333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="99.5918" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="FTMS + p ESI Full ms [200.00-2000.00]"/>
@@ -1489,7 +1489,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.288898333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="1.733657" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + p ESI Full ms [200.00-2000.00]"/>
@@ -1524,7 +1524,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.303703333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="12.790624" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 837.39@cid35.00 [220.00-1685.00]"/>
@@ -1579,7 +1579,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.31565" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="49.75468" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 643.80@cid35.00 [165.00-1300.00]"/>
@@ -1634,7 +1634,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.328526666667" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="87.58811" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 558.75@cid35.00 [140.00-1130.00]"/>
@@ -1689,7 +1689,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.342915" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="82.45621" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 882.45@cid35.00 [230.00-1775.00]"/>
@@ -1744,7 +1744,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC1">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.358558333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="66.96238" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="FTMS + p ESI Full ms [200.00-2000.00]"/>
@@ -1779,7 +1779,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.361428333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="1.4161005" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + p ESI Full ms [200.00-2000.00]"/>
@@ -1814,7 +1814,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.364755" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="11.512072" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 810.73@cid35.00 [210.00-1635.00]"/>
@@ -1869,7 +1869,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.376578333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="15.733368" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 837.35@cid35.00 [220.00-1685.00]"/>
@@ -1924,7 +1924,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.388673333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="57.842155" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 643.73@cid35.00 [165.00-1300.00]"/>
@@ -1979,7 +1979,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.401961666667" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="47.00904" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 725.68@cid35.00 [185.00-1465.00]"/>
@@ -2034,7 +2034,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.415131666667" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="56.725494" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 674.70@cid35.00 [175.00-1360.00]"/>
@@ -2089,7 +2089,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC1">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.428483333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="178.92064" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="FTMS + p ESI Full ms [200.00-2000.00]"/>
@@ -2124,7 +2124,7 @@
           <cvParam accession="MS:1000128" cvRef="MS" name="profile spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.433221666667" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="2.4204934" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + p ESI Full ms [200.00-2000.00]"/>
@@ -2159,7 +2159,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.436566666667" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="11.191861" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 810.82@cid35.00 [210.00-1635.00]"/>
@@ -2214,7 +2214,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.44832" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="17.769115" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 837.78@cid35.00 [220.00-1690.00]"/>
@@ -2269,7 +2269,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.460565" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="40.170734" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 674.84@cid35.00 [175.00-1360.00]"/>
@@ -2324,7 +2324,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.473103333333" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="83.052246" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 558.90@cid35.00 [140.00-1130.00]"/>
@@ -2379,7 +2379,7 @@
           <cvParam accession="MS:1000127" cvRef="MS" name="centroid spectrum"/>
           <scanList count="1">
             <cvParam accession="MS:1000016" cvRef="MS" name="no combination"/>
-            <scan instrumentConfigurationRef="INSTRUMENT_CONFIG_0">
+            <scan instrumentConfigurationRef="IC2">
               <cvParam accession="MS:1000016" cvRef="MS" name="scan start time" value="0.487236666667" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
               <cvParam accession="MS:1000927" cvRef="MS" name="ion injection time" value="86.34802" unitCvRef="UO" unitAccession="UO:0000028" unitName="millisecond"/>
               <cvParam accession="MS:1000512" cvRef="MS" name="filter string" value="ITMS + c ESI d Full ms2 882.54@cid35.00 [230.00-1780.00]"/>
@@ -2434,55 +2434,55 @@
 <indexList count="1">
   <index name="spectrum">
     <offset idRef="controllerType=0 controllerNumber=1 scan=1">3861</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=2">218675</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=3">400221</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=4">409219</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=5">423054</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=6">435278</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=7">445805</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=8">457409</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=9">621723</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=10">811035</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=11">820665</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=12">833921</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=13">844285</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=14">856115</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=15">866835</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=16">1054257</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=17">1236371</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=18">1246256</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=19">1259257</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=20">1269967</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=21">1280755</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=22">1293518</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=23">1483099</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=24">1646525</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=25">1656405</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=26">1669591</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=27">1681385</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=28">1692225</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=29">1704751</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=30">1925895</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=31">2103720</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=32">2116938</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=33">2127491</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=34">2138506</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=35">2148456</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=36">2329269</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=37">2495235</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=38">2505042</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=39">2519460</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=40">2529986</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=41">2542597</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=42">2554094</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=43">2910668</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=44">3094314</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=45">3104495</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=46">3118364</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=47">3129467</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=48">3140113</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=2">218659</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=3">400189</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=4">409171</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=5">422990</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=6">435198</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=7">445709</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=8">457297</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=9">621595</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=10">810891</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=11">820505</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=12">833745</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=13">844093</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=14">855907</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=15">866611</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=16">1054017</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=17">1236115</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=18">1245984</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=19">1258969</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=20">1269663</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=21">1280435</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=22">1293182</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=23">1482747</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=24">1646157</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=25">1656021</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=26">1669191</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=27">1680969</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=28">1691793</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=29">1704303</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=30">1925431</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=31">2103240</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=32">2116442</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=33">2126979</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=34">2137978</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=35">2147912</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=36">2328709</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=37">2494659</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=38">2504450</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=39">2518852</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=40">2529362</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=41">2541957</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=42">2553438</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=43">2909996</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=44">3093626</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=45">3103791</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=46">3117644</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=47">3128731</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=48">3139361</offset>
   </index>
 </indexList>
-<indexListOffset>3150574</indexListOffset>
-<fileChecksum>04d795463538725a46a823cd354ee280</fileChecksum>
+<indexListOffset>3149806</indexListOffset>
+<fileChecksum>e200373a61ead91d38f1d9caecdcf416</fileChecksum>
 </indexedmzML>

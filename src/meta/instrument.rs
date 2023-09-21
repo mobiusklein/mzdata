@@ -27,7 +27,7 @@ pub struct InstrumentConfiguration {
     pub components: Vec<Component>,
     pub params: ParamList,
     pub software_reference: String,
-    pub id: String,
+    pub id: u32,
 }
 
 impl_param_described!(InstrumentConfiguration, Component);
