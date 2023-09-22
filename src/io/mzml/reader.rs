@@ -270,8 +270,16 @@ impl IncrementingIdMap {
 
     pub fn copy_from(&mut self, other: &IncrementingIdMap) {
         other.id_map.iter().for_each(|(k, v)| {
-            self.id_map.insert(k.clone(), *v);
-            self.next_id = (*v) + 1;
+            let matched = match self.id_map.get(k) {
+                Some(ext) => {
+                    *ext == *v
+                },
+                None => false
+            };
+            if !matched {
+                self.id_map.insert(k.clone(), *v);
+                self.next_id = (*v) + 1;
+            }
         });
     }
 }
@@ -681,7 +689,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
                 self.fill_selected_ion(param);
             }
             MzMLParserState::Activation => {
-                if Activation::is_param_activation(&param) {
+                if Activation::is_param_activation(&param) && self.precursor.activation.method().is_none() {
                     *self.precursor.activation.method_mut() = Some(param);
                 } else {
                     match param.name.as_ref() {
@@ -858,12 +866,12 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
                 return Ok(MzMLParserState::Spectrum);
             }
             b"binaryDataArray" => {
-                let mut array = self.current_array.clone();
+
+                let mut array = mem::take(&mut self.current_array);
                 array
                     .decode_and_store()
                     .expect("Error during decoding and storing of array data");
                 self.arrays.add(array);
-                self.current_array.clear();
                 return Ok(MzMLParserState::BinaryDataArrayList);
             }
             b"binary" => return Ok(MzMLParserState::BinaryDataArray),
@@ -2223,6 +2231,16 @@ mod test {
                     }
                 }
             };
+            let filter_string = scan.acquisition().first_scan().unwrap().get_param_by_accession("MS:1000512").unwrap();
+            let configs = scan.acquisition().instrument_configuration_ids();
+            let conf = configs[0];
+            println!("Processing scan {}", scan.index());
+            dbg!(configs, &filter_string.value);
+            if filter_string.value.contains("ITMS") {
+                assert_eq!(conf, 1);
+            } else {
+                assert_eq!(conf, 0);
+            }
             let level = scan.ms_level();
             if level == 1 {
                 ms1_count += 1;
