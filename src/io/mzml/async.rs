@@ -80,7 +80,7 @@ pub struct MzMLReaderType<
 
 }
 
-impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D: DeconvolutedPeakAdapting + Send + Sync> MzMLReaderType<R, C, D> {
+impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D: DeconvolutedPeakAdapting + Send + Sync> MzMLReaderType<R, C, D> {
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
     /// provided with an `[io::BufReader`] and parses the metadata section of the file.
     pub async fn new(file: R) -> MzMLReaderType<R, C, D> {
@@ -115,7 +115,7 @@ impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D:
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         let mut accumulator = FileMetadataBuilder::default();
-        accumulator.instrument_id_map.copy_from(&self.instrument_id_map);
+        accumulator.instrument_id_map = Some(&mut self.instrument_id_map);
         loop {
             match reader.read_event_into_async(&mut self.buffer).await {
                 Ok(Event::Start(ref e)) => {
@@ -213,7 +213,7 @@ impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D:
         self.softwares = accumulator.softwares;
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
-        self.instrument_id_map.copy_from(&accumulator.instrument_id_map);
+
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
             MzMLParserState::ParserError => {
@@ -227,12 +227,12 @@ impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D:
 
 
     async fn _parse_into(
-        &mut self,
-        accumulator: &mut MzMLSpectrumBuilder<C, D>,
-    ) -> Result<usize, MzMLParserError> {
+        &'a mut self,
+        mut accumulator: MzMLSpectrumBuilder<'a, C, D>,
+    ) -> Result<(usize, MzMLSpectrumBuilder<C, D>), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
-        accumulator.instrument_id_map.copy_from(&self.instrument_id_map);
+        accumulator.instrument_id_map = Some(&mut self.instrument_id_map);
         let mut offset: usize = 0;
         loop {
             let event = reader.read_event_into_async(&mut self.buffer).await;
@@ -311,7 +311,6 @@ impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D:
             };
             offset += self.buffer.len();
             self.buffer.clear();
-            self.instrument_id_map.copy_from(&accumulator.instrument_id_map);
             match self.state {
                 MzMLParserState::SpectrumDone | MzMLParserState::ParserError => {
                     break;
@@ -320,7 +319,7 @@ impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D:
             };
         }
         match self.state {
-            MzMLParserState::SpectrumDone => Ok(offset),
+            MzMLParserState::SpectrumDone => Ok((offset, accumulator)),
             MzMLParserState::ParserError => {
                 let mut error = MzMLParserError::NoError;
                 mem::swap(&mut error, &mut self.error);
@@ -337,12 +336,12 @@ impl<R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D:
         &mut self,
         spectrum: &mut MultiLayerSpectrum<C, D>,
     ) -> Result<usize, MzMLParserError> {
-        let mut accumulator = MzMLSpectrumBuilder::<C, D>::new();
+        let accumulator = MzMLSpectrumBuilder::<C, D>::new();
         if self.state == MzMLParserState::SpectrumDone {
             self.state = MzMLParserState::Resume;
         }
-        match self._parse_into(&mut accumulator).await {
-            Ok(sz) => {
+        match self._parse_into(accumulator).await {
+            Ok((sz, accumulator)) => {
                 accumulator.into_spectrum(spectrum);
                 Ok(sz)
             }

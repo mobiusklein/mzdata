@@ -267,27 +267,13 @@ impl IncrementingIdMap {
             return value
         }
     }
-
-    pub fn copy_from(&mut self, other: &IncrementingIdMap) {
-        other.id_map.iter().for_each(|(k, v)| {
-            let matched = match self.id_map.get(k) {
-                Some(ext) => {
-                    *ext == *v
-                },
-                None => false
-            };
-            if !matched {
-                self.id_map.insert(k.clone(), *v);
-                self.next_id = (*v) + 1;
-            }
-        });
-    }
 }
 
 const BUFFER_SIZE: usize = 10000;
 
 #[derive(Default)]
 pub(crate) struct MzMLSpectrumBuilder<
+    'a,
     C: CentroidPeakAdapting = CentroidPeak,
     D: DeconvolutedPeakAdapting = DeconvolutedPeak,
 > {
@@ -305,17 +291,17 @@ pub(crate) struct MzMLSpectrumBuilder<
     pub signal_continuity: SignalContinuity,
     pub has_precursor: bool,
 
-    pub(crate) instrument_id_map: IncrementingIdMap,
+    pub(crate) instrument_id_map: Option<&'a mut IncrementingIdMap>,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> XMLParseBase
-    for MzMLSpectrumBuilder<C, D>
+impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> XMLParseBase
+    for MzMLSpectrumBuilder<'a, C, D>
 {
 }
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> CVParamParse
-    for MzMLSpectrumBuilder<C, D>
+impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> CVParamParse
+    for MzMLSpectrumBuilder<'a, C, D>
 {
 }
 
@@ -518,8 +504,8 @@ pub trait SpectrumBuilding<
 
 pub type ParserResult = Result<MzMLParserState, MzMLParserError>;
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
-    SpectrumBuilding<C, D, MultiLayerSpectrum<C, D>> for MzMLSpectrumBuilder<C, D>
+impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    SpectrumBuilding<C, D, MultiLayerSpectrum<C, D>> for MzMLSpectrumBuilder<'a, C, D>
 {
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
         &mut self.precursor.isolation_window
@@ -576,8 +562,8 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C, D> {
-    pub fn new() -> MzMLSpectrumBuilder<C, D> {
+impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<'a, C, D> {
+    pub fn new() -> MzMLSpectrumBuilder<'a, C, D> {
         MzMLSpectrumBuilder {
             ..Default::default()
         }
@@ -753,7 +739,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"instrumentConfigurationRef" {
-                                scan_event.instrument_configuration_id = self.instrument_id_map.get(&attr
+                                scan_event.instrument_configuration_id = self.instrument_id_map.as_mut().expect("An instrument ID map was not provided").get(&attr
                                     .unescape_value()
                                     .expect("Error decoding id")
                                 );
@@ -892,8 +878,8 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<C
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<CentroidSpectrumType<C>>
-    for MzMLSpectrumBuilder<C, D>
+impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<CentroidSpectrumType<C>>
+    for MzMLSpectrumBuilder<'a, C, D>
 {
     fn into(self) -> CentroidSpectrumType<C> {
         let mut spec = MultiLayerSpectrum::<C, D>::default();
@@ -902,8 +888,8 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<CentroidSpectrum
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<MultiLayerSpectrum<C, D>>
-    for MzMLSpectrumBuilder<C, D>
+impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<MultiLayerSpectrum<C, D>>
+    for MzMLSpectrumBuilder<'a, C, D>
 {
     fn into(self) -> MultiLayerSpectrum<C, D> {
         let mut spec = MultiLayerSpectrum::<C, D>::default();
@@ -912,7 +898,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<MultiLayerSpectr
     }
 }
 
-impl Into<RawSpectrum> for MzMLSpectrumBuilder {
+impl<'a> Into<RawSpectrum> for MzMLSpectrumBuilder<'a> {
     fn into(self) -> RawSpectrum {
         let mut spec = Spectrum::default();
         self.into_spectrum(&mut spec);
@@ -922,21 +908,21 @@ impl Into<RawSpectrum> for MzMLSpectrumBuilder {
 
 /**A SAX-style parser for building up the metadata section prior to the `<run>` element
 of an mzML file.*/
-#[derive(Debug, Default, Clone)]
-pub struct FileMetadataBuilder {
+#[derive(Debug, Default)]
+pub struct FileMetadataBuilder<'a> {
     pub file_description: FileDescription,
     pub instrument_configurations: Vec<InstrumentConfiguration>,
     pub softwares: Vec<Software>,
     pub data_processings: Vec<DataProcessing>,
     pub reference_param_groups: HashMap<String, Vec<Param>>,
     pub last_group: String,
-    pub(crate) instrument_id_map: IncrementingIdMap,
+    pub(crate) instrument_id_map: Option<&'a mut IncrementingIdMap>,
 }
 
-impl XMLParseBase for FileMetadataBuilder {}
-impl CVParamParse for FileMetadataBuilder {}
+impl<'a> XMLParseBase for FileMetadataBuilder<'a> {}
+impl<'a> CVParamParse for FileMetadataBuilder<'a> {}
 
-impl FileMetadataBuilder {
+impl<'a> FileMetadataBuilder<'a> {
     pub fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
@@ -1031,7 +1017,7 @@ impl FileMetadataBuilder {
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"id" {
-                                ic.id = self.instrument_id_map.get(attr
+                                ic.id = self.instrument_id_map.as_mut().expect("An instrument ID map was not provided").get(attr
                                     .unescape_value()
                                     .expect("Error decoding id").as_ref());
                             }
@@ -1524,7 +1510,7 @@ pub struct MzMLReaderType<
     instrument_id_map: IncrementingIdMap,
 }
 
-impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {
+impl<'a, 'b: 'a, R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
     /// provided with an `[io::BufReader`] and parses the metadata section of the file.
     pub fn new(file: R) -> MzMLReaderType<R, C, D> {
@@ -1559,7 +1545,7 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         let mut accumulator = FileMetadataBuilder::default();
-        accumulator.instrument_id_map.copy_from(&self.instrument_id_map);
+        accumulator.instrument_id_map = Some(&mut self.instrument_id_map);
         loop {
             match reader.read_event_into(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => {
@@ -1657,7 +1643,6 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
         self.softwares = accumulator.softwares;
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
-        self.instrument_id_map.copy_from(&accumulator.instrument_id_map);
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
             MzMLParserState::ParserError => {
@@ -1670,12 +1655,12 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
     }
 
     fn _parse_into(
-        &mut self,
-        accumulator: &mut MzMLSpectrumBuilder<C, D>,
-    ) -> Result<usize, MzMLParserError> {
+        &'a mut self,
+        mut accumulator: MzMLSpectrumBuilder<'a, C, D>,
+    ) -> Result<(MzMLSpectrumBuilder<'a, C, D>, usize), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
-        accumulator.instrument_id_map.copy_from(&self.instrument_id_map);
+        accumulator.instrument_id_map = Some(&mut self.instrument_id_map);
         let mut offset: usize = 0;
         loop {
             match reader.read_event_into(&mut self.buffer) {
@@ -1760,9 +1745,8 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
                 _ => {}
             };
         }
-        self.instrument_id_map.copy_from(&accumulator.instrument_id_map);
         match self.state {
-            MzMLParserState::SpectrumDone => Ok(offset),
+            MzMLParserState::SpectrumDone => Ok((accumulator, offset)),
             MzMLParserState::ParserError => {
                 let mut error = MzMLParserError::NoError;
                 mem::swap(&mut error, &mut self.error);
@@ -1779,12 +1763,12 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderTy
         &mut self,
         spectrum: &mut MultiLayerSpectrum<C, D>,
     ) -> Result<usize, MzMLParserError> {
-        let mut accumulator = MzMLSpectrumBuilder::<C, D>::new();
+        let accumulator = MzMLSpectrumBuilder::<C, D>::new();
         if self.state == MzMLParserState::SpectrumDone {
             self.state = MzMLParserState::Resume;
         }
-        match self._parse_into(&mut accumulator) {
-            Ok(sz) => {
+        match self._parse_into(accumulator) {
+            Ok((accumulator, sz)) => {
                 accumulator.into_spectrum(spectrum);
                 Ok(sz)
             }
