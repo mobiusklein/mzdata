@@ -1,8 +1,7 @@
 use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumBehavior};
 use crate::io::traits::ScanSource;
-use crate::params::ControlledVocabulary;
+use crate::params::{ControlledVocabulary, Param};
 use crate::{impl_param_described, ParamList};
-use crate::{params, Param};
 
 /**
 Describe the initialization stage of an isolation window
@@ -219,8 +218,6 @@ pub struct Precursor {
     pub product_id: Option<String>,
     /// The activation process applied to the precursor ion
     pub activation: Activation,
-    /// Additional parameters describing this precursor ion
-    pub params: ParamList,
 }
 
 impl Precursor {
@@ -261,7 +258,7 @@ impl Precursor {
 /**
 A trait for abstracting over how a precursor ion is described, immutably.
 */
-pub trait PrecursorSelection: params::ParamDescribed {
+pub trait PrecursorSelection {
     /// Describes the selected ion's properties
     fn ion(&self) -> &SelectedIon;
     /// Describes the isolation window around the selected ion
@@ -369,7 +366,7 @@ pub struct SpectrumDescription {
 impl_param_described!(
     Acquisition,
     Activation,
-    Precursor,
+    // Precursor,
     SelectedIon,
     ScanEvent,
     SpectrumDescription
