@@ -28,7 +28,7 @@ use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 use crate::meta::file_description::{FileDescription, SourceFile};
 use crate::meta::instrument::{Component, ComponentType, InstrumentConfiguration};
 use crate::meta::{DataProcessing, MSDataFileMetadata, ProcessingMethod, Software};
-use crate::params::{Param, ParamList, Unit, ControlledVocabulary, curie_to_num};
+use crate::params::{curie_to_num, ControlledVocabulary, Param, ParamList, Unit};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
@@ -249,11 +249,10 @@ impl Default for MzMLParserError {
     }
 }
 
-
 #[derive(Debug, Default, Clone)]
 pub(crate) struct IncrementingIdMap {
     id_map: HashMap<String, u32>,
-    next_id: u32
+    next_id: u32,
 }
 
 impl IncrementingIdMap {
@@ -264,7 +263,7 @@ impl IncrementingIdMap {
             let value = self.next_id;
             self.id_map.insert(key.to_string(), self.next_id);
             self.next_id += 1;
-            return value
+            return value;
         }
     }
 }
@@ -675,7 +674,9 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
                 self.fill_selected_ion(param);
             }
             MzMLParserState::Activation => {
-                if Activation::is_param_activation(&param) && self.precursor.activation.method().is_none() {
+                if Activation::is_param_activation(&param)
+                    && self.precursor.activation.method().is_none()
+                {
                     *self.precursor.activation.method_mut() = Some(param);
                 } else {
                     match param.name.as_ref() {
@@ -688,13 +689,14 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
                         }
                     }
                 }
-            },
+            }
             MzMLParserState::BinaryDataArrayList => {}
             MzMLParserState::BinaryDataArray => {
                 self.fill_binary_data_array(param);
             }
             MzMLParserState::Precursor | MzMLParserState::PrecursorList => {
-                self.precursor.params.push(param);
+                // self.precursor.params.push(param);
+                warn!("cvParam found for {:?} where none are allowed", &state);
             }
             _ => {}
         };
@@ -739,10 +741,11 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"instrumentConfigurationRef" {
-                                scan_event.instrument_configuration_id = self.instrument_id_map.as_mut().expect("An instrument ID map was not provided").get(&attr
-                                    .unescape_value()
-                                    .expect("Error decoding id")
-                                );
+                                scan_event.instrument_configuration_id = self
+                                    .instrument_id_map
+                                    .as_mut()
+                                    .expect("An instrument ID map was not provided")
+                                    .get(&attr.unescape_value().expect("Error decoding id"));
                             }
                         }
                         Err(msg) => {
@@ -775,10 +778,11 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"spectrumRef" {
-                                self.precursor.precursor_id = Some(attr
-                                    .unescape_value()
-                                    .expect("Error decoding id")
-                                    .to_string());
+                                self.precursor.precursor_id = Some(
+                                    attr.unescape_value()
+                                        .expect("Error decoding id")
+                                        .to_string(),
+                                );
                             }
                         }
                         Err(msg) => {
@@ -852,7 +856,6 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
                 return Ok(MzMLParserState::Spectrum);
             }
             b"binaryDataArray" => {
-
                 let mut array = mem::take(&mut self.current_array);
                 array
                     .decode_and_store()
@@ -872,7 +875,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
             let bin = event
                 .unescape()
                 .expect("Failed to unescape binary data array content");
-            self.current_array.data = Bytes::from(&*bin);
+            self.current_array.data = Bytes::from(bin.as_bytes());
         }
         Ok(state)
     }
@@ -1017,9 +1020,13 @@ impl<'a> FileMetadataBuilder<'a> {
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"id" {
-                                ic.id = self.instrument_id_map.as_mut().expect("An instrument ID map was not provided").get(attr
-                                    .unescape_value()
-                                    .expect("Error decoding id").as_ref());
+                                ic.id = self
+                                    .instrument_id_map
+                                    .as_mut()
+                                    .expect("An instrument ID map was not provided")
+                                    .get(
+                                        attr.unescape_value().expect("Error decoding id").as_ref(),
+                                    );
                             }
                         }
                         Err(msg) => {
@@ -1510,7 +1517,9 @@ pub struct MzMLReaderType<
     instrument_id_map: IncrementingIdMap,
 }
 
-impl<'a, 'b: 'a, R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {
+impl<'a, 'b: 'a, R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    MzMLReaderType<R, C, D>
+{
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
     /// provided with an `[io::BufReader`] and parses the metadata section of the file.
     pub fn new(file: R) -> MzMLReaderType<R, C, D> {
@@ -1530,7 +1539,7 @@ impl<'a, 'b: 'a, R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> 
 
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
-            instrument_id_map: IncrementingIdMap::default()
+            instrument_id_map: IncrementingIdMap::default(),
         };
         match inst.parse_metadata() {
             Ok(()) => {}
@@ -2215,7 +2224,12 @@ mod test {
                     }
                 }
             };
-            let filter_string = scan.acquisition().first_scan().unwrap().get_param_by_accession("MS:1000512").unwrap();
+            let filter_string = scan
+                .acquisition()
+                .first_scan()
+                .unwrap()
+                .get_param_by_accession("MS:1000512")
+                .unwrap();
             let configs = scan.acquisition().instrument_configuration_ids();
             let conf = configs[0];
             println!("Processing scan {}", scan.index());

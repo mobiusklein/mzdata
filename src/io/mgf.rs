@@ -577,10 +577,12 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFi
 
 pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
-
 pub(crate) fn is_mgf(buf: &[u8]) -> bool {
     let needle = b"BEGIN IONS";
-    if let Some(_loc) = buf.windows(needle.len()).position(|window| window == needle) {
+    if let Some(_loc) = buf
+        .windows(needle.len())
+        .position(|window| window == needle)
+    {
         true
     } else {
         false
@@ -607,6 +609,15 @@ impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFWrit
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
         }
+    }
+
+    fn write_param(&mut self, param: &Param) -> io::Result<usize> {
+        let mut count = 0;
+        count += self.handle.write(param.name.to_uppercase().as_bytes())?;
+        count += self.handle.write(param.value.as_bytes())?;
+        self.handle.write(b"\n")?;
+        count += 1;
+        Ok(count)
     }
 
     pub fn write_header(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {
@@ -641,9 +652,19 @@ TITLE="#,
                     count += self.handle.write(charge.to_string().as_bytes())?;
                 }
                 count += self.handle.write(b"\n")?;
-                for param in precursor.params() {
-                    count += self.handle.write(param.name.to_uppercase().as_bytes())?;
-                    count += self.handle.write(param.value.as_bytes())?;
+
+                for param in precursor
+                    .ion()
+                    .params()
+                    .into_iter()
+                    .chain(precursor.activation.params())
+                {
+                    count += self.write_param(param)?;
+                }
+                if let Some(pid) = precursor.precursor_id() {
+                    count += self.handle.write(b"PRECURSORSCAN=")?;
+                    count += self.handle.write(pid.as_bytes())?;
+                    count += self.handle.write(b"\n")?;
                 }
             }
             None => {}
