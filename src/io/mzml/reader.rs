@@ -221,91 +221,24 @@ pub trait CVParamParse: XMLParseBase {
     }
 }
 
-/**
-All the ways that mzML parsing can go wrong
-*/
-#[derive(Debug)]
-pub enum MzMLParserError {
-    // TODO factor this out and make usage in reader an Option<>
-    NoError,
-    UnknownError(MzMLParserState),
-    IncompleteSpectrum,
-    IncompleteElementError(String, MzMLParserState),
-    XMLError(MzMLParserState, XMLError),
-    IOError(MzMLParserState, io::Error),
-}
+pub trait MzMLSAX {
+    fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult;
 
-impl std::fmt::Display for MzMLParserError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
+    fn empty_element(
+        &mut self,
+        event: &BytesStart,
+        state: MzMLParserState,
+        reader_position: usize,
+    ) -> ParserResult;
 
-impl std::error::Error for MzMLParserError {}
+    fn end_element(&mut self, event: &BytesEnd, state: MzMLParserState) -> ParserResult;
 
-impl Default for MzMLParserError {
-    fn default() -> MzMLParserError {
-        MzMLParserError::NoError
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub(crate) struct IncrementingIdMap {
-    id_map: HashMap<String, u32>,
-    next_id: u32,
-}
-
-impl IncrementingIdMap {
-    pub fn get(&mut self, key: &str) -> u32 {
-        if let Some(value) = self.id_map.get(key) {
-            return *value;
-        } else {
-            let value = self.next_id;
-            self.id_map.insert(key.to_string(), self.next_id);
-            self.next_id += 1;
-            return value;
-        }
-    }
-}
-
-const BUFFER_SIZE: usize = 10000;
-
-#[derive(Default)]
-pub(crate) struct MzMLSpectrumBuilder<
-    'a,
-    C: CentroidPeakAdapting = CentroidPeak,
-    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
-> {
-    pub params: ParamList,
-    pub acquisition: Acquisition,
-    pub precursor: Precursor,
-
-    pub arrays: BinaryArrayMap,
-    pub current_array: DataArray,
-
-    pub index: usize,
-    pub scan_id: String,
-    pub ms_level: u8,
-    pub polarity: ScanPolarity,
-    pub signal_continuity: SignalContinuity,
-    pub has_precursor: bool,
-
-    pub(crate) instrument_id_map: Option<&'a mut IncrementingIdMap>,
-    centroid_type: PhantomData<C>,
-    deconvoluted_type: PhantomData<D>,
-}
-
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> XMLParseBase
-    for MzMLSpectrumBuilder<'a, C, D>
-{
-}
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> CVParamParse
-    for MzMLSpectrumBuilder<'a, C, D>
-{
+    fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult;
 }
 
 /// Convert mzML spectrum XML into [`Spectrum`](crate::spectrum::Spectrum)
 pub trait SpectrumBuilding<
+    'a,
     C: CentroidPeakAdapting,
     D: DeconvolutedPeakAdapting,
     S: SpectrumBehavior<C, D>,
@@ -319,6 +252,8 @@ pub trait SpectrumBuilding<
     fn current_array_mut(&mut self) -> &mut DataArray;
     /// Move all the data into the provided `spectrum` reference
     fn into_spectrum(self, spectrum: &mut S);
+
+    fn fill_spectrum(&mut self, param: Param);
 
     fn fill_binary_data_array(&mut self, param: Param) {
         match param.name.as_ref() {
@@ -499,12 +434,97 @@ pub trait SpectrumBuilding<
             &_ => {}
         }
     }
+
+    fn borrow_instrument_configuration(self, instrument_configurations: &'a mut IncrementingIdMap) -> Self;
 }
 
 pub type ParserResult = Result<MzMLParserState, MzMLParserError>;
 
+/**
+All the ways that mzML parsing can go wrong
+*/
+#[derive(Debug)]
+pub enum MzMLParserError {
+    // TODO factor this out and make usage in reader an Option<>
+    NoError,
+    UnknownError(MzMLParserState),
+    IncompleteSpectrum,
+    IncompleteElementError(String, MzMLParserState),
+    XMLError(MzMLParserState, XMLError),
+    IOError(MzMLParserState, io::Error),
+}
+
+impl std::fmt::Display for MzMLParserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for MzMLParserError {}
+
+impl Default for MzMLParserError {
+    fn default() -> MzMLParserError {
+        MzMLParserError::NoError
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct IncrementingIdMap {
+    id_map: HashMap<String, u32>,
+    next_id: u32,
+}
+
+impl IncrementingIdMap {
+    pub fn get(&mut self, key: &str) -> u32 {
+        if let Some(value) = self.id_map.get(key) {
+            return *value;
+        } else {
+            let value = self.next_id;
+            self.id_map.insert(key.to_string(), self.next_id);
+            self.next_id += 1;
+            return value;
+        }
+    }
+}
+
+const BUFFER_SIZE: usize = 10000;
+
+#[derive(Default)]
+pub struct MzMLSpectrumBuilder<
+    'a,
+    C: CentroidPeakAdapting = CentroidPeak,
+    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+> {
+    pub params: ParamList,
+    pub acquisition: Acquisition,
+    pub precursor: Precursor,
+
+    pub arrays: BinaryArrayMap,
+    pub current_array: DataArray,
+
+    pub index: usize,
+    pub scan_id: String,
+    pub ms_level: u8,
+    pub polarity: ScanPolarity,
+    pub signal_continuity: SignalContinuity,
+    pub has_precursor: bool,
+
+    pub(crate) instrument_id_map: Option<&'a mut IncrementingIdMap>,
+    centroid_type: PhantomData<C>,
+    deconvoluted_type: PhantomData<D>,
+}
+
+impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> XMLParseBase
+    for MzMLSpectrumBuilder<'a, C, D>
+{
+}
+impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> CVParamParse
+    for MzMLSpectrumBuilder<'a, C, D>
+{
+}
+
 impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
-    SpectrumBuilding<C, D, MultiLayerSpectrum<C, D>> for MzMLSpectrumBuilder<'a, C, D>
+    SpectrumBuilding<'a, C, D, MultiLayerSpectrum<C, D>> for MzMLSpectrumBuilder<'a, C, D>
 {
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
         &mut self.precursor.isolation_window
@@ -559,6 +579,34 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
 
         spectrum.arrays = Some(self.arrays);
     }
+
+    fn fill_spectrum(&mut self, param: Param) {
+        match param.name.as_ref() {
+            "ms level" => {
+                self.ms_level = param.coerce().expect("Failed to parse ms level");
+            }
+            "positive scan" => {
+                self.polarity = ScanPolarity::Positive;
+            }
+            "negative scan" => {
+                self.polarity = ScanPolarity::Negative;
+            }
+            "profile spectrum" => {
+                self.signal_continuity = SignalContinuity::Profile;
+            }
+            "centroid spectrum" => {
+                self.signal_continuity = SignalContinuity::Centroid;
+            }
+            &_ => {
+                self.params.push(param);
+            }
+        };
+    }
+
+    fn borrow_instrument_configuration(mut self, instrument_configurations: &'a mut IncrementingIdMap) -> Self {
+        self.instrument_id_map = Some(instrument_configurations);
+        self
+    }
 }
 
 impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<'a, C, D> {
@@ -600,29 +648,6 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
         }
 
         spectrum.arrays = Some(self.arrays.clone());
-    }
-
-    pub fn fill_spectrum(&mut self, param: Param) {
-        match param.name.as_ref() {
-            "ms level" => {
-                self.ms_level = param.coerce().expect("Failed to parse ms level");
-            }
-            "positive scan" => {
-                self.polarity = ScanPolarity::Positive;
-            }
-            "negative scan" => {
-                self.polarity = ScanPolarity::Negative;
-            }
-            "profile spectrum" => {
-                self.signal_continuity = SignalContinuity::Profile;
-            }
-            "centroid spectrum" => {
-                self.signal_continuity = SignalContinuity::Centroid;
-            }
-            &_ => {
-                self.params.push(param);
-            }
-        };
     }
 
     pub fn fill_param_into(&mut self, param: Param, state: MzMLParserState) {
@@ -702,7 +727,11 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
         };
     }
 
-    pub fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult {
+}
+
+
+impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX for MzMLSpectrumBuilder<'a, C, D> {
+    fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
             b"spectrum" => {
@@ -818,7 +847,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
         Ok(state)
     }
 
-    pub fn empty_element(
+    fn empty_element(
         &mut self,
         event: &BytesStart,
         state: MzMLParserState,
@@ -838,7 +867,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
         Ok(state)
     }
 
-    pub fn end_element(&mut self, event: &BytesEnd, state: MzMLParserState) -> ParserResult {
+    fn end_element(&mut self, event: &BytesEnd, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
             b"spectrum" => return Ok(MzMLParserState::SpectrumDone),
@@ -870,7 +899,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
         Ok(state)
     }
 
-    pub fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult {
+    fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult {
         if state == MzMLParserState::Binary {
             let bin = event
                 .unescape()
@@ -879,7 +908,9 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
         }
         Ok(state)
     }
+
 }
+
 
 impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<CentroidSpectrumType<C>>
     for MzMLSpectrumBuilder<'a, C, D>
@@ -1663,13 +1694,14 @@ impl<'a, 'b: 'a, R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
         }
     }
 
-    fn _parse_into(
-        &'a mut self,
-        mut accumulator: MzMLSpectrumBuilder<'a, C, D>,
-    ) -> Result<(MzMLSpectrumBuilder<'a, C, D>, usize), MzMLParserError> {
+    pub(crate) fn _parse_into<B: MzMLSAX + SpectrumBuilding<'a, C, D, MultiLayerSpectrum<C, D>> + 'a>(
+        &'b mut self,
+        mut accumulator: B,
+    ) -> Result<(B, usize), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
-        accumulator.instrument_id_map = Some(&mut self.instrument_id_map);
+        accumulator = accumulator.borrow_instrument_configuration(&mut self.instrument_id_map);
+        // accumulator.instrument_id_map = Some(&mut self.instrument_id_map);
         let mut offset: usize = 0;
         loop {
             match reader.read_event_into(&mut self.buffer) {
@@ -1943,6 +1975,10 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
 
     pub fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.handle.seek(pos)
+    }
+
+    pub fn stream_position(&mut self) -> Result<u64, io::Error> {
+        self.handle.stream_position()
     }
 
     /// Read the offset index at the end of an `<indexedmzML>` document,

@@ -12,13 +12,11 @@ use num_traits::Num;
 use log::warn;
 
 use base64;
-use base64::{Engine as _, engine::general_purpose::STANDARD as Base64Std};
+use base64::{engine::general_purpose::STANDARD as Base64Std, Engine as _};
 use flate2::write::{ZlibDecoder, ZlibEncoder};
 use flate2::Compression;
 use mzpeaks::prelude::*;
-use mzpeaks::{
-    CentroidPeak, DeconvolutedPeak, DeconvolutedPeakSet, MZPeakSetType, PeakSet,
-};
+use mzpeaks::{CentroidPeak, DeconvolutedPeak, DeconvolutedPeakSet, MZPeakSetType, PeakSet};
 
 use crate::params::{ParamList, Unit};
 use crate::utils::neutral_mass;
@@ -31,11 +29,23 @@ pub fn to_bytes<T>(data: &[T]) -> Bytes {
     let m = n * z;
     unsafe {
         let byte_buffer = slice::from_raw_parts(data.as_ptr() as *const u8, m);
-        let mut result = Bytes::new();
+        let mut result = Bytes::with_capacity(m);
+        result.resize(m, 0);
         result.copy_from_slice(byte_buffer);
         result
     }
 }
+
+pub fn as_bytes<T>(data: &[T]) -> &[u8] {
+    let n = data.len();
+    let z = mem::size_of::<T>();
+    let m = n * z;
+    unsafe {
+        let byte_buffer = slice::from_raw_parts(data.as_ptr() as *const u8, m);
+        byte_buffer
+    }
+}
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 pub enum BinaryDataArrayType {
@@ -134,7 +144,7 @@ pub struct DataArray {
     pub compression: BinaryCompressionType,
     pub name: ArrayType,
     pub params: ParamList,
-    pub unit: Unit
+    pub unit: Unit,
 }
 
 impl Debug for DataArray {
@@ -147,6 +157,182 @@ impl Debug for DataArray {
             .field("params", &self.params)
             .field("unit", &self.unit)
             .finish()
+    }
+}
+
+pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
+    fn view(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError>;
+
+    fn coerce_from<T: Clone + Sized>(
+        buffer: Cow<'transient, [u8]>,
+    ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
+        let n = buffer.len();
+        let z = mem::size_of::<T>();
+        if n % z != 0 {
+            return Err(ArrayRetrievalError::DataTypeSizeMismatch);
+        }
+        let m = n / z;
+        unsafe {
+            Ok(Cow::Borrowed(slice::from_raw_parts(
+                buffer.as_ptr() as *const T,
+                m,
+            )))
+        }
+    }
+
+    fn coerce<T: Clone + Sized>(
+        &'lifespan self,
+    ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
+        match self.view() {
+            Ok(data) => Self::coerce_from(data),
+            Err(err) => Err(err),
+        }
+    }
+
+    fn transmute<S: Num + Clone + AsPrimitive<D>, D: Num + Clone + Copy + 'static>(
+        &'lifespan self,
+    ) -> Result<Cow<'transient, [D]>, ArrayRetrievalError> {
+        match self.coerce::<S>() {
+            Ok(view) => {
+                match view {
+                    Cow::Borrowed(view) => {
+                        Ok(Cow::Owned(view.into_iter().map(|a| a.as_()).collect()))
+                    }
+                    Cow::Owned(owned) => {
+                        let res = owned.iter().map(|a| a.as_()).collect();
+                        Ok(Cow::Owned(res))
+                    }
+                }
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    fn dtype(&self) -> BinaryDataArrayType;
+
+    fn to_f32(&'lifespan self) -> Result<Cow<'transient, [f32]>, ArrayRetrievalError> {
+        type D = f32;
+        match self.dtype() {
+            BinaryDataArrayType::Float32 | BinaryDataArrayType::ASCII => self.coerce::<D>(),
+            BinaryDataArrayType::Float64 => {
+                type S = f64;
+                self.transmute::<S, D>()
+            }
+            BinaryDataArrayType::Int32 => {
+                type S = i32;
+                self.transmute::<S, D>()
+            }
+            BinaryDataArrayType::Int64 => {
+                type S = i64;
+                self.transmute::<S, D>()
+            }
+            _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
+        }
+    }
+
+    fn to_f64(&'lifespan self) -> Result<Cow<'transient, [f64]>, ArrayRetrievalError> {
+        type D = f64;
+        match self.dtype() {
+            BinaryDataArrayType::Float32 => {
+                type S = f32;
+                self.transmute::<S, D>()
+            }
+            BinaryDataArrayType::Float64 | BinaryDataArrayType::ASCII => self.coerce(),
+            BinaryDataArrayType::Int32 => {
+                type S = i32;
+                self.transmute::<S, D>()
+            }
+            BinaryDataArrayType::Int64 => {
+                type S = i64;
+                self.transmute::<S, D>()
+            }
+            _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
+        }
+    }
+
+    fn to_i32(&'lifespan self) -> Result<Cow<'transient, [i32]>, ArrayRetrievalError> {
+        type D = i32;
+        match self.dtype() {
+            BinaryDataArrayType::Float32 => {
+                type S = f32;
+                self.transmute::<S, D>()
+            }
+            BinaryDataArrayType::Float64 => {
+                type S = f64;
+                self.transmute::<S, D>()
+            }
+            BinaryDataArrayType::Int32 | BinaryDataArrayType::ASCII => self.coerce::<D>(),
+            BinaryDataArrayType::Int64 => {
+                type S = i64;
+                self.transmute::<S, D>()
+            }
+            _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
+        }
+    }
+
+    fn to_i64(&'lifespan self) -> Result<Cow<'transient, [i64]>, ArrayRetrievalError> {
+        type D = i64;
+        match self.dtype() {
+            BinaryDataArrayType::Float32 => {
+                type S = f32;
+                self.transmute::<S, D>()
+            }
+            BinaryDataArrayType::Float64 => {
+                type S = f64;
+                self.transmute::<S, D>()
+            }
+            BinaryDataArrayType::Int64 | BinaryDataArrayType::ASCII => self.coerce::<D>(),
+            BinaryDataArrayType::Int32 => {
+                type S = i32;
+                self.transmute::<S, D>()
+            }
+            _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
+        }
+    }
+}
+
+pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
+    ByteArrayView<'transient, 'lifespan>
+{
+    fn view_mut(&'transient mut self) -> Result<&'transient mut Bytes, ArrayRetrievalError>;
+
+    fn coerce_from<T: Clone + Sized>(
+        buffer: Cow<'transient, Bytes>,
+    ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
+        let n = buffer.len();
+        let z = mem::size_of::<T>();
+        if n % z != 0 {
+            return Err(ArrayRetrievalError::DataTypeSizeMismatch);
+        }
+        let m = n / z;
+        unsafe {
+            Ok(Cow::Borrowed(slice::from_raw_parts(
+                buffer.as_ptr() as *const T,
+                m,
+            )))
+        }
+    }
+
+    fn coerce_from_mut<T: Clone + Sized>(
+        buffer: &mut [u8],
+    ) -> Result<&'transient mut [T], ArrayRetrievalError> {
+        let n = buffer.len();
+        let z = mem::size_of::<T>();
+        if n % z != 0 {
+            return Err(ArrayRetrievalError::DataTypeSizeMismatch);
+        }
+        let m = n / z;
+        unsafe { Ok(slice::from_raw_parts_mut(buffer.as_ptr() as *mut T, m)) }
+    }
+
+    fn coerce_mut<T: Clone + Sized>(
+        &'lifespan mut self,
+    ) -> Result<&'transient mut [T], ArrayRetrievalError> {
+        let view = match self.view_mut() {
+            Ok(data) => data,
+            Err(err) => return Err(err),
+        };
+        Self::coerce_from_mut(view)
     }
 }
 
@@ -192,6 +378,34 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    pub fn slice(&self, start: usize, end: usize) -> Result<DataArray, ArrayRetrievalError> {
+        if end < start || (end - start) % self.dtype.size_of() != 0 {
+            Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        } else {
+            let data = self.decode()?;
+            let slice = data[start..end].to_vec();
+            let subset = Self::wrap(&self.name, self.dtype, slice);
+            Ok(subset)
+        }
+    }
+
+    pub fn slice_buffer(&self, start: usize, end: usize) -> Result<Cow<'_, [u8]>, ArrayRetrievalError> {
+        if end < start || (end - start) % self.dtype.size_of() != 0 {
+            Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        } else {
+            let data = self.decode()?;
+            match data {
+                Cow::Borrowed(view) => {
+                    Ok(Cow::Borrowed(&view[start..end]))
+                },
+                Cow::Owned(view) => {
+                    let data = &view[start..end];
+                    Ok(Cow::Owned(data.to_owned()))
+                }
+            }
+        }
+    }
+
     pub fn wrap(name: &ArrayType, dtype: BinaryDataArrayType, data: Bytes) -> DataArray {
         DataArray {
             dtype,
@@ -213,7 +427,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
     pub fn encode_bytestring(&self, compression: BinaryCompressionType) -> Bytes {
         let bytestring = match self.compression {
-            BinaryCompressionType::Decoded => Cow::Borrowed(&self.data),
+            BinaryCompressionType::Decoded => Cow::Borrowed(self.data.as_slice()),
             _ => self.decode().expect("Failed to decode binary data"),
         };
         match compression {
@@ -290,16 +504,44 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
-    pub fn decode(&'lifespan self) -> Result<Cow<'lifespan, Bytes>, ArrayRetrievalError> {
+    pub fn decode(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError> {
         match self.compression {
-            BinaryCompressionType::Decoded => Ok(Cow::Borrowed(&self.data)),
+            BinaryCompressionType::Decoded => Ok(Cow::Borrowed(&self.data.as_slice())),
             BinaryCompressionType::NoCompression => {
-                let bytestring = Base64Std.decode(&self.data).expect("Failed to decode base64 array");
+                let bytestring = Base64Std
+                    .decode(&self.data)
+                    .expect("Failed to decode base64 array");
                 Ok(Cow::Owned(bytestring))
             }
             BinaryCompressionType::Zlib => {
-                let bytestring = Base64Std.decode(&self.data).expect("Failed to decode base64 array");
+                let bytestring = Base64Std
+                    .decode(&self.data)
+                    .expect("Failed to decode base64 array");
                 Ok(Cow::Owned(Self::decompres_zlib(&bytestring)))
+            }
+            _ => Err(ArrayRetrievalError::DecompressionError),
+        }
+    }
+
+    pub(crate) fn decoded_slice(&'lifespan self, start: usize, end: usize) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError> {
+        if start > end || (end - start) % self.dtype.size_of() != 0 {
+            return Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        }
+        match self.compression {
+            BinaryCompressionType::Decoded => {
+                Ok(Cow::Borrowed(&self.data.as_slice()[start..end]))
+            },
+            BinaryCompressionType::NoCompression => {
+                let bytestring = Base64Std
+                    .decode(&self.data)
+                    .expect("Failed to decode base64 array");
+                Ok(Cow::Owned(bytestring[start..end].to_vec()))
+            }
+            BinaryCompressionType::Zlib => {
+                let bytestring = Base64Std
+                    .decode(&self.data)
+                    .expect("Failed to decode base64 array");
+                Ok(Cow::Owned(Self::decompres_zlib(&bytestring)[start..end].to_vec()))
             }
             _ => Err(ArrayRetrievalError::DecompressionError),
         }
@@ -309,13 +551,17 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         match self.compression {
             BinaryCompressionType::Decoded => Ok(&mut self.data),
             BinaryCompressionType::NoCompression => {
-                let bytestring = Base64Std.decode(&self.data).expect("Failed to decode base64 array");
+                let bytestring = Base64Std
+                    .decode(&self.data)
+                    .expect("Failed to decode base64 array");
                 self.data = bytestring;
                 self.compression = BinaryCompressionType::Decoded;
                 Ok(&mut self.data)
             }
             BinaryCompressionType::Zlib => {
-                let bytestring = Base64Std.decode(&self.data).expect("Failed to decode base64 array");
+                let bytestring = Base64Std
+                    .decode(&self.data)
+                    .expect("Failed to decode base64 array");
                 self.data = bytestring;
                 self.compression = BinaryCompressionType::Decoded;
                 Ok(&mut self.data)
@@ -324,150 +570,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
-    pub fn coerce_from<T: Clone + Sized>(
-        buffer: Cow<'transient, Bytes>,
-    ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
-        let n = buffer.len();
-        let z = mem::size_of::<T>();
-        if n % z != 0 {
-            return Err(ArrayRetrievalError::DataTypeSizeMismatch);
-        }
-        let m = n / z;
-        unsafe {
-            Ok(Cow::Borrowed(slice::from_raw_parts(
-                buffer.as_ptr() as *const T,
-                m,
-            )))
-        }
-    }
-
-    pub fn coerce_from_mut<T: Clone + Sized>(
-        buffer: &mut [u8],
-    ) -> Result<&'transient mut [T], ArrayRetrievalError> {
-        let n = buffer.len();
-        let z = mem::size_of::<T>();
-        if n % z != 0 {
-            return Err(ArrayRetrievalError::DataTypeSizeMismatch);
-        }
-        let m = n / z;
-        unsafe { Ok(slice::from_raw_parts_mut(buffer.as_ptr() as *mut T, m)) }
-    }
-
-    pub fn coerce_mut<T: Clone + Sized>(
-        &'lifespan mut self,
-    ) -> Result<&'transient mut [T], ArrayRetrievalError> {
-        let view = match self.decode_mut() {
-            Ok(data) => data,
-            Err(err) => return Err(err),
-        };
-        Self::coerce_from_mut(view)
-    }
-
-    pub fn coerce<T: Clone + Sized>(
-        &'lifespan self,
-    ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
-        match self.decode() {
-            Ok(data) => Self::coerce_from(data),
-            Err(err) => Err(err),
-        }
-    }
-
     pub fn clear(&mut self) {
         self.data.clear();
         self.params.clear();
-    }
-
-    fn transmute<S: Num + Clone + AsPrimitive<D>, D: Num + Clone + Copy + 'static>(
-        &'lifespan self,
-    ) -> Result<Cow<'transient, [D]>, ArrayRetrievalError> {
-        match self.coerce::<S>() {
-            Ok(view) => {
-                let owned = view.into_owned();
-                let res = owned.iter().map(|a| a.as_()).collect();
-                Ok(Cow::Owned(res))
-            }
-            Err(err) => Err(err),
-        }
-    }
-
-    pub fn to_f32(&'lifespan self) -> Result<Cow<'transient, [f32]>, ArrayRetrievalError> {
-        type D = f32;
-        match self.dtype {
-            BinaryDataArrayType::Float32 => self.coerce::<D>(),
-            BinaryDataArrayType::Float64 => {
-                type S = f64;
-                self.transmute::<S, D>()
-            }
-            BinaryDataArrayType::Int32 => {
-                type S = i32;
-                self.transmute::<S, D>()
-            }
-            BinaryDataArrayType::Int64 => {
-                type S = i64;
-                self.transmute::<S, D>()
-            }
-            _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
-        }
-    }
-
-    pub fn to_f64(&'lifespan self) -> Result<Cow<'transient, [f64]>, ArrayRetrievalError> {
-        type D = f64;
-        match self.dtype {
-            BinaryDataArrayType::Float32 => {
-                type S = f32;
-                self.transmute::<S, D>()
-            }
-            BinaryDataArrayType::Float64 => self.coerce(),
-            BinaryDataArrayType::Int32 => {
-                type S = i32;
-                self.transmute::<S, D>()
-            }
-            BinaryDataArrayType::Int64 => {
-                type S = i64;
-                self.transmute::<S, D>()
-            }
-            _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
-        }
-    }
-
-    pub fn to_i32(&'lifespan self) -> Result<Cow<'transient, [i32]>, ArrayRetrievalError> {
-        type D = i32;
-        match self.dtype {
-            BinaryDataArrayType::Float32 => {
-                type S = f32;
-                self.transmute::<S, D>()
-            }
-            BinaryDataArrayType::Float64 => {
-                type S = f64;
-                self.transmute::<S, D>()
-            }
-            BinaryDataArrayType::Int32 => self.coerce::<D>(),
-            BinaryDataArrayType::Int64 => {
-                type S = i64;
-                self.transmute::<S, D>()
-            }
-            _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
-        }
-    }
-
-    pub fn to_i64(&'lifespan self) -> Result<Cow<'transient, [i64]>, ArrayRetrievalError> {
-        type D = i64;
-        match self.dtype {
-            BinaryDataArrayType::Float32 => {
-                type S = f32;
-                self.transmute::<S, D>()
-            }
-            BinaryDataArrayType::Float64 => {
-                type S = f64;
-                self.transmute::<S, D>()
-            }
-            BinaryDataArrayType::Int64 => self.coerce::<D>(),
-            BinaryDataArrayType::Int32 => {
-                type S = i32;
-                self.transmute::<S, D>()
-            }
-            _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
-        }
     }
 
     pub fn store_as(&mut self, dtype: BinaryDataArrayType) -> Result<usize, ArrayRetrievalError> {
@@ -511,6 +616,56 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         };
         self.dtype = dtype;
         result
+    }
+}
+
+impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan> for DataArray {
+    fn view(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError> {
+        self.decode()
+    }
+
+    fn dtype(&self) -> BinaryDataArrayType {
+        self.dtype
+    }
+}
+
+impl<'transient, 'lifespan: 'transient> ByteArrayViewMut<'transient, 'lifespan> for DataArray {
+    fn view_mut(&'transient mut self) -> Result<&'transient mut Bytes, ArrayRetrievalError> {
+        self.decode_mut()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DataArraySlice<'a> {
+    source: &'a DataArray,
+    pub start: usize,
+    pub end: usize,
+}
+
+impl<'a> DataArraySlice<'a> {
+    pub fn new(source: &'a DataArray, mut start: usize, mut end: usize) -> Self {
+        if start > end {
+            mem::swap(&mut start, &mut end);
+        }
+        Self { source, start, end }
+    }
+
+
+    pub fn decode(&'a self) -> Result<Cow<'a, [u8]>, ArrayRetrievalError> {
+        self.source.decoded_slice(self.start, self.end)
+    }
+
+}
+
+impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan>
+    for DataArraySlice<'lifespan>
+{
+    fn view(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError> {
+        self.decode()
+    }
+
+    fn dtype(&self) -> BinaryDataArrayType {
+        self.source.dtype()
     }
 }
 
@@ -574,11 +729,7 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         self.byte_buffer_map.clear();
     }
 
-    pub fn search(
-        &self,
-        query: f64,
-        error_tolerance: Tolerance,
-    ) -> Option<usize> {
+    pub fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize> {
         let mzs = self.mzs();
         let (lower, _upper) = error_tolerance.bounds(query);
         match mzs[..].binary_search_by(|m| m.partial_cmp(&lower).unwrap()) {
@@ -634,7 +785,6 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         }
     }
 }
-
 
 impl From<&PeakSet> for BinaryArrayMap {
     fn from(peaks: &PeakSet) -> BinaryArrayMap {

@@ -24,7 +24,8 @@ mod r#async;
 
 pub use crate::io::mzml::reader::{
     CVParamParse, FileMetadataBuilder, MzMLParserError, MzMLParserState, MzMLReader,
-    MzMLReaderType, ParserResult, SpectrumBuilding, XMLParseBase
+    MzMLReaderType, ParserResult, SpectrumBuilding, XMLParseBase, MzMLSAX, MzMLSpectrumBuilder,
+    IncrementingIdMap
 };
 
 pub(crate) use crate::io::mzml::reader::is_mzml;

@@ -1,5 +1,7 @@
 pub mod mgf;
 pub mod mzml;
+#[cfg(feature = "mzmlb")]
+pub mod mzmlb;
 pub mod offset_index;
 pub mod prelude;
 pub mod traits;
