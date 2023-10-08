@@ -27,8 +27,8 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
-            apt-get update
-            apt-get install libhdf5
+            sudo apt-get update
+            sudo apt-get install libhdf5
           elif [ "$RUNNER_OS" == "Windows" ]; then
             vcpkg install hdf5
           else
