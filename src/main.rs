@@ -7,7 +7,9 @@ use std::path;
 use std::time;
 
 use mzdata::io::prelude::*;
-use mzdata::io::{mgf, mzml, mzmlb, offset_index, ScanSource};
+use mzdata::io::{mgf, mzml, offset_index, ScanSource};
+#[cfg(feature = "mzmlb")]
+use mzdata::io::mzmlb;
 use mzdata::spectrum::{DeconvolutedSpectrum, MultiLayerSpectrum, SpectrumBehavior};
 use mzpeaks::PeakCollection;
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
@@ -21,6 +23,7 @@ fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::MzMLRe
     Ok(reader)
 }
 
+#[cfg(feature = "mzmlb")]
 fn load_mzmlb_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzmlb::MzMLbReader> {
     let start = time::Instant::now();
     let reader = mzmlb::MzMLbReader::open_path(&path.into())?;
@@ -101,8 +104,15 @@ fn main() -> io::Result<()> {
     let (level_table, charge_table, peak_count, peak_charge_table_by_level) =
         if let Some(ext) = path.extension() {
             if ext.to_string_lossy().to_lowercase() == "mzmlb" {
-                let mut reader = load_mzmlb_file(path)?;
-                scan_file(&mut reader)
+                #[cfg(feature = "mzmlb")]
+                {
+                    let mut reader = load_mzmlb_file(path)?;
+                    scan_file(&mut reader)
+                }
+                #[cfg(not(feature = "mzmlb"))]
+                {
+                    panic!("Cannot read mzMLb file. Recompile enabling the `mzmlb` feature")
+                }
             } else {
                 let mut reader = load_file(path)?;
                 scan_file(&mut reader)
