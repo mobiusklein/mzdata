@@ -28,7 +28,7 @@ jobs:
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
             sudo apt-get update
-            sudo apt-get install libhdf5-103
+            sudo apt-get install libhdf5-103 libhdf5-dev
           elif [ "$RUNNER_OS" == "Windows" ]; then
             vcpkg install hdf5
           else
