@@ -23,8 +23,20 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+      - name: Install system packages
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            apt-get update
+            apt-get install libhdf5
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            vcpkg install hdf5
+          else
+            echo "$RUNNER_OS" is not supported
+            exit 1
+          fi
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features intel-mkl,parallelism,zlib -- --nocapture --show-output --test-threads 1
+          args: --no-default-features --features intel-mkl,parallelism,mzmlb -- --nocapture --show-output --test-threads 1
