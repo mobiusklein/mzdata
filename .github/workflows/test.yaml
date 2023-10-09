@@ -32,7 +32,8 @@ jobs:
           elif [ "$RUNNER_OS" == "Windows" ]; then
             vcpkg install hdf5
             ls  C:/vcpkg/installed/x64-windows/*
-            export HDF5_DIR="C:/vcpkg/installed/x64-windows/"
+            # export HDF5_DIR="C:/vcpkg/installed/x64-windows/"
+            echo "HDF5_DIR=C:/vcpkg/installed/x64-windows/" >> $GITHUB_ENV
           else
             echo "$RUNNER_OS" is not supported
             exit 1
