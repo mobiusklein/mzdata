@@ -32,6 +32,7 @@ jobs:
           elif [ "$RUNNER_OS" == "Windows" ]; then
             vcpkg install hdf5
             ls  C:/vcpkg/installed/x64-windows/*
+            export HDF5_DIR="C:/vcpkg/installed/x64-windows/"
           else
             echo "$RUNNER_OS" is not supported
             exit 1
