@@ -34,7 +34,7 @@ jobs:
             ls  C:/vcpkg/installed/x64-windows/*
             # export HDF5_DIR="C:/vcpkg/installed/x64-windows/"
             echo "HDF5_DIR=C:/vcpkg/installed/x64-windows/" >> $GITHUB_ENV
-            echo "PATH=$PATH;C:/vcpkg/installed/x64-windows/bin/" >> $GITHUB_ENV
+            echo "C:/vcpkg/installed/x64-windows/bin/" >> $GITHUB_PATH
           else
             echo "$RUNNER_OS" is not supported
             exit 1
