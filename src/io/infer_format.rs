@@ -9,15 +9,24 @@ use flate2::bufread::GzDecoder;
 
 use crate::MGFReader;
 use crate::MzMLReader;
+
+#[cfg(feature = "mzmlb")]
+pub use crate::MzMLbReader;
+
 use crate::io::traits::ScanSource;
 use crate::io::mzml::is_mzml;
 use crate::io::mgf::is_mgf;
 use crate::io::compression::{is_gzipped, is_gzipped_extension};
 
+#[cfg(feature = "mzmlb")]
+use super::traits::MZFileReader;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MassSpectrometryFormat {
     MGF,
     MzML,
+    #[cfg(feature = "mzmlb")]
+    MzMLb,
     Unknown
 }
 
@@ -30,6 +39,8 @@ pub(crate) fn infer_from_path<P: Into<path::PathBuf>,>(path: P) -> (MassSpectrom
             let form = match ext {
                 "mzml" => MassSpectrometryFormat::MzML,
                 "mgf" => MassSpectrometryFormat::MGF,
+                #[cfg(feature = "mzmlb")]
+                "mzmlb" => MassSpectrometryFormat::MzMLb,
                 _ => MassSpectrometryFormat::Unknown
             };
             (form, is_gzipped)
@@ -87,19 +98,28 @@ pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<Box<dyn ScanSour
     let path = path.into();
     let (format, is_gzipped) = infer_format(path.clone())?;
 
-    let handle = fs::File::open(path)?;
     if is_gzipped {
         Err(io::Error::new(io::ErrorKind::Unsupported, "Gzipped files are not supported"))
     } else {
         match format {
             MassSpectrometryFormat::MGF => {
+                let handle = fs::File::open(path)?;
                 let reader = MGFReader::new_indexed(handle);
                 Ok(Box::new(reader))
             },
             MassSpectrometryFormat::MzML => {
+                let handle = fs::File::open(path)?;
                 let reader = MzMLReader::new_indexed(handle);
                 Ok(Box::new(reader))
             },
+            #[cfg(feature = "mzmlb")]
+            MassSpectrometryFormat::MzMLb => {
+                let reader = MzMLbReader::open_path(path);
+                match reader {
+                    Ok(reader) => Ok(Box::new(reader)),
+                    Err(e) => Err(e.into()),
+                }
+            }
             _ => {
                 Err(io::Error::new(io::ErrorKind::Unsupported, "File format not supported"))
             }
