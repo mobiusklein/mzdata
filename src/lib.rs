@@ -44,6 +44,9 @@ pub use mzpeaks::{PeakCollection, PeakSet};
 pub use crate::io::mgf::MGFReader;
 pub use crate::io::mzml::MzMLReader;
 
+#[cfg(feature = "mzmlb")]
+pub use crate::io::mzmlb::MzMLbReader;
+
 pub use crate::params::{Param, ParamDescribed, ParamList};
 
 pub use crate::spectrum::{CentroidSpectrum, RawSpectrum, SpectrumBehavior};

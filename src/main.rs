@@ -29,7 +29,19 @@ fn load_mzmlb_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzmlb:
     let reader = mzmlb::MzMLbReader::open_path(&path.into())?;
     let end = time::Instant::now();
     println!("Index Loaded/Built in {} seconds", (end - start).as_secs());
-    mzmlb::MzMLbReader::set_blosc_nthreads(4);
+    let blosc_threads = match std::env::var("BLOSC_NUM_THREADS") {
+        Ok(val) => {
+            match val.parse() {
+                Ok(nt) => nt,
+                Err(e) => {
+                    eprintln!("Failed to parse BLOSC_NUM_THREADS env var: {}", e);
+                    4
+                },
+            }
+        },
+        Err(e) => 4,
+    };
+    mzmlb::MzMLbReader::set_blosc_nthreads(blosc_threads);
     println!("{} spectra", reader.len());
     Ok(reader)
 }
