@@ -1,6 +1,6 @@
 use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumBehavior};
 use crate::io::traits::ScanSource;
-use crate::params::{ControlledVocabulary, Param};
+use crate::params::{ControlledVocabulary, Param, ParamLike};
 use crate::{impl_param_described, ParamList};
 
 /**
@@ -145,9 +145,9 @@ impl Activation {
         &mut self._method
     }
 
-    pub fn is_param_activation(p: &Param) -> bool {
-        if p.is_controlled() && p.controlled_vocabulary.unwrap() == ControlledVocabulary::MS {
-            Self::accession_to_activation(p.accession.unwrap())
+    pub fn is_param_activation<P: ParamLike>(p: &P) -> bool {
+        if p.is_controlled() && p.controlled_vocabulary().unwrap() == ControlledVocabulary::MS {
+            Self::accession_to_activation(p.accession().unwrap())
         } else {
             false
         }

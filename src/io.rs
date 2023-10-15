@@ -10,8 +10,10 @@ pub mod infer_format;
 
 pub(crate) mod compression;
 
-pub use crate::io::mgf::MGFReader;
-pub use crate::io::mzml::MzMLReader;
+pub use crate::io::mgf::{MGFReader, MGFError};
+pub use crate::io::mzml::{MzMLReader, MzMLParserError};
+#[cfg(feature = "mzmlb")]
+pub use crate::io::mzmlb::{MzMLbReader, MzMLbError};
 pub use crate::io::offset_index::OffsetIndex;
 pub use crate::io::traits::{RandomAccessSpectrumIterator, ScanAccessError, SpectrumIterator, ScanSource};
 pub use crate::io::infer_format::open_file;

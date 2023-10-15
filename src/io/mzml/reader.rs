@@ -28,6 +28,7 @@ use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 use crate::meta::file_description::{FileDescription, SourceFile};
 use crate::meta::instrument::{Component, ComponentType, InstrumentConfiguration};
 use crate::meta::{DataProcessing, MSDataFileMetadata, ProcessingMethod, Software};
+use crate::params::ParamCow;
 use crate::params::{curie_to_num, ControlledVocabulary, Param, ParamList, Unit};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
@@ -121,6 +122,92 @@ pub trait XMLParseBase {
 Common `CVParam` parsing behaviors
 */
 pub trait CVParamParse: XMLParseBase {
+
+    fn handle_param_borrowed<'inner, 'outer: 'inner + 'event, 'event: 'inner>(
+        &self,
+        event: &'event BytesStart<'event>,
+        reader_position: usize,
+        state: MzMLParserState,
+    ) -> Result<ParamCow<'inner>, MzMLParserError> {
+        let mut name = None;
+        let mut value = None;
+        let mut accession = None;
+        let mut controlled_vocabulary = None;
+        let mut unit = Unit::Unknown;
+
+        for attr_parsed in event.attributes() {
+            match attr_parsed {
+                Ok(attr) => match attr.key.as_ref() {
+                    b"name" => {
+                        name = Some(attr
+                            .unescape_value()
+                            .unwrap_or_else(|e| {
+                                panic!("Error decoding CV param name at {}: {}", reader_position, e)
+                            }));
+                    }
+                    b"value" => {
+                        value = Some(attr
+                            .unescape_value()
+                            .unwrap_or_else(|e| {
+                                panic!(
+                                    "Error decoding CV param value at {}: {}",
+                                    reader_position, e
+                                )
+                            }));
+                    }
+                    b"cvRef" => {
+                        let cv_id = attr.unescape_value().unwrap_or_else(|e| {
+                            panic!(
+                                "Error decoding CV param reference at {}: {}",
+                                reader_position, e
+                            )
+                        });
+                        controlled_vocabulary = cv_id
+                            .parse::<ControlledVocabulary>()
+                            .expect(
+                                format!("Failed to parse controlled vocabulary ID {}", cv_id)
+                                    .as_str(),
+                            )
+                            .as_option();
+                    }
+                    b"accession" => {
+                        let v = attr.unescape_value().unwrap_or_else(|e| {
+                            panic!(
+                                "Error decoding CV param accession at {}: {}",
+                                reader_position, e
+                            )
+                        });
+                        let (_, acc) = curie_to_num(&v);
+                        accession = acc;
+                    }
+                    b"unitName" => {
+                        let v = attr.unescape_value().unwrap_or_else(|e| {
+                            panic!(
+                                "Error decoding CV param unit name at {}: {}",
+                                reader_position, e
+                            )
+                        });
+                        unit = Unit::from_name(&v);
+                    }
+                    b"unitAccession" => {
+                        let v = attr.unescape_value().unwrap_or_else(|e| {
+                            panic!(
+                                "Error decoding CV param unit name at {}: {}",
+                                reader_position, e
+                            )
+                        });
+                        unit = Unit::from_accession(&v);
+                    }
+                    b"unitCvRef" => {}
+                    _ => {}
+                },
+                Err(msg) => return Err(self.handle_xml_error(msg.into(), state)),
+            }
+        }
+        let param = ParamCow::new(name.unwrap(), value.unwrap(), accession, controlled_vocabulary, unit);
+        Ok(param)
+    }
+
     fn handle_param(
         &self,
         event: &BytesStart,
@@ -226,7 +313,7 @@ pub trait MzMLSAX {
 
     fn empty_element(
         &mut self,
-        event: &BytesStart,
+        event: & BytesStart,
         state: MzMLParserState,
         reader_position: usize,
     ) -> ParserResult;
@@ -328,7 +415,7 @@ pub trait SpectrumBuilding<
             }
 
             &_ => {
-                self.current_array_mut().params.push(param);
+                self.current_array_mut().params.push(param.into());
             }
         }
     }
@@ -347,7 +434,7 @@ pub trait SpectrumBuilding<
                     Some(param.coerce().expect("Failed to parse ion charge"));
             }
             &_ => {
-                self.selected_ion_mut().params.push(param);
+                self.selected_ion_mut().params.push(param.into());
             }
         };
     }
@@ -523,8 +610,8 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> CVParamParse
 {
 }
 
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
-    SpectrumBuilding<'a, C, D, MultiLayerSpectrum<C, D>> for MzMLSpectrumBuilder<'a, C, D>
+impl<'inner, 'outer: 'inner + 'event, 'event: 'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+    SpectrumBuilding<'inner, C, D, MultiLayerSpectrum<C, D>> for MzMLSpectrumBuilder<'inner, C, D>
 {
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
         &mut self.precursor.isolation_window
@@ -598,19 +685,19 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
                 self.signal_continuity = SignalContinuity::Centroid;
             }
             &_ => {
-                self.params.push(param);
+                self.params.push(param.into());
             }
         };
     }
 
-    fn borrow_instrument_configuration(mut self, instrument_configurations: &'a mut IncrementingIdMap) -> Self {
+    fn borrow_instrument_configuration(mut self, instrument_configurations: &'inner mut IncrementingIdMap) -> Self {
         self.instrument_id_map = Some(instrument_configurations);
         self
     }
 }
 
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<'a, C, D> {
-    pub fn new() -> MzMLSpectrumBuilder<'a, C, D> {
+impl<'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuilder<'inner, C, D> {
+    pub fn new() -> MzMLSpectrumBuilder<'inner, C, D> {
         MzMLSpectrumBuilder {
             ..Default::default()
         }
@@ -655,7 +742,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
             MzMLParserState::Spectrum => {
                 self.fill_spectrum(param);
             }
-            MzMLParserState::ScanList => self.acquisition.params.push(param),
+            MzMLParserState::ScanList => self.acquisition.params.push(param.into()),
             MzMLParserState::Scan => {
                 let event = self.acquisition.scans.last_mut().unwrap();
                 match param.name.as_bytes() {
@@ -679,7 +766,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
                             .coerce()
                             .expect("Expected floating point number for injection time");
                     }
-                    _ => event.params.push(param),
+                    _ => event.params.push(param.into()),
                 }
             }
             MzMLParserState::ScanWindowList => self
@@ -688,7 +775,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
                 .last_mut()
                 .unwrap()
                 .params
-                .push(param),
+                .push(param.into()),
             MzMLParserState::ScanWindow => {
                 self.fill_scan_window(param);
             }
@@ -702,7 +789,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
                 if Activation::is_param_activation(&param)
                     && self.precursor.activation.method().is_none()
                 {
-                    *self.precursor.activation.method_mut() = Some(param);
+                    *self.precursor.activation.method_mut() = Some(param.into());
                 } else {
                     match param.name.as_ref() {
                         "collision energy" | "activation energy" => {
@@ -710,7 +797,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
                                 param.coerce().expect("Failed to parse collision energy");
                         }
                         &_ => {
-                            self.precursor.activation.params.push(param);
+                            self.precursor.activation.params.push(param.into());
                         }
                     }
                 }
@@ -730,7 +817,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSpectrumBuild
 }
 
 
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX for MzMLSpectrumBuilder<'a, C, D> {
+impl<'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX for MzMLSpectrumBuilder<'inner, C, D> {
     fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
@@ -855,12 +942,15 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX for MzMLS
     ) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
-            b"cvParam" | b"userParam" => match self.handle_param(event, reader_position, state) {
-                Ok(param) => {
-                    self.fill_param_into(param, state);
-                    return Ok(state);
+            b"cvParam" | b"userParam" => {
+
+                match self.handle_param(event, reader_position, state) {
+                    Ok(param) => {
+                        self.fill_param_into(param, state);
+                        return Ok(state);
+                    }
+                    Err(err) => return Err(err),
                 }
-                Err(err) => return Err(err),
             },
             &_ => {}
         }
@@ -1548,7 +1638,7 @@ pub struct MzMLReaderType<
     instrument_id_map: IncrementingIdMap,
 }
 
-impl<'a, 'b: 'a, R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+impl<'a, 'b: 'a, 'inner, 'outer: 'inner + 'event, 'event: 'inner, R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     MzMLReaderType<R, C, D>
 {
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle

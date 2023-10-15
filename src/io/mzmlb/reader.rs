@@ -26,8 +26,8 @@ use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, ScanAccessError, Scan
 use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software};
 use crate::params::{ControlledVocabulary, Param};
 use crate::spectrum::signal::{
-    to_bytes, ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType,
-    ByteArrayView, DataArray, as_bytes,
+    as_bytes, to_bytes, ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType,
+    ByteArrayView, DataArray,
 };
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
@@ -72,6 +72,13 @@ impl From<ArrayRetrievalError> for MzMLbError {
         Self::ArrayRetrievalError(value)
     }
 }
+
+
+pub(crate) fn is_mzmlb(buf: &[u8]) -> bool {
+    const MAGIC_NUMBER: &[u8] = br#"\211HDF\r\n\032\n"#;
+    buf.starts_with(MAGIC_NUMBER)
+}
+
 
 #[derive(Debug, Default, Clone)]
 struct CacheInterval {
@@ -176,7 +183,7 @@ pub struct ExternalDataRegistry {
 impl Default for ExternalDataRegistry {
     fn default() -> Self {
         Self {
-            chunk_size: 2usize.pow(22),
+            chunk_size: Self::default_chunk_size(),
             registry: Default::default(),
             chunk_cache: Default::default(),
         }
@@ -190,8 +197,11 @@ impl ExternalDataRegistry {
         inst
     }
 
-    pub fn from_hdf5(handle: &hdf5::File) -> Result<Self, MzMLbError> {
-        let mut storage = Self::default();
+    fn default_chunk_size() -> usize {
+        2usize.pow(20)
+    }
+
+    fn populate_registry(&mut self, handle: &hdf5::File) -> Result<(), MzMLbError> {
         match handle.datasets() {
             Ok(datasets) => {
                 datasets.into_iter().for_each(|ds| {
@@ -203,21 +213,36 @@ impl ExternalDataRegistry {
                         | "/mzML_chromatogramIndex"
                         | "/mzML_chromatogramIndex_idRef" => {}
                         _ => {
-                            storage.registry.insert(name, ds);
+                            self.registry.insert(name, ds);
                         }
                     };
                 });
-                Ok(storage)
             }
             Err(err) => return Err(err.into()),
         }
+        Ok(())
+    }
+
+    pub fn from_hdf5(handle: &hdf5::File) -> Result<Self, MzMLbError> {
+        let mut storage = Self::default();
+        storage.populate_registry(handle)?;
+        Ok(storage)
+    }
+
+    pub fn from_hdf5_with_chunk_size(
+        handle: &hdf5::File,
+        chunk_size: usize,
+    ) -> Result<Self, MzMLbError> {
+        let mut storage = Self::new(chunk_size);
+        storage.populate_registry(handle)?;
+        Ok(storage)
     }
 
     fn read_slice_into(
         dataset: &Dataset,
         start: usize,
         end: usize,
-        buffer: &mut Vec<u8>
+        buffer: &mut Vec<u8>,
     ) -> Result<(), hdf5::Error> {
         let dtype = dataset.dtype()?;
         let sel: Selection = (start..end).into();
@@ -292,7 +317,7 @@ impl ExternalDataRegistry {
             if chunk.contains(start, end) {
                 let block = chunk.get(start, end)?;
                 destination.data.extend_from_slice(&block);
-                assert_eq!(destination.data.len(),  range_request.length * z);
+                assert_eq!(destination.data.len(), range_request.length * z);
                 return Ok(());
             }
         }
@@ -323,7 +348,7 @@ impl ExternalDataRegistry {
                 block
             };
             destination.data.extend_from_slice(&block);
-            assert_eq!(destination.data.len(),  range_request.length * z);
+            assert_eq!(destination.data.len(), range_request.length * z);
             Ok(())
         } else {
             Err(hdf5::Error::Internal(format!("Group {} not found", range_request.name)).into())
@@ -393,7 +418,6 @@ pub struct MzMLbSpectrumBuilder<'a, C: CentroidPeakAdapting, D: DeconvolutedPeak
     inner: MzMLSpectrumBuilder<'a, C, D>,
     data_registry: Option<&'a mut ExternalDataRegistry>,
     current_data_range_query: DataRangeRequest,
-    // compression: Param,
 }
 
 impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbSpectrumBuilder<'a, C, D> {
@@ -587,43 +611,51 @@ pub struct MzMLbReaderType<
 }
 
 impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbReaderType<C, D> {
-    pub fn new<P: AsRef<Path>>(path: &P) -> io::Result<Self> {
+
+    /// Create a new `[MzMLbReader]` with an internal cache size of `chunk_size` elements
+    /// per data array to reduce the number of disk reads needed to populate spectra.
+    ///
+    /// The default chunk size is 2**20 elements, which can use as much as 8.4 MB for 64-bit
+    /// data types like those used to store m/z.
+    pub fn with_chunk_size<P: AsRef<Path>>(path: &P, chunk_size: usize) -> io::Result<Self> {
         let handle = match hdf5::File::open(path.as_ref()) {
             Ok(handle) => handle,
             Err(e) => Err(io::Error::new(io::ErrorKind::Other, e))?,
         };
 
-        let index = Self::parse_index(&handle)?;
+        let index = Self::parse_spectrum_index(&handle)?;
 
         let mzml_ds = match handle.dataset("mzML") {
             Ok(ds) => ds,
             Err(e) => Err(io::Error::new(io::ErrorKind::Other, e))?,
         };
 
-        let meta_parser = MzMLReaderType::<ByteReader, C, D>::new(mzml_ds.into());
+        let mut mzml_parser = MzMLReaderType::<ByteReader, C, D>::new(mzml_ds.into());
+        mzml_parser.seek(SeekFrom::Start(0))?;
 
-        let mzml_ds = match handle.dataset("mzML") {
-            Ok(ds) => ds,
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e))?,
-        };
-
-        let data_buffers = ExternalDataRegistry::from_hdf5(&handle)?;
+        let data_buffers = ExternalDataRegistry::from_hdf5_with_chunk_size(&handle, chunk_size)?;
 
         let inst = Self {
             handle,
             index: index,
-            file_description: meta_parser.file_description,
-            instrument_configurations: meta_parser.instrument_configurations,
-            softwares: meta_parser.softwares,
-            data_processings: meta_parser.data_processings,
-            mzml_parser: MzMLReaderType::<_, C, D>::new(mzml_ds.into()),
+            file_description: mzml_parser.file_description.clone(),
+            instrument_configurations: mzml_parser.instrument_configurations.clone(),
+            softwares: mzml_parser.softwares.clone(),
+            data_processings: mzml_parser.data_processings.clone(),
+            mzml_parser,
             data_buffers: data_buffers,
         };
 
         Ok(inst)
     }
 
-    fn parse_index(handle: &hdf5::File) -> io::Result<OffsetIndex> {
+    /// Create a new `[MzMLbReader]` with the default caching behavior.
+    pub fn new<P: AsRef<Path>>(path: &P) -> io::Result<Self> {
+        Self::with_chunk_size(path, ExternalDataRegistry::default_chunk_size())
+    }
+
+    /// Parses the regular spectrum index if it is present.
+    fn parse_spectrum_index(handle: &hdf5::File) -> io::Result<OffsetIndex> {
         let mut index = OffsetIndex::new("spectrum".to_string());
         let mut spectrum_index_ids_ds: ByteReader = match handle.dataset("mzML_spectrumIndex_idRef")
         {
@@ -841,7 +873,7 @@ pub type MzMLbReader = MzMLbReaderType<CentroidPeak, DeconvolutedPeak>;
 
 #[cfg(test)]
 mod test {
-    use crate::{SpectrumBehavior, MzMLReader};
+    use crate::{MzMLReader, SpectrumBehavior};
 
     use super::*;
 
