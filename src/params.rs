@@ -6,22 +6,113 @@ use std::str::{self, FromStr};
 pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<u32>) {
     let mut parts = curie.split(":");
     let prefix = match parts.next() {
-        Some(v) => {
-            v.parse::<ControlledVocabulary>().unwrap().as_option()
-        },
-        None => {
-            None
-        }
+        Some(v) => v.parse::<ControlledVocabulary>().unwrap().as_option(),
+        None => None,
     };
     if let Some(k) = curie.split(":").nth(1) {
         match k.parse() {
             Ok(v) => (prefix, Some(v)),
-            Err(_) => (prefix, None)
+            Err(_) => (prefix, None),
         }
     } else {
         (prefix, None)
     }
+}
 
+pub trait ParamLike {
+    fn name(&self) -> &str;
+    fn value(&self) -> &str;
+    fn accession(&self) -> Option<u32>;
+    fn controlled_vocabulary(&self) -> Option<ControlledVocabulary>;
+    fn unit(&self) -> Unit;
+
+    fn coerce<T: str::FromStr>(&self) -> Result<T, T::Err> {
+        self.value().parse::<T>()
+    }
+
+    fn is_controlled(&self) -> bool {
+        !self.accession().is_none()
+    }
+
+    fn curie(&self) -> Option<String> {
+        if !self.is_controlled() {
+            None
+        } else {
+            let cv = &self.controlled_vocabulary().unwrap();
+            let acc = self.accession().unwrap();
+            let accession_str = format!("{}:{:07}", cv.prefix(), acc);
+            Some(accession_str)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ParamCow<'a> {
+    pub name: Cow<'a, str>,
+    pub value: Cow<'a, str>,
+    pub accession: Option<u32>,
+    pub controlled_vocabulary: Option<ControlledVocabulary>,
+    pub unit: Unit,
+}
+
+impl<'a> ParamCow<'a> {
+    pub fn new(
+        name: Cow<'a, str>,
+        value: Cow<'a, str>,
+        accession: Option<u32>,
+        controlled_vocabulary: Option<ControlledVocabulary>,
+        unit: Unit,
+    ) -> Self {
+        Self {
+            name,
+            value,
+            accession,
+            controlled_vocabulary,
+            unit,
+        }
+    }
+
+    pub fn coerce<T: str::FromStr>(&self) -> Result<T, T::Err> {
+        self.value.parse::<T>()
+    }
+
+    pub fn is_controlled(&self) -> bool {
+        !self.accession.is_none()
+    }
+}
+
+impl<'a> ParamLike for ParamCow<'a> {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn value(&self) -> &str {
+        &self.value
+    }
+
+    fn accession(&self) -> Option<u32> {
+        self.accession
+    }
+
+    fn controlled_vocabulary(&self) -> Option<ControlledVocabulary> {
+        self.controlled_vocabulary
+    }
+
+    fn unit(&self) -> Unit {
+        self.unit
+    }
+}
+
+impl<'a> Into<Param> for ParamCow<'a> {
+    fn into(self) -> Param {
+        Param {
+            name: self.name.into_owned(),
+            value: self.value.into_owned(),
+            accession: self.accession,
+            controlled_vocabulary: self.controlled_vocabulary,
+            unit: self.unit
+        }
+    }
 }
 
 
@@ -78,6 +169,28 @@ impl Param {
     pub fn with_unit_t(mut self, unit: &Unit) -> Param {
         self.unit = *unit;
         self
+    }
+}
+
+impl ParamLike for Param {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn value(&self) -> &str {
+        &self.value
+    }
+
+    fn accession(&self) -> Option<u32> {
+        self.accession
+    }
+
+    fn controlled_vocabulary(&self) -> Option<ControlledVocabulary> {
+        self.controlled_vocabulary
+    }
+
+    fn unit(&self) -> Unit {
+        self.unit
     }
 }
 
