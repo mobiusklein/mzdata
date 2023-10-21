@@ -3,6 +3,7 @@ on: [push, pull_request]
 env:
   RUST_BACKTRACE: full
   RUST_LOG: debug
+  CARGO_PROFILE_TEST_BUILD_OVERRIDE_DEBUG: true
 
 name: Test
 jobs:
@@ -33,8 +34,8 @@ jobs:
             cp .github/helpers/vcpkg.json .
             vcpkg install
             ls  vcpkg_installed/x64-windows/*
-            echo "HDF5_DIR=`realpath vcpkg_installed/x64-windows/`" >> $GITHUB_ENV
-            echo `realpath vcpkg_installed/x64-windows/bin/` >> $GITHUB_PATH
+            echo "HDF5_DIR=${GITHUB_WORKSPACE}\vcpkg_installed\x64-windows\\" >> $GITHUB_ENV
+            echo "${GITHUB_WORKSPACE}\vcpkg_installed\x64-windows\bin\\" >> $GITHUB_PATH
           else
             echo "$RUNNER_OS" is not supported
             exit 1
