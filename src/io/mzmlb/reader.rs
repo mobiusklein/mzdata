@@ -14,6 +14,9 @@ use ndarray::Ix1;
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
+#[cfg(feature = "numpress")]
+use numpress::numpress_decompress;
+
 use crate::io::mzml::{
     CVParamParse, IncrementingIdMap, MzMLParserError, MzMLParserState, MzMLReaderType, MzMLSAX,
     MzMLSpectrumBuilder, ParserResult, SpectrumBuilding,
@@ -21,13 +24,12 @@ use crate::io::mzml::{
 use crate::io::prelude::MSDataFileMetadata;
 use crate::io::traits::MZFileReader;
 use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, ScanAccessError, ScanSource};
-// use crate::io::traits::{ScanSource, RandomAccessSpectrumIterator};
 
 use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software};
 use crate::params::{ControlledVocabulary, Param};
 use crate::spectrum::signal::{
-    as_bytes, to_bytes, ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType,
-    ByteArrayView, DataArray,
+    as_bytes, delta_decoding, linear_prediction_decoding, to_bytes, ArrayRetrievalError, ArrayType,
+    BinaryCompressionType, BinaryDataArrayType, ByteArrayView, ByteArrayViewMut, DataArray, vec_as_bytes,
 };
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
@@ -73,12 +75,10 @@ impl From<ArrayRetrievalError> for MzMLbError {
     }
 }
 
-
 pub(crate) fn is_mzmlb(buf: &[u8]) -> bool {
     const MAGIC_NUMBER: &[u8] = br#"\211HDF\r\n\032\n"#;
     buf.starts_with(MAGIC_NUMBER)
 }
-
 
 #[derive(Debug, Default, Clone)]
 struct CacheInterval {
@@ -302,6 +302,100 @@ impl ExternalDataRegistry {
         let mut block = Vec::new();
         Self::read_slice_into(dataset, start, end, &mut block)?;
         Ok(block)
+    }
+
+    fn handle_encoding(data: &mut DataArray) -> Result<(), ArrayRetrievalError> {
+        match data.compression {
+            BinaryCompressionType::NoCompression => Ok(()),
+            BinaryCompressionType::Zlib => Err(ArrayRetrievalError::DecompressionError(
+                data.compression.unsupported_msg(None),
+            )),
+            #[cfg(feature = "numpress")]
+            BinaryCompressionType::NumpressLinear => {
+                match data.dtype {
+                    BinaryDataArrayType::Float64 => {
+                        let buffer = data.coerce::<u8>()?;
+                        let buffer = numpress_decompress(&buffer)?;
+                        data.data = vec_as_bytes(buffer);
+                        data.compression = BinaryCompressionType::Decoded;
+                    },
+                    _ => {
+                        return Err(ArrayRetrievalError::DecompressionError(
+                            data.compression.unsupported_msg(Some(
+                                format!("Not compatible with {:?}", data.dtype).as_str(),
+                            )),
+                        ))
+                    }
+                }
+                Err(ArrayRetrievalError::DecompressionError(
+                    data.compression.unsupported_msg(None),
+                ))
+            },
+            #[cfg(not(feature = "numpress"))]
+            BinaryCompressionType::NumpressLinear => Err(ArrayRetrievalError::DecompressionError(
+                data.compression.unsupported_msg(None),
+            )),
+            BinaryCompressionType::NumpressSLOF => Err(ArrayRetrievalError::DecompressionError(
+                data.compression.unsupported_msg(None),
+            )),
+            BinaryCompressionType::NumpressPIC => Err(ArrayRetrievalError::DecompressionError(
+                data.compression.unsupported_msg(None),
+            )),
+            BinaryCompressionType::NumpressLinearZlib => Err(
+                ArrayRetrievalError::DecompressionError(data.compression.unsupported_msg(None)),
+            ),
+            BinaryCompressionType::NumpressSLOFZlib => Err(
+                ArrayRetrievalError::DecompressionError(data.compression.unsupported_msg(None)),
+            ),
+            BinaryCompressionType::NumpressPICZlib => Err(ArrayRetrievalError::DecompressionError(
+                data.compression.unsupported_msg(None),
+            )),
+            BinaryCompressionType::LinearPrediction => {
+                match data.dtype {
+                    BinaryDataArrayType::Float64 => {
+                        let buffer = data.coerce_mut::<f64>()?;
+                        linear_prediction_decoding(buffer);
+                        data.compression = BinaryCompressionType::Decoded;
+                    }
+                    BinaryDataArrayType::Float32 => {
+                        let buffer = data.coerce_mut::<f32>()?;
+                        linear_prediction_decoding(buffer);
+                        data.compression = BinaryCompressionType::Decoded;
+                    }
+                    _ => {
+                        return Err(ArrayRetrievalError::DecompressionError(
+                            data.compression.unsupported_msg(Some(
+                                format!("Not compatible with {:?}", data.dtype).as_str(),
+                            )),
+                        ))
+                    }
+                }
+                Ok(())
+            }
+            BinaryCompressionType::DeltaPrediction => {
+                match data.dtype {
+                    BinaryDataArrayType::Float64 => {
+                        let buffer = data.coerce_mut::<f64>()?;
+                        delta_decoding(buffer);
+                        data.compression = BinaryCompressionType::Decoded;
+                    }
+                    BinaryDataArrayType::Float32 => {
+                        let buffer = data.coerce_mut::<f32>()?;
+                        delta_decoding(buffer);
+                        data.compression = BinaryCompressionType::Decoded;
+                    }
+                    _ => {
+                        return Err(ArrayRetrievalError::DecompressionError(
+                            data.compression.unsupported_msg(Some(
+                                format!("Not compatible with {:?}", data.dtype).as_str(),
+                            )),
+                        ))
+                    }
+                }
+                Ok(())
+            }
+            BinaryCompressionType::Decoded => Ok(()),
+        }
     }
 
     pub fn get(
@@ -611,7 +705,6 @@ pub struct MzMLbReaderType<
 }
 
 impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbReaderType<C, D> {
-
     /// Create a new `[MzMLbReader]` with an internal cache size of `chunk_size` elements
     /// per data array to reduce the number of disk reads needed to populate spectra.
     ///

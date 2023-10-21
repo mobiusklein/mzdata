@@ -20,7 +20,7 @@ pub struct FileDescription {
 impl_param_described!(SourceFile);
 
 impl ParamDescribed for FileDescription {
-    fn params(&self) -> &ParamList {
+    fn params(&self) -> &[Param] {
         &self.contents
     }
 

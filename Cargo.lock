@@ -1258,6 +1258,7 @@ name = "mzdata"
 version = "0.7.0"
 dependencies = [
  "base64 0.21.4",
+ "bytemuck",
  "criterion",
  "env_logger 0.10.0",
  "filename",
@@ -1271,6 +1272,7 @@ dependencies = [
  "mzsignal",
  "ndarray",
  "num-traits",
+ "numpress",
  "quick-xml",
  "rayon",
  "regex",
@@ -1412,6 +1414,12 @@ dependencies = [
  "hermit-abi 0.3.3",
  "libc",
 ]
+
+[[package]]
+name = "numpress"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5c8c027ca789dc1c2f9625b7a2d2e5daa6493e24f22adf0727d4d86736e0e52"
 
 [[package]]
 name = "object"

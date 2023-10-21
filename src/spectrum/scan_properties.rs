@@ -1,6 +1,6 @@
 use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumBehavior};
 use crate::io::traits::ScanSource;
-use crate::params::{ControlledVocabulary, Param, ParamLike};
+use crate::params::{ControlledVocabulary, Param, ParamLike, Unit};
 use crate::{impl_param_described, ParamList};
 
 /**
@@ -63,12 +63,71 @@ pub struct ScanEvent {
 
 pub type ScanEventList = Vec<ScanEvent>;
 
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum ScanCombination {
+    // MS:1000795
+    NoCombination,
+    // MS:1000571
+    Sum,
+    // MS:1000573
+    Median
+}
+
+impl Default for ScanCombination {
+    fn default() -> Self {
+        Self::NoCombination
+    }
+}
+
+impl ScanCombination {
+    pub fn from_accession(controlled_vocabulary: ControlledVocabulary, accession: u32) -> Option<ScanCombination> {
+        match controlled_vocabulary {
+            ControlledVocabulary::MS => match accession {
+                1000795 => Some(Self::NoCombination),
+                1000571 => Some(Self::Sum),
+                1000573 => Some(Self::Median),
+                _ => None
+            },
+            _ => None
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            ScanCombination::NoCombination => "no combination",
+            ScanCombination::Sum => "sum of spectra",
+            ScanCombination::Median => "median of spectra",
+        }
+    }
+
+    pub fn accession(&self) -> u32 {
+        match self {
+            ScanCombination::NoCombination => 1000795,
+            ScanCombination::Sum => 1000571,
+            ScanCombination::Median => 1000573,
+        }
+    }
+
+    pub fn to_param(&self) -> Param {
+        Param {
+            name: self.name().to_string(),
+            value: String::default(),
+            accession: Some(self.accession()),
+            controlled_vocabulary: Some(ControlledVocabulary::MS),
+            unit: Unit::Unknown
+        }
+    }
+}
+
+
 #[derive(Default, Debug, Clone, PartialEq)]
 /// Describe the series of acquisition events that constructed the spectrum
 /// being described.
 pub struct Acquisition {
     pub scans: ScanEventList,
-    pub params: ParamList,
+    pub combination: ScanCombination,
+    pub params: Option<Box<ParamList>>,
 }
 
 impl Acquisition {
@@ -107,7 +166,7 @@ pub struct SelectedIon {
     /// The reported precursor ion's charge state. May be absent in
     /// some source files.
     pub charge: Option<i32>,
-    pub params: ParamList,
+    pub params: Option<Box<ParamList>>,
 }
 
 impl IonProperties for SelectedIon {
@@ -364,10 +423,9 @@ pub struct SpectrumDescription {
 }
 
 impl_param_described!(
-    Acquisition,
     Activation,
-    // Precursor,
-    SelectedIon,
     ScanEvent,
     SpectrumDescription
 );
+
+impl_param_described_deferred!(SelectedIon, Acquisition);

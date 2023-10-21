@@ -2,4 +2,4 @@
 
 mod reader;
 
-pub use reader::{MzMLbReader, MzMLbError};
+pub use reader::{MzMLbReader, MzMLbError, MzMLbReaderType, MzMLbSpectrumBuilder};

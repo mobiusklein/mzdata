@@ -4,10 +4,12 @@ use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::io::prelude::*;
 use std::mem;
+use std::ops::Mul;
+use bytemuck::{self, Pod};
 use std::slice;
 
 use num_traits::cast::AsPrimitive;
-use num_traits::Num;
+use num_traits::{Num, Float};
 
 use log::warn;
 
@@ -18,35 +20,90 @@ use flate2::Compression;
 use mzpeaks::prelude::*;
 use mzpeaks::{CentroidPeak, DeconvolutedPeak, DeconvolutedPeakSet, MZPeakSetType, PeakSet};
 
+#[cfg(feature = "numpress")]
+use numpress;
+
 use crate::params::{ParamList, Unit};
 use crate::utils::neutral_mass;
 
 type Bytes = Vec<u8>;
 
-pub fn to_bytes<T>(data: &[T]) -> Bytes {
-    let n = data.len();
-    let z = mem::size_of::<T>();
-    let m = n * z;
-    unsafe {
-        let byte_buffer = slice::from_raw_parts(data.as_ptr() as *const u8, m);
-        let mut result = Bytes::with_capacity(m);
-        result.resize(m, 0);
-        result.copy_from_slice(byte_buffer);
-        result
-    }
+pub fn to_bytes<T: Pod>(data: &[T]) -> Bytes {
+    bytemuck::cast_slice(data).to_vec()
 }
 
-pub fn as_bytes<T>(data: &[T]) -> &[u8] {
-    let n = data.len();
-    let z = mem::size_of::<T>();
-    let m = n * z;
-    unsafe {
-        let byte_buffer = slice::from_raw_parts(data.as_ptr() as *const u8, m);
-        byte_buffer
-    }
+pub fn as_bytes<T: Pod>(data: &[T]) -> &[u8] {
+    bytemuck::cast_slice(data)
 }
 
 
+pub fn vec_as_bytes<T: Pod>(data: Vec<T>) -> Bytes {
+    bytemuck::cast_vec(data)
+}
+
+
+pub fn linear_prediction_decoding<F: Float + Mul<F>>(values: &mut [F]) -> &mut [F] {
+    let two = F::from(2.0).unwrap();
+
+    for i in 0..values.len() {
+        if i < 2 {
+            continue;
+        }
+        let v = values[i] + two * values[i - 1] - values[i - 2] - values[1];
+        values[i] = v;
+    }
+    values
+}
+
+
+pub fn linear_prediction_encoding<F: Float + Mul<F>>(values: &mut [F]) -> &mut [F] {
+    let n = values.len();
+    if n < 3 {
+        return values
+    }
+    let offset = values[1];
+    let mut prev2 = values[0];
+    let mut prev1 = values[1];
+    let two = F::from(2.0).unwrap();
+    for i in 0..values.len() {
+        values[i] = offset + values[i] - two * prev1 + prev2;
+        let tmp = prev1;
+        prev1 = values[i] + two * prev1 - prev2 - offset;
+        prev2 = tmp;
+    }
+    values
+}
+
+
+pub fn delta_decoding<F: Float + Mul<F>>(values: &mut [F]) -> &mut [F] {
+    for i in 0..values.len() {
+        if i < 2 {
+            continue;
+        }
+        values[i] = values[i] + values[i - 1] - values[0];
+    }
+    values
+}
+
+
+pub fn delta_encoding<F: Float + Mul<F>>(values: &mut [F]) -> &mut [F] {
+    let n = values.len();
+    if n < 2 {
+        return values
+    }
+    let mut prev = values[0];
+    let offset = values[0];
+    for i in 1..n {
+        let tmp = values[i];
+        values[i] = offset + values[i] - prev;
+        prev = tmp;
+    }
+    values
+}
+
+
+/// The canonical primitive data types found in MS data file formats
+/// supported by the PSI-MS controlled vocabulary
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 pub enum BinaryDataArrayType {
     Unknown,
@@ -73,6 +130,10 @@ impl Default for BinaryDataArrayType {
     }
 }
 
+
+/// The range of compression and encoding states that a raw byte buffer
+/// might be in during different stages of decoding. Other than `[BinaryCompressionType::Decoded]`,
+/// these states may or may not include intermediate base64 encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 pub enum BinaryCompressionType {
     NoCompression,
@@ -80,7 +141,22 @@ pub enum BinaryCompressionType {
     NumpressLinear,
     NumpressSLOF,
     NumpressPIC,
+    NumpressLinearZlib,
+    NumpressSLOFZlib,
+    NumpressPICZlib,
+    LinearPrediction,
+    DeltaPrediction,
     Decoded,
+}
+
+impl BinaryCompressionType {
+    /// Generate a user-understandable message about why a compression conversion operation failed
+    pub fn unsupported_msg(&self, context: Option<&str>) -> String {
+        match context {
+            Some(ctx) => format!("Cannot decode array compressed with {:?} ({})", self, ctx),
+            None => format!("Cannot decode array compressed with {:?}", self)
+        }
+    }
 }
 
 impl Default for BinaryCompressionType {
@@ -89,19 +165,23 @@ impl Default for BinaryCompressionType {
     }
 }
 
+
+/// The kinds of data arrays found in mass spectrometry data files governed
+/// by the PSI-MS controlled vocabulary.
 #[derive(Debug, Clone, PartialEq, Hash, Eq, PartialOrd, Ord)]
 pub enum ArrayType {
     Unknown,
     MZArray,
     IntensityArray,
     ChargeArray,
+    SignalToNoiseArray,
     TimeArray,
     WavelengthArray,
     IonMobilityArray,
     MeanIonMobilityArray,
     RawIonMobilityArray,
     DeconvolutedIonMobilityArray,
-    NonStandardDataArray { name: String },
+    NonStandardDataArray { name: Box<String> },
 }
 
 impl Default for ArrayType {
@@ -121,10 +201,14 @@ impl ArrayType {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+
+/// A high level set of failure modes that an operation to retrieve a typed memory buffer
+/// from a `[BinaryArrayMap]` might encounter. May also be used to represented conversion
+/// during reading or writing.
+#[derive(Debug, Clone)]
 pub enum ArrayRetrievalError {
     NotFound,
-    DecompressionError,
+    DecompressionError(String),
     DecodeError,
     DataTypeSizeMismatch,
 }
@@ -137,13 +221,22 @@ impl std::fmt::Display for ArrayRetrievalError {
 
 impl std::error::Error for ArrayRetrievalError {}
 
+#[cfg(feature = "numpress")]
+impl From<numpress::Error> for ArrayRetrievalError {
+    fn from(value: numpress::Error) -> Self {
+        ArrayRetrievalError::DecompressionError(value.to_string())
+    }
+}
+
+
+/// Represents a data array
 #[derive(Default, Clone)]
 pub struct DataArray {
     pub data: Bytes,
     pub dtype: BinaryDataArrayType,
     pub compression: BinaryCompressionType,
     pub name: ArrayType,
-    pub params: ParamList,
+    pub params: Option<Box<ParamList>>,
     pub unit: Unit,
 }
 
@@ -163,7 +256,7 @@ impl Debug for DataArray {
 pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
     fn view(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError>;
 
-    fn coerce_from<T: Clone + Sized>(
+    fn coerce_from<T: Pod>(
         buffer: Cow<'transient, [u8]>,
     ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
         let n = buffer.len();
@@ -180,7 +273,7 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         }
     }
 
-    fn coerce<T: Clone + Sized>(
+    fn coerce<T: Pod>(
         &'lifespan self,
     ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
         match self.view() {
@@ -189,7 +282,7 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         }
     }
 
-    fn transmute<S: Num + Clone + AsPrimitive<D>, D: Num + Clone + Copy + 'static>(
+    fn convert<S: Num + Clone + AsPrimitive<D> + Pod, D: Num + Clone + Copy + 'static>(
         &'lifespan self,
     ) -> Result<Cow<'transient, [D]>, ArrayRetrievalError> {
         match self.coerce::<S>() {
@@ -216,15 +309,15 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
             BinaryDataArrayType::Float32 | BinaryDataArrayType::ASCII => self.coerce::<D>(),
             BinaryDataArrayType::Float64 => {
                 type S = f64;
-                self.transmute::<S, D>()
+                self.convert::<S, D>()
             }
             BinaryDataArrayType::Int32 => {
                 type S = i32;
-                self.transmute::<S, D>()
+                self.convert::<S, D>()
             }
             BinaryDataArrayType::Int64 => {
                 type S = i64;
-                self.transmute::<S, D>()
+                self.convert::<S, D>()
             }
             _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
         }
@@ -235,16 +328,16 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         match self.dtype() {
             BinaryDataArrayType::Float32 => {
                 type S = f32;
-                self.transmute::<S, D>()
+                self.convert::<S, D>()
             }
             BinaryDataArrayType::Float64 | BinaryDataArrayType::ASCII => self.coerce(),
             BinaryDataArrayType::Int32 => {
                 type S = i32;
-                self.transmute::<S, D>()
+                self.convert::<S, D>()
             }
             BinaryDataArrayType::Int64 => {
                 type S = i64;
-                self.transmute::<S, D>()
+                self.convert::<S, D>()
             }
             _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
         }
@@ -255,16 +348,16 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         match self.dtype() {
             BinaryDataArrayType::Float32 => {
                 type S = f32;
-                self.transmute::<S, D>()
+                self.convert::<S, D>()
             }
             BinaryDataArrayType::Float64 => {
                 type S = f64;
-                self.transmute::<S, D>()
+                self.convert::<S, D>()
             }
             BinaryDataArrayType::Int32 | BinaryDataArrayType::ASCII => self.coerce::<D>(),
             BinaryDataArrayType::Int64 => {
                 type S = i64;
-                self.transmute::<S, D>()
+                self.convert::<S, D>()
             }
             _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
         }
@@ -275,16 +368,16 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         match self.dtype() {
             BinaryDataArrayType::Float32 => {
                 type S = f32;
-                self.transmute::<S, D>()
+                self.convert::<S, D>()
             }
             BinaryDataArrayType::Float64 => {
                 type S = f64;
-                self.transmute::<S, D>()
+                self.convert::<S, D>()
             }
             BinaryDataArrayType::Int64 | BinaryDataArrayType::ASCII => self.coerce::<D>(),
             BinaryDataArrayType::Int32 => {
                 type S = i32;
-                self.transmute::<S, D>()
+                self.convert::<S, D>()
             }
             _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
         }
@@ -295,23 +388,6 @@ pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
     ByteArrayView<'transient, 'lifespan>
 {
     fn view_mut(&'transient mut self) -> Result<&'transient mut Bytes, ArrayRetrievalError>;
-
-    fn coerce_from<T: Clone + Sized>(
-        buffer: Cow<'transient, Bytes>,
-    ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
-        let n = buffer.len();
-        let z = mem::size_of::<T>();
-        if n % z != 0 {
-            return Err(ArrayRetrievalError::DataTypeSizeMismatch);
-        }
-        let m = n / z;
-        unsafe {
-            Ok(Cow::Borrowed(slice::from_raw_parts(
-                buffer.as_ptr() as *const T,
-                m,
-            )))
-        }
-    }
 
     fn coerce_from_mut<T: Clone + Sized>(
         buffer: &mut [u8],
@@ -416,7 +492,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
-    pub fn update_buffer<T>(&mut self, data_buffer: &[T]) -> Result<usize, ArrayRetrievalError> {
+    pub fn update_buffer<T: Pod>(&mut self, data_buffer: &[T]) -> Result<usize, ArrayRetrievalError> {
         if self.dtype.size_of() != mem::size_of::<T>() {
             Err(ArrayRetrievalError::DataTypeSizeMismatch)
         } else {
@@ -470,20 +546,41 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         dup
     }
 
-    fn compress_zlib(bytestring: &[u8]) -> Bytes {
+    pub fn compress_zlib(bytestring: &[u8]) -> Bytes {
         let result = Bytes::new();
         let mut compressor = ZlibEncoder::new(result, Compression::best());
         compressor.write_all(bytestring).expect("Error compressing");
         compressor.finish().expect("Error compressing")
     }
 
-    fn decompres_zlib(bytestring: &[u8]) -> Bytes {
+    pub fn decompres_zlib(bytestring: &[u8]) -> Bytes {
         let result = Bytes::new();
         let mut decompressor = ZlibDecoder::new(result);
         decompressor
             .write_all(bytestring)
             .expect("Error decompression");
         decompressor.finish().expect("Error decompression")
+    }
+
+    #[cfg(feature = "numpress")]
+    pub fn compress_numpress_linear(data: &[f64]) -> Result<Bytes, ArrayRetrievalError> {
+        let scaling = numpress::optimal_scaling(data);
+        match numpress::numpress_compress(data, scaling) {
+            Ok(data) => Ok(data),
+            Err(e) => {
+                Err(ArrayRetrievalError::DecompressionError(e.to_string()))
+            },
+        }
+    }
+
+    #[cfg(feature = "numpress")]
+    pub fn decompres_numpress_linear(data: &[u8]) -> Result<Vec<f64>, ArrayRetrievalError> {
+        match numpress::numpress_decompress(data) {
+            Ok(data) => Ok(data),
+            Err(e) => {
+                Err(ArrayRetrievalError::DecompressionError(e.to_string()))
+            },
+        }
     }
 
     pub fn decode_and_store(&mut self) -> Result<BinaryCompressionType, ArrayRetrievalError> {
@@ -518,8 +615,28 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                     .decode(&self.data)
                     .expect("Failed to decode base64 array");
                 Ok(Cow::Owned(Self::decompres_zlib(&bytestring)))
+            },
+            #[cfg(feature = "numpress")]
+            BinaryCompressionType::NumpressLinear => {
+                match self.dtype {
+                    BinaryDataArrayType::Float64 => {
+                        let mut bytestring = Base64Std
+                            .decode(&self.data)
+                            .expect("Failed to decode base64 array");
+                        let decoded = Self::decompres_numpress_linear(&mut bytestring)?;
+                        let view = vec_as_bytes(decoded);
+                        Ok(Cow::Owned(view))
+                    }
+                    _ => {
+                        Err(ArrayRetrievalError::DecompressionError(
+                            self.compression.unsupported_msg(Some(
+                                format!("Not compatible with {:?}", self.dtype).as_str(),
+                            )),
+                        ))
+                    }
+                }
             }
-            _ => Err(ArrayRetrievalError::DecompressionError),
+            mode => Err(ArrayRetrievalError::DecompressionError(format!("Cannot decode array encoded with {:?}", mode))),
         }
     }
 
@@ -543,7 +660,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                     .expect("Failed to decode base64 array");
                 Ok(Cow::Owned(Self::decompres_zlib(&bytestring)[start..end].to_vec()))
             }
-            _ => Err(ArrayRetrievalError::DecompressionError),
+            mode => Err(ArrayRetrievalError::DecompressionError(format!("Cannot decode array compressed with {:?}", mode))),
         }
     }
 
@@ -566,13 +683,13 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                 self.compression = BinaryCompressionType::Decoded;
                 Ok(&mut self.data)
             }
-            _ => Err(ArrayRetrievalError::DecompressionError),
+            mode => Err(ArrayRetrievalError::DecompressionError(format!("Cannot decode array compressed with {:?}", mode))),
         }
     }
 
     pub fn clear(&mut self) {
         self.data.clear();
-        self.params.clear();
+        self.params = None;
     }
 
     pub fn store_as(&mut self, dtype: BinaryDataArrayType) -> Result<usize, ArrayRetrievalError> {
@@ -634,6 +751,11 @@ impl<'transient, 'lifespan: 'transient> ByteArrayViewMut<'transient, 'lifespan> 
         self.decode_mut()
     }
 }
+
+
+
+impl_param_described_deferred!(DataArray);
+
 
 #[derive(Clone, Debug)]
 pub struct DataArraySlice<'a> {

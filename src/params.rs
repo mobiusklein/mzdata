@@ -286,7 +286,7 @@ pub type ParamList = Vec<Param>;
 pub type ParamMap = HashMap<String, Param>;
 
 pub trait ParamDescribed {
-    fn params(&self) -> &ParamList;
+    fn params(&self) -> &[Param];
     fn params_mut(&mut self) -> &mut ParamList;
 
     fn add_param(&mut self, param: Param) {
@@ -322,12 +322,40 @@ macro_rules! impl_param_described {
     ($($t:ty), +) => {$(
 
         impl $crate::params::ParamDescribed for $t {
-            fn params(&self) -> &$crate::params::ParamList {
+            fn params(&self) -> &[$crate::params::Param] {
                 return &self.params
             }
 
             fn params_mut(&mut self) -> &mut $crate::params::ParamList {
                 return &mut self.params
+            }
+        }
+    )+};
+}
+
+pub const _EMPTY_PARAM: &[Param] = &[];
+
+#[macro_export]
+macro_rules! impl_param_described_deferred {
+    ($($t:ty), +) => {$(
+        impl $crate::params::ParamDescribed for $t {
+            fn params(&self) -> &[$crate::params::Param] {
+                match &self.params {
+                    Some(val) => &val,
+                    None => {
+                        $crate::params::_EMPTY_PARAM
+                    }
+                }
+            }
+
+            fn params_mut(&mut self) -> &mut $crate::params::ParamList {
+                let val = &mut self.params;
+                if val.is_some() {
+                    return val.as_deref_mut().unwrap()
+                } else {
+                    *val = Some(Box::default());
+                    return val.as_deref_mut().unwrap()
+                }
             }
         }
     )+};

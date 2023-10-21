@@ -592,7 +592,9 @@ where
         attrib!("count", count, scan_list_tag);
         start_event!(self, scan_list_tag);
         self.handle
-            .write_param(&self.ms_cv.param("MS:1000016", "no combination"))?;
+            .write_param(
+                &acq.combination.to_param()
+            )?;
 
         for scan in acq.scans.iter() {
             let mut scan_tag = bstart!("scan");

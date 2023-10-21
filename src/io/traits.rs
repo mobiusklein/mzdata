@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io;
 use std::marker::PhantomData;
-use std::path;
+use std::path::{self, PathBuf};
 
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 
@@ -288,47 +288,17 @@ pub trait MZFileReader<
                 let mut reader = Self::open_file(file);
                 if let Some(index_path) = &index_file_name {
                     if index_path.exists() {
-                        let index_stream = fs::File::open(index_path).unwrap_or_else(|e| {
-                            panic!("Failed to open index file {}: {}", index_path.display(), e)
-                        });
+                        let index_stream = fs::File::open(index_path)?;
                         match reader.read_index(Box::new(io::BufReader::new(index_stream))) {
                             Ok(_) => {}
                             Err(_err) => {
-                                let index_stream = fs::File::create(index_path).unwrap_or_else(|e| {
-                                    panic!("Failed to open index file {}: {}", index_path.display(), e)
-                                });
                                 reader.construct_index_from_stream();
-                                match reader.write_index(Box::new(io::BufWriter::new(index_stream))) {
-                                    Ok(_) => {}
-                                    Err(err) => {
-                                        warn!(
-                                            "Failed to write index to {} because {:?}",
-                                            index_path.display(),
-                                            err
-                                        );
-                                    }
-                                }
+                                _save_index(&index_path, &reader)?;
                             }
                         }
                     } else {
                         reader.construct_index_from_stream();
-                        let index_stream = fs::File::create(index_path).unwrap_or_else(|e| {
-                            panic!(
-                                "Failed to create index file {}: {}",
-                                index_path.display(),
-                                e
-                            )
-                        });
-                        match reader.write_index(Box::new(io::BufWriter::new(index_stream))) {
-                            Ok(_) => {}
-                            Err(err) => {
-                                warn!(
-                                    "Failed to write index to {} because {:?}",
-                                    index_path.display(),
-                                    err
-                                );
-                            }
-                        }
+                        _save_index(&index_path, &reader)?;
                     }
                 }
                 Ok(reader)
@@ -339,6 +309,25 @@ pub trait MZFileReader<
 
     /// Given a regular file, construct a new instance without indexing.
     fn open_file(source: fs::File) -> Self;
+}
+
+fn _save_index<
+    C: CentroidLike + Default,
+    D: DeconvolutedCentroidLike + Default,
+    S: SpectrumBehavior<C, D>,
+>(index_path: &PathBuf, reader: &impl MZFileReader<C, D, S>) -> io::Result<()> {
+    let index_stream = fs::File::create(index_path)?;
+    match reader.write_index(Box::new(io::BufWriter::new(index_stream))) {
+        Ok(_) => {}
+        Err(err) => {
+            warn!(
+                "Failed to write index to {} because {:?}",
+                index_path.display(),
+                err
+            );
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug)]
