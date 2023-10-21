@@ -32,9 +32,9 @@ jobs:
           elif [ "$RUNNER_OS" == "Windows" ]; then
             cp .github/helpers/vcpkg.json .
             vcpkg install
-            ls  C:/vcpkg/installed/x64-windows/*
-            echo "HDF5_DIR=C:/vcpkg/installed/x64-windows/" >> $GITHUB_ENV
-            echo "C:/vcpkg/installed/x64-windows/bin/" >> $GITHUB_PATH
+            ls  vcpkg_installed/x64-windows/*
+            echo "HDF5_DIR=`realpath vcpkg_installed/x64-windows/`" >> $GITHUB_ENV
+            echo `realpath vcpkg_installed/x64-windows/bin/`` >> $GITHUB_PATH
           else
             echo "$RUNNER_OS" is not supported
             exit 1
