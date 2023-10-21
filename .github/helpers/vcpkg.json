@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "dependencies": [
+    {
+      "name": "hdf5",
+      "version>=": "1.10.1"
+    }
+  ],
+  "overrides": [{ "name": "hdf5", "version": "1.10.1" }],
+  "builtin-baseline": "830f86fb309ad7167468a433a890b7415fbb90a5"
+}

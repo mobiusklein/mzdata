@@ -30,9 +30,9 @@ jobs:
             sudo apt-get update
             sudo apt-get install libhdf5-103 libhdf5-dev
           elif [ "$RUNNER_OS" == "Windows" ]; then
-            vcpkg install hdf5 -v 1.10.10
+            cp .github/helpers/vcpkg.json .
+            vcpkg install
             ls  C:/vcpkg/installed/x64-windows/*
-            # export HDF5_DIR="C:/vcpkg/installed/x64-windows/"
             echo "HDF5_DIR=C:/vcpkg/installed/x64-windows/" >> $GITHUB_ENV
             echo "C:/vcpkg/installed/x64-windows/bin/" >> $GITHUB_PATH
           else
