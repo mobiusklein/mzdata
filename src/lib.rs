@@ -4,6 +4,11 @@
 //! The library currently supports reading:
 //!   1. MGF files using [`MGFReader`] in [`mzdata::io::mgf`](crate::io::mgf)
 //!   2. mzML files using [`MzMLReader`] in [`mzdata::io::mzml`](crate::io::mzml)
+//!   3. mzMLb files using [`MzMLbReader`] in [`mzdata::io::mzmlb`](crate::io::mzmlb)
+//!
+//! and writing:
+//!   1. MGF files using [`MGFWriter`] in [`mzdata::io::mgf`](crate::io::mgf)
+//!   2. mzML files using [`MzMLWriter`] in [`mzdata::io::mzml`](crate::io::mzml)
 //!
 //! It also includes a set of representation layers for spectra in [`mzdata::spectrum`](crate::spectrum)
 //!
@@ -28,8 +33,12 @@
 //! assert_eq!(msn_count, 34);
 //! ```
 //!
-//! It also provides a sorted data structure for representing peak lists, [`PeakSet`]
-//! and a trait implementing the majority of the logic, [`PeakCollection`].
+//! It uses [`mzpeaks`] to represent peaks and peak lists, and re-exports the basic types. While the high-level
+//! types are templated on simple peak types, more complex, application-specific peak types can be substituted.
+//! See [`mzdata::spectrum::signal`](crate::spectrum::signal) for more information about how to directly convert
+//! data arrays to peak lists.
+//!
+//!
 pub mod io;
 pub mod meta;
 #[macro_use]
@@ -41,8 +50,8 @@ pub use mzpeaks::Tolerance;
 pub use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 pub use mzpeaks::{PeakCollection, PeakSet};
 
-pub use crate::io::mgf::MGFReader;
-pub use crate::io::mzml::MzMLReader;
+pub use crate::io::mgf::{MGFReader, MGFWriter, MGFError};
+pub use crate::io::mzml::{MzMLReader, MzMLWriter, MzMLParserError as MzMLError};
 
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::MzMLbReader;

@@ -798,7 +798,7 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbRead
         }
     }
 
-    /// Populate a new [`Spectrum`] in-place on the next available spectrum data.
+    /// Populate a new [`MultiLayerSpectrum`] in-place on the next available spectrum data.
     /// This allocates memory to build the spectrum's attributes but then moves it
     /// into `spectrum` rather than copying it.
     pub fn read_into(
@@ -840,7 +840,7 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbRead
     }
 }
 
-/// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
+/// [`MzMLReaderType`] instances are [`Iterator`]s over [`MultiLayerSpectrum`]
 impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator for MzMLbReaderType<C, D> {
     type Item = MultiLayerSpectrum<C, D>;
 
@@ -982,18 +982,15 @@ mod test {
         assert_eq!(scan.id(), ref_scan.id());
         let arrays = scan.arrays.as_ref().unwrap();
         let ref_arrays = ref_scan.arrays.as_ref().unwrap();
-        dbg!(arrays);
         assert!(arrays.mzs().len() == 19914);
         assert_eq!(arrays.mzs().len(), ref_arrays.mzs().len());
         assert_eq!(arrays.intensities().len(), ref_arrays.intensities().len());
 
         for (scan, ref_scan) in reader.zip(ref_reader) {
-            dbg!(scan.id());
             assert_eq!(scan.ms_level(), ref_scan.ms_level());
             assert_eq!(scan.id(), ref_scan.id());
             let arrays = scan.arrays.as_ref().unwrap();
             let ref_arrays = ref_scan.arrays.as_ref().unwrap();
-            dbg!(arrays, ref_arrays);
             assert_eq!(arrays.mzs().len(), ref_arrays.mzs().len());
             assert_eq!(arrays.intensities().len(), ref_arrays.intensities().len());
         }

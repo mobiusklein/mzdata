@@ -2,7 +2,7 @@
 <indexedmzML xmlns="http://psi.hupo.org/ms/mzml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.3_idx.xsd">
   <mzML xmlns="http://psi.hupo.org/ms/mzml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.1.xsd" version="1.1.1">
     <cvList count="2">
-      <cv id="MS" fullName="PSI-MS" URI="https://raw.githubusercontent.com/HUPO-PSI/psi-ms-CV/master/psi-ms.obo" version="4.1.57"/>
+      <cv id="MS" fullName="PSI-MS" URI="http://purl.obolibrary.org/obo/ms.obo" version="4.1.57"/>
       <cv id="UO" fullName="UNIT-ONTOLOGY" URI="http://ontologies.berkeleybop.org/uo.obo" version="releases/2020-03-10"/>
     </cvList>
     <fileDescription>
@@ -2433,56 +2433,56 @@
 </mzML>
 <indexList count="1">
   <index name="spectrum">
-    <offset idRef="controllerType=0 controllerNumber=1 scan=1">3861</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=2">219051</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=3">402245</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=4">411227</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=5">425046</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=6">437254</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=7">447765</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=8">459353</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=9">623887</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=10">814907</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=11">824521</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=12">837761</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=13">848109</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=14">859923</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=15">870627</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=16">1058333</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=17">1242059</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=18">1251928</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=19">1264913</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=20">1275607</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=21">1286379</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=22">1299126</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=23">1488979</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=24">1653817</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=25">1663681</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=26">1676851</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=27">1688629</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=28">1699453</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=29">1711963</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=30">1933399</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=31">2112788</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=32">2125990</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=33">2136527</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=34">2147526</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=35">2157460</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=36">2338537</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=37">2505979</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=38">2515770</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=39">2530172</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=40">2540682</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=41">2553277</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=42">2564758</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=43">2921932</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=44">3107246</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=45">3117411</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=46">3131264</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=47">3142351</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=48">3152981</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=1">3828</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=2">219018</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=3">402212</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=4">411194</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=5">425013</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=6">437221</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=7">447732</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=8">459320</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=9">623854</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=10">814874</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=11">824488</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=12">837728</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=13">848076</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=14">859890</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=15">870594</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=16">1058300</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=17">1242026</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=18">1251895</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=19">1264880</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=20">1275574</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=21">1286346</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=22">1299093</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=23">1488946</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=24">1653784</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=25">1663648</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=26">1676818</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=27">1688596</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=28">1699420</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=29">1711930</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=30">1933366</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=31">2112755</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=32">2125957</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=33">2136494</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=34">2147493</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=35">2157427</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=36">2338504</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=37">2505946</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=38">2515737</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=39">2530139</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=40">2540649</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=41">2553244</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=42">2564725</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=43">2921899</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=44">3107213</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=45">3117378</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=46">3131231</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=47">3142318</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=48">3152948</offset>
   </index>
 </indexList>
-<indexListOffset>3163426</indexListOffset>
-<fileChecksum>461432c82e2c59406d3273130a4d5017</fileChecksum>
+<indexListOffset>3163393</indexListOffset>
+<fileChecksum>0b4d3f5ad83fbf2343c760f24d74fded</fileChecksum>
 </indexedmzML>

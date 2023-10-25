@@ -324,7 +324,7 @@ pub trait MzMLSAX {
     fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult;
 }
 
-/// Convert mzML spectrum XML into [`Spectrum`](crate::spectrum::Spectrum)
+/// Convert mzML spectrum XML into [`MultiLayerSpectrum`](crate::spectrum::MultiLayerSpectrum)
 pub trait SpectrumBuilding<
     'a,
     C: CentroidPeakAdapting,
@@ -2415,7 +2415,6 @@ mod test {
             let configs = scan.acquisition().instrument_configuration_ids();
             let conf = configs[0];
             println!("Processing scan {}", scan.index());
-            dbg!(configs, &filter_string.value);
             if filter_string.value.contains("ITMS") {
                 assert_eq!(conf, 1);
             } else {

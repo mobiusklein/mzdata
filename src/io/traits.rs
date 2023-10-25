@@ -293,12 +293,12 @@ pub trait MZFileReader<
                             Ok(_) => {}
                             Err(_err) => {
                                 reader.construct_index_from_stream();
-                                _save_index(&index_path, &reader)?;
+                                // _save_index(&index_path, &reader)?;
                             }
                         }
                     } else {
                         reader.construct_index_from_stream();
-                        _save_index(&index_path, &reader)?;
+                        // _save_index(&index_path, &reader)?;
                     }
                 }
                 Ok(reader)

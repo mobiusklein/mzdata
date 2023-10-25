@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::io;
 use std::io::{BufWriter, Seek, Write};
 use std::marker::PhantomData;
@@ -20,7 +20,7 @@ use mzpeaks::{peak_set::PeakSetVec, CentroidPeak, DeconvolutedPeak, Mass, MZ};
 use crate::meta::file_description::FileDescription;
 use crate::meta::instrument::{ComponentType, InstrumentConfiguration};
 use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
-use crate::params::{ControlledVocabulary, Param, Unit};
+use crate::params::{ControlledVocabulary, Param, ParamLike, Unit, ParamCow};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
@@ -49,9 +49,7 @@ macro_rules! attrib {
 
 macro_rules! start_event {
     ($writer:ident, $target:ident) => {
-        $writer
-            .handle
-            .write_event(Event::Start($target.borrow()))?;
+        $writer.handle.write_event(Event::Start($target.borrow()))?;
     };
 }
 
@@ -66,7 +64,45 @@ fn instrument_id(id: &u32) -> String {
     format!("IC{}", *id + 1)
 }
 
-pub type WriterResult = Result<(), XMLError>;
+
+const MS1_SPECTRUM: ParamCow = ControlledVocabulary::MS.const_param_ident("MS1 spectrum", 1000579);
+const MSN_SPECTRUM: ParamCow = ControlledVocabulary::MS.const_param_ident("MSn spectrum", 1000580);
+const NEGATIVE_SCAN: ParamCow = ControlledVocabulary::MS.const_param_ident("negative scan", 1000129);
+const POSITIVE_SCAN: ParamCow = ControlledVocabulary::MS.const_param_ident("positive scan", 1000130);
+const PROFILE_SPECTRUM: ParamCow = ControlledVocabulary::MS.const_param_ident("profile spectrum", 1000128);
+const CENTROID_SPECTRUM: ParamCow = ControlledVocabulary::MS.const_param_ident("centroid spectrum", 1000127);
+
+
+#[derive(Debug)]
+pub enum MzMLWriterError {
+    XMLError(XMLError),
+    StateTransitionError {from_state: MzMLWriterState, to_state: MzMLWriterState},
+    IOError(io::Error),
+    InvalidActionError(MzMLWriterState),
+}
+
+impl Display for MzMLWriterError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for MzMLWriterError {}
+
+impl From<XMLError> for MzMLWriterError {
+    fn from(value: XMLError) -> Self {
+        Self::XMLError(value)
+    }
+}
+
+impl From<io::Error> for MzMLWriterError {
+    fn from(value: io::Error) -> Self {
+        Self::IOError(value)
+    }
+}
+
+
+pub type WriterResult = Result<(), MzMLWriterError>;
 
 struct InnerXMLWriter<W: io::Write> {
     pub handle: Writer<BufWriter<MD5HashingStream<W>>>,
@@ -99,27 +135,27 @@ impl<W: io::Write> InnerXMLWriter<W> {
         self.handle.get_mut().flush()
     }
 
-    pub fn write_param(&mut self, param: &Param) -> WriterResult {
-        let mut elt = if param.accession.is_none() {
+    pub fn write_param<P: ParamLike + Debug>(&mut self, param: &P) -> WriterResult {
+        let mut elt = if !param.is_controlled() {
             bstart!("userParam")
         } else {
             let mut elt = bstart!("cvParam");
             let accession_str = param.curie().unwrap();
             attrib!("accession", accession_str, elt);
-            if let Some(cv_ref) = &param.controlled_vocabulary {
+            if let Some(cv_ref) = &param.controlled_vocabulary() {
                 attrib!("cvRef", cv_ref, elt);
             }
             elt
         };
 
-        attrib!("name", param.name, elt);
-        if !param.value.is_empty() {
-            attrib!("value", param.value, elt);
+        attrib!("name", param.name(), elt);
+        if !param.value().is_empty() {
+            attrib!("value", param.value(), elt);
         }
-        match param.unit {
-            Unit::Unknown => {},
-            _ => {
-                let (unit_acc, unit_name) = param.unit.for_param();
+        match param.unit() {
+            Unit::Unknown => {}
+            unit => {
+                let (unit_acc, unit_name) = unit.for_param();
                 let mut split = unit_acc.split(':');
                 if let Some(prefix) = split.next() {
                     attrib!("unitCvRef", prefix, elt);
@@ -128,10 +164,10 @@ impl<W: io::Write> InnerXMLWriter<W> {
                 }
                 attrib!("unitAccession", unit_acc, elt);
                 attrib!("unitName", unit_name, elt);
-
             }
         }
-        self.handle.write_event(Event::Empty(elt))
+        self.handle.write_event(Event::Empty(elt))?;
+        Ok(())
     }
 
     pub fn write_param_list<'a, T: Iterator<Item = &'a Param>>(
@@ -145,7 +181,8 @@ impl<W: io::Write> InnerXMLWriter<W> {
     }
 
     pub fn write_event(&mut self, event: Event) -> WriterResult {
-        self.handle.write_event(event)
+        self.handle.write_event(event)?;
+        Ok(())
     }
 }
 
@@ -169,6 +206,22 @@ pub enum MzMLWriterState {
     IndexList,
     IndexListClosed,
     End,
+}
+
+pub trait MzMLSpectrumWriter<'a,
+    C: CentroidPeakAdapting + 'static = CentroidPeak,
+    D: DeconvolutedPeakAdapting + 'static = DeconvolutedPeak,
+>
+{
+    fn write_scan_list(&mut self, acq: &Acquisition) -> WriterResult;
+    fn write_isolation_window(&mut self, iw: &IsolationWindow) -> WriterResult;
+    fn write_activation(&mut self, precursor: &Precursor) -> WriterResult;
+    fn write_precursor(&mut self, precursor: &Precursor) -> WriterResult;
+
+    fn write_binary_data_array(&mut self, array: &DataArray) -> WriterResult;
+    fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap) -> WriterResult;
+
+    fn write_spectrum(&'a mut self, spectrum: &'a MultiLayerSpectrum<C, D>) -> WriterResult;
 }
 
 /**
@@ -289,8 +342,33 @@ where
         }
     }
 
+    fn transition_err(&self, to_state: MzMLWriterState) -> WriterResult {
+        Err(MzMLWriterError::StateTransitionError { from_state: self.state, to_state })
+    }
+
     fn stream_position(&mut self) -> io::Result<u64> {
         self.handle.handle.get_mut().stream_position()
+    }
+
+    fn make_psi_ms_cv(&self) -> BytesStart<'static> {
+        let mut cv = BytesStart::from_content("cv", 2);
+        cv.push_attribute(("id", "MS"));
+        cv.push_attribute(("fullName", "PSI-MS"));
+        cv.push_attribute((
+            "URI",
+            "http://purl.obolibrary.org/obo/ms.obo",
+        ));
+        cv.push_attribute(("version", Self::PSIMS_VERSION));
+        cv
+    }
+
+    fn make_unit_cv(&self) -> BytesStart<'static> {
+        let mut cv = BytesStart::from_content("cv", 2);
+        cv.push_attribute(("id", "UO"));
+        cv.push_attribute(("fullName", "UNIT-ONTOLOGY"));
+        cv.push_attribute(("URI", "http://ontologies.berkeleybop.org/uo.obo"));
+        cv.push_attribute(("version", Self::UNIT_VERSION));
+        cv
     }
 
     fn write_cv_list(&mut self) -> WriterResult {
@@ -298,21 +376,10 @@ where
         cv_list.push_attribute(("count", "2"));
         self.handle.write_event(Event::Start(cv_list))?;
 
-        let mut cv = BytesStart::from_content("cv", 2);
-        cv.push_attribute(("id", "MS"));
-        cv.push_attribute(("fullName", "PSI-MS"));
-        cv.push_attribute((
-            "URI",
-            "https://raw.githubusercontent.com/HUPO-PSI/psi-ms-CV/master/psi-ms.obo",
-        ));
-        cv.push_attribute(("version", Self::PSIMS_VERSION));
+        let cv = self.make_psi_ms_cv();
         self.handle.write_event(Event::Empty(cv))?;
 
-        let mut cv = BytesStart::from_content("cv", 2);
-        cv.push_attribute(("id", "UO"));
-        cv.push_attribute(("fullName", "UNIT-ONTOLOGY"));
-        cv.push_attribute(("URI", "http://ontologies.berkeleybop.org/uo.obo"));
-        cv.push_attribute(("version", Self::UNIT_VERSION));
+        let cv = self.make_unit_cv();
         self.handle.write_event(Event::Empty(cv))?;
 
         self.handle
@@ -346,7 +413,7 @@ where
         Ok(())
     }
 
-    fn writer_header(&mut self) -> WriterResult {
+    fn write_header(&mut self) -> WriterResult {
         if self.state < MzMLWriterState::DocumentOpen {
             self.start_document()?;
         } else {
@@ -443,8 +510,7 @@ where
                 };
                 let order = comp.order.to_string();
                 attrib!("order", order, cmp_tag);
-                self.handle
-                    .write_event(Event::Start(cmp_tag.borrow()))?;
+                self.handle.write_event(Event::Start(cmp_tag.borrow()))?;
                 for param in comp.params() {
                     self.handle.write_param(param)?
                 }
@@ -487,10 +553,9 @@ where
 
     fn start_run(&mut self) -> WriterResult {
         if self.state < MzMLWriterState::Run {
-            self.writer_header()?;
+            self.write_header()?;
         } else {
-            panic!(
-                "Cannot start writing the run of mzML, currently in state {:?} which happens after.", self.state)
+            return self.transition_err(MzMLWriterState::Run);
         }
         let mut run = bstart!("run");
         attrib!("id", "1", run);
@@ -515,8 +580,8 @@ where
                 self.start_run()?;
             }
             state if state > MzMLWriterState::SpectrumList => {
-                panic!("Cannot start writing the run of mzML, currently in state {:?} which happens after the run has already begin", state)
-            },
+                return self.transition_err(MzMLWriterState::SpectrumList);
+            }
             _ => {}
         }
         let mut list = bstart!("spectrumList");
@@ -545,7 +610,8 @@ where
         } else if self.state == MzMLWriterState::ChromatogramList {
             // TODO
         } else if self.state > MzMLWriterState::RunClosed {
-            panic!("Cannot close the run of mzML, currently in state {:?} which happens after the run has already ended", self.state)
+            // Cannot close the run of mzML, currently in state which happens after the run has already ended
+            return self.transition_err(MzMLWriterState::RunClosed);
         }
         let tag = bstart!("run");
         end_event!(self, tag);
@@ -591,21 +657,13 @@ where
         let count = acq.scans.len().to_string();
         attrib!("count", count, scan_list_tag);
         start_event!(self, scan_list_tag);
-        self.handle
-            .write_param(
-                &acq.combination.to_param()
-            )?;
+        self.handle.write_param(&acq.combination.to_param())?;
 
         for scan in acq.scans.iter() {
             let mut scan_tag = bstart!("scan");
             let id = instrument_id(&scan.instrument_configuration_id);
-            attrib!(
-                "instrumentConfigurationRef",
-                id,
-                scan_tag
-            );
-            self.handle
-                .write_event(Event::Start(scan_tag.borrow()))?;
+            attrib!("instrumentConfigurationRef", id, scan_tag);
+            self.handle.write_event(Event::Start(scan_tag.borrow()))?;
 
             self.handle.write_param(
                 &self
@@ -633,8 +691,7 @@ where
                 .write_event(Event::Start(scan_window_list_tag.borrow()))?;
             for window in scan.scan_windows.iter() {
                 let window_tag = bstart!("scanWindow");
-                self.handle
-                    .write_event(Event::Start(window_tag.borrow()))?;
+                self.handle.write_event(Event::Start(window_tag.borrow()))?;
                 self.handle.write_param(
                     &self
                         .ms_cv
@@ -667,8 +724,7 @@ where
 
     fn write_isolation_window(&mut self, iw: &IsolationWindow) -> WriterResult {
         let iw_tag = bstart!("isolationWindow");
-        self.handle
-            .write_event(Event::Start(iw_tag.borrow()))?;
+        self.handle.write_event(Event::Start(iw_tag.borrow()))?;
         self.handle.write_param(
             &self
                 .ms_cv
@@ -741,7 +797,7 @@ where
         match act.method() {
             Some(meth) => {
                 self.handle.write_param(meth)?;
-            },
+            }
             None => {}
         }
         self.handle.write_param_list(act.params().iter())?;
@@ -816,55 +872,32 @@ where
             self.handle
                 .write_param(&self.ms_cv.param("MS:1000574", "zlib compression"))?;
         }
-        let array_name_param = match &array.name {
-            ArrayType::MZArray => self
-                    .ms_cv
-                    .param("MS:1000514", "m/z array")
-                    .with_unit("MS:1000040", "m/z"),
-            ArrayType::IntensityArray =>
-                self
-                    .ms_cv
-                    .param("MS:1000515", "intensity array")
-                    .with_unit("MS:1000131", "number of detector counts"),
-            ArrayType::ChargeArray => self.ms_cv.param("MS:1000516", "charge array"),
-            ArrayType::TimeArray => self
-                    .ms_cv
-                    .param("MS:1000595", "time array")
-                    .with_unit("UO:0000031", "minute"),
-            ArrayType::RawIonMobilityArray => self
-                    .ms_cv
-                    .param("MS:1003007", "raw ion mobility array")
-                    .with_unit_t(&array.unit),
-            ArrayType::MeanIonMobilityArray => self
-                    .ms_cv
-                    .param("MS:1002816", "mean ion mobility array")
-                    .with_unit_t(&array.unit),
-            ArrayType::DeconvolutedIonMobilityArray => {
-                let p = self
-                    .ms_cv
-                    .param("MS:1003154", "deconvoluted ion mobility array")
-                    .with_unit_t(&array.unit);
-
-                p
-            },
+        match &array.name {
+            ArrayType::MZArray => self.handle.write_param(&array.name.as_param_const())?,
+            ArrayType::IntensityArray => self.handle.write_param(&array.name.as_param_const())?,
+            ArrayType::ChargeArray => self.handle.write_param(&array.name.as_param_const())?,
+            ArrayType::TimeArray => self.handle.write_param(&array.name.as_param_const())?,
+            ArrayType::RawIonMobilityArray => self.handle.write_param(&array.name.as_param_with_unit_const(array.unit))?,
+            ArrayType::MeanIonMobilityArray => self.handle.write_param(&array.name.as_param_with_unit_const(array.unit))?,
+            ArrayType::DeconvolutedIonMobilityArray => self.handle.write_param(&array.name.as_param_with_unit_const(array.unit))?,
             ArrayType::NonStandardDataArray { name } => {
                 // self.handle.write_param()?;
                 let mut p = self
-                        .ms_cv
-                        .param_val("MS:1000786", "non-standard data array", name);
+                    .ms_cv
+                    .param_val("MS:1000786", "non-standard data array", name);
                 p = p.with_unit_t(&array.unit);
-                p
-            },
+                self.handle.write_param(&p)?;
+            }
             _ => {
                 panic!("Could not determine how to name for {:?}", array.name);
             }
-        };
-        self.handle.write_param(&array_name_param)?;
+        }
 
         let bin = bstart!("binary");
         start_event!(self, bin);
-        self.handle
-            .write_event(Event::Text(BytesText::new(String::from_utf8_lossy(&encoded).as_ref())))?;
+        self.handle.write_event(Event::Text(BytesText::new(
+            String::from_utf8_lossy(&encoded).as_ref(),
+        )))?;
         end_event!(self, bin);
         end_event!(self, outer);
         Ok(())
@@ -901,8 +934,10 @@ where
                 self.start_spectrum_list()?;
             }
             state if state > MzMLWriterState::SpectrumList => {
-                panic!("Cannot write spectrum, currently in state {:?} which happens after spectra may be written", state)
-            },
+                // Cannot write spectrum, currently in state which happens
+                // after spectra may be written
+                return Err(MzMLWriterError::InvalidActionError(self.state))
+            }
             _ => {}
         }
         let pos = self.stream_position()? - (1 + (4 * InnerXMLWriter::<W>::INDENT_SIZE));
@@ -917,10 +952,10 @@ where
         let ms_level = spectrum.ms_level();
         if ms_level == 1 {
             self.handle
-                .write_param(&self.ms_cv.param("MS:1000579", "MS1 spectrum"))?;
+                .write_param(&MS1_SPECTRUM)?;
         } else {
             self.handle
-                .write_param(&self.ms_cv.param("MS:1000580", "MSn spectrum"))?;
+                .write_param(&MSN_SPECTRUM)?;
         }
         self.handle.write_param(&self.ms_cv.param_val(
             "MS:1000511",
@@ -931,35 +966,35 @@ where
         match spectrum.polarity() {
             ScanPolarity::Negative => self
                 .handle
-                .write_param(&self.ms_cv.param("MS:1000129", "negative scan"))?,
+                .write_param(&NEGATIVE_SCAN)?,
             ScanPolarity::Positive => self
                 .handle
-                .write_param(&self.ms_cv.param("MS:1000130", "positive scan"))?,
+                .write_param(&POSITIVE_SCAN)?,
             ScanPolarity::Unknown => {
                 warn!(
                     "Could not determine scan polarity for {}, assuming positive",
                     spectrum.id()
                 );
                 self.handle
-                    .write_param(&self.ms_cv.param("MS:1000130", "positive scan"))?
+                    .write_param(&POSITIVE_SCAN)?
             }
         }
 
         match spectrum.signal_continuity() {
             SignalContinuity::Profile => self
                 .handle
-                .write_param(&self.ms_cv.param("MS:1000128", "profile spectrum"))?,
+                .write_param(&PROFILE_SPECTRUM)?,
             SignalContinuity::Unknown => {
                 warn!(
                     "Could not determine scan polarity for {}, assuming centroid",
                     spectrum.id()
                 );
                 self.handle
-                    .write_param(&self.ms_cv.param("MS:1000127", "centroid spectrum"))?;
+                    .write_param(&CENTROID_SPECTRUM)?;
             }
             _ => {
                 self.handle
-                    .write_param(&self.ms_cv.param("MS:1000127", "centroid spectrum"))?;
+                    .write_param(&CENTROID_SPECTRUM)?;
             }
         }
 
@@ -1042,6 +1077,40 @@ where
     /// Get a mutable reference to the mzML writer's spectrum count to modify in-place.
     pub fn spectrum_count_mut(&mut self) -> &mut u64 {
         &mut self.spectrum_count
+    }
+}
+
+
+impl<'a, C: CentroidPeakAdapting + 'static, D: DeconvolutedPeakAdapting + 'static, W: Write + Seek> MzMLSpectrumWriter<'a, C, D> for MzMLWriterType<W, C, D> where
+    &'a PeakSetVec<C, MZ>: Into<BinaryArrayMap>,
+    &'a PeakSetVec<D, Mass>: Into<BinaryArrayMap> {
+
+    fn write_scan_list(&mut self, acq: &Acquisition) -> WriterResult {
+        self.write_scan_list(acq)
+    }
+
+    fn write_isolation_window(&mut self, iw: &IsolationWindow) -> WriterResult {
+        self.write_isolation_window(iw)
+    }
+
+    fn write_activation(&mut self, precursor: &Precursor) -> WriterResult {
+        self.write_activation(precursor)
+    }
+
+    fn write_precursor(&mut self, precursor: &Precursor) -> WriterResult {
+        self.write_precursor(precursor)
+    }
+
+    fn write_binary_data_array(&mut self, array: &DataArray) -> WriterResult {
+        self.write_binary_data_array(array)
+    }
+
+    fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap) -> WriterResult {
+        self.write_binary_data_arrays(arrays)
+    }
+
+    fn write_spectrum(&'a mut self, spectrum: &'a MultiLayerSpectrum<C, D>) -> WriterResult {
+        self.write_spectrum(spectrum)
     }
 }
 

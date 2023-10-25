@@ -125,6 +125,20 @@ pub struct Param {
     pub unit: Unit,
 }
 
+impl Display for Param {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut body = if self.is_controlled() {
+            format!("{}:{}|{}={}", String::from_utf8_lossy(self.controlled_vocabulary.unwrap().as_bytes()), self.accession.unwrap(), self.name, self.value)
+        } else {
+            format!("{}={}", self.name, self.value)
+        };
+        if self.unit != Unit::Unknown {
+            body.extend(format!(" {}", self.unit).chars());
+        };
+        f.write_str(body.as_str())
+    }
+}
+
 impl Param {
     pub fn new() -> Param {
         Param {
@@ -246,6 +260,23 @@ impl ControlledVocabulary {
             );
         }
         param
+    }
+
+    pub const fn const_param(&self, name: &'static str, value: &'static str, accession: u32, unit: Unit) -> ParamCow<'static> {
+        ParamCow { name: Cow::Borrowed(name),
+                   value: Cow::Borrowed(value),
+                   accession: Some(accession),
+                   controlled_vocabulary:
+                   Some(*self),
+                   unit: unit }
+    }
+
+    pub const fn const_param_ident(&self, name: &'static str, accession: u32) -> ParamCow<'static> {
+        self.const_param(name, "", accession, Unit::Unknown)
+    }
+
+    pub const fn const_param_ident_unit(&self, name: &'static str, accession: u32, unit: Unit) -> ParamCow<'static> {
+        self.const_param(name, "", accession, unit)
     }
 
     pub fn param_val<S: Into<String>, A: AsRef<str>, V: ToString>(
@@ -464,5 +495,11 @@ impl Unit {
 impl Default for Unit {
     fn default() -> Self {
         Self::Unknown
+    }
+}
+
+impl Display for Unit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(format!("{:?}", self).as_str())
     }
 }

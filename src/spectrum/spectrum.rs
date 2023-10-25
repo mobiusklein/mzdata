@@ -233,6 +233,7 @@ pub struct RawSpectrum {
     pub arrays: BinaryArrayMap,
 }
 
+/// Errors that may arise when converting between different SpectrumBehavior-like types
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SpectrumConversionError {
     MZIntensityArraySizeMismatch,
@@ -431,7 +432,7 @@ pub type DeconvolutedSpectrum = DeconvolutedSpectrumType<DeconvolutedPeak>;
 #[derive(Default, Debug, Clone)]
 /// Represent a spectrum with multiple layers of representation of the
 /// peak data.
-pub struct MultiLayerSpectrum<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> {
+pub struct MultiLayerSpectrum<C: CentroidLike + Default=CentroidPeak, D: DeconvolutedCentroidLike + Default=DeconvolutedPeak> {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
 
