@@ -17,6 +17,8 @@ pub trait SeekRead: io::Read + io::Seek {}
 impl<T: io::Read + io::Seek> SeekRead for T {}
 
 /// A base trait defining the behaviors of a source of spectra.
+///
+/// A [`ScanSource`]
 pub trait ScanSource<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
@@ -293,12 +295,10 @@ pub trait MZFileReader<
                             Ok(_) => {}
                             Err(_err) => {
                                 reader.construct_index_from_stream();
-                                // _save_index(&index_path, &reader)?;
                             }
                         }
                     } else {
                         reader.construct_index_from_stream();
-                        // _save_index(&index_path, &reader)?;
                     }
                 }
                 Ok(reader)

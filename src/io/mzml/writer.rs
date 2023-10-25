@@ -417,8 +417,7 @@ where
         if self.state < MzMLWriterState::DocumentOpen {
             self.start_document()?;
         } else {
-            panic!(
-                "Cannot start writing the header of mzML, currently in state {:?} which happens after.", self.state)
+            return self.transition_err(MzMLWriterState::Header)
         }
         self.write_cv_list()?;
         self.write_file_description()?;

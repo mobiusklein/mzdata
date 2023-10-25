@@ -96,8 +96,9 @@ where
     }
 }
 
+/// A writable stream that keeps a running MD5 checksum of all bytes
 #[derive(Clone)]
-pub struct MD5HashingStream<T: io::Write> {
+pub(crate) struct MD5HashingStream<T: io::Write> {
     pub stream: T,
     pub context: MD5Context,
 }
