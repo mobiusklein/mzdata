@@ -483,11 +483,11 @@ impl Seek for ByteReader {
     fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
         match pos {
             io::SeekFrom::Start(offset) => {
-                self.position = (self.position + offset as usize).min(0);
+                self.position = (offset as usize).max(0);
             }
             io::SeekFrom::End(offset) => {
                 let mut n = self.handle.size();
-                self.position = (n + offset as usize).min(0);
+                self.position = (n + offset as usize).max(n);
             }
             io::SeekFrom::Current(offset) => {
                 self.position = (self.position + offset as usize).max(0);

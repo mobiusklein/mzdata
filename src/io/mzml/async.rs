@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 use std::mem;
 use std::pin::Pin;
 
+use super::MzMLSAX;
 use super::reader::{
     MzMLParserError, MzMLParserState, SpectrumBuilding,
     Bytes, FileMetadataBuilder, MzMLSpectrumBuilder,

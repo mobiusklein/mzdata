@@ -35,7 +35,7 @@ lto = true
 debug = true
 
 [features]
-default = ["intel-mkl", "parallelism", "plotting", "mzmlb", "zlib-ng-compat"]
+default = ["intel-mkl", "parallelism", "plotting", "mzmlb", "zlib-ng-compat", ]
 
 openblas = ["mzsignal/openblas"]
 netlib = ["mzsignal/netlib"]
