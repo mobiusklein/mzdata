@@ -9,10 +9,13 @@ and this project adheres to [Semantic Versioning].
 
 ### Added
 - Limited async MzML reader support
+- mzMLb reader support
 
 ### Changed
 - `RandomAccessScanIterator` methods now return mutable references to self, making them actually useful in a chain.
 - Make some window size attributes smaller as they do not require double precision.
+- Clean up the internal implementation of the various internal `SpectrumBuilder` types.
+- Factor up `mzdata::spectrum::signal` to be less monolithic.
 
 ### Deprecated
 
