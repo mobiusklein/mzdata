@@ -1,13 +1,14 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::hash_map::{Iter, IterMut};
 
 use log::warn;
 use mzpeaks::Tolerance;
 
 use super::bindata::DataArray;
 use super::encodings::{ArrayType, ArrayRetrievalError, BinaryCompressionType};
-use super::traits::ByteArrayView;
+use super::traits::{ByteArrayView, ByteArrayViewMut};
 
 
 #[derive(Debug, Default, Clone)]
@@ -15,7 +16,7 @@ pub struct BinaryArrayMap {
     pub byte_buffer_map: HashMap<ArrayType, DataArray>,
 }
 
-impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
+impl BinaryArrayMap {
     pub fn new() -> BinaryArrayMap {
         BinaryArrayMap {
             ..Default::default()
@@ -30,15 +31,15 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         self.byte_buffer_map.is_empty()
     }
 
-    pub fn iter(&self) -> std::collections::hash_map::Iter<ArrayType, DataArray> {
+    pub fn iter(&self) -> Iter<ArrayType, DataArray> {
         self.byte_buffer_map.iter()
     }
 
-    pub fn iter_mut(&mut self) -> std::collections::hash_map::IterMut<ArrayType, DataArray> {
+    pub fn iter_mut(&mut self) -> IterMut<ArrayType, DataArray> {
         self.byte_buffer_map.iter_mut()
     }
 
-    pub fn decode(&mut self) -> Result<(), ArrayRetrievalError> {
+    pub fn decode_all_arrays(&mut self) -> Result<(), ArrayRetrievalError> {
         for (_key, value) in self.iter_mut() {
             match value.compression {
                 BinaryCompressionType::Decoded => {}
@@ -50,11 +51,20 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         Ok(())
     }
 
+    pub fn decode_array(&mut self, array_type: &ArrayType) -> Result<(), ArrayRetrievalError> {
+        if let Some(array) = self.get_mut(array_type) {
+            array.decode_and_store()?;
+            Ok(())
+        } else {
+            Err(ArrayRetrievalError::NotFound)
+        }
+    }
+
     pub fn add(&mut self, array: DataArray) {
         self.byte_buffer_map.insert(array.name.clone(), array);
     }
 
-    pub fn get(&'transient self, array_type: &ArrayType) -> Option<&'transient DataArray> {
+    pub fn get(&self, array_type: &ArrayType) -> Option<&DataArray> {
         self.byte_buffer_map.get(array_type)
     }
 
@@ -95,7 +105,7 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         }
     }
 
-    pub fn mzs(&'transient self) -> Cow<'transient, [f64]> {
+    pub fn mzs(&'_ self) -> Cow<'_, [f64]> {
         let mz_array = self
             .get(&ArrayType::MZArray)
             .expect("Did not find m/z array")
@@ -104,7 +114,17 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         mz_array
     }
 
-    pub fn intensities(&'transient self) -> Cow<'transient, [f32]> {
+    pub fn mzs_mut(&mut self) -> Result<&mut [f64], ArrayRetrievalError> {
+        if let Some(mz_array) = self.get_mut(&ArrayType::MZArray) {
+            mz_array.decode_and_store()?;
+            mz_array.store_as(super::BinaryDataArrayType::Float64)?;
+            mz_array.coerce_mut()
+        } else {
+            Err(ArrayRetrievalError::NotFound)
+        }
+    }
+
+    pub fn intensities(&'_ self) -> Cow<'_, [f32]> {
         let intensities = self
             .get(&ArrayType::IntensityArray)
             .expect("Did not find intensity array")
@@ -113,7 +133,17 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
         intensities
     }
 
-    pub fn charges(&'transient self) -> Option<Cow<'transient, [i32]>> {
+    pub fn intensities_mut(&mut self) -> Result<&mut [f32], ArrayRetrievalError> {
+        if let Some(mz_array) = self.get_mut(&ArrayType::IntensityArray) {
+            mz_array.decode_and_store()?;
+            mz_array.store_as(super::BinaryDataArrayType::Float32)?;
+            mz_array.coerce_mut()
+        } else {
+            Err(ArrayRetrievalError::NotFound)
+        }
+    }
+
+    pub fn charges(&'_ self) -> Option<Cow<'_, [i32]>> {
         match self.get(&ArrayType::ChargeArray) {
             Some(data_array) => match data_array.to_i32() {
                 Ok(array) => Some(array),
@@ -125,4 +155,15 @@ impl<'transient, 'lifespan: 'transient> BinaryArrayMap {
             None => None,
         }
     }
+
+    pub fn charge_mut(&mut self) -> Result<&mut [i32], ArrayRetrievalError> {
+        if let Some(mz_array) = self.get_mut(&ArrayType::ChargeArray) {
+            mz_array.decode_and_store()?;
+            mz_array.store_as(super::BinaryDataArrayType::Int32)?;
+            mz_array.coerce_mut()
+        } else {
+            Err(ArrayRetrievalError::NotFound)
+        }
+    }
+
 }

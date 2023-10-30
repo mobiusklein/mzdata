@@ -36,7 +36,7 @@ for spectrum in reader {
 ```
 
 */
-use std::borrow;
+use std::borrow::Cow;
 use std::convert::TryFrom;
 
 use mzpeaks::{IndexType, prelude::*};
@@ -54,6 +54,8 @@ use crate::spectrum::scan_properties::{
     Acquisition, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
 };
 use crate::spectrum::signal::{ArrayType, BinaryArrayMap, BinaryDataArrayType};
+
+use super::signal::ArrayRetrievalError;
 
 pub trait CentroidPeakAdapting: CentroidLike + Default + From<CentroidPeak> {}
 impl<C: CentroidLike + Default + From<CentroidPeak>> CentroidPeakAdapting for C {}
@@ -250,6 +252,26 @@ impl std::fmt::Display for SpectrumConversionError {
 
 impl std::error::Error for SpectrumConversionError {}
 
+
+impl From<SpectrumConversionError> for SpectrumProcessingError {
+    fn from(value: SpectrumConversionError) -> Self {
+        Self::SpectrumConversionError(value)
+    }
+}
+
+impl Into<SpectrumProcessingError> for DenoisingError {
+    fn into(self) -> SpectrumProcessingError {
+        SpectrumProcessingError::DenoisingError(self)
+    }
+}
+
+impl Into<SpectrumProcessingError> for PeakPickerError {
+    fn into(self) -> SpectrumProcessingError {
+        SpectrumProcessingError::PeakPickerError(self)
+    }
+}
+
+
 #[derive(Debug, Clone)]
 pub enum SpectrumProcessingError {
     DenoisingError(DenoisingError),
@@ -299,12 +321,24 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         Ok(centroid)
     }
 
-    pub fn mzs(&'lifespan self) -> borrow::Cow<'transient, [f64]> {
+    pub fn mzs(&'lifespan self) -> Cow<'transient, [f64]> {
         self.arrays.mzs()
     }
 
-    pub fn intensities(&'lifespan self) -> borrow::Cow<'transient, [f32]> {
+    pub fn intensities(&'lifespan self) -> Cow<'transient, [f32]> {
         self.arrays.intensities()
+    }
+
+    pub fn mzs_mut(&mut self) -> Result<&mut [f64], ArrayRetrievalError> {
+        self.arrays.mzs_mut()
+    }
+
+    pub fn intensities_mut(&mut self) -> Result<&mut [f32], ArrayRetrievalError> {
+        self.arrays.intensities_mut()
+    }
+
+    pub fn decode_all_arrays(&mut self) -> Result<(), ArrayRetrievalError> {
+        self.arrays.decode_all_arrays()
     }
 
     /// Convert a spectrum into a [`Spectrum`]
@@ -338,7 +372,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         self,
         peak_picker: &PeakPicker,
     ) -> Result<MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>, SpectrumProcessingError> {
-        let mut result = self.into_spectrum().unwrap();
+        let mut result = self.into_spectrum()?;
         match result.pick_peaks_with(peak_picker) {
             Ok(_) => Ok(result),
             Err(err) => Err(err),
@@ -460,12 +494,18 @@ impl<'lifespan, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default
             PeakDataLevel::Centroid(peaks)
         } else if let Some(arrays) = &self.arrays {
             PeakDataLevel::RawData(arrays)
+        } else if let Some(peaks) = &self.deconvoluted_peaks {
+            PeakDataLevel::Deconvoluted(peaks)
         } else {
             PeakDataLevel::Missing
         }
     }
 }
 
+
+// TODO: This set of methods may be too restrictive and prevent specializing. Either
+// implement with dtolnay specialization or remove the blanket implementation via the
+// "Adapting" template constraints.
 impl<'lifespan, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MultiLayerSpectrum<C, D> {
     /// Convert a spectrum into a [`CentroidSpectrumType<C>`]
     pub fn into_centroid(self) -> Result<CentroidSpectrumType<C>, SpectrumConversionError> {
