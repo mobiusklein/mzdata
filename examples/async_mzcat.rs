@@ -42,7 +42,7 @@ async fn scan_file(
 
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
-fn main() -> io::Result<()> {
+async fn main() -> io::Result<()> {
     let path = path::PathBuf::from(
         env::args()
             .skip(1)
