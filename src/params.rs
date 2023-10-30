@@ -25,7 +25,13 @@ pub trait ParamLike {
     fn accession(&self) -> Option<u32>;
     fn controlled_vocabulary(&self) -> Option<ControlledVocabulary>;
     fn unit(&self) -> Unit;
-
+    fn is_ms(&self) -> bool {
+        if let Some(cv) = self.controlled_vocabulary() {
+            cv == ControlledVocabulary::MS
+        } else {
+            false
+        }
+    }
     fn coerce<T: str::FromStr>(&self) -> Result<T, T::Err> {
         self.value().parse::<T>()
     }

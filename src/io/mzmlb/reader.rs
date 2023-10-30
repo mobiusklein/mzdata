@@ -21,7 +21,7 @@ use crate::io::mzml::{
     CVParamParse, IncrementingIdMap, MzMLParserError, MzMLParserState, MzMLReaderType, MzMLSAX,
     MzMLSpectrumBuilder, ParserResult, SpectrumBuilding,
 };
-use crate::io::prelude::MSDataFileMetadata;
+use crate::io::prelude::{MSDataFileMetadata, ParamLike};
 use crate::io::traits::MZFileReader;
 use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, ScanAccessError, ScanSource};
 
@@ -665,7 +665,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
         self.inner.fill_spectrum(param)
     }
 
-    fn fill_binary_data_array(&mut self, param: Param) {
+    fn fill_binary_data_array<P: ParamLike + Into<Param>>(&mut self, param: P) {
         self.inner.fill_binary_data_array(param)
     }
 

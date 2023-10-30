@@ -25,6 +25,7 @@ use super::super::traits::{
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
+use crate::io::prelude::ParamLike;
 use crate::meta::file_description::{FileDescription, SourceFile};
 use crate::meta::instrument::{Component, ComponentType, InstrumentConfiguration};
 use crate::meta::{DataProcessing, MSDataFileMetadata, ProcessingMethod, Software};
@@ -123,7 +124,7 @@ Common `CVParam` parsing behaviors
 */
 pub trait CVParamParse: XMLParseBase {
     fn handle_param_borrowed<'inner, 'outer: 'inner + 'event, 'event: 'inner>(
-        &self,
+        &'outer self,
         event: &'event BytesStart<'event>,
         reader_position: usize,
         state: MzMLParserState,
@@ -343,10 +344,10 @@ pub trait SpectrumBuilding<
 
     fn fill_spectrum(&mut self, param: Param);
 
-    fn fill_binary_data_array(&mut self, param: Param) {
-        if param.is_controlled() && param.controlled_vocabulary.unwrap() == ControlledVocabulary::MS
+    fn fill_binary_data_array<P: ParamLike + Into<Param>>(&mut self, param: P) {
+        if param.is_ms()
         {
-            match param.accession.unwrap() {
+            match param.accession().unwrap() {
                 // Compression types
                 1000574 => {
                     self.current_array_mut().compression = BinaryCompressionType::Zlib;
@@ -402,7 +403,7 @@ pub trait SpectrumBuilding<
                 1000517 => self.current_array_mut().name = ArrayType::SignalToNoiseArray,
                 1000786 => {
                     self.current_array_mut().name = ArrayType::NonStandardDataArray {
-                        name: Box::new(param.value),
+                        name: Box::new(param.value().to_string()),
                     };
                 }
                 1002477 => {
@@ -438,11 +439,11 @@ pub trait SpectrumBuilding<
                     self.current_array_mut().unit = Unit::VoltSecondPerSquareCentimeter;
                 }
                 _ => {
-                    self.current_array_mut().add_param(param);
+                    self.current_array_mut().add_param(param.into());
                 }
             }
         } else {
-            self.current_array_mut().add_param(param);
+            self.current_array_mut().add_param(param.into());
         }
     }
 
@@ -460,7 +461,7 @@ pub trait SpectrumBuilding<
                     Some(param.coerce().expect("Failed to parse ion charge"));
             }
             &_ => {
-                self.selected_ion_mut().add_param(param.into());
+                self.selected_ion_mut().add_param(param);
             }
         };
     }
@@ -734,7 +735,7 @@ impl<
     }
 }
 
-impl<'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+impl<'inner, 'outer: 'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     MzMLSpectrumBuilder<'inner, C, D>
 {
     pub fn new() -> MzMLSpectrumBuilder<'inner, C, D> {
@@ -777,11 +778,8 @@ impl<'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
         spectrum.arrays = Some(self.arrays.clone());
     }
 
-    pub fn fill_param_into(&mut self, param: Param, state: MzMLParserState) {
+    pub fn fill_param_into_view(&'outer mut self, param: ParamCow<'inner>, state: MzMLParserState) {
         match state {
-            MzMLParserState::Spectrum => {
-                self.fill_spectrum(param);
-            }
             MzMLParserState::ScanList => {
                 if param.is_controlled() {
                     if let Some(comb) = ScanCombination::from_accession(
@@ -821,7 +819,7 @@ impl<'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
                     }
                     _ => event.add_param(param.into()),
                 }
-            }
+            },
             MzMLParserState::ScanWindowList => self
                 .acquisition
                 .scans
@@ -829,13 +827,13 @@ impl<'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
                 .unwrap()
                 .add_param(param.into()),
             MzMLParserState::ScanWindow => {
-                self.fill_scan_window(param);
+                self.fill_scan_window(param.into());
             }
             MzMLParserState::IsolationWindow => {
-                self.fill_isolation_window(param);
+                self.fill_isolation_window(param.into());
             }
             MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
-                self.fill_selected_ion(param);
+                self.fill_selected_ion(param.into());
             }
             MzMLParserState::Activation => {
                 if Activation::is_param_activation(&param)
@@ -862,11 +860,99 @@ impl<'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
                 warn!("cvParam found for {:?} where none are allowed", &state);
             }
             _ => {}
+        }
+    }
+
+    pub fn fill_param_into(&mut self, param: Param, state: MzMLParserState) {
+        match state {
+            MzMLParserState::Spectrum => {
+                self.fill_spectrum(param);
+            }
+            MzMLParserState::ScanList => {
+                if param.is_controlled() {
+                    if let Some(comb) = ScanCombination::from_accession(
+                        param.controlled_vocabulary.unwrap(),
+                        param.accession.unwrap(),
+                    ) {
+                        self.acquisition.combination = comb
+                    } else {
+                        self.acquisition.add_param(param)
+                    }
+                } else {
+                    self.acquisition.add_param(param)
+                }
+            }
+            MzMLParserState::Scan => {
+                let event = self.acquisition.scans.last_mut().unwrap();
+                match param.name.as_bytes() {
+                    b"scan start time" => {
+                        let value: f64 = param
+                            .coerce()
+                            .expect("Expected floating point number for scan time");
+                        let value = match &param.unit {
+                            Unit::Minute => value,
+                            Unit::Second => value * 60.0,
+                            Unit::Millisecond => value * 60000.0,
+                            _ => {
+                                warn!("Could not infer unit for {:?}", param);
+                                value
+                            }
+                        };
+                        event.start_time = value;
+                    }
+                    b"ion injection time" => {
+                        event.injection_time = param
+                            .coerce()
+                            .expect("Expected floating point number for injection time");
+                    }
+                    _ => event.add_param(param),
+                }
+            }
+            MzMLParserState::ScanWindowList => self
+                .acquisition
+                .scans
+                .last_mut()
+                .unwrap()
+                .add_param(param),
+            MzMLParserState::ScanWindow => {
+                self.fill_scan_window(param);
+            }
+            MzMLParserState::IsolationWindow => {
+                self.fill_isolation_window(param);
+            }
+            MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
+                self.fill_selected_ion(param);
+            }
+            MzMLParserState::Activation => {
+                if Activation::is_param_activation(&param)
+                    && self.precursor.activation.method().is_none()
+                {
+                    *self.precursor.activation.method_mut() = Some(param);
+                } else {
+                    match param.name.as_ref() {
+                        "collision energy" | "activation energy" => {
+                            self.precursor.activation.energy =
+                                param.coerce().expect("Failed to parse collision energy");
+                        }
+                        &_ => {
+                            self.precursor.activation.add_param(param);
+                        }
+                    }
+                }
+            }
+            MzMLParserState::BinaryDataArrayList => {}
+            MzMLParserState::BinaryDataArray => {
+                self.fill_binary_data_array(param);
+            }
+            MzMLParserState::Precursor | MzMLParserState::PrecursorList => {
+                warn!("cvParam found for {:?} where none are allowed", &state);
+            }
+            _ => {}
         };
     }
 }
 
-impl<'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
+impl<'inner, 'outer: 'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
     for MzMLSpectrumBuilder<'inner, C, D>
 {
     fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult {

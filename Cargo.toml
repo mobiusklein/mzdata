@@ -25,6 +25,10 @@ documentation = "https://docs.rs/mzdata"
 name = "mzdata"
 # src = "src/main.rs"
 
+[[example]]
+name = "async_mzcat"
+required-features = ["async"]
+
 
 [lib]
 name = "mzdata"
