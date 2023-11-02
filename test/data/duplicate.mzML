@@ -78,7 +78,7 @@
     </dataProcessingList>
     <run id="1" defaultInstrumentConfigurationRef="IC1" defaultSourceFileRef="RAW1">
       <spectrumList count="48" defaultDataProcessingRef="pwiz_Reader_Thermo_conversion">
-        <spectrum id="controllerType=0 controllerNumber=1 scan=1" index="0">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=1" index="0" defaultArrayLength="19914">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -113,7 +113,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=2" index="1">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=2" index="1" defaultArrayLength="19800">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -148,7 +148,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=3" index="2">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=3" index="2" defaultArrayLength="485">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -203,7 +203,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=4" index="3">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=4" index="3" defaultArrayLength="1006">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -258,7 +258,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=5" index="4">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=5" index="4" defaultArrayLength="837">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -313,7 +313,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=6" index="5">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=6" index="5" defaultArrayLength="650">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -368,7 +368,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=7" index="6">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=7" index="6" defaultArrayLength="762">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -423,7 +423,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=8" index="7">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=8" index="7" defaultArrayLength="15238">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -458,7 +458,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=9" index="8">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=9" index="8" defaultArrayLength="19800">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -493,7 +493,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=10" index="9">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=10" index="9" defaultArrayLength="552">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -548,7 +548,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=11" index="10">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=11" index="10" defaultArrayLength="941">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -603,7 +603,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=12" index="11">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=12" index="11" defaultArrayLength="635">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -658,7 +658,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=13" index="12">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=13" index="12" defaultArrayLength="792">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -713,7 +713,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=14" index="13">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=14" index="13" defaultArrayLength="669">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -768,7 +768,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=15" index="14">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=15" index="14" defaultArrayLength="17468">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -803,7 +803,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=16" index="15">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=16" index="15" defaultArrayLength="19800">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -838,7 +838,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=17" index="16">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=17" index="16" defaultArrayLength="579">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -893,7 +893,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=18" index="17">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=18" index="17" defaultArrayLength="916">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -948,7 +948,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=19" index="18">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=19" index="18" defaultArrayLength="670">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1003,7 +1003,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=20" index="19">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=20" index="19" defaultArrayLength="674">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1058,7 +1058,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=21" index="20">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=21" index="20" defaultArrayLength="891">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1113,7 +1113,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=22" index="21">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=22" index="21" defaultArrayLength="17758">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1148,7 +1148,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=23" index="22">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=23" index="22" defaultArrayLength="19800">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1183,7 +1183,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=24" index="23">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=24" index="23" defaultArrayLength="579">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1238,7 +1238,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=25" index="24">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=25" index="24" defaultArrayLength="938">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1293,7 +1293,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=26" index="25">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=26" index="25" defaultArrayLength="789">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1348,7 +1348,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=27" index="26">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=27" index="26" defaultArrayLength="687">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1403,7 +1403,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=28" index="27">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=28" index="27" defaultArrayLength="865">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1458,7 +1458,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=29" index="28">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=29" index="28" defaultArrayLength="20710">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1493,7 +1493,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=30" index="29">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=30" index="29" defaultArrayLength="19800">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1528,7 +1528,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=31" index="30">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=31" index="30" defaultArrayLength="938">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1583,7 +1583,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=32" index="31">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=32" index="31" defaultArrayLength="653">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1638,7 +1638,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=33" index="32">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=33" index="32" defaultArrayLength="702">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1693,7 +1693,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=34" index="33">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=34" index="33" defaultArrayLength="587">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1748,7 +1748,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=35" index="34">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=35" index="34" defaultArrayLength="16847">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1783,7 +1783,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=36" index="35">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=36" index="35" defaultArrayLength="19800">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1818,7 +1818,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=37" index="36">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=37" index="36" defaultArrayLength="572">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1873,7 +1873,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=38" index="37">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=38" index="37" defaultArrayLength="1064">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1928,7 +1928,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=39" index="38">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=39" index="38" defaultArrayLength="653">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -1983,7 +1983,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=40" index="39">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=40" index="39" defaultArrayLength="875">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -2038,7 +2038,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=41" index="40">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=41" index="40" defaultArrayLength="754">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -2093,7 +2093,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=42" index="41">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=42" index="41" defaultArrayLength="33335">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -2128,7 +2128,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=43" index="42">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=43" index="42" defaultArrayLength="19800">
           <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="1"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -2163,7 +2163,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=44" index="43">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=44" index="43" defaultArrayLength="611">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -2218,7 +2218,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=45" index="44">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=45" index="44" defaultArrayLength="1010">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -2273,7 +2273,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=46" index="45">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=46" index="45" defaultArrayLength="713">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -2328,7 +2328,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=47" index="46">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=47" index="46" defaultArrayLength="659">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -2383,7 +2383,7 @@
             </binaryDataArray>
           </binaryDataArrayList>
         </spectrum>
-        <spectrum id="controllerType=0 controllerNumber=1 scan=48" index="47">
+        <spectrum id="controllerType=0 controllerNumber=1 scan=48" index="47" defaultArrayLength="636">
           <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
           <cvParam accession="MS:1000511" cvRef="MS" name="ms level" value="2"/>
           <cvParam accession="MS:1000130" cvRef="MS" name="positive scan"/>
@@ -2445,55 +2445,55 @@
 <indexList count="1">
   <index name="spectrum">
     <offset idRef="controllerType=0 controllerNumber=1 scan=1">4496</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=2">219686</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=3">402880</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=4">411862</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=5">425681</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=6">437889</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=7">448400</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=8">459988</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=9">624522</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=10">815542</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=11">825156</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=12">838396</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=13">848744</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=14">860558</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=15">871262</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=16">1058968</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=17">1242694</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=18">1252563</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=19">1265548</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=20">1276242</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=21">1287014</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=22">1299761</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=23">1489614</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=24">1654452</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=25">1664316</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=26">1677486</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=27">1689264</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=28">1700088</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=29">1712598</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=30">1934034</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=31">2113423</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=32">2126625</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=33">2137162</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=34">2148161</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=35">2158095</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=36">2339172</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=37">2506614</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=38">2516405</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=39">2530807</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=40">2541317</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=41">2553912</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=42">2565393</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=43">2922567</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=44">3107881</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=45">3118046</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=46">3131899</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=47">3142986</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=48">3153616</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=2">219713</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=3">402934</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=4">411941</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=5">425786</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=6">438019</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=7">448555</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=8">460168</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=9">624729</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=10">815776</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=11">825415</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=12">838680</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=13">849053</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=14">860892</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=15">871621</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=16">1059354</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=17">1243107</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=18">1253001</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=19">1266011</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=20">1276730</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=21">1287527</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=22">1300299</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=23">1490179</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=24">1655044</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=25">1664933</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=26">1678128</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=27">1689931</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=28">1700780</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=29">1713315</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=30">1934778</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=31">2114194</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=32">2127421</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=33">2137983</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=34">2149007</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=35">2158966</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=36">2340070</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=37">2507539</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=38">2517355</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=39">2531783</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=40">2542318</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=41">2554938</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=42">2566444</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=43">2923645</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=44">3108986</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=45">3119176</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=46">3133055</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=47">3144167</offset>
+    <offset idRef="controllerType=0 controllerNumber=1 scan=48">3154822</offset>
   </index>
 </indexList>
-<indexListOffset>3164061</indexListOffset>
-<fileChecksum>aad47bee2a9254c22458fc342180d57d</fileChecksum>
+<indexListOffset>3165292</indexListOffset>
+<fileChecksum>74d835c08d147fde73ea6d725f33711c</fileChecksum>
 </indexedmzML>

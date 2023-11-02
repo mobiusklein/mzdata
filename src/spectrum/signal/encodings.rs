@@ -1,4 +1,4 @@
-use std::{fmt::{self, Formatter}, ops::Mul};
+use std::{fmt::{self, Formatter}, ops::Mul, io};
 use bytemuck::{self, Pod};
 
 use num_traits::Float;
@@ -180,6 +180,18 @@ impl std::fmt::Display for ArrayRetrievalError {
 }
 
 impl std::error::Error for ArrayRetrievalError {}
+
+
+impl From<ArrayRetrievalError> for io::Error {
+    fn from(value: ArrayRetrievalError) -> Self {
+        match value {
+            ArrayRetrievalError::NotFound => io::Error::new(io::ErrorKind::NotFound, value),
+            ArrayRetrievalError::DecompressionError(e) => io::Error::new(io::ErrorKind::InvalidData, e),
+            ArrayRetrievalError::DecodeError => io::Error::new(io::ErrorKind::InvalidData, value),
+            ArrayRetrievalError::DataTypeSizeMismatch => io::Error::new(io::ErrorKind::InvalidData, value),
+        }
+    }
+}
 
 #[cfg(feature = "numpress")]
 impl From<numpress::Error> for ArrayRetrievalError {

@@ -3,6 +3,9 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::hash_map::{Iter, IterMut};
 
+#[cfg(feature = "parallelism")]
+use rayon::prelude::*;
+
 use log::warn;
 use mzpeaks::Tolerance;
 
@@ -40,6 +43,21 @@ impl BinaryArrayMap {
     }
 
     pub fn decode_all_arrays(&mut self) -> Result<(), ArrayRetrievalError> {
+        #[cfg(not(feature = "parallelism"))]
+        {
+            self._decode_all_arrays()
+        }
+        #[cfg(feature = "parallelism")]
+        {
+            if self.len() > 2 {
+                self._decode_all_arrays_parallel()
+            } else {
+                self._decode_all_arrays()
+            }
+        }
+    }
+
+    fn _decode_all_arrays(&mut self) -> Result<(), ArrayRetrievalError> {
         for (_key, value) in self.iter_mut() {
             match value.compression {
                 BinaryCompressionType::Decoded => {}
@@ -49,6 +67,20 @@ impl BinaryArrayMap {
             }
         }
         Ok(())
+    }
+
+    #[cfg(feature = "parallelism")]
+    fn _decode_all_arrays_parallel(&mut self)  -> Result<(), ArrayRetrievalError> {
+        let res: Result<(), ArrayRetrievalError> = self.iter_mut().par_bridge().map(|(_key, value)| {
+            match value.compression {
+                BinaryCompressionType::Decoded => {}
+                _ => {
+                    value.decode_and_store()?;
+                }
+            }
+            Ok(())
+        }).collect::<Result<(), ArrayRetrievalError>>();
+        res
     }
 
     pub fn decode_array(&mut self, array_type: &ArrayType) -> Result<(), ArrayRetrievalError> {
@@ -166,4 +198,45 @@ impl BinaryArrayMap {
         }
     }
 
+}
+
+
+#[cfg(test)]
+mod test {
+    use crate::spectrum::BinaryDataArrayType;
+
+    use super::*;
+    use std::io::{self, prelude::*};
+    use std::fs;
+
+    fn make_array_from_file() -> io::Result<DataArray> {
+        let mut fh = fs::File::open("./test/data/mz_f64_zlib_bas64.txt")?;
+        let mut buf = String::new();
+        fh.read_to_string(&mut buf)?;
+        let bytes: Vec<u8> = buf.into();
+        let mut da = DataArray::wrap(&ArrayType::MZArray, BinaryDataArrayType::Float64, bytes);
+        da.compression = BinaryCompressionType::Zlib;
+        Ok(da)
+    }
+
+    #[test]
+    fn test_construction() -> io::Result<()> {
+        let da = make_array_from_file()?;
+        let mut map = BinaryArrayMap::new();
+        assert!(!map.has_array(&ArrayType::MZArray));
+        map.add(da);
+        assert!(map.has_array(&ArrayType::MZArray));
+        Ok(())
+    }
+
+    #[test]
+    fn test_decode() -> io::Result<()> {
+        let da = make_array_from_file()?;
+        let mut map = BinaryArrayMap::new();
+        map.add(da);
+        assert_eq!(map.get(&ArrayType::MZArray).unwrap().compression, BinaryCompressionType::Zlib);
+        map.decode_all_arrays()?;
+        assert_eq!(map.get(&ArrayType::MZArray).unwrap().compression, BinaryCompressionType::Decoded);
+        Ok(())
+    }
 }

@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 
 use log::warn;
 
+use mzpeaks::PeakCollection;
 use quick_xml::events::BytesDecl;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
@@ -945,6 +946,18 @@ where
         attrib!("id", spectrum.id(), outer);
         let count = self.spectrum_counter.to_string();
         attrib!("index", count, outer);
+        let default_array_len = if let Some(mass_peaks) = &spectrum.deconvoluted_peaks {
+            mass_peaks.len()
+        } else if let Some(mz_peaks) = &spectrum.peaks {
+            mz_peaks.len()
+        } else if let Some(arrays) = &spectrum.arrays {
+            arrays.mzs().len()
+        } else {
+            0
+        }.to_string();
+
+        attrib!("defaultArrayLength", default_array_len, outer);
+
         self.handle.write_event(Event::Start(outer.borrow()))?;
         self.spectrum_counter += 1;
 

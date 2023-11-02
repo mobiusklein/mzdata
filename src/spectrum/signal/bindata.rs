@@ -5,6 +5,7 @@ use std::mem;
 
 use base64;
 use base64::{engine::general_purpose::STANDARD as Base64Std, Engine as _};
+use base64_simd;
 use bytemuck::Pod;
 use flate2::write::{ZlibDecoder, ZlibEncoder};
 use flate2::Compression;
@@ -143,9 +144,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         match compression {
             BinaryCompressionType::Zlib => {
                 let compressed = Self::compress_zlib(&bytestring);
-                Base64Std.encode(compressed).into()
+                base64_simd::STANDARD.encode_type::<Bytes>(&compressed)
             }
-            BinaryCompressionType::NoCompression => Base64Std.encode(bytestring.as_ref()).into(),
+            BinaryCompressionType::NoCompression => base64_simd::STANDARD.encode_type::<Bytes>(bytestring.as_ref()),
             BinaryCompressionType::Decoded => panic!("Should never happen"),
             _ => {
                 panic!("Compresion type {:?} is unsupported", compression)
@@ -208,14 +209,12 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         match self.compression {
             BinaryCompressionType::Decoded => Ok(Cow::Borrowed(&self.data.as_slice())),
             BinaryCompressionType::NoCompression => {
-                let bytestring = Base64Std
-                    .decode(&self.data)
+                let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
                     .expect("Failed to decode base64 array");
                 Ok(Cow::Owned(bytestring))
             }
             BinaryCompressionType::Zlib => {
-                let bytestring = Base64Std
-                    .decode(&self.data)
+                let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
                     .expect("Failed to decode base64 array");
                 Ok(Cow::Owned(Self::decompres_zlib(&bytestring)))
             }
@@ -395,5 +394,34 @@ impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan>
 
     fn dtype(&self) -> BinaryDataArrayType {
         self.source.dtype()
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::io;
+    use std::fs;
+
+    use super::DataArray;
+
+    fn make_array_from_file() -> io::Result<DataArray> {
+        let mut fh = fs::File::open("./test/data/mz_f64_zlib_bas64.txt")?;
+        let mut buf = String::new();
+        fh.read_to_string(&mut buf)?;
+        let bytes: Vec<u8> = buf.into();
+        let mut da = DataArray::wrap(&ArrayType::MZArray, BinaryDataArrayType::Float64, bytes);
+        da.compression = BinaryCompressionType::Zlib;
+        Ok(da)
+    }
+
+    #[test]
+    fn test_decode() -> io::Result<()> {
+        let mut da = make_array_from_file()?;
+        da.decode_and_store()?;
+        let view = da.to_f64()?;
+        assert_eq!(view.len(), 19800);
+        Ok(())
     }
 }
