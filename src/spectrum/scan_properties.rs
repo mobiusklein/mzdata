@@ -142,6 +142,17 @@ impl Acquisition {
         self.scans.first_mut()
     }
 
+    pub fn last_scan(&self) -> Option<&ScanEvent> {
+        self.scans.last()
+    }
+
+    pub fn last_scan_mut(&mut self) -> Option<&mut ScanEvent> {
+        if self.scans.is_empty() {
+            self.scans.push(ScanEvent::default());
+        }
+        self.scans.last_mut()
+    }
+
     pub fn instrument_configuration_ids(&self) -> Vec<u32> {
         self.scans.iter().map(|s| {
             s.instrument_configuration_id

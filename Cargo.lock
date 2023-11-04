@@ -1290,6 +1290,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-log",
+ "thiserror",
  "tokio",
 ]
 

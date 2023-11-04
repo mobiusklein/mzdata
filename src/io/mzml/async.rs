@@ -4,12 +4,14 @@ use std::marker::PhantomData;
 use std::mem;
 use std::pin::Pin;
 
-use super::MzMLSAX;
+use super::reading_shared::{
+    MzMLSAX, MzMLParserError, MzMLParserState,
+    XMLParseBase, IndexParserState, MzMLIndexingError,
+    FileMetadataBuilder, IncrementingIdMap
+};
 use super::reader::{
-    MzMLParserError, MzMLParserState, SpectrumBuilding,
-    Bytes, FileMetadataBuilder, MzMLSpectrumBuilder,
-    IndexParserState, XMLParseBase, MzMLIndexingError,
-    IncrementingIdMap
+    SpectrumBuilding,
+    Bytes, MzMLSpectrumBuilder
 };
 
 use tokio::{self, io};
@@ -56,7 +58,7 @@ pub struct MzMLReaderType<
     /// The raw reader
     pub handle: BufReader<R>,
     /// A place to store the last error the parser encountered
-    error: MzMLParserError,
+    error: Option<MzMLParserError>,
     /// A spectrum ID to byte offset for fast random access
     pub index: OffsetIndex,
     /// The description of the file's contents and the previous data files that were
@@ -89,7 +91,7 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
         let mut inst = MzMLReaderType {
             handle,
             state: MzMLParserState::Start,
-            error: MzMLParserError::default(),
+            error: None,
             buffer: Bytes::new(),
             index: OffsetIndex::new("spectrum".to_owned()),
 
@@ -132,7 +134,7 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = message;
+                            self.error = Some(message);
                         }
                     };
                 }
@@ -143,7 +145,7 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = message;
+                            self.error = Some(message);
                         }
                     };
                 }
@@ -154,7 +156,7 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = message;
+                            self.error = Some(message);
                         }
                     };
                 }
@@ -165,7 +167,7 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = message;
+                            self.error = Some(message);
                         }
                     }
                 }
@@ -180,18 +182,18 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
-                            self.error = MzMLParserError::IncompleteElementError(
+                            self.error = Some(MzMLParserError::IncompleteElementError(
                                 String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
                                 self.state,
-                            );
+                            ));
                             self.state = MzMLParserState::ParserError;
                         }
                     }
                     _ => {
-                        self.error = MzMLParserError::IncompleteElementError(
+                        self.error = Some(MzMLParserError::IncompleteElementError(
                             String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
                             self.state,
-                        );
+                        ));
                         self.state = MzMLParserState::ParserError;
                     }
                 },
@@ -218,9 +220,9 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
             MzMLParserState::ParserError => {
-                let mut error = MzMLParserError::NoError;
+                let mut error = None;
                 mem::swap(&mut error, &mut self.error);
-                Err(error)
+                Err(error.unwrap())
             }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
@@ -245,7 +247,7 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = message;
+                            self.error = Some(message);
                         }
                     };
                 }
@@ -256,7 +258,7 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = message;
+                            self.error = Some(message);
                         }
                     };
                 }
@@ -267,7 +269,7 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = message;
+                            self.error = Some(message);
                         }
                     };
                 }
@@ -278,7 +280,7 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = message;
+                            self.error = Some(message);
                         }
                     }
                 }
@@ -293,18 +295,18 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
-                            self.error = MzMLParserError::IncompleteElementError(
+                            self.error = Some(MzMLParserError::IncompleteElementError(
                                 String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
                                 self.state,
-                            );
+                            ));
                             self.state = MzMLParserState::ParserError;
                         }
                     }
                     _ => {
-                        self.error = MzMLParserError::IncompleteElementError(
+                        self.error = Some(MzMLParserError::IncompleteElementError(
                             String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
                             self.state,
-                        );
+                        ));
                         self.state = MzMLParserState::ParserError;
                     }
                 },
@@ -322,9 +324,9 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
         match self.state {
             MzMLParserState::SpectrumDone => Ok((offset, accumulator)),
             MzMLParserState::ParserError => {
-                let mut error = MzMLParserError::NoError;
+                let mut error = None;
                 mem::swap(&mut error, &mut self.error);
-                Err(error)
+                Err(error.unwrap())
             }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }

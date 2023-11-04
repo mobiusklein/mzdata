@@ -83,6 +83,7 @@ filename = "0.1.1"
 numpress = { version = "1.1.0", optional = true }
 bytemuck = { version = "1.14.0", features = ["extern_crate_alloc"]}
 base64-simd = "0.8.0"
+thiserror = "1.0.50"
 
 
 [dev-dependencies]

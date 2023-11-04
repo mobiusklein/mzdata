@@ -17,15 +17,20 @@ and a complementary reverse conversion for writing.
 */
 
 mod reader;
+mod reading_shared;
 mod writer;
 
 #[cfg(feature = "async")]
 mod r#async;
 
+pub use reading_shared::{
+    CVParamParse, MzMLParserError, MzMLParserState, MzMLSAX, ParserResult, XMLParseBase,
+    FileMetadataBuilder, IncrementingIdMap
+};
+
 pub use crate::io::mzml::reader::{
-    CVParamParse, FileMetadataBuilder, MzMLParserError, MzMLParserState, MzMLReader,
-    MzMLReaderType, ParserResult, SpectrumBuilding, XMLParseBase, MzMLSAX, MzMLSpectrumBuilder,
-    IncrementingIdMap
+    MzMLReader, MzMLReaderType, MzMLSpectrumBuilder,
+    SpectrumBuilding,
 };
 
 pub(crate) use crate::io::mzml::reader::is_mzml;
@@ -33,4 +38,6 @@ pub(crate) use crate::io::mzml::reader::is_mzml;
 pub use crate::io::mzml::writer::{MzMLWriter, MzMLWriterState, MzMLWriterType, WriterResult};
 
 #[cfg(feature = "async")]
-pub use crate::io::mzml::r#async::{MzMLReaderType as AsyncMzMLReaderType, MzMLReader as AsyncMzMLReader};
+pub use crate::io::mzml::r#async::{
+    MzMLReader as AsyncMzMLReader, MzMLReaderType as AsyncMzMLReaderType,
+};
