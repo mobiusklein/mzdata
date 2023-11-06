@@ -250,7 +250,7 @@ pub enum SpectrumConversionError {
     #[error("No peak data of any kind was found")]
     NoPeakData,
     #[error("An error occurred while accessing raw data arrays: {0}")]
-    ArrayRetrievalError(#[from] ArrayRetrievalError),
+    ArrayRetrievalError(#[from] #[source] ArrayRetrievalError),
 }
 
 #[derive(Debug, Clone, Error)]
@@ -260,9 +260,9 @@ pub enum SpectrumProcessingError {
     #[error("An error occurred while peak picking: {0:?}")]
     PeakPickerError(PeakPickerError),
     #[error("An error occurred while trying to convert spectrum types: {0}")]
-    SpectrumConversionError(#[from] SpectrumConversionError),
+    SpectrumConversionError(#[from] #[source] SpectrumConversionError),
     #[error("An error occurred while accessing raw data arrays: {0}")]
-    ArrayRetrievalError(#[from] ArrayRetrievalError),
+    ArrayRetrievalError(#[from] #[source] ArrayRetrievalError),
 }
 
 impl<'transient, 'lifespan: 'transient> RawSpectrum {

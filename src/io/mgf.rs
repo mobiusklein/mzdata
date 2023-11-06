@@ -62,7 +62,7 @@ pub enum MGFError {
     #[error("Too many columns for peak line encountered")]
     TooManyColumnsForPeakLine,
     #[error("Encountered an IO error: {0}")]
-    IOError(#[from] io::Error),
+    IOError(#[from] #[source] io::Error),
 }
 
 #[derive(Debug, Default)]
