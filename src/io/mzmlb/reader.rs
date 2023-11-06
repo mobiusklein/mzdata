@@ -540,56 +540,61 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
         let elt_name = event.name();
         match elt_name.as_ref() {
             b"cvParam" | b"userParam" => {
-                match self.inner.handle_param(event, reader_position, state) {
-                    Ok(param) => {
-                        match &state {
-                            MzMLParserState::BinaryDataArray => {
-                                if !param.is_controlled()
-                                    || param.controlled_vocabulary.unwrap()
-                                        != ControlledVocabulary::MS
-                                {
-                                    self.inner.fill_param_into(param, state)
-                                } else {
-                                    match param.accession.unwrap() {
-                                        // external HDF5 dataset
-                                        1002841 => {
-                                            if self.current_data_range_query.name.len() == 0
-                                                && !param.value.starts_with("/")
-                                            {
-                                                self.current_data_range_query
-                                                    .name
-                                                    .extend("/".chars());
+                match &state {
+                    MzMLParserState::BinaryDataArray => {
+                        match MzMLSpectrumBuilder::<'a, C, D>::handle_param(event, reader_position, state) {
+                            Ok(param) => {
+                                match &state {
+                                    MzMLParserState::BinaryDataArray => {
+                                        if !param.is_controlled()
+                                            || param.controlled_vocabulary.unwrap()
+                                                != ControlledVocabulary::MS
+                                        {
+                                            self.inner.fill_param_into(param, state)
+                                        } else {
+                                            match param.accession.unwrap() {
+                                                // external HDF5 dataset
+                                                1002841 => {
+                                                    if self.current_data_range_query.name.len() == 0
+                                                        && !param.value.starts_with("/")
+                                                    {
+                                                        self.current_data_range_query
+                                                            .name
+                                                            .extend("/".chars());
+                                                    }
+                                                    self.current_data_range_query
+                                                        .name
+                                                        .extend(param.value.chars());
+                                                }
+                                                // external offset
+                                                1002842 => {
+                                                    self.current_data_range_query.offset = param
+                                                        .value
+                                                        .parse()
+                                                        .expect("Failed to extract external offset")
+                                                }
+                                                // external array length
+                                                1002843 => {
+                                                    self.current_data_range_query.length = param
+                                                        .value
+                                                        .parse()
+                                                        .expect("Failed to extract external array length")
+                                                }
+                                                _ => self.inner.fill_param_into(param, state),
                                             }
-                                            self.current_data_range_query
-                                                .name
-                                                .extend(param.value.chars());
                                         }
-                                        // external offset
-                                        1002842 => {
-                                            self.current_data_range_query.offset = param
-                                                .value
-                                                .parse()
-                                                .expect("Failed to extract external offset")
-                                        }
-                                        // external array length
-                                        1002843 => {
-                                            self.current_data_range_query.length = param
-                                                .value
-                                                .parse()
-                                                .expect("Failed to extract external array length")
-                                        }
-                                        _ => self.inner.fill_param_into(param, state),
                                     }
+                                    _ => self.inner.fill_param_into(param, state),
                                 }
+                                return Ok(state);
                             }
-                            _ => self.inner.fill_param_into(param, state),
+                            Err(err) => return Err(err),
                         }
-                        return Ok(state);
-                    }
-                    Err(err) => return Err(err),
+                    },
+                    _ => return self.inner.empty_element(event, state, reader_position)
                 }
             }
-            &_ => {}
+            _ => {}
         }
         Ok(state)
     }
@@ -661,7 +666,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
         self.inner.into_spectrum(spectrum)
     }
 
-    fn fill_spectrum(&mut self, param: Param) {
+    fn fill_spectrum<P: ParamLike + Into<Param>>(&mut self, param: P) {
         self.inner.fill_spectrum(param)
     }
 

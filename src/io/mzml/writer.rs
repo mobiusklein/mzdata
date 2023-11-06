@@ -77,7 +77,7 @@ const CENTROID_SPECTRUM: ParamCow =
 #[derive(Debug, Error)]
 pub enum MzMLWriterError {
     #[error("An XML error occurred: {0}")]
-    XMLError(#[from] XMLError),
+    XMLError(#[from] #[source] XMLError),
 
     #[error("Attempted to transition from {from_state:?} to {to_state:?}")]
     StateTransitionError {
@@ -85,7 +85,7 @@ pub enum MzMLWriterError {
         to_state: MzMLWriterState,
     },
     #[error("An IO error occurred: {0}")]
-    IOError(#[from] io::Error),
+    IOError(#[from] #[source] io::Error),
     #[error("Attempted to perform an invalid action {0:?}")]
     InvalidActionError(MzMLWriterState),
 }

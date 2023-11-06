@@ -94,9 +94,9 @@ pub enum MzMLParserError {
     #[error("An incomplete element {0} was encountered in {1:?}")]
     IncompleteElementError(String, MzMLParserState),
     #[error("An XML error {1:?} was encountered in {0:?}")]
-    XMLError(MzMLParserState, XMLError),
+    XMLError(MzMLParserState, #[source] XMLError),
     #[error("An IO error {1} was encountered in {0:?}")]
-    IOError(MzMLParserState, io::Error),
+    IOError(MzMLParserState, #[source] io::Error),
 }
 
 pub type ParserResult = Result<MzMLParserState, MzMLParserError>;
@@ -115,7 +115,6 @@ Common `CVParam` parsing behaviors
 */
 pub trait CVParamParse: XMLParseBase {
     fn handle_param_borrowed<'inner, 'outer: 'inner + 'event, 'event: 'inner>(
-        &'outer self,
         event: &'event BytesStart<'event>,
         reader_position: usize,
         state: MzMLParserState,
@@ -188,7 +187,7 @@ pub trait CVParamParse: XMLParseBase {
                     b"unitCvRef" => {}
                     _ => {}
                 },
-                Err(msg) => return Err(self.handle_xml_error(msg.into(), state)),
+                Err(msg) => return Err(MzMLParserError::XMLError(state, msg.into())),
             }
         }
         let param = ParamCow::new(
@@ -202,7 +201,6 @@ pub trait CVParamParse: XMLParseBase {
     }
 
     fn handle_param(
-        &self,
         event: &BytesStart,
         reader_position: usize,
         state: MzMLParserState,
@@ -278,7 +276,7 @@ pub trait CVParamParse: XMLParseBase {
                     b"unitCvRef" => {}
                     _ => {}
                 },
-                Err(msg) => return Err(self.handle_xml_error(msg.into(), state)),
+                Err(msg) => return Err(MzMLParserError::XMLError(state, msg.into())),
             }
         }
         if let Some(unit_acc) = unit_accession {
@@ -322,9 +320,9 @@ pub enum MzMLIndexingError {
     #[error("Offset index not found")]
     OffsetNotFound,
     #[error("XML error {0} occurred while reading out mzML index")]
-    XMLError(#[from] XMLError),
+    XMLError(#[from] #[source] XMLError),
     #[error("IO error {0} occurred while reading out mzML index")]
-    IOError(#[from] io::Error),
+    IOError(#[from] #[source] io::Error),
 }
 
 
@@ -799,7 +797,7 @@ impl<'a> FileMetadataBuilder<'a> {
     ) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
-            b"cvParam" | b"userParam" => match self.handle_param(event, reader_position, state) {
+            b"cvParam" | b"userParam" => match Self::handle_param(event, reader_position, state) {
                 Ok(param) => {
                     self.fill_param_into(param, state);
                     return Ok(state);

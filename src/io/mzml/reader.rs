@@ -67,7 +67,7 @@ pub trait SpectrumBuilding<
     /// Move all the data into the provided `spectrum` reference
     fn into_spectrum(self, spectrum: &mut S);
 
-    fn fill_spectrum(&mut self, param: Param);
+    fn fill_spectrum<P: ParamLike + Into<Param>>(&mut self, param: P);
 
     fn fill_binary_data_array<P: ParamLike + Into<Param>>(&mut self, param: P) {
         if param.is_ms() {
@@ -378,8 +378,8 @@ impl<
         spectrum.arrays = Some(self.arrays);
     }
 
-    fn fill_spectrum(&mut self, param: Param) {
-        match param.name.as_ref() {
+    fn fill_spectrum<P: ParamLike + Into<Param>>(&mut self, param: P) {
+        match param.name() {
             "ms level" => {
                 self.ms_level = param.coerce().expect("Failed to parse ms level");
             }
@@ -451,91 +451,6 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
         }
 
         spectrum.arrays = Some(self.arrays.clone());
-    }
-
-    pub fn fill_param_into_view(&'outer mut self, param: ParamCow<'inner>, state: MzMLParserState) {
-        match state {
-            MzMLParserState::ScanList => {
-                if param.is_controlled() {
-                    if let Some(comb) = ScanCombination::from_accession(
-                        param.controlled_vocabulary.unwrap(),
-                        param.accession.unwrap(),
-                    ) {
-                        self.acquisition.combination = comb
-                    } else {
-                        self.acquisition.add_param(param.into())
-                    }
-                } else {
-                    self.acquisition.add_param(param.into())
-                }
-            }
-            MzMLParserState::Scan => {
-                let event = self.acquisition.scans.last_mut().unwrap();
-                match param.name.as_bytes() {
-                    b"scan start time" => {
-                        let value: f64 = param
-                            .coerce()
-                            .expect("Expected floating point number for scan time");
-                        let value = match &param.unit {
-                            Unit::Minute => value,
-                            Unit::Second => value * 60.0,
-                            Unit::Millisecond => value * 60000.0,
-                            _ => {
-                                warn!("Could not infer unit for {:?}", param);
-                                value
-                            }
-                        };
-                        event.start_time = value;
-                    }
-                    b"ion injection time" => {
-                        event.injection_time = param
-                            .coerce()
-                            .expect("Expected floating point number for injection time");
-                    }
-                    _ => event.add_param(param.into()),
-                }
-            }
-            MzMLParserState::ScanWindowList => self
-                .acquisition
-                .scans
-                .last_mut()
-                .unwrap()
-                .add_param(param.into()),
-            MzMLParserState::ScanWindow => {
-                self.fill_scan_window(param.into());
-            }
-            MzMLParserState::IsolationWindow => {
-                self.fill_isolation_window(param.into());
-            }
-            MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
-                self.fill_selected_ion(param.into());
-            }
-            MzMLParserState::Activation => {
-                if Activation::is_param_activation(&param)
-                    && self.precursor.activation.method().is_none()
-                {
-                    *self.precursor.activation.method_mut() = Some(param.into());
-                } else {
-                    match param.name.as_ref() {
-                        "collision energy" | "activation energy" => {
-                            self.precursor.activation.energy =
-                                param.coerce().expect("Failed to parse collision energy");
-                        }
-                        &_ => {
-                            self.precursor.activation.add_param(param.into());
-                        }
-                    }
-                }
-            }
-            MzMLParserState::BinaryDataArrayList => {}
-            MzMLParserState::BinaryDataArray => {
-                self.fill_binary_data_array(param);
-            }
-            MzMLParserState::Precursor | MzMLParserState::PrecursorList => {
-                warn!("cvParam found for {:?} where none are allowed", &state);
-            }
-            _ => {}
-        }
     }
 
     pub fn fill_param_into(&mut self, param: Param, state: MzMLParserState) {
@@ -751,13 +666,103 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
     ) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
-            b"cvParam" | b"userParam" => match self.handle_param(event, reader_position, state) {
+            // b"cvParam" | b"userParam" => match Self::handle_param(event, reader_position, state) {
+            //     Ok(param) => {
+            //         self.fill_param_into(param, state);
+            //         return Ok(state);
+            //     }
+            //     Err(err) => return Err(err),
+            // },
+            b"cvParam" | b"userParam" => match Self::handle_param_borrowed(event, reader_position, state) {
                 Ok(param) => {
-                    self.fill_param_into(param, state);
-                    return Ok(state);
-                }
+                    match state {
+                        MzMLParserState::Spectrum => {
+                            self.fill_spectrum(param)
+                        }
+                        MzMLParserState::ScanList => {
+                            if param.is_controlled() {
+                                if let Some(comb) = ScanCombination::from_accession(
+                                    param.controlled_vocabulary.unwrap(),
+                                    param.accession.unwrap(),
+                                ) {
+                                    self.acquisition.combination = comb
+                                } else {
+                                    self.acquisition.add_param(param.into())
+                                }
+                            } else {
+                                self.acquisition.add_param(param.into())
+                            }
+                        }
+                        MzMLParserState::Scan => {
+                            let event = self.acquisition.scans.last_mut().unwrap();
+                            match param.name.as_bytes() {
+                                b"scan start time" => {
+                                    let value: f64 = param
+                                        .coerce()
+                                        .expect("Expected floating point number for scan time");
+                                    let value = match &param.unit {
+                                        Unit::Minute => value,
+                                        Unit::Second => value * 60.0,
+                                        Unit::Millisecond => value * 60000.0,
+                                        _ => {
+                                            warn!("Could not infer unit for {:?}", param);
+                                            value
+                                        }
+                                    };
+                                    event.start_time = value;
+                                }
+                                b"ion injection time" => {
+                                    event.injection_time = param
+                                        .coerce()
+                                        .expect("Expected floating point number for injection time");
+                                }
+                                _ => event.add_param(param.into()),
+                            }
+                        }
+                        MzMLParserState::ScanWindowList => self
+                            .acquisition
+                            .scans
+                            .last_mut()
+                            .unwrap()
+                            .add_param(param.into()),
+                        MzMLParserState::ScanWindow => {
+                            self.fill_scan_window(param.into());
+                        }
+                        MzMLParserState::IsolationWindow => {
+                            self.fill_isolation_window(param.into());
+                        }
+                        MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
+                            self.fill_selected_ion(param.into());
+                        }
+                        MzMLParserState::Activation => {
+                            if Activation::is_param_activation(&param)
+                                && self.precursor.activation.method().is_none()
+                            {
+                                *self.precursor.activation.method_mut() = Some(param.into());
+                            } else {
+                                match param.name.as_ref() {
+                                    "collision energy" | "activation energy" => {
+                                        self.precursor.activation.energy =
+                                            param.coerce().expect("Failed to parse collision energy");
+                                    }
+                                    &_ => {
+                                        self.precursor.activation.add_param(param.into());
+                                    }
+                                }
+                            }
+                        }
+                        MzMLParserState::BinaryDataArrayList => {}
+                        MzMLParserState::BinaryDataArray => {
+                            self.fill_binary_data_array(param);
+                        }
+                        MzMLParserState::Precursor | MzMLParserState::PrecursorList => {
+                            warn!("cvParam found for {:?} where none are allowed", &state);
+                        }
+                        _ => {}
+                    }
+                },
                 Err(err) => return Err(err),
-            },
+            }
             &_ => {}
         }
         Ok(state)
