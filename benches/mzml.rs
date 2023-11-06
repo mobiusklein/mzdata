@@ -8,21 +8,21 @@ use mzdata::io::prelude::*;
 fn serial(file_path: &str) {
     let file = fs::File::open(file_path).unwrap();
     let reader = MzMLReader::new(file);
-    let total: usize = reader.map(|s| s.arrays.unwrap().mzs().len()).sum();
+    let total: usize = reader.map(|s| s.arrays.unwrap().mzs().unwrap().len()).sum();
     assert_eq!(total, 305214);
 }
 
 fn serial_with_index(file_path: &str) {
     let file = fs::File::open(file_path).unwrap();
     let reader = MzMLReader::new_indexed(file);
-    let total: usize = reader.map(|s| s.arrays.unwrap().mzs().len()).sum();
+    let total: usize = reader.map(|s| s.arrays.unwrap().mzs().unwrap().len()).sum();
     assert_eq!(total, 305214);
 }
 
 fn serial_with_external_iterator(file_path: &str) {
     let file = fs::File::open(file_path).unwrap();
     let mut reader = MzMLReader::new_indexed(file);
-    let total: usize = reader.iter().map(|s| s.arrays.unwrap().mzs().len()).sum();
+    let total: usize = reader.iter().map(|s| s.arrays.unwrap().mzs().unwrap().len()).sum();
     assert_eq!(total, 305214);
 }
 

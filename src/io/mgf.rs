@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::mem;
 use std::fs;
 use std::io;
 use std::io::prelude::*;
@@ -8,26 +9,29 @@ use std::marker::PhantomData;
 use std::str;
 
 use log::warn;
+use thiserror::Error;
 
 use lazy_static::lazy_static;
+use mzpeaks::MZPeakSetType;
+use mzpeaks::MassPeakSetType;
 use regex::Regex;
 
 use mzpeaks::peak::KnownCharge;
-use mzpeaks::{
-    CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated,
-};
+use mzpeaks::{CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated};
 
 use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, Software,
 };
-use crate::params::{Param, ParamDescribed, ParamLike, ControlledVocabulary};
-use crate::spectrum::signal::{BinaryArrayMap, ArrayType, BinaryDataArrayType, DataArray, vec_as_bytes};
+use crate::params::{ControlledVocabulary, Param, ParamDescribed, ParamLike};
+use crate::spectrum::signal::{
+    vec_as_bytes, ArrayType, BinaryArrayMap, BinaryDataArrayType, BuildArrayMapFrom,
+    BuildFromArrayMap, DataArray,
+};
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
 };
 use crate::spectrum::{
-    Precursor, PrecursorSelection, SelectedIon, SpectrumBehavior,
-    SpectrumDescription,
+    Precursor, PrecursorSelection, SelectedIon, SpectrumBehavior, SpectrumDescription,
 };
 use crate::utils::neutral_mass;
 
@@ -47,23 +51,19 @@ pub enum MGFParserState {
     Error,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Error)]
 pub enum MGFError {
+    #[error("No error occurred")]
     NoError,
+    #[error("Encountered a malformed peak line")]
     MalformedPeakLine,
+    #[error("Encountered a malformed header line")]
     MalformedHeaderLine,
+    #[error("Too many columns for peak line encountered")]
     TooManyColumnsForPeakLine,
-    IOError,
+    #[error("Encountered an IO error: {0}")]
+    IOError(#[from] io::Error),
 }
-
-impl std::fmt::Display for MGFError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl std::error::Error for MGFError {}
-
 
 #[derive(Debug, Default)]
 struct SpectrumBuilderFlex<
@@ -79,42 +79,79 @@ struct SpectrumBuilderFlex<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<BinaryArrayMap> for SpectrumBuilderFlex<C, D> {
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<BinaryArrayMap>
+    for SpectrumBuilderFlex<C, D>
+{
     fn into(self) -> BinaryArrayMap {
         let mut arrays = BinaryArrayMap::new();
-        arrays.add(DataArray::wrap(&ArrayType::MZArray, BinaryDataArrayType::Float64, vec_as_bytes(self.mz_array)));
-        arrays.add(DataArray::wrap(&ArrayType::IntensityArray, BinaryDataArrayType::Float32, vec_as_bytes(self.intensity_array)));
+        arrays.add(DataArray::wrap(
+            &ArrayType::MZArray,
+            BinaryDataArrayType::Float64,
+            vec_as_bytes(self.mz_array),
+        ));
+        arrays.add(DataArray::wrap(
+            &ArrayType::IntensityArray,
+            BinaryDataArrayType::Float32,
+            vec_as_bytes(self.intensity_array),
+        ));
         if self.has_charge > 0 {
-            arrays.add(DataArray::wrap(&ArrayType::ChargeArray, BinaryDataArrayType::Int32, vec_as_bytes(self.charge_array)));
+            arrays.add(DataArray::wrap(
+                &ArrayType::ChargeArray,
+                BinaryDataArrayType::Int32,
+                vec_as_bytes(self.charge_array),
+            ));
         }
         arrays
     }
 }
 
-
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> SpectrumBuilderFlex<C, D> {
+impl<
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+    > SpectrumBuilderFlex<C, D>
+{
     pub fn into_spectrum(self, spectrum: &mut MultiLayerSpectrum<C, D>) {
         if self.has_charge > 0 {
-            spectrum.deconvoluted_peaks = Some(self.mz_array.into_iter().zip(self.intensity_array.into_iter()).zip(self.charge_array.into_iter()).map(|((mz, inten), z)| {
-                DeconvolutedPeak {
-                    neutral_mass: neutral_mass(mz, if z != 0 {z} else {1}),
-                    intensity: inten,
-                    charge: if z != 0 {z} else {1},
-                    ..Default::default()
-                }.into()
-            }).collect())
+            spectrum.deconvoluted_peaks = Some(
+                self.mz_array
+                    .into_iter()
+                    .zip(self.intensity_array.into_iter())
+                    .zip(self.charge_array.into_iter())
+                    .map(|((mz, inten), z)| {
+                        DeconvolutedPeak {
+                            neutral_mass: neutral_mass(mz, if z != 0 { z } else { 1 }),
+                            intensity: inten,
+                            charge: if z != 0 { z } else { 1 },
+                            ..Default::default()
+                        }
+                        .into()
+                    })
+                    .collect(),
+            )
         } else {
-            spectrum.peaks = Some(self.mz_array.into_iter().zip(self.intensity_array.into_iter()).map(|(mz, inten)| {
-                CentroidPeak { mz, intensity: inten, ..Default::default() }.into()
-            }).collect())
+            spectrum.peaks = Some(
+                self.mz_array
+                    .into_iter()
+                    .zip(self.intensity_array.into_iter())
+                    .map(|(mz, inten)| {
+                        CentroidPeak {
+                            mz,
+                            intensity: inten,
+                            ..Default::default()
+                        }
+                        .into()
+                    })
+                    .collect(),
+            )
         }
         spectrum.description = self.description;
     }
 }
 
-
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilderFlex<C, D>>
-    for MultiLayerSpectrum<C, D>
+impl<
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+    > From<SpectrumBuilderFlex<C, D>> for MultiLayerSpectrum<C, D>
 {
     fn from(builder: SpectrumBuilderFlex<C, D>) -> MultiLayerSpectrum<C, D> {
         let mut spec = MultiLayerSpectrum::default();
@@ -123,16 +160,19 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilderF
     }
 }
 
-
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilderFlex<C, D>>
-    for CentroidSpectrumType<C>
+impl<
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+    > From<SpectrumBuilderFlex<C, D>> for CentroidSpectrumType<C>
+where
+    MZPeakSetType<C>: BuildFromArrayMap + BuildArrayMapFrom,
+    MassPeakSetType<D>: BuildFromArrayMap + BuildArrayMapFrom,
 {
     fn from(builder: SpectrumBuilderFlex<C, D>) -> CentroidSpectrumType<C> {
         let spec: MultiLayerSpectrum<C, D> = builder.into();
         spec.try_into().unwrap()
     }
 }
-
 
 /// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
 /// The parser produces [`crate::spectrum::Spectrum`] instances. These may be converted directly into [`crate::spectrum::CentroidSpectrum`]
@@ -146,7 +186,7 @@ pub struct MGFReaderType<
     pub handle: io::BufReader<R>,
     pub state: MGFParserState,
     pub offset: usize,
-    pub error: MGFError,
+    pub error: Option<MGFError>,
     pub index: OffsetIndex,
     file_description: FileDescription,
     instrument_configurations: HashMap<u32, InstrumentConfiguration>,
@@ -161,8 +201,17 @@ lazy_static! {
     static ref PEAK_SEPERATOR: Regex = Regex::new(r"\t|\s+").unwrap();
 }
 
-impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReaderType<R, C, D> {
-    fn parse_peak_from_line_flex(&mut self, line: &str, builder: &mut SpectrumBuilderFlex<C, D>) -> Option<bool> {
+impl<
+        R: io::Read,
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+    > MGFReaderType<R, C, D>
+{
+    fn parse_peak_from_line_flex(
+        &mut self,
+        line: &str,
+        builder: &mut SpectrumBuilderFlex<C, D>,
+    ) -> Option<bool> {
         let mut chars = line.chars();
         let first = chars.next().unwrap();
         if first.is_numeric() {
@@ -170,8 +219,8 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             let nparts = parts.len();
             if nparts < 2 || nparts > 3 {
                 self.state = MGFParserState::Error;
-                self.error = MGFError::TooManyColumnsForPeakLine;
-                return None
+                self.error = Some(MGFError::TooManyColumnsForPeakLine);
+                return None;
             }
             let mz: f64 = parts[0].parse().unwrap();
             let intensity: f32 = parts[1].parse().unwrap();
@@ -181,7 +230,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             if nparts == 3 {
                 let charge = parts[2].parse().unwrap();
                 builder.charge_array.push(charge);
-                builder.has_charge +=1;
+                builder.has_charge += 1;
             } else {
                 builder.charge_array.push(0);
             }
@@ -192,16 +241,13 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
         }
     }
 
-
     fn handle_scan_header_flex(
         &mut self,
         line: &str,
         builder: &mut SpectrumBuilderFlex<C, D>,
     ) -> bool {
         let peak_line = match self.parse_peak_from_line_flex(line, builder) {
-            Some(peak) => {
-                peak
-            }
+            Some(peak) => peak,
             None => false,
         };
         if peak_line {
@@ -211,27 +257,27 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             self.state = MGFParserState::Between;
             true
         } else if line.contains('=') {
-            let parts: Vec<&str> = line.splitn(2, '=').collect();
-            let key = parts[0];
-            let value = parts[1];
+            let mut parts = line.splitn(2, '=');
+            let key = parts.next().unwrap();
+            let value = parts.next().unwrap();
             match key {
                 "TITLE" => builder.description.id = String::from(value),
                 "RTINSECONDS" => {
-                    let scan_ev = builder.description
+                    let scan_ev = builder
+                        .description
                         .acquisition
                         .first_scan_mut()
                         .expect("Automatically adds scan event");
                     scan_ev.start_time = value.parse().unwrap()
                 }
                 "PEPMASS" => {
-                    let parts: Vec<&str> = value.split_ascii_whitespace().collect();
-                    let mz: f64 = parts[0].parse().unwrap();
-                    let intensity: f32 = parts[1].parse().unwrap();
-                    let mut charge: Option<i32> = None;
-
-                    if parts.len() > 2 {
-                        charge = Some(parts[2].parse().unwrap());
-                    }
+                    let mut parts = value.split_ascii_whitespace();
+                    let mz: f64 = parts.next().unwrap().parse().unwrap();
+                    let intensity: f32 = parts.next().unwrap().parse().unwrap();
+                    let charge: Option<i32> = match parts.next() {
+                        Some(c) => Some(c.parse().unwrap()),
+                        None => None
+                    };
                     builder.description.precursor = Some(Precursor {
                         ion: SelectedIon {
                             mz,
@@ -253,16 +299,14 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             true
         } else {
             self.state = MGFParserState::Error;
-            self.error = MGFError::MalformedHeaderLine;
+            self.error = Some(MGFError::MalformedHeaderLine);
             false
         }
     }
 
     fn handle_peak_flex(&mut self, line: &str, builder: &mut SpectrumBuilderFlex<C, D>) -> bool {
         let peak_line = match self.parse_peak_from_line_flex(line, builder) {
-            Some(peak) => {
-                peak
-            }
+            Some(peak) => peak,
             None => false,
         };
         if peak_line {
@@ -272,7 +316,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             false
         } else {
             self.state = MGFParserState::Error;
-            self.error = MGFError::MalformedPeakLine;
+            self.error = Some(MGFError::MalformedPeakLine);
             false
         }
     }
@@ -315,7 +359,10 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
     }
 
     /// Read the next spectrum's contents directly into the passed struct.
-    fn _parse_into_flex(&mut self, builder: &mut SpectrumBuilderFlex<C, D>) -> Result<usize, MGFError> {
+    fn _parse_into_flex(
+        &mut self,
+        builder: &mut SpectrumBuilderFlex<C, D>,
+    ) -> Result<usize, MGFError> {
         let mut buffer = String::new();
         let mut work = true;
         let mut offset: usize = 0;
@@ -328,10 +375,9 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                     }
                     b
                 }
-                Err(_err) => {
-                    self.error = MGFError::IOError;
+                Err(err) => {
                     self.state = MGFParserState::Error;
-                    return Err(self.error);
+                    return Err(MGFError::IOError(err));
                 }
             };
             offset += b;
@@ -354,7 +400,10 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                 work = self.handle_peak_flex(line, builder);
             }
             if matches!(self.state, MGFParserState::Error) {
-                panic!("MGF Parsing Error: {:?}", self.error);
+                let mut err = None;
+                mem::swap(&mut self.error, &mut err);
+                self.error = None;
+                return Err(err.unwrap())
             }
         }
         Ok(offset)
@@ -391,7 +440,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             handle,
             state: MGFParserState::Start,
             offset: 0,
-            error: MGFError::NoError,
+            error: None,
             index: OffsetIndex::new("spectrum".to_owned()),
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
@@ -403,8 +452,11 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
     }
 }
 
-impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator
-    for MGFReaderType<R, C, D>
+impl<
+        R: io::Read,
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+    > Iterator for MGFReaderType<R, C, D>
 {
     type Item = MultiLayerSpectrum<C, D>;
 
@@ -414,7 +466,12 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator
     }
 }
 
-impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReaderType<R, C, D> {
+impl<
+        R: SeekRead,
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+    > MGFReaderType<R, C, D>
+{
     /// Construct a new MGFReaderType and build an offset index
     /// using [`Self::build_index`]
     pub fn new_indexed(file: R) -> MGFReaderType<R, C, D> {
@@ -480,8 +537,11 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
     }
 }
 
-impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
-    ScanSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+impl<
+        R: SeekRead,
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+    > ScanSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
@@ -545,8 +605,11 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     }
 }
 
-impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
-    RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+impl<
+        R: SeekRead,
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+    > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, ScanAccessError> {
         match self._offset_of_id(id) {
@@ -579,8 +642,10 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
-    MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<fs::File, C, D>
+impl<
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+    > MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<fs::File, C, D>
 {
     fn open_file(source: fs::File) -> Self {
         Self::new(source)
@@ -591,8 +656,11 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     }
 }
 
-impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
-    for MGFReaderType<R, C, D>
+impl<
+        R: io::Read,
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+    > MSDataFileMetadata for MGFReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
 }
@@ -613,8 +681,8 @@ pub(crate) fn is_mgf(buf: &[u8]) -> bool {
 
 pub struct MGFWriterType<
     R: io::Write,
-    C: CentroidPeakAdapting = CentroidPeak,
-    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+    C: CentroidPeakAdapting + From<CentroidPeak> = CentroidPeak,
+    D: DeconvolutedPeakAdapting + From<DeconvolutedPeak> = DeconvolutedPeak,
 > {
     pub handle: io::BufWriter<R>,
     pub offset: usize,
@@ -622,7 +690,12 @@ pub struct MGFWriterType<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFWriterType<W, C, D> {
+impl<
+        W: io::Write,
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+    > MGFWriterType<W, C, D>
+{
     pub fn new(file: W) -> MGFWriterType<W, C, D> {
         let handle = io::BufWriter::with_capacity(500, file);
         MGFWriterType {
@@ -739,8 +812,8 @@ TITLE="#,
 impl<
         'a,
         W: io::Write,
-        C: CentroidPeakAdapting + 'static,
-        D: DeconvolutedPeakAdapting + 'static,
+        C: CentroidPeakAdapting + From<CentroidPeak> + 'static,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak> + 'static,
     > ScanWriter<'a, W, C, D> for MGFWriterType<W, C, D>
 {
     fn write(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {

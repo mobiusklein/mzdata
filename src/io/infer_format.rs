@@ -178,7 +178,7 @@ mod test {
                 if let Some(data_arrays) = &spec.arrays {
                     assert!(data_arrays.has_array(&ArrayType::MZArray));
                     assert!(data_arrays.has_array(&ArrayType::IntensityArray));
-                    let mzs = data_arrays.mzs();
+                    let mzs = data_arrays.mzs().unwrap();
                     assert!(mzs.len() == 941);
                 }
             }

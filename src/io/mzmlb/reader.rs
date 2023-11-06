@@ -982,17 +982,17 @@ mod test {
         assert_eq!(scan.id(), ref_scan.id());
         let arrays = scan.arrays.as_ref().unwrap();
         let ref_arrays = ref_scan.arrays.as_ref().unwrap();
-        assert!(arrays.mzs().len() == 19914);
-        assert_eq!(arrays.mzs().len(), ref_arrays.mzs().len());
-        assert_eq!(arrays.intensities().len(), ref_arrays.intensities().len());
+        assert!(arrays.mzs()?.len() == 19914);
+        assert_eq!(arrays.mzs()?.len(), ref_arrays.mzs()?.len());
+        assert_eq!(arrays.intensities()?.len(), ref_arrays.intensities()?.len());
 
         for (scan, ref_scan) in reader.zip(ref_reader) {
             assert_eq!(scan.ms_level(), ref_scan.ms_level());
             assert_eq!(scan.id(), ref_scan.id());
             let arrays = scan.arrays.as_ref().unwrap();
             let ref_arrays = ref_scan.arrays.as_ref().unwrap();
-            assert_eq!(arrays.mzs().len(), ref_arrays.mzs().len());
-            assert_eq!(arrays.intensities().len(), ref_arrays.intensities().len());
+            assert_eq!(arrays.mzs()?.len(), ref_arrays.mzs()?.len());
+            assert_eq!(arrays.intensities()?.len(), ref_arrays.intensities()?.len());
         }
         Ok(())
     }

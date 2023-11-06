@@ -1,5 +1,6 @@
-use std::{fmt::{self, Formatter}, ops::Mul, io};
+use std::{ops::Mul, io};
 use bytemuck::{self, Pod};
+use thiserror::{self, Error};
 
 use num_traits::Float;
 #[cfg(feature = "numpress")]
@@ -165,29 +166,21 @@ impl Default for BinaryCompressionType {
 /// A high level set of failure modes that an operation to retrieve a typed memory buffer
 /// from a `[BinaryArrayMap]` might encounter. May also be used to represented conversion
 /// during reading or writing.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error, PartialEq)]
 pub enum ArrayRetrievalError {
-    NotFound,
+    #[error("Array type {0:?} not found")]
+    NotFound(ArrayType),
+    #[error("An error occurred while decompressing: {0}")]
     DecompressionError(String),
-    DecodeError,
+    #[error("The requested data type does not match the number of bytes available in the buffer")]
     DataTypeSizeMismatch,
 }
-
-impl std::fmt::Display for ArrayRetrievalError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl std::error::Error for ArrayRetrievalError {}
-
 
 impl From<ArrayRetrievalError> for io::Error {
     fn from(value: ArrayRetrievalError) -> Self {
         match value {
-            ArrayRetrievalError::NotFound => io::Error::new(io::ErrorKind::NotFound, value),
+            ArrayRetrievalError::NotFound(_) => io::Error::new(io::ErrorKind::NotFound, value),
             ArrayRetrievalError::DecompressionError(e) => io::Error::new(io::ErrorKind::InvalidData, e),
-            ArrayRetrievalError::DecodeError => io::Error::new(io::ErrorKind::InvalidData, value),
             ArrayRetrievalError::DataTypeSizeMismatch => io::Error::new(io::ErrorKind::InvalidData, value),
         }
     }

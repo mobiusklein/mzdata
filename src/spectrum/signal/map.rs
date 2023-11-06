@@ -6,7 +6,6 @@ use std::collections::hash_map::{Iter, IterMut};
 #[cfg(feature = "parallelism")]
 use rayon::prelude::*;
 
-use log::warn;
 use mzpeaks::Tolerance;
 
 use super::bindata::DataArray;
@@ -88,7 +87,7 @@ impl BinaryArrayMap {
             array.decode_and_store()?;
             Ok(())
         } else {
-            Err(ArrayRetrievalError::NotFound)
+            Err(ArrayRetrievalError::NotFound(array_type.clone()))
         }
     }
 
@@ -113,7 +112,7 @@ impl BinaryArrayMap {
     }
 
     pub fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize> {
-        let mzs = self.mzs();
+        let mzs = self.mzs().unwrap();
         let (lower, _upper) = error_tolerance.bounds(query);
         match mzs[..].binary_search_by(|m| m.partial_cmp(&lower).unwrap()) {
             Ok(i) => {
@@ -137,13 +136,11 @@ impl BinaryArrayMap {
         }
     }
 
-    pub fn mzs(&'_ self) -> Cow<'_, [f64]> {
+    pub fn mzs(&'_ self) -> Result<Cow<'_, [f64]>, ArrayRetrievalError> {
         let mz_array = self
-            .get(&ArrayType::MZArray)
-            .expect("Did not find m/z array")
-            .to_f64()
-            .expect("Failed to decode m/z array");
-        mz_array
+            .get(&ArrayType::MZArray).ok_or(ArrayRetrievalError::NotFound(ArrayType::MZArray))?
+            .to_f64()?;
+        Ok(mz_array)
     }
 
     pub fn mzs_mut(&mut self) -> Result<&mut [f64], ArrayRetrievalError> {
@@ -152,17 +149,15 @@ impl BinaryArrayMap {
             mz_array.store_as(super::BinaryDataArrayType::Float64)?;
             mz_array.coerce_mut()
         } else {
-            Err(ArrayRetrievalError::NotFound)
+            Err(ArrayRetrievalError::NotFound(ArrayType::MZArray))
         }
     }
 
-    pub fn intensities(&'_ self) -> Cow<'_, [f32]> {
+    pub fn intensities(&'_ self) -> Result<Cow<'_, [f32]>, ArrayRetrievalError> {
         let intensities = self
-            .get(&ArrayType::IntensityArray)
-            .expect("Did not find intensity array")
-            .to_f32()
-            .expect("Failed to decode intensity array");
-        intensities
+            .get(&ArrayType::IntensityArray).ok_or(ArrayRetrievalError::NotFound(ArrayType::IntensityArray))?
+            .to_f32()?;
+        Ok(intensities)
     }
 
     pub fn intensities_mut(&mut self) -> Result<&mut [f32], ArrayRetrievalError> {
@@ -171,20 +166,14 @@ impl BinaryArrayMap {
             mz_array.store_as(super::BinaryDataArrayType::Float32)?;
             mz_array.coerce_mut()
         } else {
-            Err(ArrayRetrievalError::NotFound)
+            Err(ArrayRetrievalError::NotFound(ArrayType::IntensityArray))
         }
     }
 
-    pub fn charges(&'_ self) -> Option<Cow<'_, [i32]>> {
+    pub fn charges(&'_ self) -> Result<Cow<'_, [i32]>, ArrayRetrievalError> {
         match self.get(&ArrayType::ChargeArray) {
-            Some(data_array) => match data_array.to_i32() {
-                Ok(array) => Some(array),
-                Err(err) => {
-                    warn!("Failed to decode charge state array: {:?}", err);
-                    None
-                }
-            },
-            None => None,
+            Some(data_array) => data_array.to_i32(),
+            None => Err(ArrayRetrievalError::NotFound(ArrayType::ChargeArray)),
         }
     }
 
@@ -194,7 +183,7 @@ impl BinaryArrayMap {
             mz_array.store_as(super::BinaryDataArrayType::Int32)?;
             mz_array.coerce_mut()
         } else {
-            Err(ArrayRetrievalError::NotFound)
+            Err(ArrayRetrievalError::NotFound(ArrayType::ChargeArray))
         }
     }
 

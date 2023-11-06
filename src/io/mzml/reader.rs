@@ -9,6 +9,9 @@ use std::mem;
 use log::debug;
 use log::warn;
 
+use mzpeaks::CentroidLike;
+use mzpeaks::MZPeakSetType;
+use mzpeaks::MassPeakSetType;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
 use quick_xml::Reader;
@@ -27,6 +30,8 @@ use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
 use crate::params::ParamCow;
 use crate::params::{Param, ParamList, Unit};
 use crate::spectrum::scan_properties::*;
+use crate::spectrum::signal::BuildArrayMapFrom;
+use crate::spectrum::signal::BuildFromArrayMap;
 use crate::spectrum::signal::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
 };
@@ -38,8 +43,9 @@ use crate::ParamDescribed;
 use crate::SpectrumBehavior;
 
 use super::reading_shared::{
-    CVParamParse, FileMetadataBuilder, IndexedMzMLIndexExtractor, MzMLParserError, MzMLParserState,
-    MzMLSAX, ParserResult, XMLParseBase, IndexParserState, IncrementingIdMap, MzMLIndexingError
+    CVParamParse, FileMetadataBuilder, IncrementingIdMap, IndexParserState,
+    IndexedMzMLIndexExtractor, MzMLIndexingError, MzMLParserError, MzMLParserState, MzMLSAX,
+    ParserResult, XMLParseBase,
 };
 
 pub type Bytes = Vec<u8>;
@@ -47,7 +53,7 @@ pub type Bytes = Vec<u8>;
 /// Convert mzML spectrum XML into [`MultiLayerSpectrum`](crate::spectrum::MultiLayerSpectrum)
 pub trait SpectrumBuilding<
     'a,
-    C: CentroidPeakAdapting,
+    C: CentroidLike + Default,
     D: DeconvolutedPeakAdapting,
     S: SpectrumBehavior<C, D>,
 >
@@ -278,7 +284,7 @@ const BUFFER_SIZE: usize = 10000;
 #[derive(Default)]
 pub struct MzMLSpectrumBuilder<
     'a,
-    C: CentroidPeakAdapting = CentroidPeak,
+    C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedPeakAdapting = DeconvolutedPeak,
 > {
     pub params: ParamList,
@@ -300,11 +306,11 @@ pub struct MzMLSpectrumBuilder<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> XMLParseBase
+impl<'a, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> XMLParseBase
     for MzMLSpectrumBuilder<'a, C, D>
 {
 }
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> CVParamParse
+impl<'a, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> CVParamParse
     for MzMLSpectrumBuilder<'a, C, D>
 {
 }
@@ -313,7 +319,7 @@ impl<
         'inner,
         'outer: 'inner + 'event,
         'event: 'inner,
-        C: CentroidPeakAdapting,
+        C: CentroidLike + Default,
         D: DeconvolutedPeakAdapting,
     > SpectrumBuilding<'inner, C, D, MultiLayerSpectrum<C, D>>
     for MzMLSpectrumBuilder<'inner, C, D>
@@ -404,7 +410,7 @@ impl<
     }
 }
 
-impl<'inner, 'outer: 'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapting>
     MzMLSpectrumBuilder<'inner, C, D>
 {
     pub fn new() -> MzMLSpectrumBuilder<'inner, C, D> {
@@ -618,7 +624,7 @@ impl<'inner, 'outer: 'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdaptin
     }
 }
 
-impl<'inner, 'outer: 'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
+impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> MzMLSAX
     for MzMLSpectrumBuilder<'inner, C, D>
 {
     fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult {
@@ -800,8 +806,11 @@ impl<'inner, 'outer: 'inner, C: CentroidPeakAdapting, D: DeconvolutedPeakAdaptin
     }
 }
 
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<CentroidSpectrumType<C>>
+impl<'a, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> Into<CentroidSpectrumType<C>>
     for MzMLSpectrumBuilder<'a, C, D>
+where
+    MZPeakSetType<C>: BuildFromArrayMap + BuildArrayMapFrom,
+    MassPeakSetType<D>: BuildFromArrayMap + BuildArrayMapFrom,
 {
     fn into(self) -> CentroidSpectrumType<C> {
         let mut spec = MultiLayerSpectrum::<C, D>::default();
@@ -1161,7 +1170,6 @@ impl<
         }
     }
 }
-
 
 impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     MzMLReaderType<R, C, D>
