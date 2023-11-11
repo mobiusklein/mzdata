@@ -27,7 +27,6 @@ use crate::io::prelude::ParamLike;
 use crate::meta::file_description::FileDescription;
 use crate::meta::instrument::InstrumentConfiguration;
 use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
-use crate::params::ParamCow;
 use crate::params::{Param, ParamList, Unit};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::BuildArrayMapFrom;
@@ -514,7 +513,7 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                 if Activation::is_param_activation(&param)
                     && self.precursor.activation.method().is_none()
                 {
-                    *self.precursor.activation.method_mut() = Some(param);
+                    *self.precursor.activation.method_mut() = Some(param.into());
                 } else {
                     match param.name.as_ref() {
                         "collision energy" | "activation energy" => {

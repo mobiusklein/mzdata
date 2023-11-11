@@ -1,12 +1,11 @@
-#![allow(unused)]
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::io::{self, prelude::*, SeekFrom};
-use std::ops::Range;
 use std::path::Path;
 use std::{fs, mem};
 
+use hdf5::types::{VarLenAscii, FixedUnicode, VarLenUnicode, FixedAscii};
+use thiserror::Error;
 use filename;
 use hdf5::{self, filters, Dataset, Selection};
 use log::{debug, warn};
@@ -28,28 +27,23 @@ use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, ScanAccessError, Scan
 use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software};
 use crate::params::{ControlledVocabulary, Param};
 use crate::spectrum::signal::{
-    as_bytes, delta_decoding, linear_prediction_decoding, to_bytes, ArrayRetrievalError, ArrayType,
-    BinaryCompressionType, BinaryDataArrayType, ByteArrayView, ByteArrayViewMut, DataArray, vec_as_bytes,
+    as_bytes, delta_decoding, linear_prediction_decoding, ArrayRetrievalError,
+    BinaryCompressionType, BinaryDataArrayType, ByteArrayView, ByteArrayViewMut, DataArray,
 };
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
 };
 use crate::spectrum::{IsolationWindow, ScanWindow, SelectedIon};
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum MzMLbError {
-    HDF5Error(hdf5::Error),
-    MzMLError(MzMLParserError),
-    ArrayRetrievalError(ArrayRetrievalError),
+    #[error("An HDF5-related error occurred: {0}")]
+    HDF5Error(#[from] hdf5::Error),
+    #[error("An mzML-related error occurred: {0}")]
+    MzMLError(#[from] MzMLParserError),
+    #[error("An error occurred while decoding binary data: {0}")]
+    ArrayRetrievalError(#[from] ArrayRetrievalError),
 }
-
-impl Display for MzMLbError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(format!("{:?}", self).as_str())
-    }
-}
-
-impl std::error::Error for MzMLbError {}
 
 impl From<MzMLbError> for io::Error {
     fn from(value: MzMLbError) -> Self {
@@ -57,24 +51,8 @@ impl From<MzMLbError> for io::Error {
     }
 }
 
-impl From<MzMLParserError> for MzMLbError {
-    fn from(value: MzMLParserError) -> Self {
-        Self::MzMLError(value)
-    }
-}
 
-impl From<hdf5::Error> for MzMLbError {
-    fn from(value: hdf5::Error) -> Self {
-        Self::HDF5Error(value)
-    }
-}
-
-impl From<ArrayRetrievalError> for MzMLbError {
-    fn from(value: ArrayRetrievalError) -> Self {
-        Self::ArrayRetrievalError(value)
-    }
-}
-
+#[allow(unused)]
 pub(crate) fn is_mzmlb(buf: &[u8]) -> bool {
     const MAGIC_NUMBER: &[u8] = br#"\211HDF\r\n\032\n"#;
     buf.starts_with(MAGIC_NUMBER)
@@ -116,15 +94,6 @@ impl CacheInterval {
             }
         }
         return false;
-    }
-
-    pub fn copy_from_slice(&mut self, src: &[u8]) {
-        let size = self.data.data.len();
-        let source_size = src.len();
-        if size < source_size {
-            self.data.data.resize(source_size, 0)
-        }
-        self.data.data.copy_from_slice(src)
     }
 
     #[inline]
@@ -223,6 +192,7 @@ impl ExternalDataRegistry {
         Ok(())
     }
 
+    #[allow(unused)]
     pub fn from_hdf5(handle: &hdf5::File) -> Result<Self, MzMLbError> {
         let mut storage = Self::default();
         storage.populate_registry(handle)?;
@@ -304,6 +274,7 @@ impl ExternalDataRegistry {
         Ok(block)
     }
 
+    #[allow(unused)]
     fn handle_encoding(data: &mut DataArray) -> Result<(), ArrayRetrievalError> {
         match data.compression {
             BinaryCompressionType::NoCompression => Ok(()),
@@ -486,7 +457,7 @@ impl Seek for ByteReader {
                 self.position = (offset as usize).max(0);
             }
             io::SeekFrom::End(offset) => {
-                let mut n = self.handle.size();
+                let n = self.handle.size();
                 self.position = (n + offset as usize).max(n);
             }
             io::SeekFrom::Current(offset) => {
@@ -605,7 +576,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
         state: MzMLParserState,
     ) -> ParserResult {
         let elt_name = event.name();
-        match elt_name.as_ref() {
+        let res = match elt_name.as_ref() {
             b"binaryDataArray" => {
                 if self.current_data_range_query.name.len() == 0 {
                     return Err(MzMLParserError::IncompleteElementError(
@@ -618,10 +589,35 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
                 self.data_registry
                     .as_mut()
                     .expect("Did not provide data registry")
-                    .get(&data_request, array);
+                    .get(&data_request, array)
             }
-            _ => {}
+            _ => {
+                Ok(())
+            }
         };
+        match res {
+            Ok(()) => {},
+            Err(e) => {
+                match e {
+                    MzMLbError::HDF5Error(e) => {
+                        match e {
+                            hdf5::Error::HDF5(_) => {
+                                Err(MzMLParserError::IOError(state, io::Error::new(io::ErrorKind::Other, e)))?
+                            },
+                            hdf5::Error::Internal(e) => {
+                                Err(MzMLParserError::IOError(state, io::Error::new(io::ErrorKind::Other, e)))?
+                            },
+                        }
+                    },
+                    MzMLbError::MzMLError(e) => {
+                        Err(e)?
+                    },
+                    MzMLbError::ArrayRetrievalError(e) => {
+                        Err(MzMLParserError::IOError(state, e.into()))?
+                    }
+                }
+            }
+        }
         self.inner.end_element(event, state)
     }
 
@@ -705,6 +701,8 @@ pub struct MzMLbReaderType<
     /// source files to produce this file's contents.
     pub data_processings: Vec<DataProcessing>,
 
+    pub schema_version: String,
+
     mzml_parser: MzMLReaderType<ByteReader, C, D>,
     data_buffers: ExternalDataRegistry,
 }
@@ -728,6 +726,11 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbRead
             Err(e) => Err(io::Error::new(io::ErrorKind::Other, e))?,
         };
 
+        let schema_version = match Self::read_schema_version(&mzml_ds) {
+            Ok(schema_version) => schema_version,
+            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e))?,
+        };
+
         let mut mzml_parser = MzMLReaderType::<ByteReader, C, D>::new(mzml_ds.into());
         mzml_parser.seek(SeekFrom::Start(0))?;
 
@@ -741,10 +744,41 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbRead
             softwares: mzml_parser.softwares.clone(),
             data_processings: mzml_parser.data_processings.clone(),
             mzml_parser,
+            schema_version,
             data_buffers: data_buffers,
         };
 
         Ok(inst)
+    }
+
+    fn read_schema_version(mzml_ds: &Dataset) -> Result<String, hdf5::Error> {
+        let schema_version_attr = mzml_ds.attr("version")?;
+        let dtype = schema_version_attr.dtype()?;
+        let td = dtype.to_descriptor()?;
+        let buf = match td {
+            hdf5::types::TypeDescriptor::FixedAscii(_) => {
+                let val: FixedAscii<9> = schema_version_attr.read_scalar()?;
+                val.to_string()
+            },
+            hdf5::types::TypeDescriptor::FixedUnicode(_) => {
+                let val: FixedUnicode<9> = schema_version_attr.read_scalar()?;
+                val.to_string()
+            },
+            hdf5::types::TypeDescriptor::VarLenAscii => {
+                let val: VarLenAscii = schema_version_attr.read_scalar()?;
+                val.to_string()
+            },
+            hdf5::types::TypeDescriptor::VarLenUnicode => {
+                let val: VarLenUnicode = schema_version_attr.read_scalar()?;
+                val.to_string()
+            },
+            _ => {
+                let val: [u8; 9] = schema_version_attr.as_reader().read_scalar()?;
+                String::from_utf8_lossy(&val).to_string()
+            }
+        };
+        debug!("Parsed mzMLb version: {}", buf);
+        Ok(buf)
     }
 
     /// Create a new `[MzMLbReader]` with the default caching behavior.

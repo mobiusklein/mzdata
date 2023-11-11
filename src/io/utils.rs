@@ -114,6 +114,14 @@ impl<T: io::Write> MD5HashingStream<T> {
     pub fn compute(&self) -> Digest {
         self.context.clone().compute()
     }
+
+    pub fn get_mut(&mut self) -> &mut T {
+        &mut self.stream
+    }
+
+    pub fn into_inner(self) -> T {
+        self.stream
+    }
 }
 
 impl<T: io::Write> io::Write for MD5HashingStream<T> {

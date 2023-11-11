@@ -35,7 +35,7 @@ pub use crate::io::mzml::reader::{
 
 pub(crate) use crate::io::mzml::reader::is_mzml;
 
-pub use crate::io::mzml::writer::{MzMLWriter, MzMLWriterState, MzMLWriterType, WriterResult};
+pub use crate::io::mzml::writer::{MzMLWriter, MzMLWriterState, MzMLWriterType, WriterResult, MzMLSpectrumWriter, MzMLWriterError};
 
 #[cfg(feature = "async")]
 pub use crate::io::mzml::r#async::{

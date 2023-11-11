@@ -335,7 +335,7 @@ where
         })
     }
 
-    fn stream_position(&mut self) -> io::Result<u64> {
+    pub fn stream_position(&mut self) -> io::Result<u64> {
         self.handle.handle.get_mut().stream_position()
     }
 
@@ -781,7 +781,8 @@ where
         start_event!(self, tag);
         match act.method() {
             Some(meth) => {
-                self.handle.write_param(meth)?;
+                let meth_param: Param = meth.clone().into();
+                self.handle.write_param(&meth_param)?;
             }
             None => {}
         }
@@ -905,6 +906,89 @@ where
             self.write_binary_data_array(array)?
         }
         end_event!(self, outer);
+        Ok(())
+    }
+
+    pub fn start_spectrum(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> WriterResult {
+        match self.state {
+            MzMLWriterState::SpectrumList => {}
+            state if state < MzMLWriterState::SpectrumList => {
+                self.start_spectrum_list()?;
+            }
+            state if state > MzMLWriterState::SpectrumList => {
+                // Cannot write spectrum, currently in state which happens
+                // after spectra may be written
+                return Err(MzMLWriterError::InvalidActionError(self.state));
+            }
+            _ => {}
+        }
+        let pos = self.stream_position()? - (1 + (4 * InnerXMLWriter::<W>::INDENT_SIZE));
+        self.offset_index.insert(spectrum.id().to_string(), pos);
+        let mut outer = bstart!("spectrum");
+        attrib!("id", spectrum.id(), outer);
+        let count = self.spectrum_counter.to_string();
+        attrib!("index", count, outer);
+        let default_array_len = if let Some(mass_peaks) = &spectrum.deconvoluted_peaks {
+            mass_peaks.len()
+        } else if let Some(mz_peaks) = &spectrum.peaks {
+            mz_peaks.len()
+        } else if let Some(arrays) = &spectrum.arrays {
+            arrays.mzs().unwrap().len()
+        } else {
+            0
+        }
+        .to_string();
+
+        attrib!("defaultArrayLength", default_array_len, outer);
+
+        self.handle.write_event(Event::Start(outer.borrow()))?;
+        self.spectrum_counter += 1;
+
+        let ms_level = spectrum.ms_level();
+        if ms_level == 1 {
+            self.handle.write_param(&MS1_SPECTRUM)?;
+        } else {
+            self.handle.write_param(&MSN_SPECTRUM)?;
+        }
+        self.handle.write_param(&self.ms_cv.param_val(
+            "MS:1000511",
+            "ms level",
+            ms_level.to_string(),
+        ))?;
+
+        match spectrum.polarity() {
+            ScanPolarity::Negative => self.handle.write_param(&NEGATIVE_SCAN)?,
+            ScanPolarity::Positive => self.handle.write_param(&POSITIVE_SCAN)?,
+            ScanPolarity::Unknown => {
+                warn!(
+                    "Could not determine scan polarity for {}, assuming positive",
+                    spectrum.id()
+                );
+                self.handle.write_param(&POSITIVE_SCAN)?
+            }
+        }
+
+        match spectrum.signal_continuity() {
+            SignalContinuity::Profile => self.handle.write_param(&PROFILE_SPECTRUM)?,
+            SignalContinuity::Unknown => {
+                warn!(
+                    "Could not determine scan polarity for {}, assuming centroid",
+                    spectrum.id()
+                );
+                self.handle.write_param(&CENTROID_SPECTRUM)?;
+            }
+            _ => {
+                self.handle.write_param(&CENTROID_SPECTRUM)?;
+            }
+        }
+
+        let acq = spectrum.acquisition();
+
+        self.write_scan_list(acq)?;
+
+        if let Some(precursor) = spectrum.precursor() {
+            self.write_precursor(precursor)?;
+        }
         Ok(())
     }
 
@@ -1071,6 +1155,19 @@ where
     pub fn spectrum_count_mut(&mut self) -> &mut u64 {
         &mut self.spectrum_count
     }
+
+    pub fn get_mut(&mut self) -> io::Result<&mut W> {
+        let inner = self.handle.handle.get_mut();
+        let inner = inner.get_mut();
+        Ok(inner.get_mut())
+    }
+
+    pub fn into_inner(self) -> io::Result<W> {
+        let mut inner: BufWriter<MD5HashingStream<W>> = self.handle.handle.into_inner();
+        inner.flush()?;
+        let stream = inner.into_inner()?;
+        Ok(stream.into_inner())
+    }
 }
 
 impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default, W: Write + Seek>
@@ -1122,7 +1219,7 @@ mod test {
     #[test]
     fn write_test() -> WriterResult {
         let path = path::Path::new("./test/data/small.mzML");
-        let mut reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::open_path(path)
+        let mut reader = MzMLReaderType::<_, _, _>::open_path(path)
             .expect("Test file doesn't exist?");
 
         let n = reader.len();
