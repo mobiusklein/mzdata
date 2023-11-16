@@ -108,33 +108,6 @@ impl CacheInterval {
     }
 }
 
-impl From<hdf5::Datatype> for BinaryDataArrayType {
-    fn from(value: hdf5::Datatype) -> Self {
-        match value.size() {
-            1 => Self::ASCII,
-            4 => {
-                if value.is::<i32>() {
-                    Self::Int32
-                } else if value.is::<f32>() {
-                    Self::Float32
-                } else {
-                    Self::Unknown
-                }
-            }
-            8 => {
-                if value.is::<i64>() {
-                    Self::Int64
-                } else if value.is::<f64>() {
-                    Self::Float64
-                } else {
-                    Self::Unknown
-                }
-            }
-            _ => Self::Unknown,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct DataRangeRequest {
     name: String,

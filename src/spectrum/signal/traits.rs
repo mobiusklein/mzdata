@@ -136,6 +136,12 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
             _ => Err(ArrayRetrievalError::DataTypeSizeMismatch),
         }
     }
+
+    fn data_len(&'lifespan self) -> Result<usize, ArrayRetrievalError> {
+        let view = self.view()?;
+        let n = view.len();
+        Ok(n / self.dtype().size_of())
+    }
 }
 
 pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:

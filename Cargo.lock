@@ -1275,6 +1275,7 @@ dependencies = [
  "filename",
  "flate2",
  "hdf5",
+ "hdf5-sys",
  "indexmap",
  "lazy_static",
  "log",

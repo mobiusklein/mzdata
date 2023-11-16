@@ -814,7 +814,7 @@ impl<
         W: io::Write,
         C: CentroidPeakAdapting + From<CentroidPeak> + 'static,
         D: DeconvolutedPeakAdapting + From<DeconvolutedPeak> + 'static,
-    > ScanWriter<'a, W, C, D> for MGFWriterType<W, C, D>
+    > ScanWriter<'a, C, D> for MGFWriterType<W, C, D>
 {
     fn write(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {
         let desc = spectrum.description();

@@ -23,6 +23,15 @@ fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::MzMLRe
     Ok(reader)
 }
 
+fn load_mgf_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mgf::MGFReader<fs::File>> {
+    let start = time::Instant::now();
+    let reader = mgf::MGFReader::open_path(path)?;
+    let end = time::Instant::now();
+    println!("Index Loaded/Built in {} seconds", (end - start).as_secs());
+    println!("{} spectra", reader.len());
+    Ok(reader)
+}
+
 #[cfg(feature = "mzmlb")]
 fn load_mzmlb_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzmlb::MzMLbReader> {
     let start = time::Instant::now();
@@ -125,6 +134,10 @@ fn main() -> io::Result<()> {
                 {
                     panic!("Cannot read mzMLb file. Recompile enabling the `mzmlb` feature")
                 }
+            }
+            else if ext.to_string_lossy().to_lowercase() == "mgf" {
+                let mut reader = load_mgf_file(path)?;
+                scan_file(&mut reader)
             } else {
                 let mut reader = load_file(path)?;
                 scan_file(&mut reader)

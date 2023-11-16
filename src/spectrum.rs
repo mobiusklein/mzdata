@@ -54,6 +54,7 @@ for spectrum in reader {
 pub(crate) mod scan_properties;
 pub mod signal;
 pub(crate) mod spectrum;
+pub(crate) mod chromatogram;
 
 pub use crate::spectrum::scan_properties::*;
 pub use crate::spectrum::signal::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray};
@@ -62,3 +63,4 @@ pub use crate::spectrum::spectrum::{
     SpectrumConversionError, SpectrumProcessingError,
     CentroidSpectrum, RawSpectrum, Spectrum, DeconvolutedSpectrum,
     MultiLayerSpectrum, CentroidSpectrumType, DeconvolutedSpectrumType};
+pub use crate::spectrum::chromatogram::{Chromatogram, ChromatogramBehavior};

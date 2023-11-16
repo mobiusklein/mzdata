@@ -56,7 +56,7 @@ miniz_oxide = ["flate2/rust_backend"]
 
 plotting = ["mzsignal/plotting"]
 
-mzmlb = ["hdf5", "ndarray"]
+mzmlb = ["hdf5", "ndarray", "hdf5-sys"]
 
 async = ["tokio", "quick-xml/async-tokio"]
 
@@ -78,6 +78,7 @@ md5 = "0.7.0"
 tokio = {version = "1.32.0", optional = true, features = ["macros", "rt", "fs", "rt-multi-thread"]}
 
 hdf5 = {version = "0.8.1", optional = true, features = ["blosc", "lzf",]}
+hdf5-sys = { version = "0.8.1", optional = true }
 ndarray = { version = "0.15.6", optional = true }
 filename = "0.1.1"
 numpress = { version = "1.1.0", optional = true }

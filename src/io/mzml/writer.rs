@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::io;
+use std::{io, mem};
 use std::io::{BufWriter, Seek, Write};
 use std::marker::PhantomData;
 
-use thiserror::Error;
-
 use log::warn;
+use thiserror::Error;
 
 use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, PeakCollection};
 use quick_xml::events::BytesDecl;
@@ -24,12 +23,12 @@ use crate::meta::file_description::FileDescription;
 use crate::meta::instrument::{ComponentType, InstrumentConfiguration};
 use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
 use crate::params::{ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, Unit};
-use crate::spectrum::scan_properties::*;
 use crate::spectrum::signal::{
-    ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, BuildArrayMapFrom,
-    DataArray,
+    ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType,
+    BuildArrayMapFrom, ByteArrayView, DataArray, to_bytes
 };
 use crate::spectrum::spectrum::{MultiLayerSpectrum, SpectrumBehavior};
+use crate::spectrum::{scan_properties::*, Chromatogram, ChromatogramBehavior};
 
 const BUFFER_SIZE: usize = 10000;
 
@@ -77,7 +76,11 @@ const CENTROID_SPECTRUM: ParamCow =
 #[derive(Debug, Error)]
 pub enum MzMLWriterError {
     #[error("An XML error occurred: {0}")]
-    XMLError(#[from] #[source] XMLError),
+    XMLError(
+        #[from]
+        #[source]
+        XMLError,
+    ),
 
     #[error("Attempted to transition from {from_state:?} to {to_state:?}")]
     StateTransitionError {
@@ -85,7 +88,19 @@ pub enum MzMLWriterError {
         to_state: MzMLWriterState,
     },
     #[error("An IO error occurred: {0}")]
-    IOError(#[from] #[source] io::Error),
+    IOError(
+        #[from]
+        #[source]
+        io::Error,
+    ),
+
+    #[error("An error occurred while retrieving array: {0}")]
+    ArrayRetrievalError(
+        #[from]
+        #[source]
+        ArrayRetrievalError,
+    ),
+
     #[error("Attempted to perform an invalid action {0:?}")]
     InvalidActionError(MzMLWriterState),
 }
@@ -123,7 +138,7 @@ impl<W: io::Write> InnerXMLWriter<W> {
         self.handle.get_mut().flush()
     }
 
-    pub fn write_param<P: ParamLike + Debug>(&mut self, param: &P) -> WriterResult {
+    pub fn write_param<P: ParamLike>(&mut self, param: &P) -> WriterResult {
         let mut elt = if !param.is_controlled() {
             bstart!("userParam")
         } else {
@@ -196,22 +211,82 @@ pub enum MzMLWriterState {
     End,
 }
 
-pub trait MzMLSpectrumWriter<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
-> where
-    PeakSetVec<C, MZ>: BuildArrayMapFrom,
-    PeakSetVec<D, Mass>: BuildArrayMapFrom,
-{
-    fn write_scan_list(&mut self, acq: &Acquisition) -> WriterResult;
-    fn write_isolation_window(&mut self, iw: &IsolationWindow) -> WriterResult;
-    fn write_activation(&mut self, precursor: &Precursor) -> WriterResult;
-    fn write_precursor(&mut self, precursor: &Precursor) -> WriterResult;
+#[derive(Debug, Clone, Default)]
+pub struct ChromatogramCollector {
+    name: ChromatogramType,
+    time: Vec<u8>,
+    intensity: Vec<u8>,
+}
 
-    fn write_binary_data_array(&mut self, array: &DataArray) -> WriterResult;
-    fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap) -> WriterResult;
+impl ChromatogramCollector {
+    pub fn of(chromatogram_type: ChromatogramType) -> Self {
+        Self {
+            name: chromatogram_type,
+            ..Default::default()
+        }
+    }
 
-    fn write_spectrum(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> WriterResult;
+    pub fn add(&mut self, time: f64, intensity: f32) {
+        self.time.extend(time.to_le_bytes());
+        self.intensity.extend(intensity.to_le_bytes());
+    }
+
+    pub fn to_chromatogram(&self) -> Chromatogram {
+        let mut descr = ChromatogramDescription::default();
+        let mut arrays = BinaryArrayMap::default();
+        match self.name {
+            ChromatogramType::TotalIonCurrentChromatogram => {
+                descr.id = "TIC".to_string();
+                descr.add_param(
+                    ControlledVocabulary::MS
+                        .const_param_ident("total ion current chromatogram", 1000235)
+                        .into(),
+                );
+                let time_array = DataArray::wrap(
+                    &ArrayType::TimeArray,
+                    BinaryDataArrayType::Float64,
+                    to_bytes(&self.time),
+                );
+
+                let intensity_array = DataArray::wrap(
+                    &ArrayType::IntensityArray,
+                    BinaryDataArrayType::Float32,
+                    to_bytes(&self.intensity),
+                );
+                arrays.add(time_array);
+                arrays.add(intensity_array);
+            }
+            ChromatogramType::BasePeakChromatogram => {
+                descr.id = "BIC".to_string();
+                descr.add_param(
+                    ControlledVocabulary::MS
+                        .const_param_ident("basepeak chromatogram", 1000628)
+                        .into(),
+                );
+                let time_array = DataArray::wrap(
+                    &ArrayType::TimeArray,
+                    BinaryDataArrayType::Float64,
+                    to_bytes(&self.time),
+                );
+
+                let intensity_array = DataArray::wrap(
+                    &ArrayType::IntensityArray,
+                    BinaryDataArrayType::Float32,
+                    to_bytes(&self.intensity),
+                );
+                arrays.add(time_array);
+                arrays.add(intensity_array);
+            }
+            _ => panic!("Don't know how to construct {:?}", &self.name),
+        };
+        Chromatogram::new(descr, arrays)
+    }
+}
+
+impl From<ChromatogramCollector> for Chromatogram {
+    fn from(value: ChromatogramCollector) -> Self {
+        value.to_chromatogram()
+    }
 }
 
 /**
@@ -258,7 +333,14 @@ pub struct MzMLWriterType<
     pub instrument_configurations: HashMap<u32, InstrumentConfiguration>,
 
     pub state: MzMLWriterState,
-    pub offset_index: OffsetIndex,
+    pub write_index: bool,
+
+    pub spectrum_offset_index: OffsetIndex,
+    pub chromatogram_offset_index: OffsetIndex,
+
+    pub tic_collector: ChromatogramCollector,
+    pub bic_collector: ChromatogramCollector,
+    pub wrote_summaries: bool,
 
     handle: InnerXMLWriter<W>,
     centroid_type: PhantomData<C>,
@@ -267,7 +349,7 @@ pub struct MzMLWriterType<
 }
 
 impl<'a, W: Write + Seek, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
-    ScanWriter<'a, W, C, D> for MzMLWriterType<W, C, D>
+    ScanWriter<'a, C, D> for MzMLWriterType<W, C, D>
 where
     PeakSetVec<C, MZ>: BuildArrayMapFrom,
     PeakSetVec<D, Mass>: BuildArrayMapFrom,
@@ -305,8 +387,11 @@ where
     const PSIMS_VERSION: &'static str = "4.1.57";
     const UNIT_VERSION: &'static str = "releases/2020-03-10";
 
-    /// Wrap a new [`std::io::Write`]-able type, constructing a new [`MzMLWriterType`]
-    pub fn new(file: W) -> MzMLWriterType<W, C, D> {
+    pub const fn get_indent_size() -> u64 {
+        InnerXMLWriter::<W>::INDENT_SIZE
+    }
+
+    pub fn new_with_index(file: W, write_index: bool) -> MzMLWriterType<W, C, D> {
         let handle = InnerXMLWriter::new(file);
         MzMLWriterType {
             handle,
@@ -315,17 +400,27 @@ where
             softwares: Vec::new(),
             data_processings: Vec::new(),
             offset: 0,
-            offset_index: OffsetIndex::new("spectrum".into()),
+            spectrum_offset_index: OffsetIndex::new("spectrum".into()),
+            chromatogram_offset_index: OffsetIndex::new("chromatogram".into()),
             state: MzMLWriterState::Start,
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
+            write_index,
             spectrum_count: 0,
             spectrum_counter: 0,
             chromatogram_count: 0,
             chromatogram_counter: 0,
+            tic_collector: ChromatogramCollector::of(ChromatogramType::TotalIonCurrentChromatogram),
+            bic_collector: ChromatogramCollector::of(ChromatogramType::BasePeakChromatogram),
             ms_cv: ControlledVocabulary::MS,
             data_array_compression: BinaryCompressionType::Zlib,
+            wrote_summaries: false,
         }
+    }
+
+    /// Wrap a new [`std::io::Write`]-able type, constructing a new [`MzMLWriterType`]
+    pub fn new(file: W) -> MzMLWriterType<W, C, D> {
+        Self::new_with_index(file, true)
     }
 
     fn transition_err(&self, to_state: MzMLWriterState) -> WriterResult {
@@ -376,14 +471,17 @@ where
     fn start_document(&mut self) -> WriterResult {
         self.handle
             .write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
-        let mut indexed = BytesStart::from_content("indexedmzML", 11);
-        indexed.push_attribute(("xmlns", "http://psi.hupo.org/ms/mzml"));
-        indexed.push_attribute(("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"));
-        indexed.push_attribute((
-            "xsi:schemaLocation",
-            "http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.3_idx.xsd",
-        ));
-        self.handle.write_event(Event::Start(indexed))?;
+
+        if self.write_index {
+            let mut indexed = BytesStart::from_content("indexedmzML", 11);
+            indexed.push_attribute(("xmlns", "http://psi.hupo.org/ms/mzml"));
+            indexed.push_attribute(("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"));
+            indexed.push_attribute((
+                "xsi:schemaLocation",
+                "http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.3_idx.xsd",
+            ));
+            self.handle.write_event(Event::Start(indexed))?;
+        }
 
         let mut mzml = BytesStart::from_content("mzML", 4);
         mzml.push_attribute(("xmlns", "http://psi.hupo.org/ms/mzml"));
@@ -419,7 +517,7 @@ where
         let fd = bstart!("fileDescription");
         start_event!(self, fd);
 
-        let fc_tag = bstart!("fileContents");
+        let fc_tag = bstart!("fileContent");
         start_event!(self, fc_tag);
         for param in self.file_description.params() {
             self.handle.write_param(param)?
@@ -484,6 +582,11 @@ where
             for param in ic.params() {
                 self.handle.write_param(param)?
             }
+            let mut comp_list_tag = bstart!("componentList");
+            let comp_count = ic.components.len().to_string();
+            attrib!("count", comp_count, comp_list_tag);
+            self.handle
+                .write_event(Event::Start(comp_list_tag.borrow()))?;
             for comp in ic.components.iter() {
                 let mut cmp_tag = match comp.component_type {
                     ComponentType::Analyzer => bstart!("analyzer"),
@@ -501,7 +604,9 @@ where
                 }
                 self.handle.write_event(Event::End(cmp_tag.to_end()))?;
             }
-            let mut sw = bstart!("sofwareRef");
+            self.handle
+                .write_event(Event::End(comp_list_tag.to_end()))?;
+            let mut sw = bstart!("softwareRef");
             attrib!("ref", ic.software_reference, sw);
             self.handle.write_event(Event::Empty(sw))?;
             self.handle.write_event(Event::End(tag.to_end()))?;
@@ -558,7 +663,7 @@ where
         Ok(())
     }
 
-    fn start_spectrum_list(&mut self) -> WriterResult {
+    pub fn start_spectrum_list(&mut self) -> WriterResult {
         match self.state {
             MzMLWriterState::SpectrumList => {}
             state if state < MzMLWriterState::SpectrumList => {
@@ -581,7 +686,57 @@ where
     }
 
     fn close_spectrum_list(&mut self) -> WriterResult {
+        if self.state < MzMLWriterState::SpectrumList {
+            self.start_spectrum_list()?;
+        }
         let tag = bstart!("spectrumList");
+        end_event!(self, tag);
+        self.state = MzMLWriterState::SpectrumListClosed;
+        Ok(())
+    }
+
+    pub fn write_summary_chromatograms(&mut self) -> WriterResult {
+        if !self.wrote_summaries {
+            self.write_chromatogram(&self.tic_collector.to_chromatogram())?;
+            self.write_chromatogram(&self.bic_collector.to_chromatogram())?;
+            self.wrote_summaries = true;
+        }
+        Ok(())
+    }
+
+    pub fn start_chromatogram_list(&mut self) -> WriterResult {
+        match self.state {
+            MzMLWriterState::ChromatogramList => {}
+            MzMLWriterState::SpectrumList => {
+                self.close_spectrum_list()?;
+            }
+            state if state < MzMLWriterState::SpectrumList => {
+                self.start_run()?;
+                self.start_spectrum_list()?;
+                self.close_spectrum_list()?;
+            }
+            state if state > MzMLWriterState::ChromatogramList => {
+                return self.transition_err(MzMLWriterState::ChromatogramList);
+            }
+            _ => {}
+        }
+        let mut list = bstart!("chromatogramList");
+        let count = self.chromatogram_count.to_string();
+        attrib!("count", count, list);
+        if let Some(dp) = self.data_processings.first() {
+            attrib!("defaultDataProcessingRef", dp.id, list);
+        }
+        self.handle.write_event(Event::Start(list))?;
+        self.state = MzMLWriterState::ChromatogramList;
+        Ok(())
+    }
+
+    fn close_chromatogram_list(&mut self) -> WriterResult {
+        if self.state < MzMLWriterState::ChromatogramList {
+            self.start_chromatogram_list()?;
+        }
+        self.write_summary_chromatograms()?;
+        let tag = bstart!("chromatogramList");
         end_event!(self, tag);
         self.state = MzMLWriterState::SpectrumListClosed;
         Ok(())
@@ -592,8 +747,10 @@ where
             self.start_run()?;
         } else if self.state == MzMLWriterState::SpectrumList {
             self.close_spectrum_list()?;
+            self.start_chromatogram_list()?;
+            self.close_chromatogram_list()?;
         } else if self.state == MzMLWriterState::ChromatogramList {
-            // TODO
+            self.close_chromatogram_list()?;
         } else if self.state > MzMLWriterState::RunClosed {
             // Cannot close the run of mzML, currently in state which happens after the run has already ended
             return self.transition_err(MzMLWriterState::RunClosed);
@@ -608,9 +765,9 @@ where
         if self.state < MzMLWriterState::RunClosed {
             self.close_run()?;
         }
-        let tag = bstart!("mzML");
+        let tag = BytesEnd::new("mzML");
+        self.write_event(Event::End(tag))?;
         self.state = MzMLWriterState::MzMLClosed;
-        end_event!(self, tag);
         Ok(())
     }
 
@@ -618,9 +775,12 @@ where
         if self.state < MzMLWriterState::MzMLClosed {
             self.close_mzml()?;
         }
-        self.write_index_list()?;
-        let tag = bstart!("indexedmzML");
-        end_event!(self, tag);
+        if self.write_index {
+            self.state = MzMLWriterState::IndexList;
+            self.write_index_list()?;
+            let tag = bstart!("indexedmzML");
+            end_event!(self, tag);
+        }
         self.state = MzMLWriterState::End;
         Ok(())
     }
@@ -631,13 +791,15 @@ where
     */
     pub fn close(&mut self) -> WriterResult {
         if self.state < MzMLWriterState::End {
-            self.close_indexed_mzml()
+            self.close_indexed_mzml()?;
+            self.handle.flush()?;
+            Ok(())
         } else {
             Ok(())
         }
     }
 
-    fn write_scan_list(&mut self, acq: &Acquisition) -> WriterResult {
+    pub fn write_scan_list(&mut self, acq: &Acquisition) -> WriterResult {
         let mut scan_list_tag = bstart!("scanList");
         let count = acq.scans.len().to_string();
         attrib!("count", count, scan_list_tag);
@@ -707,7 +869,7 @@ where
         Ok(())
     }
 
-    fn write_isolation_window(&mut self, iw: &IsolationWindow) -> WriterResult {
+    pub fn write_isolation_window(&mut self, iw: &IsolationWindow) -> WriterResult {
         let iw_tag = bstart!("isolationWindow");
         self.handle.write_event(Event::Start(iw_tag.borrow()))?;
         self.handle.write_param(
@@ -743,7 +905,7 @@ where
         self.handle.write_event(Event::End(iw_tag.to_end()))
     }
 
-    fn write_selected_ions(&mut self, precursor: &Precursor) -> WriterResult {
+    pub fn write_selected_ions(&mut self, precursor: &Precursor) -> WriterResult {
         let mut outer = bstart!("selectedIonList");
         attrib!("count", "1", outer);
         start_event!(self, outer);
@@ -775,7 +937,7 @@ where
         Ok(())
     }
 
-    fn write_activation(&mut self, precursor: &Precursor) -> WriterResult {
+    pub fn write_activation(&mut self, precursor: &Precursor) -> WriterResult {
         let act = precursor.activation();
         let tag = bstart!("activation");
         start_event!(self, tag);
@@ -797,7 +959,7 @@ where
         Ok(())
     }
 
-    fn write_precursor(&mut self, precursor: &Precursor) -> WriterResult {
+    pub fn write_precursor(&mut self, precursor: &Precursor) -> WriterResult {
         let mut precursor_list_tag = bstart!("precursorList");
         attrib!("count", "1", precursor_list_tag);
         start_event!(self, precursor_list_tag);
@@ -818,7 +980,7 @@ where
         Ok(())
     }
 
-    fn write_binary_data_array(&mut self, array: &DataArray) -> WriterResult {
+    pub fn write_binary_data_array(&mut self, array: &DataArray) -> WriterResult {
         let mut outer = bstart!("binaryDataArray");
 
         let encoded = array.encode_bytestring(self.data_array_compression);
@@ -873,7 +1035,6 @@ where
                 .handle
                 .write_param(&array.name.as_param_with_unit_const(array.unit))?,
             ArrayType::NonStandardDataArray { name } => {
-                // self.handle.write_param()?;
                 let mut p = self
                     .ms_cv
                     .param_val("MS:1000786", "non-standard data array", name);
@@ -895,7 +1056,7 @@ where
         Ok(())
     }
 
-    fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap) -> WriterResult {
+    pub fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap) -> WriterResult {
         let count = arrays.len().to_string();
         let mut outer = bstart!("binaryDataArrayList");
         attrib!("count", count, outer);
@@ -909,22 +1070,11 @@ where
         Ok(())
     }
 
-    pub fn start_spectrum(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> WriterResult {
-        match self.state {
-            MzMLWriterState::SpectrumList => {}
-            state if state < MzMLWriterState::SpectrumList => {
-                self.start_spectrum_list()?;
-            }
-            state if state > MzMLWriterState::SpectrumList => {
-                // Cannot write spectrum, currently in state which happens
-                // after spectra may be written
-                return Err(MzMLWriterError::InvalidActionError(self.state));
-            }
-            _ => {}
-        }
-        let pos = self.stream_position()? - (1 + (4 * InnerXMLWriter::<W>::INDENT_SIZE));
-        self.offset_index.insert(spectrum.id().to_string(), pos);
-        let mut outer = bstart!("spectrum");
+    pub fn start_spectrum(
+        &mut self,
+        spectrum: &MultiLayerSpectrum<C, D>,
+        outer: &mut BytesStart,
+    ) -> WriterResult {
         attrib!("id", spectrum.id(), outer);
         let count = self.spectrum_counter.to_string();
         attrib!("index", count, outer);
@@ -943,7 +1093,10 @@ where
 
         self.handle.write_event(Event::Start(outer.borrow()))?;
         self.spectrum_counter += 1;
+        Ok(())
+    }
 
+    fn write_ms_level(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> WriterResult {
         let ms_level = spectrum.ms_level();
         if ms_level == 1 {
             self.handle.write_param(&MS1_SPECTRUM)?;
@@ -955,40 +1108,49 @@ where
             "ms level",
             ms_level.to_string(),
         ))?;
+        Ok(())
+    }
 
+    fn write_polarity(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> WriterResult {
         match spectrum.polarity() {
-            ScanPolarity::Negative => self.handle.write_param(&NEGATIVE_SCAN)?,
-            ScanPolarity::Positive => self.handle.write_param(&POSITIVE_SCAN)?,
+            ScanPolarity::Negative => self.handle.write_param(&NEGATIVE_SCAN),
+            ScanPolarity::Positive => self.handle.write_param(&POSITIVE_SCAN),
             ScanPolarity::Unknown => {
                 warn!(
                     "Could not determine scan polarity for {}, assuming positive",
                     spectrum.id()
                 );
-                self.handle.write_param(&POSITIVE_SCAN)?
+                self.handle.write_param(&POSITIVE_SCAN)
             }
         }
+    }
 
+    fn write_continuity(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> WriterResult {
         match spectrum.signal_continuity() {
-            SignalContinuity::Profile => self.handle.write_param(&PROFILE_SPECTRUM)?,
+            SignalContinuity::Profile => self.handle.write_param(&PROFILE_SPECTRUM),
             SignalContinuity::Unknown => {
                 warn!(
                     "Could not determine scan polarity for {}, assuming centroid",
                     spectrum.id()
                 );
-                self.handle.write_param(&CENTROID_SPECTRUM)?;
+                self.handle.write_param(&CENTROID_SPECTRUM)
             }
-            _ => {
-                self.handle.write_param(&CENTROID_SPECTRUM)?;
-            }
+            _ => self.handle.write_param(&CENTROID_SPECTRUM),
         }
+    }
 
-        let acq = spectrum.acquisition();
-
-        self.write_scan_list(acq)?;
+    pub fn write_spectrum_descriptors(
+        &mut self,
+        spectrum: &MultiLayerSpectrum<C, D>,
+    ) -> WriterResult {
+        self.write_ms_level(spectrum)?;
+        self.write_polarity(spectrum)?;
+        self.write_continuity(spectrum)?;
+        self.write_scan_list(spectrum.acquisition())?;
 
         if let Some(precursor) = spectrum.precursor() {
             self.write_precursor(precursor)?;
-        }
+        };
         Ok(())
     }
 
@@ -1015,73 +1177,21 @@ where
             }
             _ => {}
         }
-        let pos = self.stream_position()? - (1 + (4 * InnerXMLWriter::<W>::INDENT_SIZE));
-        self.offset_index.insert(spectrum.id().to_string(), pos);
+        let pos = self.stream_position()?;
+        self.spectrum_offset_index
+            .insert(spectrum.id().to_string(), pos);
+
         let mut outer = bstart!("spectrum");
-        attrib!("id", spectrum.id(), outer);
-        let count = self.spectrum_counter.to_string();
-        attrib!("index", count, outer);
-        let default_array_len = if let Some(mass_peaks) = &spectrum.deconvoluted_peaks {
-            mass_peaks.len()
-        } else if let Some(mz_peaks) = &spectrum.peaks {
-            mz_peaks.len()
-        } else if let Some(arrays) = &spectrum.arrays {
-            arrays.mzs().unwrap().len()
-        } else {
-            0
-        }
-        .to_string();
+        self.start_spectrum(spectrum, &mut outer)?;
 
-        attrib!("defaultArrayLength", default_array_len, outer);
+        self.write_spectrum_descriptors(spectrum)?;
 
-        self.handle.write_event(Event::Start(outer.borrow()))?;
-        self.spectrum_counter += 1;
-
-        let ms_level = spectrum.ms_level();
-        if ms_level == 1 {
-            self.handle.write_param(&MS1_SPECTRUM)?;
-        } else {
-            self.handle.write_param(&MSN_SPECTRUM)?;
-        }
-        self.handle.write_param(&self.ms_cv.param_val(
-            "MS:1000511",
-            "ms level",
-            ms_level.to_string(),
-        ))?;
-
-        match spectrum.polarity() {
-            ScanPolarity::Negative => self.handle.write_param(&NEGATIVE_SCAN)?,
-            ScanPolarity::Positive => self.handle.write_param(&POSITIVE_SCAN)?,
-            ScanPolarity::Unknown => {
-                warn!(
-                    "Could not determine scan polarity for {}, assuming positive",
-                    spectrum.id()
-                );
-                self.handle.write_param(&POSITIVE_SCAN)?
-            }
-        }
-
-        match spectrum.signal_continuity() {
-            SignalContinuity::Profile => self.handle.write_param(&PROFILE_SPECTRUM)?,
-            SignalContinuity::Unknown => {
-                warn!(
-                    "Could not determine scan polarity for {}, assuming centroid",
-                    spectrum.id()
-                );
-                self.handle.write_param(&CENTROID_SPECTRUM)?;
-            }
-            _ => {
-                self.handle.write_param(&CENTROID_SPECTRUM)?;
-            }
-        }
-
-        let acq = spectrum.acquisition();
-
-        self.write_scan_list(acq)?;
-
-        if let Some(precursor) = spectrum.precursor() {
-            self.write_precursor(precursor)?;
-        }
+        self.tic_collector
+            .add(spectrum.start_time(), spectrum.peaks().tic());
+        self.bic_collector.add(
+            spectrum.start_time(),
+            spectrum.peaks().base_peak().intensity,
+        );
 
         if let Some(mass_peaks) = &spectrum.deconvoluted_peaks {
             let arrays: BinaryArrayMap = mass_peaks.as_arrays();
@@ -1093,6 +1203,58 @@ where
             self.write_binary_data_arrays(arrays)?
         }
 
+        end_event!(self, outer);
+        Ok(())
+    }
+
+    pub fn start_chromatogram(
+        &mut self,
+        chromatogram: &Chromatogram,
+        outer: &mut BytesStart,
+    ) -> WriterResult {
+        attrib!("id", chromatogram.id(), outer);
+        let count = self.chromatogram_count.to_string();
+        attrib!("index", count, outer);
+        let default_array_len = chromatogram
+            .arrays
+            .get(&ArrayType::TimeArray)
+            .unwrap()
+            .data_len()?
+            .to_string();
+
+        attrib!("defaultArrayLength", default_array_len, outer);
+
+        self.handle.write_event(Event::Start(outer.borrow()))?;
+        self.chromatogram_count += 1;
+        Ok(())
+    }
+
+    pub fn write_chromatogram(&mut self, chromatogram: &Chromatogram) -> WriterResult {
+        match self.state {
+            MzMLWriterState::ChromatogramList => {}
+            state if state < MzMLWriterState::ChromatogramList => {
+                self.start_chromatogram_list()?;
+            }
+            state if state > MzMLWriterState::ChromatogramList => {
+                // Cannot write chromatogram, currently in state which happens
+                // after spectra may be written
+                return Err(MzMLWriterError::InvalidActionError(self.state));
+            }
+            _ => {}
+        }
+        let pos = self.stream_position()?;
+        self.chromatogram_offset_index
+            .insert(chromatogram.id().to_string(), pos);
+
+        let mut outer = bstart!("chromatogram");
+        self.start_chromatogram(chromatogram, &mut outer)?;
+        self.write_param_list(chromatogram.params().iter())?;
+
+        if let Some(precursor) = chromatogram.precursor() {
+            self.write_precursor(precursor)?;
+        }
+
+        self.write_binary_data_arrays(&chromatogram.arrays)?;
         end_event!(self, outer);
         Ok(())
     }
@@ -1115,14 +1277,25 @@ where
     }
 
     fn write_index_list(&mut self) -> WriterResult {
+        if !self.write_index {
+            return Ok(());
+        }
         if self.state < MzMLWriterState::IndexList {
             self.close_mzml()?;
         }
         let offset = self.stream_position()?;
         let mut outer = bstart!("indexList");
-        attrib!("count", "1", outer);
+        attrib!("count", "2", outer);
         start_event!(self, outer);
-        self.write_index(&self.offset_index.clone())?;
+        let mut tmp_index = OffsetIndex::new("tmp".to_string());
+        mem::swap(&mut tmp_index, &mut self.spectrum_offset_index);
+        self.write_index(&tmp_index)?;
+        mem::swap(&mut tmp_index, &mut self.spectrum_offset_index);
+
+        mem::swap(&mut tmp_index, &mut self.chromatogram_offset_index);
+        self.write_index(&tmp_index)?;
+        mem::swap(&mut tmp_index, &mut self.chromatogram_offset_index);
+
         end_event!(self, outer);
 
         let tag = bstart!("indexListOffset");
@@ -1168,40 +1341,24 @@ where
         let stream = inner.into_inner()?;
         Ok(stream.into_inner())
     }
-}
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default, W: Write + Seek>
-    MzMLSpectrumWriter<C, D> for MzMLWriterType<W, C, D>
-where
-    PeakSetVec<C, MZ>: BuildArrayMapFrom,
-    PeakSetVec<D, Mass>: BuildArrayMapFrom,
-{
-    fn write_scan_list(&mut self, acq: &Acquisition) -> WriterResult {
-        self.write_scan_list(acq)
+    pub fn write_event(&mut self, event: Event) -> WriterResult {
+        self.handle.write_event(event)
     }
 
-    fn write_isolation_window(&mut self, iw: &IsolationWindow) -> WriterResult {
-        self.write_isolation_window(iw)
+    pub fn write_param<P: ParamLike>(&mut self, param: &P) -> WriterResult {
+        self.handle.write_param(param)
     }
 
-    fn write_activation(&mut self, precursor: &Precursor) -> WriterResult {
-        self.write_activation(precursor)
+    pub fn write_param_list<'a, T: Iterator<Item = &'a Param>>(
+        &mut self,
+        params: T,
+    ) -> WriterResult {
+        self.handle.write_param_list(params)
     }
 
-    fn write_precursor(&mut self, precursor: &Precursor) -> WriterResult {
-        self.write_precursor(precursor)
-    }
-
-    fn write_binary_data_array(&mut self, array: &DataArray) -> WriterResult {
-        self.write_binary_data_array(array)
-    }
-
-    fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap) -> WriterResult {
-        self.write_binary_data_arrays(arrays)
-    }
-
-    fn write_spectrum(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> WriterResult {
-        self.write_spectrum(spectrum)
+    pub fn get_ms_cv(&self) -> &ControlledVocabulary {
+        &self.ms_cv
     }
 }
 
@@ -1219,8 +1376,8 @@ mod test {
     #[test]
     fn write_test() -> WriterResult {
         let path = path::Path::new("./test/data/small.mzML");
-        let mut reader = MzMLReaderType::<_, _, _>::open_path(path)
-            .expect("Test file doesn't exist?");
+        let mut reader =
+            MzMLReaderType::<_, _, _>::open_path(path).expect("Test file doesn't exist?");
 
         let n = reader.len();
         assert_eq!(n, 48);

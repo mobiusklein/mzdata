@@ -6,10 +6,10 @@
       <cv id="UO" fullName="UNIT-ONTOLOGY" URI="http://ontologies.berkeleybop.org/uo.obo" version="releases/2020-03-10"/>
     </cvList>
     <fileDescription>
-      <fileContents>
+      <fileContent>
         <cvParam accession="MS:1000579" cvRef="MS" name="MS1 spectrum"/>
         <cvParam accession="MS:1000580" cvRef="MS" name="MSn spectrum"/>
-      </fileContents>
+      </fileContent>
       <sourceFileList count="2">
         <sourceFile id="RAW1" name="small.RAW" location="file:///">
           <cvParam accession="MS:1000768" cvRef="MS" name="Thermo nativeID format"/>
@@ -36,32 +36,36 @@
       <instrumentConfiguration id="IC1">
         <cvParam accession="MS:1000448" cvRef="MS" name="LTQ FT"/>
         <cvParam accession="MS:1000529" cvRef="MS" name="instrument serial number" value="SN06061F"/>
-        <source order="1">
-          <cvParam accession="MS:1000073" cvRef="MS" name="electrospray ionization"/>
-          <cvParam accession="MS:1000057" cvRef="MS" name="electrospray inlet"/>
-        </source>
-        <analyzer order="2">
-          <cvParam accession="MS:1000079" cvRef="MS" name="fourier transform ion cyclotron resonance mass spectrometer"/>
-        </analyzer>
-        <detector order="3">
-          <cvParam accession="MS:1000624" cvRef="MS" name="inductive detector"/>
-        </detector>
-        <sofwareRef ref="Xcalibur"/>
+        <componentList count="3">
+          <source order="1">
+            <cvParam accession="MS:1000073" cvRef="MS" name="electrospray ionization"/>
+            <cvParam accession="MS:1000057" cvRef="MS" name="electrospray inlet"/>
+          </source>
+          <analyzer order="2">
+            <cvParam accession="MS:1000079" cvRef="MS" name="fourier transform ion cyclotron resonance mass spectrometer"/>
+          </analyzer>
+          <detector order="3">
+            <cvParam accession="MS:1000624" cvRef="MS" name="inductive detector"/>
+          </detector>
+        </componentList>
+        <softwareRef ref="Xcalibur"/>
       </instrumentConfiguration>
       <instrumentConfiguration id="IC2">
         <cvParam accession="MS:1000448" cvRef="MS" name="LTQ FT"/>
         <cvParam accession="MS:1000529" cvRef="MS" name="instrument serial number" value="SN06061F"/>
-        <source order="1">
-          <cvParam accession="MS:1000073" cvRef="MS" name="electrospray ionization"/>
-          <cvParam accession="MS:1000057" cvRef="MS" name="electrospray inlet"/>
-        </source>
-        <analyzer order="2">
-          <cvParam accession="MS:1000083" cvRef="MS" name="radial ejection linear ion trap"/>
-        </analyzer>
-        <detector order="3">
-          <cvParam accession="MS:1000253" cvRef="MS" name="electron multiplier"/>
-        </detector>
-        <sofwareRef ref="Xcalibur"/>
+        <componentList count="3">
+          <source order="1">
+            <cvParam accession="MS:1000073" cvRef="MS" name="electrospray ionization"/>
+            <cvParam accession="MS:1000057" cvRef="MS" name="electrospray inlet"/>
+          </source>
+          <analyzer order="2">
+            <cvParam accession="MS:1000083" cvRef="MS" name="radial ejection linear ion trap"/>
+          </analyzer>
+          <detector order="3">
+            <cvParam accession="MS:1000253" cvRef="MS" name="electron multiplier"/>
+          </detector>
+        </componentList>
+        <softwareRef ref="Xcalibur"/>
       </instrumentConfiguration>
     </instrumentConfigurationList>
     <dataProcessingList count="2">
@@ -2439,61 +2443,100 @@
           </binaryDataArrayList>
         </spectrum>
       </spectrumList>
+      <chromatogramList count="0" defaultDataProcessingRef="pwiz_Reader_Thermo_conversion">
+        <chromatogram id="TIC" index="0" defaultArrayLength="48">
+          <cvParam accession="MS:1000235" cvRef="MS" name="total ion current chromatogram"/>
+          <binaryDataArrayList count="2">
+            <binaryDataArray encodedLength="272">
+              <cvParam accession="MS:1000521" cvRef="MS" name="32-bit float"/>
+              <cvParam accession="MS:1000574" cvRef="MS" name="zlib compression"/>
+              <cvParam accession="MS:1000515" cvRef="MS" name="intensity array" unitCvRef="MS" unitAccession="MS:1000131" unitName="number of detector counts"/>
+              <binary>eNoBwAA//+xVhEyE20RLcCIPSUWc10jaTd9Hp73+RxG9DUkke31M7u0dS7UiT0nuud5IMYXyR2aky0dP9A9IVJqTTPdsKEuxl4ZJX+evSGrZ9UfZ6ApIpfUPSEXNjEwY/8JJqMVxSf+T2kiE/otH31/qR1C2FEgFcqxMmLw9SzkQuUi3TOtHrTHeR7/Dj0cYKIhMDdrHSlxKfkl1ARlJXfnUR7+hGEiK9ZpHNYxITMVvS0sU2WFJ78LMSPairUcZhMRHgTmYRyVPXGU=</binary>
+            </binaryDataArray>
+            <binaryDataArray encodedLength="528">
+              <cvParam accession="MS:1000523" cvRef="MS" name="64-bit float"/>
+              <cvParam accession="MS:1000574" cvRef="MS" name="zlib compression"/>
+              <cvParam accession="MS:1000595" cvRef="MS" name="time array" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
+              <binary>eNoBgAF//mYxsfm4NnQ/HE2oqCAsgD9oND82o/mGP3+hCpvuYpc/UiegibDhoT8w8Nx7uOSoP7qQDEdqtK8/3J212y40sz/s8qyr7+mzP9DN/dy9ybQ/fMhaSoPItz9LUS0pZNS6P4vDmV/NAb4/QJcNy4ykwD9OG3LMn1zCPxF4wx2CvcI/Jcy0/Ssrwz+o80XbHqrEPzfDDfj8MMY/BXaYlmvkxz+OQLyuX7DJPzWlWNWlWcs/Egdt0lq+yz9Oh7HsXCvMP0X9kYlu0M0/wARu3c1Tzz/unBjCRJbQPwHz3uhQc9E/qPgN41tF0j9hL2JvT33SP7F9Fhvgb9M/pN++Dpwz1D/Rtky2lAbVP6ezk8FR8tU/dOfXpp7y1j9Z1eBNpCHXP9VbA1slWNc/9QiDAtwZ2D/Ohd8dBuDYP5MlJW29udk/aZn3aISR2j+b9uJbRWzbP1o3kF7nuds/o/H2ULXw2z9TIoleRrHcP9KpK5/led0/+c0SNFNH3j/fyy+z4i7fPwrxyKk=</binary>
+            </binaryDataArray>
+          </binaryDataArrayList>
+        </chromatogram>
+        <chromatogram id="BIC" index="1" defaultArrayLength="48">
+          <cvParam accession="MS:1000628" cvRef="MS" name="basepeak chromatogram"/>
+          <binaryDataArrayList count="2">
+            <binaryDataArray encodedLength="272">
+              <cvParam accession="MS:1000521" cvRef="MS" name="32-bit float"/>
+              <cvParam accession="MS:1000574" cvRef="MS" name="zlib compression"/>
+              <cvParam accession="MS:1000515" cvRef="MS" name="intensity array" unitCvRef="MS" unitAccession="MS:1000131" unitName="number of detector counts"/>
+              <binary>eNoBwAA//8eXs0muhzNIN10dSMzT40YyZwZGuVJ6RgUP7UcDnslJyrULSMhObEgV40JHIkS5RlYV80UbsYtGqXH3SYZkA0jUJSZIVhgoRxdbyEaf7IRGd66RRsjF+EldzqBG/ieGSNBhS0cfCgNGylVtRo5lf0YLASFKCuE4SHqVIEeObsNGsCRcRjCWRUaVN9RJCZbORz6jkUh9yChHjFyrRnuWiUYXYSBGkGSkSTxiKkhyjntIu3g6R/YYSkaYRU9GFeZLRhLSTjg=</binary>
+            </binaryDataArray>
+            <binaryDataArray encodedLength="528">
+              <cvParam accession="MS:1000523" cvRef="MS" name="64-bit float"/>
+              <cvParam accession="MS:1000574" cvRef="MS" name="zlib compression"/>
+              <cvParam accession="MS:1000595" cvRef="MS" name="time array" unitCvRef="UO" unitAccession="UO:0000031" unitName="minute"/>
+              <binary>eNoBgAF//mYxsfm4NnQ/HE2oqCAsgD9oND82o/mGP3+hCpvuYpc/UiegibDhoT8w8Nx7uOSoP7qQDEdqtK8/3J212y40sz/s8qyr7+mzP9DN/dy9ybQ/fMhaSoPItz9LUS0pZNS6P4vDmV/NAb4/QJcNy4ykwD9OG3LMn1zCPxF4wx2CvcI/Jcy0/Ssrwz+o80XbHqrEPzfDDfj8MMY/BXaYlmvkxz+OQLyuX7DJPzWlWNWlWcs/Egdt0lq+yz9Oh7HsXCvMP0X9kYlu0M0/wARu3c1Tzz/unBjCRJbQPwHz3uhQc9E/qPgN41tF0j9hL2JvT33SP7F9Fhvgb9M/pN++Dpwz1D/Rtky2lAbVP6ezk8FR8tU/dOfXpp7y1j9Z1eBNpCHXP9VbA1slWNc/9QiDAtwZ2D/Ohd8dBuDYP5MlJW29udk/aZn3aISR2j+b9uJbRWzbP1o3kF7nuds/o/H2ULXw2z9TIoleRrHcP9KpK5/led0/+c0SNFNH3j/fyy+z4i7fPwrxyKk=</binary>
+            </binaryDataArray>
+          </binaryDataArrayList>
+        </chromatogram>
+      </chromatogramList>
     </run>
   </mzML>
-</mzML>
-<indexList count="1">
-  <index name="spectrum">
-    <offset idRef="controllerType=0 controllerNumber=1 scan=1">4496</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=2">219713</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=3">402934</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=4">411941</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=5">425786</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=6">438019</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=7">448555</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=8">460168</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=9">624729</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=10">815776</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=11">825415</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=12">838680</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=13">849053</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=14">860892</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=15">871621</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=16">1059354</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=17">1243107</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=18">1253001</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=19">1266011</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=20">1276730</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=21">1287527</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=22">1300299</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=23">1490179</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=24">1655044</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=25">1664933</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=26">1678128</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=27">1689931</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=28">1700780</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=29">1713315</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=30">1934778</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=31">2114194</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=32">2127421</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=33">2137983</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=34">2149007</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=35">2158966</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=36">2340070</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=37">2507539</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=38">2517355</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=39">2531783</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=40">2542318</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=41">2554938</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=42">2566444</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=43">2923645</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=44">3108986</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=45">3119176</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=46">3133055</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=47">3144167</offset>
-    <offset idRef="controllerType=0 controllerNumber=1 scan=48">3154822</offset>
-  </index>
-</indexList>
-<indexListOffset>3165292</indexListOffset>
-<fileChecksum>74d835c08d147fde73ea6d725f33711c</fileChecksum>
+  <indexList count="2">
+    <index name="spectrum">
+      <offset idRef="controllerType=0 controllerNumber=1 scan=1">4663</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=2">219880</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=3">403101</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=4">412108</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=5">425953</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=6">438186</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=7">448722</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=8">460335</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=9">624896</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=10">815943</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=11">825582</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=12">838847</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=13">849220</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=14">861059</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=15">871788</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=16">1059521</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=17">1243274</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=18">1253168</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=19">1266178</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=20">1276897</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=21">1287694</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=22">1300466</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=23">1490346</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=24">1655211</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=25">1665100</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=26">1678295</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=27">1690098</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=28">1700947</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=29">1713482</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=30">1934945</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=31">2114361</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=32">2127588</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=33">2138150</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=34">2149174</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=35">2159133</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=36">2340237</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=37">2507706</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=38">2517522</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=39">2531950</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=40">2542485</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=41">2555105</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=42">2566611</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=43">2923812</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=44">3109153</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=45">3119343</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=46">3133222</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=47">3144334</offset>
+      <offset idRef="controllerType=0 controllerNumber=1 scan=48">3154989</offset>
+    </index>
+    <index name="chromatogram">
+      <offset idRef="TIC">3165513</offset>
+      <offset idRef="BIC">3167419</offset>
+    </index>
+  </indexList>
+  <indexListOffset>3169363</indexListOffset>
+  <fileChecksum>7641ce125c3bd54e1d43622761e5c7d0</fileChecksum>
 </indexedmzML>

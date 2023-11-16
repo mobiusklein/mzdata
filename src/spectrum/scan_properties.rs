@@ -6,20 +6,16 @@ use crate::{impl_param_described, ParamList};
 /**
 Describe the initialization stage of an isolation window
 */
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 #[repr(i8)]
 pub enum IsolationWindowState {
+    #[default]
     Unknown = 0,
     Offset,
     Explicit,
     Complete,
 }
 
-impl Default for IsolationWindowState {
-    fn default() -> IsolationWindowState {
-        IsolationWindowState::Unknown
-    }
-}
 
 #[derive(Default, Debug, Clone)]
 /// The interval around the precursor ion that was isolated in the precursor scan.
@@ -63,9 +59,10 @@ pub struct ScanEvent {
 
 pub type ScanEventList = Vec<ScanEvent>;
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default)]
 pub enum ScanCombination {
     // MS:1000795
+    #[default]
     NoCombination,
     // MS:1000571
     Sum,
@@ -73,11 +70,6 @@ pub enum ScanCombination {
     Median,
 }
 
-impl Default for ScanCombination {
-    fn default() -> Self {
-        Self::NoCombination
-    }
-}
 
 impl ScanCombination {
     pub fn from_accession(
@@ -579,18 +571,14 @@ Describes the polarity of a mass spectrum. A spectrum is either `Positive` (1+),
 or `Unknown` (0). The `Unknown` state is the default.
 */
 #[repr(i8)]
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Default)]
 pub enum ScanPolarity {
+    #[default]
     Unknown = 0,
     Positive = 1,
     Negative = -1,
 }
 
-impl Default for ScanPolarity {
-    fn default() -> ScanPolarity {
-        ScanPolarity::Unknown
-    }
-}
 
 /**
 Describes the initial representation of the signal of a spectrum.
@@ -599,18 +587,14 @@ Though most formats explicitly have a method of either conveying a processing le
 or an assumed level, the `Unknown` option is retained for partial initialization.
 */
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default)]
 pub enum SignalContinuity {
+    #[default]
     Unknown = 0,
     Centroid = 3,
     Profile = 5,
 }
 
-impl Default for SignalContinuity {
-    fn default() -> SignalContinuity {
-        SignalContinuity::Unknown
-    }
-}
 
 /**
 The set of descriptive metadata that give context for how a mass spectrum was acquired
@@ -633,3 +617,29 @@ pub struct SpectrumDescription {
 
 impl_param_described!(Activation, SpectrumDescription);
 impl_param_described_deferred!(SelectedIon, Acquisition, ScanEvent);
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum ChromatogramType {
+    #[default]
+    Unknown,
+    TotalIonCurrentChromatogram,
+    BasePeakChromatogram,
+    SelectedIonCurrentChromatogram,
+    SelectedReactionMonitoringChromatogram,
+}
+
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct ChromatogramDescription {
+    pub id: String,
+    pub index: usize,
+    pub ms_level: Option<u8>,
+    pub polarity: ScanPolarity,
+    pub chromatogram_type: ChromatogramType,
+
+    pub params: ParamList,
+    pub precursor: Option<Precursor>,
+}
+
+impl_param_described!(ChromatogramDescription);

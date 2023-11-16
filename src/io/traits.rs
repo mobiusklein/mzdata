@@ -876,7 +876,6 @@ impl<
 /// Common interface for spectrum writing
 pub trait ScanWriter<
     'a,
-    W: io::Write,
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumBehavior<C, D> + 'static = MultiLayerSpectrum<C, D>,

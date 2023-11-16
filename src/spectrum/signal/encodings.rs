@@ -102,7 +102,7 @@ impl ArrayType {
 
 /// The canonical primitive data types found in MS data file formats
 /// supported by the PSI-MS controlled vocabulary
-#[derive(Debug, Clone, Copy, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum BinaryDataArrayType {
     Unknown,
     Float64,

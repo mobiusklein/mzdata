@@ -192,7 +192,7 @@ pub trait CVParamParse: XMLParseBase {
         }
         let param = ParamCow::new(
             name.unwrap(),
-            value.unwrap(),
+            value.unwrap_or_default(),
             accession,
             controlled_vocabulary,
             unit,
