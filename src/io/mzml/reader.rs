@@ -1233,7 +1233,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
             .expect("Failed to save checkpoint");
         self.seek(SeekFrom::Start(offset))
             .expect("Failed to move seek to offset");
-        debug_assert!(self.check_stream("spectrum").unwrap());
+        debug_assert!(self.check_stream("spectrum").unwrap(), "The next XML tag was not `spectrum`");
         let result = self.read_next();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
@@ -1249,7 +1249,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
             .stream_position()
             .expect("Failed to save checkpoint");
         self.seek(SeekFrom::Start(byte_offset)).ok()?;
-        debug_assert!(self.check_stream("spectrum").unwrap());
+        debug_assert!(self.check_stream("spectrum").unwrap(), "The next XML tag was not `spectrum`");
         let result = self.read_next();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
@@ -1750,6 +1750,24 @@ mod test {
         }
         let n = reader.len();
         assert_eq!(n, counter + 30);
+        Ok(())
+    }
+
+    #[test]
+    fn test_random_access_failure() -> io::Result<()> {
+        let path = path::Path::new("./test/data/small.mzML");
+        let mut reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::open_path(path)?;
+
+        let offset = reader._offset_of_index(20).unwrap().saturating_sub(200);
+        reader.seek(SeekFrom::Start(offset))?;
+
+        let found = reader.check_stream("spectrum")?;
+        assert!(!found);
+
+        let offset = reader._offset_of_index(20).unwrap();
+        reader.seek(SeekFrom::Start(offset))?;
+        let found = reader.check_stream("spectrum")?;
+        assert!(found);
         Ok(())
     }
 }

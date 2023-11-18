@@ -99,6 +99,17 @@ pub enum MzMLParserError {
     IOError(MzMLParserState, #[source] io::Error),
 }
 
+
+impl From<MzMLParserError> for io::Error {
+    fn from(value: MzMLParserError) -> Self {
+        match value {
+            MzMLParserError::IOError(_, ref e) => io::Error::new(e.kind(), value),
+            _ => io::Error::new(io::ErrorKind::InvalidData, value),
+        }
+    }
+}
+
+
 pub type ParserResult = Result<MzMLParserState, MzMLParserError>;
 
 /**
