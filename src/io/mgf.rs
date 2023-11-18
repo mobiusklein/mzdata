@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::io::BufWriter;
 use std::mem;
 use std::fs;
 use std::io;
@@ -706,6 +707,10 @@ impl<
         }
     }
 
+    pub fn into_inner(self) ->BufWriter<W> {
+        self.handle
+    }
+
     fn write_param<P: ParamLike>(&mut self, param: &P) -> io::Result<()> {
         self.handle.write_all(param.name().to_uppercase().as_bytes())?;
         self.handle.write_all(param.value().as_bytes())?;
@@ -903,19 +908,19 @@ mod test {
 
         let path = path::Path::new("./test/data/small.mgf");
         let file = fs::File::open(path).expect("Test file doesn't exist");
-        let reader = MGFReader::new(file);
+        let mut reader = MGFReader::new(file);
 
-        let mut count = 0;
-        for scan in reader {
-            count += writer.write(&scan)?;
+        for scan in reader.iter() {
+            writer.write(&scan)?;
         }
         writer.flush()?;
         let inner_writer = writer.handle.into_inner()?;
-        let buffer = inner_writer.get_ref();
-        let text = str::from_utf8(buffer).unwrap();
+        let buffer = inner_writer.into_inner();
+        let reader2 = MGFReader::new(io::Cursor::new(buffer));
+        assert_eq!(reader2.len(), reader.len());
+
+
         // Not including platform-specific line endings
-        assert_eq!(count, 548732);
-        assert_eq!(count, text.len());
         Ok(())
     }
 }
