@@ -1046,7 +1046,6 @@ impl<
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         accumulator = accumulator.borrow_instrument_configuration(&mut self.instrument_id_map);
-        // accumulator.instrument_id_map = Some(&mut self.instrument_id_map);
         let mut offset: usize = 0;
         loop {
             match reader.read_event_into(&mut self.buffer) {
@@ -1175,9 +1174,37 @@ impl<
     }
 }
 
-impl<R: io::Read + io::Seek, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
-    MzMLReaderType<R, C, D>
-{
+impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D>  {
+    pub fn check_stream(&mut self, next_tag: &str) -> Result<bool, MzMLParserError> {
+        let position = match self.stream_position() {
+            Ok(pos) => pos,
+            Err(err) => return Err(MzMLParserError::IOError(self.state, err))
+        };
+        let mut reader = Reader::from_reader(&mut self.handle);
+        reader.trim_text(true);
+        let matched_tag = match reader.read_event_into(&mut self.buffer) {
+            Ok(event) => {
+                match event {
+                    Event::Start(ref e) => e.name().0 == next_tag.as_bytes(),
+                    Event::End(_) => false,
+                    Event::Empty(ref e) => e.name().0 == next_tag.as_bytes(),
+                    Event::Text(_) => false,
+                    Event::Eof => false,
+                    _ => false
+                }
+            },
+            Err(err) => {
+                self.buffer.clear();
+                return Err(MzMLParserError::XMLError(self.state, err))
+            },
+        };
+        self.buffer.clear();
+        match self.seek(SeekFrom::Start(position)) {
+            Ok(_) => {},
+            Err(err) => return Err(MzMLParserError::IOError(self.state, err))
+        }
+        Ok(matched_tag)
+    }
 }
 
 /// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
@@ -1206,6 +1233,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
             .expect("Failed to save checkpoint");
         self.seek(SeekFrom::Start(offset))
             .expect("Failed to move seek to offset");
+        debug_assert!(self.check_stream("spectrum").unwrap());
         let result = self.read_next();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
@@ -1221,6 +1249,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
             .stream_position()
             .expect("Failed to save checkpoint");
         self.seek(SeekFrom::Start(byte_offset)).ok()?;
+        debug_assert!(self.check_stream("spectrum").unwrap());
         let result = self.read_next();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");

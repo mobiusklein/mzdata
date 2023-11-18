@@ -833,6 +833,8 @@ fn create_fixed_length_str_attribute(
 
 #[cfg(test)]
 mod test {
+    use tempfile;
+
     use crate::io::prelude::*;
 
     use super::super::super::MzMLReader;
@@ -841,7 +843,8 @@ mod test {
 
     #[test]
     fn test_writer() -> WriterResult {
-        let path = PathBuf::from("./test/data/duplicate.mzMLb");
+        let tmpdir = tempfile::tempdir()?;
+        let path = tmpdir.path().join("duplicate.mzMLb");
         let mut reader = MzMLReader::open_path("test/data/small.mzML")?;
         let mut writer = MzMLBWriterBuilder::new(&path)
             .with_zlib_compression(9)

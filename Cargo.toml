@@ -39,7 +39,7 @@ lto = true
 debug = true
 
 [features]
-default = ["intel-mkl", "parallelism", "plotting", "mzmlb", "zlib-ng-compat", ]
+default = ["intel-mkl", "parallelism", "mzsignal", "mzmlb", "zlib-ng-compat", ]
 
 openblas = ["mzsignal/openblas"]
 netlib = ["mzsignal/netlib"]
@@ -54,7 +54,7 @@ zlib = ["flate2/zlib"]
 zlib-ng-compat = ["flate2/zlib-ng-compat"]
 miniz_oxide = ["flate2/rust_backend"]
 
-plotting = ["mzsignal/plotting"]
+plotting = ["mzsignal", "mzsignal/plotting"]
 
 mzmlb = ["hdf5", "ndarray", "hdf5-sys"]
 
@@ -73,7 +73,7 @@ indexmap = { version = "2.0.0", features = [ "serde" ] }
 log = "0.4.20"
 mzpeaks = { version = "0.7.0" }
 rayon = { version = "1.7.0", optional = true }
-mzsignal = { version = "0.3.1", default-features = false}
+mzsignal = { version = "0.3.1", default-features = false, optional = true}
 md5 = "0.7.0"
 tokio = {version = "1.32.0", optional = true, features = ["macros", "rt", "fs", "rt-multi-thread"]}
 
@@ -81,6 +81,7 @@ hdf5 = {version = "0.8.1", optional = true, features = ["blosc", "lzf",]}
 hdf5-sys = { version = "0.8.1", optional = true }
 ndarray = { version = "0.15.6", optional = true }
 filename = "0.1.1"
+
 numpress = { version = "1.1.0", optional = true }
 bytemuck = { version = "1.14.0", features = ["extern_crate_alloc"]}
 base64-simd = "0.8.0"
@@ -91,6 +92,7 @@ thiserror = "1.0.50"
 criterion = { version = "0.5.1", features = [ "html_reports" ] }
 test-log = "0.2.12 "
 env_logger = "0.10.0"
+tempfile = "3.8.1"
 
 [[bench]]
 name = "mzml"

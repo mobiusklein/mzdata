@@ -1372,9 +1372,12 @@ mod test {
     use crate::io::prelude::*;
     use std::fs;
     use std::path;
+    use tempfile;
 
     #[test]
     fn write_test() -> WriterResult {
+        let tmpdir = tempfile::tempdir()?;
+        let dest_path = tmpdir.path().join("duplicate.mzML");
         let path = path::Path::new("./test/data/small.mzML");
         let mut reader =
             MzMLReaderType::<_, _, _>::open_path(path).expect("Test file doesn't exist?");
@@ -1382,7 +1385,7 @@ mod test {
         let n = reader.len();
         assert_eq!(n, 48);
 
-        let dest = fs::File::create("./test/data/duplicate.mzML")?;
+        let dest = fs::File::create(dest_path.clone())?;
         let mut writer = MzMLWriterType::new(dest);
         writer.copy_metadata_from(&reader);
         *writer.spectrum_count_mut() = reader.len() as u64;
@@ -1396,7 +1399,7 @@ mod test {
         }
         writer.close()?;
 
-        let mut reader2 = MzMLReader::open_path(path)?;
+        let mut reader2 = MzMLReader::open_path(dest_path)?;
         assert_eq!(reader.file_description(), reader2.file_description());
 
         for (a, b) in reader.iter().zip(reader2.iter()) {

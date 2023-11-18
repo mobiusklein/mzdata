@@ -93,8 +93,8 @@ fn scan_file<
                 *charge_table.entry(0).or_default() += 1;
             }
         }
+        peak_count += scan.peaks().len();
         let has_charge = if let Some(ref arrays) = scan.arrays {
-            peak_count += arrays.mzs().unwrap().len();
             arrays.charges().is_ok()
         } else {
             false

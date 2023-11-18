@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning].
 
 ### Added
 - Limited async MzML reader support
-- mzMLb reader support
+- mzMLb read and write support
 
 ### Changed
 - `RandomAccessScanIterator` methods now return mutable references to self, making them actually useful in a chain.

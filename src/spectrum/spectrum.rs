@@ -39,7 +39,6 @@ for spectrum in reader {
 use std::borrow::Cow;
 use std::convert::TryFrom;
 
-use mzsignal::FittedPeak;
 use thiserror::Error;
 
 use mzpeaks::{prelude::*, IndexType};
@@ -49,8 +48,12 @@ use mzpeaks::{
 };
 use mzpeaks::{CentroidPeak, DeconvolutedPeak, Tolerance};
 
+#[cfg(feature = "mzsignal")]
 use mzsignal::denoise::{denoise, DenoisingError};
+#[cfg(feature = "mzsignal")]
 use mzsignal::peak_picker::{PeakFitType, PeakPicker, PeakPickerError};
+#[cfg(feature = "mzsignal")]
+use mzsignal::FittedPeak;
 
 use crate::params::ParamList;
 use crate::spectrum::scan_properties::{
@@ -145,6 +148,15 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
             PeakDataLevel::RawData(arrays) => arrays.search(query, error_tolerance),
             PeakDataLevel::Centroid(peaks) => peaks.search(query, error_tolerance),
             PeakDataLevel::Deconvoluted(peaks) => peaks.search(query, error_tolerance),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            PeakDataLevel::Missing => 0,
+            PeakDataLevel::RawData(arrays) => arrays.mzs().expect("Failed to locate m/z array while computing size").len(),
+            PeakDataLevel::Centroid(peaks) => peaks.len(),
+            PeakDataLevel::Deconvoluted(peaks) => peaks.len(),
         }
     }
 }
@@ -255,12 +267,17 @@ pub enum SpectrumConversionError {
 
 #[derive(Debug, Clone, Error)]
 pub enum SpectrumProcessingError {
+    #[cfg(feature = "mzsignal")]
     #[error("An error occurred while denoising: {0:?}")]
     DenoisingError(DenoisingError),
+
+    #[cfg(feature = "mzsignal")]
     #[error("An error occurred while peak picking: {0:?}")]
     PeakPickerError(PeakPickerError),
+
     #[error("An error occurred while trying to convert spectrum types: {0}")]
     SpectrumConversionError(#[from] #[source] SpectrumConversionError),
+
     #[error("An error occurred while accessing raw data arrays: {0}")]
     ArrayRetrievalError(#[from] #[source] ArrayRetrievalError),
 }
@@ -327,6 +344,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         })
     }
 
+    #[cfg(feature = "mzsignal")]
     pub fn denoise(&mut self, scale: f32) -> Result<(), SpectrumProcessingError> {
         let mut intensities_copy = self.arrays.intensities()?.into_owned();
         let mz_array = self.arrays.mzs()?;
@@ -343,6 +361,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         }
     }
 
+    #[cfg(feature = "mzsignal")]
     pub fn pick_peaks_with_into(
         self,
         peak_picker: &PeakPicker,
@@ -354,6 +373,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         }
     }
 
+    #[cfg(feature = "mzsignal")]
     pub fn pick_peaks_into(
         self,
         signal_to_noise_threshold: f32,
