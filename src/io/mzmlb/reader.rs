@@ -782,7 +782,7 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbRead
         };
 
         idx_splits.zip(offsets).for_each(|(id, off)| {
-            if id.len() == 0 {
+            if id.len() == 0 || off == 0 {
                 return;
             }
             index.insert(
@@ -876,7 +876,8 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
             .expect("Failed to save checkpoint");
         self.mzml_parser
             .seek(SeekFrom::Start(offset))
-            .expect("Failed to move seek to offset");
+            .expect("Failed to seek to offset");
+        debug_assert!(self.mzml_parser.check_stream("spectrum").unwrap(), "The next XML tag was not `spectrum`");
         let result = self.read_next();
         self.mzml_parser
             .seek(SeekFrom::Start(start))
@@ -892,7 +893,8 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
             .mzml_parser
             .stream_position()
             .expect("Failed to save checkpoint");
-        self.mzml_parser.seek(SeekFrom::Start(byte_offset)).ok()?;
+        self.mzml_parser.seek(SeekFrom::Start(byte_offset)).expect("Failed to seek to offset");
+        debug_assert!(self.mzml_parser.check_stream("spectrum").unwrap(), "The next XML tag was not `spectrum`");
         let result = self.read_next();
         self.mzml_parser
             .seek(SeekFrom::Start(start))

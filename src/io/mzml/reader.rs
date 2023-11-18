@@ -1185,12 +1185,30 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
         let matched_tag = match reader.read_event_into(&mut self.buffer) {
             Ok(event) => {
                 match event {
-                    Event::Start(ref e) => e.name().0 == next_tag.as_bytes(),
-                    Event::End(_) => false,
-                    Event::Empty(ref e) => e.name().0 == next_tag.as_bytes(),
-                    Event::Text(_) => false,
-                    Event::Eof => false,
-                    _ => false
+                    Event::Start(ref e) => {
+                        debug!("From {}, the next element started was {}", position, String::from_utf8_lossy(e.name().0));
+                        e.name().0 == next_tag.as_bytes()
+                    },
+                    Event::End(ref e) => {
+                        debug!("From {}, the next element ended was {}", position, String::from_utf8_lossy(e.name().0));
+                        false
+                    },
+                    Event::Empty(ref e) => {
+                        debug!("From {}, the next empty element was {}", position, String::from_utf8_lossy(e.name().0));
+                        e.name().0 == next_tag.as_bytes()
+                    },
+                    Event::Text(ref e) => {
+                        debug!("From {}, the next was a text node of {} bytes", position, e.len());
+                        false
+                    },
+                    Event::Eof => {
+                        debug!("From {}, the next was EOF", position);
+                        false
+                    },
+                    e => {
+                        debug!("From {}, the next was {:?}", position, e);
+                        false
+                    }
                 }
             },
             Err(err) => {

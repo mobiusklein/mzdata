@@ -834,6 +834,7 @@ fn create_fixed_length_str_attribute(
 #[cfg(test)]
 mod test {
     use tempfile;
+    use test_log;
 
     use crate::io::prelude::*;
 
@@ -841,7 +842,7 @@ mod test {
     use super::super::MzMLbReader;
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_writer() -> WriterResult {
         let tmpdir = tempfile::tempdir()?;
         let path = tmpdir.path().join("duplicate.mzMLb");
