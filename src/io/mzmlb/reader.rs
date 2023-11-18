@@ -88,10 +88,8 @@ impl CacheInterval {
 
     #[inline]
     pub fn contains(&self, start: usize, end: usize) -> bool {
-        if self.start <= start {
-            if end < self.end {
-                return true;
-            }
+        if self.start <= start && end < self.end {
+            return true;
         }
         false
     }
@@ -134,11 +132,11 @@ impl Default for ExternalDataRegistry {
 
 impl ExternalDataRegistry {
     pub fn new(chunk_size: usize) -> Self {
-        let inst = Self {
+        
+        Self {
             chunk_size,
             ..Default::default()
-        };
-        inst
+        }
     }
 
     fn default_chunk_size() -> usize {
@@ -364,15 +362,15 @@ impl ExternalDataRegistry {
         if let Some(dset) = self.registry.get(&range_request.name).as_ref() {
             let dtype = dset.dtype()?;
             let block_end = (start + self.chunk_size).min(dset.size());
-            let cache_block = Self::read_slice_to_bytes(&dset, start, block_end)?;
+            let cache_block = Self::read_slice_to_bytes(dset, start, block_end)?;
             let cache_block = DataArray::wrap(&destination.name, dtype.into(), cache_block);
             let mut cache_block = CacheInterval::new(start, block_end, cache_block);
             let block = if let Some(cache_block) = self
                 .chunk_cache
                 .get_mut(&range_request.name)
-                .and_then(|prev| {
+                .map(|prev| {
                     mem::swap(prev, &mut cache_block);
-                    Some(prev)
+                    prev
                 }) {
                 debug!(
                     "Updated {} cache block: {:?}",
@@ -499,16 +497,14 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
                                             match param.accession.unwrap() {
                                                 // external HDF5 dataset
                                                 1002841 => {
-                                                    if self.current_data_range_query.name.len() == 0
-                                                        && !param.value.starts_with("/")
+                                                    if self.current_data_range_query.name.is_empty()
+                                                        && !param.value.starts_with('/')
                                                     {
                                                         self.current_data_range_query
-                                                            .name
-                                                            .extend("/".chars());
+                                                            .name.push('/');
                                                     }
                                                     self.current_data_range_query
-                                                        .name
-                                                        .extend(param.value.chars());
+                                                        .name.push_str(&param.value);
                                                 }
                                                 // external offset
                                                 1002842 => {
@@ -551,7 +547,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
         let elt_name = event.name();
         let res = match elt_name.as_ref() {
             b"binaryDataArray" => {
-                if self.current_data_range_query.name.len() == 0 {
+                if self.current_data_range_query.name.is_empty() {
                     return Err(MzMLParserError::IncompleteElementError(
                         "The external data array name was missing or empty".to_owned(),
                         MzMLParserState::BinaryDataArray,
@@ -711,14 +707,14 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbRead
 
         let inst = Self {
             handle,
-            index: index,
+            index,
             file_description: mzml_parser.file_description.clone(),
             instrument_configurations: mzml_parser.instrument_configurations.clone(),
             softwares: mzml_parser.softwares.clone(),
             data_processings: mzml_parser.data_processings.clone(),
             mzml_parser,
             schema_version,
-            data_buffers: data_buffers,
+            data_buffers,
         };
 
         Ok(inst)
@@ -782,7 +778,7 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbRead
         };
 
         idx_splits.zip(offsets).for_each(|(id, off)| {
-            if id.len() == 0 || off == 0 {
+            if id.is_empty() || off == 0 {
                 return;
             }
             index.insert(

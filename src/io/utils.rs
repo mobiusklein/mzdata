@@ -10,17 +10,15 @@ use md5::Digest;
 type ByteBuffer = io::Cursor<Vec<u8>>;
 
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub enum FileWrapper<T: io::Read> {
     FileSystem(path::PathBuf),
     Stream(T),
+    #[default]
     Empty,
 }
 
-impl<T: io::Read> Default for FileWrapper<T> {
-    fn default() -> FileWrapper<T> {
-        FileWrapper::Empty
-    }
-}
+
 
 #[derive(Debug, Clone, Default)]
 pub struct FileSource<T: io::Read> {
@@ -126,7 +124,7 @@ impl<T: io::Write> MD5HashingStream<T> {
 
 impl<T: io::Write> io::Write for MD5HashingStream<T> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.context.consume(&buf);
+        self.context.consume(buf);
         self.stream.write(buf)
     }
 
@@ -153,7 +151,7 @@ mod test {
         let stream = ByteBuffer::new(buff);
         let mut out: Vec<u8> = Vec::new();
         let desc = FileSource::<ByteBuffer>::from_stream(stream);
-        assert!(matches!(desc.file_name(), None));
+        assert!(desc.file_name().is_none());
         if let FileWrapper::Stream(mut buff) = desc.source {
             buff.read_to_end(&mut out).unwrap();
             assert_eq!(out, b"foobar");

@@ -43,7 +43,7 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
             Ok(view) => {
                 match view {
                     Cow::Borrowed(view) => {
-                        Ok(Cow::Owned(view.into_iter().map(|a| a.as_()).collect()))
+                        Ok(Cow::Owned(view.iter().map(|a| a.as_()).collect()))
                     }
                     Cow::Owned(owned) => {
                         let res = owned.iter().map(|a| a.as_()).collect();

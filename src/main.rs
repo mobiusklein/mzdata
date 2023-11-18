@@ -116,9 +116,7 @@ fn scan_file<
 
 fn main() -> io::Result<()> {
     let path = path::PathBuf::from(
-        env::args()
-            .skip(1)
-            .next()
+        env::args().nth(1)
             .unwrap_or("./test/data/small.mzML".to_owned()),
     );
 
@@ -170,7 +168,7 @@ fn main() -> io::Result<()> {
     peak_charge_levels.sort_by(|(level_a, _), (level_b, _)| level_a.cmp(level_b));
 
     for (level, peak_charge_table) in peak_charge_levels {
-        if peak_charge_table.len() > 0 {
+        if !peak_charge_table.is_empty() {
             println!("Peak Charge States for MS level {}:", level);
             let mut peak_charge_set: Vec<(&i32, &usize)> = peak_charge_table.iter().collect();
             peak_charge_set.sort_by_key(|(a, b)| *a);

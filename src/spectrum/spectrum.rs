@@ -516,24 +516,22 @@ where
             };
             result.description.signal_continuity = SignalContinuity::Centroid;
             return Ok(result);
-        } else {
-            if self.signal_continuity() == SignalContinuity::Centroid {
-                if let Some(arrays) = &self.arrays {
-                    let peaks = MZPeakSetType::<C>::try_from_arrays(arrays)?;
-                    let mut centroid = CentroidSpectrumType::<C> {
-                        description: self.description,
-                        peaks,
-                    };
-                    centroid.description.signal_continuity = SignalContinuity::Centroid;
-                    return Ok(centroid);
-                } else {
-                    let mut result = CentroidSpectrumType::<C> {
-                        peaks: MZPeakSetType::<C>::empty(),
-                        description: self.description,
-                    };
-                    result.description.signal_continuity = SignalContinuity::Centroid;
-                    return Ok(result);
-                }
+        } else if self.signal_continuity() == SignalContinuity::Centroid {
+            if let Some(arrays) = &self.arrays {
+                let peaks = MZPeakSetType::<C>::try_from_arrays(arrays)?;
+                let mut centroid = CentroidSpectrumType::<C> {
+                    description: self.description,
+                    peaks,
+                };
+                centroid.description.signal_continuity = SignalContinuity::Centroid;
+                return Ok(centroid);
+            } else {
+                let mut result = CentroidSpectrumType::<C> {
+                    peaks: MZPeakSetType::<C>::empty(),
+                    description: self.description,
+                };
+                result.description.signal_continuity = SignalContinuity::Centroid;
+                return Ok(result);
             }
         }
         Err(SpectrumConversionError::NotCentroided)
@@ -733,7 +731,7 @@ mod test {
         assert_eq!(scan.signal_continuity(), SignalContinuity::Profile);
         assert_eq!(scan.ms_level(), 1);
         assert_eq!(scan.polarity(), ScanPolarity::Positive);
-        assert!(matches!(scan.precursor(), None));
+        assert!(scan.precursor().is_none());
 
         match scan.pick_peaks(1.0, PeakFitType::Quadratic) {
             Err(err) => {

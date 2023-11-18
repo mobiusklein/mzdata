@@ -4,12 +4,12 @@ use std::fmt::Display;
 use std::str::{self, FromStr};
 
 pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<u32>) {
-    let mut parts = curie.split(":");
+    let mut parts = curie.split(':');
     let prefix = match parts.next() {
         Some(v) => v.parse::<ControlledVocabulary>().unwrap().as_option(),
         None => None,
     };
-    if let Some(k) = curie.split(":").nth(1) {
+    if let Some(k) = curie.split(':').nth(1) {
         match k.parse() {
             Ok(v) => (prefix, Some(v)),
             Err(_) => (prefix, None),
@@ -37,7 +37,7 @@ pub trait ParamLike {
     }
 
     fn is_controlled(&self) -> bool {
-        !self.accession().is_none()
+        self.accession().is_some()
     }
 
     fn curie(&self) -> Option<String> {
@@ -83,7 +83,7 @@ impl<'a> ParamCow<'a> {
     }
 
     pub fn is_controlled(&self) -> bool {
-        !self.accession.is_none()
+        self.accession.is_some()
     }
 }
 
@@ -226,10 +226,10 @@ pub enum ControlledVocabulary {
     Unknown,
 }
 
-const MS_CV: &'static str = "MS";
-const UO_CV: &'static str = "UO";
-const MS_CV_BYTES: &'static [u8] = MS_CV.as_bytes();
-const UO_CV_BYTES: &'static [u8] = UO_CV.as_bytes();
+const MS_CV: &str = "MS";
+const UO_CV: &str = "UO";
+const MS_CV_BYTES: &[u8] = MS_CV.as_bytes();
+const UO_CV_BYTES: &[u8] = UO_CV.as_bytes();
 
 impl ControlledVocabulary {
     pub fn prefix(&self) -> Cow<'static, str> {
@@ -282,7 +282,7 @@ impl ControlledVocabulary {
             value: Cow::Borrowed(value),
             accession: Some(accession),
             controlled_vocabulary: Some(*self),
-            unit: unit,
+            unit,
         }
     }
 

@@ -123,8 +123,9 @@ impl BinaryDataArrayType {
 /// The range of compression and encoding states that a raw byte buffer
 /// might be in during different stages of decoding. Other than `[BinaryCompressionType::Decoded]`,
 /// these states may or may not include intermediate base64 encoding.
-#[derive(Debug, Clone, Copy, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Default)]
 pub enum BinaryCompressionType {
+    #[default]
     NoCompression,
     Zlib,
     NumpressLinear,
@@ -148,11 +149,7 @@ impl BinaryCompressionType {
     }
 }
 
-impl Default for BinaryCompressionType {
-    fn default() -> BinaryCompressionType {
-        BinaryCompressionType::NoCompression
-    }
-}
+
 
 /// A high level set of failure modes that an operation to retrieve a typed memory buffer
 /// from a `[BinaryArrayMap]` might encounter. May also be used to represented conversion

@@ -555,7 +555,7 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                                     .to_string();
                             }
                             b"index" => {
-                                self.index = (&String::from_utf8_lossy(&attr.value))
+                                self.index = String::from_utf8_lossy(&attr.value)
                                     .parse::<usize>()
                                     .expect("Failed to parse index");
                             }
@@ -810,33 +810,33 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
     }
 }
 
-impl<'a, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> Into<CentroidSpectrumType<C>>
-    for MzMLSpectrumBuilder<'a, C, D>
+impl<'a, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> From<MzMLSpectrumBuilder<'a, C, D>>
+    for CentroidSpectrumType<C>
 where
     MZPeakSetType<C>: BuildFromArrayMap + BuildArrayMapFrom,
     MassPeakSetType<D>: BuildFromArrayMap + BuildArrayMapFrom,
 {
-    fn into(self) -> CentroidSpectrumType<C> {
+    fn from(val: MzMLSpectrumBuilder<'a, C, D>) -> Self {
         let mut spec = MultiLayerSpectrum::<C, D>::default();
-        self.into_spectrum(&mut spec);
+        val.into_spectrum(&mut spec);
         spec.try_into().unwrap()
     }
 }
 
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<MultiLayerSpectrum<C, D>>
-    for MzMLSpectrumBuilder<'a, C, D>
+impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<MzMLSpectrumBuilder<'a, C, D>>
+    for MultiLayerSpectrum<C, D>
 {
-    fn into(self) -> MultiLayerSpectrum<C, D> {
+    fn from(val: MzMLSpectrumBuilder<'a, C, D>) -> Self {
         let mut spec = MultiLayerSpectrum::<C, D>::default();
-        self.into_spectrum(&mut spec);
+        val.into_spectrum(&mut spec);
         spec
     }
 }
 
-impl<'a> Into<RawSpectrum> for MzMLSpectrumBuilder<'a> {
-    fn into(self) -> RawSpectrum {
+impl<'a> From<MzMLSpectrumBuilder<'a>> for RawSpectrum {
+    fn from(val: MzMLSpectrumBuilder<'a>) -> Self {
         let mut spec = Spectrum::default();
-        self.into_spectrum(&mut spec);
+        val.into_spectrum(&mut spec);
         spec.into()
     }
 }
@@ -1021,7 +1021,7 @@ impl<
         self.instrument_configurations = accumulator
             .instrument_configurations
             .into_iter()
-            .map(|ic| (ic.id.clone(), ic))
+            .map(|ic| (ic.id, ic))
             .collect();
         self.softwares = accumulator.softwares;
         self.data_processings = accumulator.data_processings;
@@ -1712,7 +1712,7 @@ mod test {
                 panic!("Failed to parse out index {:?}", err);
             }
         };
-        assert!(reader.index.len() > 0);
+        assert!(!reader.index.is_empty());
         Ok(())
     }
 
@@ -1745,9 +1745,9 @@ mod test {
 <offset idRef="controllerType=0 controllerNumber=1 scan=4">461270</offset>
 <offset idRef="controllerType=0 controllerNumber=1 scan=5">476248</offset>
 "#;
-        for line in needle.split("\n") {
+        for line in needle.split('\n') {
             assert!(
-                decoded.contains(&line),
+                decoded.contains(line),
                 "Failed to find {} in {}",
                 line,
                 decoded

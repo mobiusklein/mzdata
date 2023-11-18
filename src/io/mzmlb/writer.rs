@@ -170,7 +170,7 @@ impl ToString for BufferName {
             ArrayType::RawIonMobilityArray => Cow::Borrowed("raw_ion_mobility"),
             ArrayType::DeconvolutedIonMobilityArray => Cow::Borrowed("deconvoluted_ion_mobility"),
             ArrayType::NonStandardDataArray { name } => {
-                Cow::Owned(name.replace("/", "_").replace(" ", "_"))
+                Cow::Owned(name.replace(['/', ' '], "_"))
             }
         };
         let dtype = match self.dtype {
@@ -413,7 +413,7 @@ where
             handle,
             mzml_writer,
             buffers: HashMap::new(),
-            chunk_size: chunk_size,
+            chunk_size,
             filters: Self::zlib_compression(9),
         })
     }
@@ -703,9 +703,7 @@ where
     fn finalize_data_buffers(&mut self) -> WriterResult {
         let result: WriterResult = self
             .buffers
-            .iter_mut()
-            .map(|(_, v)| -> WriterResult { v.flush(true) })
-            .collect();
+            .iter_mut().try_for_each(|(_, v)| -> WriterResult { v.flush(true) });
         result?;
         Ok(())
     }

@@ -2,18 +2,16 @@ use crate::impl_param_described;
 use crate::params::ParamList;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum ComponentType {
     Analyzer,
     IonSource,
     Detector,
+    #[default]
     Unknown,
 }
 
-impl Default for ComponentType {
-    fn default() -> ComponentType {
-        ComponentType::Unknown
-    }
-}
+
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Component {

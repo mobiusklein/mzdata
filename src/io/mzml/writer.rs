@@ -652,7 +652,7 @@ where
         let mut keys: Vec<_> = self.instrument_configurations.keys().collect();
         keys.sort();
         if let Some(ic_ref) = keys.first() {
-            let inst_id = instrument_id(&ic_ref);
+            let inst_id = instrument_id(ic_ref);
             attrib!("defaultInstrumentConfigurationRef", inst_id, run);
         }
         if let Some(sf_ref) = self.file_description.source_files.first() {

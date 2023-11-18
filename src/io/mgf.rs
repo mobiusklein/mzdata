@@ -80,26 +80,26 @@ struct SpectrumBuilderFlex<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Into<BinaryArrayMap>
-    for SpectrumBuilderFlex<C, D>
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilderFlex<C, D>>
+    for BinaryArrayMap
 {
-    fn into(self) -> BinaryArrayMap {
+    fn from(val: SpectrumBuilderFlex<C, D>) -> Self {
         let mut arrays = BinaryArrayMap::new();
         arrays.add(DataArray::wrap(
             &ArrayType::MZArray,
             BinaryDataArrayType::Float64,
-            vec_as_bytes(self.mz_array),
+            vec_as_bytes(val.mz_array),
         ));
         arrays.add(DataArray::wrap(
             &ArrayType::IntensityArray,
             BinaryDataArrayType::Float32,
-            vec_as_bytes(self.intensity_array),
+            vec_as_bytes(val.intensity_array),
         ));
-        if self.has_charge > 0 {
+        if val.has_charge > 0 {
             arrays.add(DataArray::wrap(
                 &ArrayType::ChargeArray,
                 BinaryDataArrayType::Int32,
-                vec_as_bytes(self.charge_array),
+                vec_as_bytes(val.charge_array),
             ));
         }
         arrays
@@ -116,8 +116,8 @@ impl<
             spectrum.deconvoluted_peaks = Some(
                 self.mz_array
                     .into_iter()
-                    .zip(self.intensity_array.into_iter())
-                    .zip(self.charge_array.into_iter())
+                    .zip(self.intensity_array)
+                    .zip(self.charge_array)
                     .map(|((mz, inten), z)| {
                         DeconvolutedPeak {
                             neutral_mass: neutral_mass(mz, if z != 0 { z } else { 1 }),
@@ -133,7 +133,7 @@ impl<
             spectrum.peaks = Some(
                 self.mz_array
                     .into_iter()
-                    .zip(self.intensity_array.into_iter())
+                    .zip(self.intensity_array)
                     .map(|(mz, inten)| {
                         CentroidPeak {
                             mz,
@@ -218,7 +218,7 @@ impl<
         if first.is_numeric() {
             let parts: Vec<&str> = PEAK_SEPERATOR.split(line).collect();
             let nparts = parts.len();
-            if nparts < 2 || nparts > 3 {
+            if !(2..=3).contains(&nparts) {
                 self.state = MGFParserState::Error;
                 self.error = Some(MGFError::TooManyColumnsForPeakLine);
                 return None;
@@ -247,10 +247,7 @@ impl<
         line: &str,
         builder: &mut SpectrumBuilderFlex<C, D>,
     ) -> bool {
-        let peak_line = match self.parse_peak_from_line_flex(line, builder) {
-            Some(peak) => peak,
-            None => false,
-        };
+        let peak_line = self.parse_peak_from_line_flex(line, builder).unwrap_or(false);
         if peak_line {
             self.state = MGFParserState::Peaks;
             true
@@ -258,9 +255,9 @@ impl<
             self.state = MGFParserState::Between;
             true
         } else if line.contains('=') {
-            let mut parts = line.splitn(2, '=');
-            let key = parts.next().unwrap();
-            let value = parts.next().unwrap();
+            let (key, value) = line.split_once('=').unwrap();
+            
+            
             match key {
                 "TITLE" => builder.description.id = String::from(value),
                 "RTINSECONDS" => {
@@ -275,10 +272,7 @@ impl<
                     let mut parts = value.split_ascii_whitespace();
                     let mz: f64 = parts.next().unwrap().parse().unwrap();
                     let intensity: f32 = parts.next().unwrap().parse().unwrap();
-                    let charge: Option<i32> = match parts.next() {
-                        Some(c) => Some(c.parse().unwrap()),
-                        None => None
-                    };
+                    let charge: Option<i32> = parts.next().map(|c| c.parse().unwrap());
                     builder.description.precursor = Some(Precursor {
                         ion: SelectedIon {
                             mz,
@@ -306,10 +300,7 @@ impl<
     }
 
     fn handle_peak_flex(&mut self, line: &str, builder: &mut SpectrumBuilderFlex<C, D>) -> bool {
-        let peak_line = match self.parse_peak_from_line_flex(line, builder) {
-            Some(peak) => peak,
-            None => false,
-        };
+        let peak_line = self.parse_peak_from_line_flex(line, builder).unwrap_or(false);
         if peak_line {
             true
         } else if line == "END IONS" {
@@ -753,7 +744,7 @@ TITLE="#,
                 for param in precursor
                     .ion()
                     .params()
-                    .into_iter()
+                    .iter()
                     .chain(precursor.activation.params())
                 {
                     self.write_param(param)?;
@@ -827,12 +818,11 @@ impl<
             return Ok(0);
         }
         self.write_header(spectrum)?;
-        if matches!(&spectrum.deconvoluted_peaks, Some(_)) {
+        if spectrum.deconvoluted_peaks.is_some() {
             self.write_deconvoluted_centroids(spectrum)?;
-        } else if matches!(&spectrum.peaks, Some(_)) {
+        } else if spectrum.peaks.is_some() {
             self.write_centroids(spectrum)?;
-        } else {
-        }
+        } 
         self.handle.write_all(b"END IONS\n")?;
         Ok(0)
     }

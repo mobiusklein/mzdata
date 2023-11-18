@@ -368,12 +368,10 @@ impl<
             self.index = scan.index();
             self.back_index = 0;
             Ok(self)
+        } else if self.get_index().contains_key(id) {
+            Err(ScanAccessError::IOError(None))
         } else {
-            if self.get_index().contains_key(id) {
-                Err(ScanAccessError::IOError(None))
-            } else {
-                Err(ScanAccessError::ScanNotFound)
-            }
+            Err(ScanAccessError::ScanNotFound)
         }
     }
 
@@ -392,17 +390,15 @@ impl<
             self.index = scan.index();
             self.back_index = 0;
             Ok(self)
+        } else if self
+            .get_spectrum_by_index(self.len() - 1)
+            .expect("Failed to fetch spectrum for boundary testing")
+            .start_time()
+            < time
+        {
+            Err(ScanAccessError::ScanNotFound)
         } else {
-            if self
-                .get_spectrum_by_index(self.len() - 1)
-                .expect("Failed to fetch spectrum for boundary testing")
-                .start_time()
-                < time
-            {
-                Err(ScanAccessError::ScanNotFound)
-            } else {
-                Err(ScanAccessError::IOError(None))
-            }
+            Err(ScanAccessError::IOError(None))
         }
     }
 }
@@ -655,20 +651,18 @@ impl<
                     self.product_scan_mapping.entry(MISSING_SCAN_ID.to_owned()).or_default().push(scan);
                 }
             }
+        } else if !self.queue.is_empty() {
+            // Consider replacing with normal get_mut to avoid re-copying
+            let last = self.queue.back().unwrap();
+            self.generation_tracker
+                .add(last.id().to_owned(), self.generation);
+            self.product_scan_mapping
+                .entry(last.id().to_owned())
+                .or_default()
+                .push(scan);
         } else {
-            if !self.queue.is_empty() {
-                // Consider replacing with normal get_mut to avoid re-copying
-                let last = self.queue.back().unwrap();
-                self.generation_tracker
-                    .add(last.id().to_owned(), self.generation);
-                self.product_scan_mapping
-                    .entry(last.id().to_owned())
-                    .or_default()
-                    .push(scan);
-            } else {
-                let ent = self.product_scan_mapping.entry(MISSING_SCAN_ID.to_owned());
-                ent.or_default().push(scan);
-            }
+            let ent = self.product_scan_mapping.entry(MISSING_SCAN_ID.to_owned());
+            ent.or_default().push(scan);
         }
     }
 
@@ -800,12 +794,10 @@ impl<
             if level > 1 {
                 self.add_product(spectrum);
                 self.next_group()
+            } else if self.add_precursor(spectrum) {
+                self.deque_group(false)
             } else {
-                if self.add_precursor(spectrum) {
-                    self.deque_group(false)
-                } else {
-                    self.next_group()
-                }
+                self.next_group()
             }
         } else {
             match self.queue.len() {

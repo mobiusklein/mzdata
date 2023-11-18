@@ -61,9 +61,7 @@ fn scan_file<
 
 fn main() -> io::Result<()> {
     let path = path::PathBuf::from(
-        env::args()
-            .skip(1)
-            .next()
+        env::args().nth(1)
             .expect("Please pass an MS data file path"),
     );
     if let Some(ext) = path.extension() {

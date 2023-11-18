@@ -62,7 +62,7 @@ pub(crate) fn infer_from_path<P: Into<path::PathBuf>,>(path: P) -> (MassSpectrom
 /// stream is GZIP compressed. This assumes the stream is seekable.
 pub(crate) fn infer_from_stream<R: Read + Seek>(stream: &mut R) -> io::Result<(MassSpectrometryFormat, bool)> {
     let mut buf = Vec::with_capacity(100);
-    let current_pos = stream.seek(io::SeekFrom::Current(0))?;
+    let current_pos = stream.stream_position()?;
     stream.read_exact(buf.as_mut_slice())?;
     let is_stream_gzipped = is_gzipped(buf.as_slice());
     if is_stream_gzipped {
@@ -129,7 +129,7 @@ pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<Box<dyn ScanSour
                 let reader = MzMLbReader::open_path(path);
                 match reader {
                     Ok(reader) => Ok(Box::new(reader)),
-                    Err(e) => Err(e.into()),
+                    Err(e) => Err(e),
                 }
             }
             _ => {
@@ -172,7 +172,7 @@ mod test {
             assert_eq!(reader.len(), 48);
 
             if let Some(spec) = reader.get_spectrum_by_index(10) {
-                let spec: Spectrum = spec.into();
+                let spec: Spectrum = spec;
                 assert!(spec.index() == 10);
                 assert!(spec.id() == "controllerType=0 controllerNumber=1 scan=11");
                 if let Some(data_arrays) = &spec.arrays {
