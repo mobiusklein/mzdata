@@ -763,8 +763,8 @@ where
         let mut id_arrays = Cursor::new(Vec::new());
         let mut offset_arrays: Vec<u64> = Vec::new();
         for (k, v) in self.mzml_writer.chromatogram_offset_index.iter() {
-            id_arrays.write(k.as_bytes())?;
-            id_arrays.write(b"\x00")?;
+            id_arrays.write_all(k.as_bytes())?;
+            id_arrays.write_all(b"\x00")?;
             offset_arrays.push(*v);
         }
         offset_arrays.push(0);
