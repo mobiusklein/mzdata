@@ -941,12 +941,9 @@ where
         let act = precursor.activation();
         let tag = bstart!("activation");
         start_event!(self, tag);
-        match act.method() {
-            Some(meth) => {
-                let meth_param: Param = meth.clone().into();
-                self.handle.write_param(&meth_param)?;
-            }
-            None => {}
+        if let Some(meth) = act.method() {
+            let meth_param: Param = meth.clone().into();
+            self.handle.write_param(&meth_param)?;
         }
         self.handle.write_param_list(act.params().iter())?;
         self.handle.write_param(

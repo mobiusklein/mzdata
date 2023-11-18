@@ -706,46 +706,44 @@ impl<
         }
     }
 
-    fn write_param<P: ParamLike>(&mut self, param: &P) -> io::Result<usize> {
-        let mut count = 0;
-        count += self.handle.write(param.name().to_uppercase().as_bytes())?;
-        count += self.handle.write(param.value().as_bytes())?;
-        self.handle.write(b"\n")?;
-        count += 1;
-        Ok(count)
+    fn write_param<P: ParamLike>(&mut self, param: &P) -> io::Result<()> {
+        self.handle.write_all(param.name().to_uppercase().as_bytes())?;
+        self.handle.write_all(param.value().as_bytes())?;
+        self.handle.write_all(b"\n")?;
+        Ok(())
     }
 
-    pub fn write_header<T: SpectrumBehavior<C, D>>(&mut self, spectrum: &T) -> io::Result<usize> {
+    pub fn write_header<T: SpectrumBehavior<C, D>>(&mut self, spectrum: &T) -> io::Result<()> {
         let desc = spectrum.description();
         if desc.ms_level == 1 {
             log::warn!(
                 "Attempted to write an MS1 spectrum to MGF, {}, skipping.",
                 desc.id
             );
-            return Ok(0);
+            return Ok(());
         }
-        let mut count = self.handle.write(
+        self.handle.write_all(
             br#"BEGIN IONS
 TITLE="#,
         )?;
-        count += self.handle.write(desc.id.as_bytes())?;
-        count += self.handle.write(b"\nRTINSECONDS=")?;
-        count += self
+        self.handle.write_all(desc.id.as_bytes())?;
+        self.handle.write_all(b"\nRTINSECONDS=")?;
+        self
             .handle
-            .write(spectrum.start_time().to_string().as_bytes())?;
-        count += self.handle.write(b"\n")?;
+            .write_all(spectrum.start_time().to_string().as_bytes())?;
+        self.handle.write_all(b"\n")?;
         match &desc.precursor {
             Some(precursor) => {
                 let ion = precursor.ion();
-                count += self.handle.write(b"PEPMASS=")?;
-                count += self.handle.write(ion.mz.to_string().as_bytes())?;
-                count += self.handle.write(b" ")?;
-                count += self.handle.write(ion.intensity.to_string().as_bytes())?;
+                self.handle.write_all(b"PEPMASS=")?;
+                self.handle.write_all(ion.mz.to_string().as_bytes())?;
+                self.handle.write_all(b" ")?;
+                self.handle.write_all(ion.intensity.to_string().as_bytes())?;
                 if let Some(charge) = ion.charge {
-                    count += self.handle.write(b" ")?;
-                    count += self.handle.write(charge.to_string().as_bytes())?;
+                    self.handle.write_all(b" ")?;
+                    self.handle.write_all(charge.to_string().as_bytes())?;
                 }
-                count += self.handle.write(b"\n")?;
+                self.handle.write_all(b"\n")?;
 
                 for param in precursor
                     .ion()
@@ -753,59 +751,57 @@ TITLE="#,
                     .into_iter()
                     .chain(precursor.activation.params())
                 {
-                    count += self.write_param(param)?;
+                    self.write_param(param)?;
                 }
                 if let Some(pid) = precursor.precursor_id() {
-                    count += self.handle.write(b"PRECURSORSCAN=")?;
-                    count += self.handle.write(pid.as_bytes())?;
-                    count += self.handle.write(b"\n")?;
+                    self.handle.write_all(b"PRECURSORSCAN=")?;
+                    self.handle.write_all(pid.as_bytes())?;
+                    self.handle.write_all(b"\n")?;
                 }
             }
             None => {}
         }
         for param in desc.params() {
-            count += self.handle.write(param.name.to_uppercase().as_bytes())?;
-            count += self.handle.write(param.value.as_bytes())?;
+            self.handle.write_all(param.name.to_uppercase().as_bytes())?;
+            self.handle.write_all(param.value.as_bytes())?;
         }
 
-        Ok(count)
+        Ok(())
     }
 
     pub fn write_deconvoluted_centroids(
         &mut self,
         spectrum: &MultiLayerSpectrum<C, D>,
-    ) -> io::Result<usize> {
-        let mut count = 0;
+    ) -> io::Result<()> {
         match &spectrum.deconvoluted_peaks {
             Some(centroids) => {
                 for peak in centroids.iter().map(|p| p.as_centroid()) {
-                    count += self.handle.write(peak.mz().to_string().as_bytes())?;
-                    count += self.handle.write(b" ")?;
-                    count += self.handle.write(peak.intensity().to_string().as_bytes())?;
-                    count += self.handle.write(b" ")?;
-                    count += self.handle.write(peak.charge().to_string().as_bytes())?;
-                    count += self.handle.write(b"\n")?;
+                    self.handle.write_all(peak.mz().to_string().as_bytes())?;
+                    self.handle.write_all(b" ")?;
+                    self.handle.write_all(peak.intensity().to_string().as_bytes())?;
+                    self.handle.write_all(b" ")?;
+                    self.handle.write_all(peak.charge().to_string().as_bytes())?;
+                    self.handle.write_all(b"\n")?;
                 }
             }
             None => {}
         }
-        Ok(count)
+        Ok(())
     }
 
-    pub fn write_centroids(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {
-        let mut count = 0;
+    pub fn write_centroids(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<()> {
         match &spectrum.peaks {
             Some(centroids) => {
                 for peak in centroids {
-                    count += self.handle.write(peak.mz().to_string().as_bytes())?;
-                    count += self.handle.write(b" ")?;
-                    count += self.handle.write(peak.intensity().to_string().as_bytes())?;
-                    count += self.handle.write(b"\n")?;
+                    self.handle.write_all(peak.mz().to_string().as_bytes())?;
+                    self.handle.write_all(b" ")?;
+                    self.handle.write_all(peak.intensity().to_string().as_bytes())?;
+                    self.handle.write_all(b"\n")?;
                 }
             }
             None => {}
         }
-        Ok(count)
+        Ok(())
     }
 }
 
@@ -825,16 +821,15 @@ impl<
             );
             return Ok(0);
         }
-        let mut count = self.write_header(spectrum)?;
+        self.write_header(spectrum)?;
         if matches!(&spectrum.deconvoluted_peaks, Some(_)) {
-            count += self.write_deconvoluted_centroids(spectrum)?;
+            self.write_deconvoluted_centroids(spectrum)?;
         } else if matches!(&spectrum.peaks, Some(_)) {
-            count += self.write_centroids(spectrum)?;
+            self.write_centroids(spectrum)?;
         } else {
         }
-        count += self.handle.write(b"END IONS\n")?;
-        self.offset += count;
-        Ok(count)
+        self.handle.write_all(b"END IONS\n")?;
+        Ok(0)
     }
 
     fn flush(&mut self) -> io::Result<()> {

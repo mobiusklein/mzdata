@@ -1,4 +1,4 @@
-use std::{ops::Mul, io};
+use std::{ops::{Mul, AddAssign}, io};
 use bytemuck::{self, Pod};
 use thiserror::{self, Error};
 
@@ -24,8 +24,9 @@ pub fn vec_as_bytes<T: Pod>(data: Vec<T>) -> Bytes {
 
 /// The kinds of data arrays found in mass spectrometry data files governed
 /// by the PSI-MS controlled vocabulary.
-#[derive(Debug, Clone, PartialEq, Hash, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, Default)]
 pub enum ArrayType {
+    #[default]
     Unknown,
     MZArray,
     IntensityArray,
@@ -40,11 +41,6 @@ pub enum ArrayType {
     NonStandardDataArray { name: Box<String> },
 }
 
-impl Default for ArrayType {
-    fn default() -> ArrayType {
-        ArrayType::Unknown
-    }
-}
 
 impl ArrayType {
     pub const fn preferred_dtype(&self) -> BinaryDataArrayType {
@@ -102,8 +98,9 @@ impl ArrayType {
 
 /// The canonical primitive data types found in MS data file formats
 /// supported by the PSI-MS controlled vocabulary
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Default)]
 pub enum BinaryDataArrayType {
+    #[default]
     Unknown,
     Float64,
     Float32,
@@ -119,12 +116,6 @@ impl BinaryDataArrayType {
             BinaryDataArrayType::Float32 | BinaryDataArrayType::Int32 => 4,
             BinaryDataArrayType::Float64 | BinaryDataArrayType::Int64 => 8,
         }
-    }
-}
-
-impl Default for BinaryDataArrayType {
-    fn default() -> BinaryDataArrayType {
-        BinaryDataArrayType::Unknown
     }
 }
 
@@ -194,8 +185,23 @@ impl From<numpress::Error> for ArrayRetrievalError {
 }
 
 
-pub fn linear_prediction_decoding<F: Float + Mul<F>>(values: &mut [F]) -> &mut [F] {
+pub fn linear_prediction_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
+    if values.len() < 2 {
+        return values
+    }
     let two = F::from(2.0).unwrap();
+
+    let prev2 = values[1];
+    let prev1 = values[2];
+    let offset = values[1];
+
+    values.iter_mut().skip(2).fold((prev1, prev2), |(prev1, prev2), current| {
+        let tmp = *current + two * prev1 - prev2 - offset;
+        let prev1 = *current;
+        let prev2 = prev1;
+        *current = tmp;
+        (prev1, prev2)
+    });
 
     for i in 0..values.len() {
         if i < 2 {
@@ -208,47 +214,56 @@ pub fn linear_prediction_decoding<F: Float + Mul<F>>(values: &mut [F]) -> &mut [
 }
 
 
-pub fn linear_prediction_encoding<F: Float + Mul<F>>(values: &mut [F]) -> &mut [F] {
+pub fn linear_prediction_encoding<F: Float + Mul<F> + AddAssign>(values: &mut [F]) -> &mut [F] {
     let n = values.len();
     if n < 3 {
         return values
     }
     let offset = values[1];
-    let mut prev2 = values[0];
-    let mut prev1 = values[1];
+    let prev2 = values[0];
+    let prev1 = values[1];
     let two = F::from(2.0).unwrap();
-    for i in 0..values.len() {
-        values[i] = offset + values[i] - two * prev1 + prev2;
+
+    values.iter_mut().fold((prev1, prev2), |(prev1, prev2), val| {
+        *val += offset - two * prev1 + prev2;
         let tmp = prev1;
-        prev1 = values[i] + two * prev1 - prev2 - offset;
-        prev2 = tmp;
-    }
+        let prev1 = *val + two * prev1 - prev2 - offset;
+        let prev2 = tmp;
+        (prev1, prev2)
+    });
     values
 }
 
 
-pub fn delta_decoding<F: Float + Mul<F>>(values: &mut [F]) -> &mut [F] {
-    for i in 0..values.len() {
-        if i < 2 {
-            continue;
-        }
-        values[i] = values[i] + values[i - 1] - values[0];
+pub fn delta_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
+    if values.len() < 2 {
+        return values
     }
+
+    let offset = values[0];
+    let prev = values[1];
+
+    values.iter_mut().skip(2).fold(prev, |prev, current| {
+        *current += prev - offset;
+        *current
+    });
     values
 }
 
 
-pub fn delta_encoding<F: Float + Mul<F>>(values: &mut [F]) -> &mut [F] {
+pub fn delta_encoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
     let n = values.len();
     if n < 2 {
         return values
     }
-    let mut prev = values[0];
+    let prev = values[0];
     let offset = values[0];
-    for i in 1..n {
-        let tmp = values[i];
-        values[i] = offset + values[i] - prev;
-        prev = tmp;
-    }
+
+    let it = values.iter_mut();
+    it.skip(1).fold(prev, |prev, current| {
+        let tmp = *current;
+        *current += offset - prev;
+        tmp
+    });
     values
 }

@@ -279,7 +279,7 @@ impl BinaryDataArrayBuffer {
 
     pub fn add(&mut self, data: &DataArray) -> Result<u64, MzMLbWriterError> {
         let offset = self.offset as u64 + self.buffer.position() / self.dtype.size_of() as u64;
-        self.buffer.write(&data.data)?;
+        self.buffer.write_all(&data.data)?;
         self.flush(false)?;
         Ok(offset)
     }
@@ -507,8 +507,7 @@ where
             ))?;
         let offset = match self.buffers.entry(key) {
             Entry::Occupied(mut buf) => {
-                let offset = buf.get_mut().add(&array)?;
-                offset
+                buf.get_mut().add(array)?
             }
             Entry::Vacant(opening) => {
                 let builder = self.handle.new_dataset_builder();
@@ -521,7 +520,7 @@ where
                     &self.filters,
                     array.dtype,
                 )?;
-                let offset = buf.add(&array)?;
+                let offset = buf.add(array)?;
                 opening.insert(buf);
                 offset
             }
@@ -733,8 +732,8 @@ where
         let mut id_arrays = Cursor::new(Vec::new());
         let mut offset_arrays: Vec<u64> = Vec::new();
         for (k, v) in self.mzml_writer.spectrum_offset_index.iter() {
-            id_arrays.write(k.as_bytes())?;
-            id_arrays.write(b"\x00")?;
+            id_arrays.write_all(k.as_bytes())?;
+            id_arrays.write_all(b"\x00")?;
             offset_arrays.push(*v);
         }
         offset_arrays.push(0);

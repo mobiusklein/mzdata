@@ -480,7 +480,7 @@ pub struct MultiLayerSpectrum<
     pub deconvoluted_peaks: Option<MassPeakSetType<D>>,
 }
 
-impl<'lifespan, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     SpectrumBehavior<C, D> for MultiLayerSpectrum<C, D>
 {
     #[inline]
@@ -501,7 +501,7 @@ impl<'lifespan, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default
     }
 }
 
-impl<'lifespan, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     MultiLayerSpectrum<C, D>
 where
     MZPeakSetType<C>: BuildFromArrayMap + BuildArrayMapFrom,
@@ -598,7 +598,6 @@ where
 }
 
 impl<
-        'lifespan,
         C: CentroidLike + Default + From<FittedPeak>,
         D: DeconvolutedCentroidLike + Default,
     > MultiLayerSpectrum<C, D>
@@ -640,7 +639,7 @@ impl<
     }
 }
 
-impl<'lifespan, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     TryFrom<MultiLayerSpectrum<C, D>> for CentroidSpectrumType<C>
 where
     MZPeakSetType<C>: BuildFromArrayMap + BuildArrayMapFrom,

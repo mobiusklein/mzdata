@@ -161,9 +161,8 @@ pub trait CVParamParse: XMLParseBase {
                         });
                         controlled_vocabulary = cv_id
                             .parse::<ControlledVocabulary>()
-                            .expect(
-                                format!("Failed to parse controlled vocabulary ID {}", cv_id)
-                                    .as_str(),
+                            .unwrap_or_else(|_|
+                                panic!("Failed to parse controlled vocabulary ID {}", cv_id)
                             )
                             .as_option();
                     }
@@ -250,9 +249,8 @@ pub trait CVParamParse: XMLParseBase {
                         });
                         param.controlled_vocabulary = cv_id
                             .parse::<ControlledVocabulary>()
-                            .expect(
-                                format!("Failed to parse controlled vocabulary ID {}", cv_id)
-                                    .as_str(),
+                            .unwrap_or_else(|_|
+                                panic!("Failed to parse controlled vocabulary ID {}", cv_id)
                             )
                             .as_option();
                     }
@@ -459,7 +457,7 @@ impl IndexedMzMLIndexExtractor {
                     .unescape()
                     .expect("Failed to unescape spectrum offset");
                 if let Ok(offset) = bin.parse::<u64>() {
-                    if self.last_id != "" {
+                    if !self.last_id.is_empty() {
                         let key = mem::take(&mut self.last_id);
                         self.spectrum_index.insert(key, offset);
                     } else {
@@ -472,7 +470,7 @@ impl IndexedMzMLIndexExtractor {
                     .unescape()
                     .expect("Failed to unescape chromatogram offset");
                 if let Ok(offset) = bin.parse::<u64>() {
-                    if self.last_id != "" {
+                    if !self.last_id.is_empty() {
                         let key = mem::take(&mut self.last_id);
                         self.chromatogram_index.insert(key, offset);
                     } else {
@@ -815,8 +813,7 @@ impl<'a> FileMetadataBuilder<'a> {
                 }
                 Err(err) => return Err(err),
             },
-            b"softwareRef" => match state {
-                MzMLParserState::InstrumentConfiguration => {
+            b"softwareRef" => if state == MzMLParserState::InstrumentConfiguration {
                     let ic = self.instrument_configurations.last_mut().unwrap();
                     for attr_parsed in event.attributes() {
                         match attr_parsed {
@@ -833,9 +830,7 @@ impl<'a> FileMetadataBuilder<'a> {
                             }
                         }
                     }
-                }
-                _ => {}
-            },
+                },
             b"referenceableParamGroupRef" => {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
@@ -914,12 +909,12 @@ pub struct IncrementingIdMap {
 impl IncrementingIdMap {
     pub fn get(&mut self, key: &str) -> u32 {
         if let Some(value) = self.id_map.get(key) {
-            return *value;
+            *value
         } else {
             let value = self.next_id;
             self.id_map.insert(key.to_string(), self.next_id);
             self.next_id += 1;
-            return value;
+            value
         }
     }
 }

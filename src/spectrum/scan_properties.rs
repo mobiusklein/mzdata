@@ -188,11 +188,7 @@ impl IonProperties for SelectedIon {
 
     #[inline]
     fn neutral_mass(&self) -> f64 {
-        let charge = match self.charge {
-            Some(z) => z,
-            None => 1,
-        };
-        crate::utils::neutral_mass(self.mz, charge)
+        crate::utils::neutral_mass(self.mz, self.charge.unwrap_or(1))
     }
 
     #[inline]

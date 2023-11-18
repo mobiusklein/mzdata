@@ -26,14 +26,8 @@ assert_eq!(msn_count, 34);
 
 ### Supported Formats
 1. `mzML` and `indexedmzML`
-2. MGF
-
-## TODO
- 1. mzML Implementation
-    1. Improve unit handling.
- 2. Iteration behavior
-    1. Implement a caching strategy for re-using recently yielded spectra.
- 3. Other formats?
+2. `MGF`
+3. `mzMLb`
 
 ### Disclaimer
 This library was made in part to learn Rust, so it may not use the preferred idioms,

@@ -207,7 +207,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
     pub fn decode(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError> {
         match self.compression {
-            BinaryCompressionType::Decoded => Ok(Cow::Borrowed(&self.data.as_slice())),
+            BinaryCompressionType::Decoded => Ok(Cow::Borrowed(self.data.as_slice())),
             BinaryCompressionType::NoCompression => {
                 let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
                     .expect("Failed to decode base64 array");

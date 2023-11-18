@@ -109,18 +109,17 @@ impl<'a> ParamLike for ParamCow<'a> {
     }
 }
 
-impl<'a> Into<Param> for ParamCow<'a> {
-    fn into(self) -> Param {
+impl<'a> From<ParamCow<'a>> for Param {
+    fn from(value: ParamCow<'a>) -> Self {
         Param {
-            name: self.name.into_owned(),
-            value: self.value.into_owned(),
-            accession: self.accession,
-            controlled_vocabulary: self.controlled_vocabulary,
-            unit: self.unit
+            name: value.name.into_owned(),
+            value: value.value.into_owned(),
+            accession: value.accession,
+            controlled_vocabulary: value.controlled_vocabulary,
+            unit: value.unit,
         }
     }
 }
-
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Param {
@@ -134,7 +133,13 @@ pub struct Param {
 impl Display for Param {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut body = if self.is_controlled() {
-            format!("{}:{}|{}={}", String::from_utf8_lossy(self.controlled_vocabulary.unwrap().as_bytes()), self.accession.unwrap(), self.name, self.value)
+            format!(
+                "{}:{}|{}={}",
+                String::from_utf8_lossy(self.controlled_vocabulary.unwrap().as_bytes()),
+                self.accession.unwrap(),
+                self.name,
+                self.value
+            )
         } else {
             format!("{}={}", self.name, self.value)
         };
@@ -164,7 +169,7 @@ impl Param {
     }
 
     pub fn is_controlled(&self) -> bool {
-        !self.accession.is_none()
+        self.accession.is_some()
     }
 
     pub fn curie(&self) -> Option<String> {
@@ -229,8 +234,8 @@ const UO_CV_BYTES: &'static [u8] = UO_CV.as_bytes();
 impl ControlledVocabulary {
     pub fn prefix(&self) -> Cow<'static, str> {
         match &self {
-            Self::MS => Cow::Borrowed(&MS_CV),
-            Self::UO => Cow::Borrowed(&UO_CV),
+            Self::MS => Cow::Borrowed(MS_CV),
+            Self::UO => Cow::Borrowed(UO_CV),
             Self::Unknown => panic!("Cannot encode unknown CV"),
         }
     }
@@ -254,34 +259,43 @@ impl ControlledVocabulary {
         let mut param = Param::new();
         param.controlled_vocabulary = Some(*self);
         param.name = name.into();
-        if let Some(nb) = accession.as_ref().split(":").nth(1) {
-            param.accession = Some(
-                nb.parse().expect(
-                    format!(
-                        "Expected accession to be numeric, got {}",
-                        accession.as_ref()
-                    )
-                    .as_str(),
-                ),
-            );
+        if let Some(nb) = accession.as_ref().split(':').nth(1) {
+            param.accession = Some(nb.parse().unwrap_or_else(|_| {
+                panic!(
+                    "Expected accession to be numeric, got {}",
+                    accession.as_ref()
+                )
+            }));
         }
         param
     }
 
-    pub const fn const_param(&self, name: &'static str, value: &'static str, accession: u32, unit: Unit) -> ParamCow<'static> {
-        ParamCow { name: Cow::Borrowed(name),
-                   value: Cow::Borrowed(value),
-                   accession: Some(accession),
-                   controlled_vocabulary:
-                   Some(*self),
-                   unit: unit }
+    pub const fn const_param(
+        &self,
+        name: &'static str,
+        value: &'static str,
+        accession: u32,
+        unit: Unit,
+    ) -> ParamCow<'static> {
+        ParamCow {
+            name: Cow::Borrowed(name),
+            value: Cow::Borrowed(value),
+            accession: Some(accession),
+            controlled_vocabulary: Some(*self),
+            unit: unit,
+        }
     }
 
     pub const fn const_param_ident(&self, name: &'static str, accession: u32) -> ParamCow<'static> {
         self.const_param(name, "", accession, Unit::Unknown)
     }
 
-    pub const fn const_param_ident_unit(&self, name: &'static str, accession: u32, unit: Unit) -> ParamCow<'static> {
+    pub const fn const_param_ident_unit(
+        &self,
+        name: &'static str,
+        accession: u32,
+        unit: Unit,
+    ) -> ParamCow<'static> {
         self.const_param(name, "", accession, unit)
     }
 
@@ -335,22 +349,15 @@ pub trait ParamDescribed {
     }
 
     fn get_param_by_name(&self, name: &str) -> Option<&Param> {
-        for param in self.params().iter() {
-            if param.name == name {
-                return Some(param);
-            }
-        }
-        None
+        self.params().iter().find(|&param| param.name == name)
     }
 
     fn get_param_by_accession(&self, accession: &str) -> Option<&Param> {
         let (cv, acc_num) = curie_to_num(accession);
-        for param in self.params().iter() {
-            if param.accession == acc_num && param.controlled_vocabulary == cv {
-                return Some(param);
-            }
-        }
-        None
+        return self
+            .params()
+            .iter()
+            .find(|&param| param.accession == acc_num && param.controlled_vocabulary == cv);
     }
 }
 

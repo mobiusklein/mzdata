@@ -36,10 +36,10 @@ impl From<&PeakSet> for BinaryArrayMap {
             let mz: f64 = p.coordinate();
             let inten: f32 = p.intensity();
 
-            let raw_bytes: [u8; mem::size_of::<f64>()] = unsafe { mem::transmute(mz) };
+            let raw_bytes: [u8; mem::size_of::<f64>()] = mz.to_le_bytes();
             mz_array.data.extend(raw_bytes);
 
-            let raw_bytes: [u8; mem::size_of::<f32>()] = unsafe { mem::transmute(inten) };
+            let raw_bytes: [u8; mem::size_of::<f32>()] = inten.to_le_bytes();
             intensity_array.data.extend(raw_bytes);
         }
 
@@ -132,13 +132,13 @@ impl From<&DeconvolutedPeakSet> for BinaryArrayMap {
             let inten: f32 = p.intensity();
             let charge = p.charge();
 
-            let raw_bytes: [u8; mem::size_of::<f64>()] = unsafe { mem::transmute(mz) };
+            let raw_bytes: [u8; mem::size_of::<f64>()] = mz.to_le_bytes();
             mz_array.data.extend(raw_bytes);
 
-            let raw_bytes: [u8; mem::size_of::<f32>()] = unsafe { mem::transmute(inten) };
+            let raw_bytes: [u8; mem::size_of::<f32>()] = inten.to_le_bytes();
             intensity_array.data.extend(raw_bytes);
 
-            let raw_bytes: [u8; mem::size_of::<i32>()] = unsafe { mem::transmute(charge) };
+            let raw_bytes: [u8; mem::size_of::<i32>()] = charge.to_le_bytes();
             charge_array.data.extend(raw_bytes);
         }
 
@@ -196,10 +196,10 @@ impl BuildArrayMapFrom for MZPeakSetType<CentroidPeak> {
             let mz: f64 = p.coordinate();
             let inten: f32 = p.intensity();
 
-            let raw_bytes: [u8; mem::size_of::<f64>()] = unsafe { mem::transmute(mz) };
+            let raw_bytes: [u8; mem::size_of::<f64>()] = mz.to_le_bytes();
             mz_array.data.extend(raw_bytes);
 
-            let raw_bytes: [u8; mem::size_of::<f32>()] = unsafe { mem::transmute(inten) };
+            let raw_bytes: [u8; mem::size_of::<f32>()] = inten.to_le_bytes();
             intensity_array.data.extend(raw_bytes);
         }
 
@@ -261,13 +261,13 @@ impl BuildArrayMapFrom for DeconvolutedPeakSet {
             let inten: f32 = p.intensity();
             let charge = p.charge();
 
-            let raw_bytes: [u8; mem::size_of::<f64>()] = unsafe { mem::transmute(mz) };
+            let raw_bytes: [u8; mem::size_of::<f64>()] = mz.to_le_bytes();
             mz_array.data.extend(raw_bytes);
 
-            let raw_bytes: [u8; mem::size_of::<f32>()] = unsafe { mem::transmute(inten) };
+            let raw_bytes: [u8; mem::size_of::<f32>()] = inten.to_le_bytes();
             intensity_array.data.extend(raw_bytes);
 
-            let raw_bytes: [u8; mem::size_of::<i32>()] = unsafe { mem::transmute(charge) };
+            let raw_bytes: [u8; mem::size_of::<i32>()] = charge.to_le_bytes();
             charge_array.data.extend(raw_bytes);
         }
 

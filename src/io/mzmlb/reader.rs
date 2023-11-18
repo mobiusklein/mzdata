@@ -93,7 +93,7 @@ impl CacheInterval {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     #[inline]
@@ -134,8 +134,10 @@ impl Default for ExternalDataRegistry {
 
 impl ExternalDataRegistry {
     pub fn new(chunk_size: usize) -> Self {
-        let mut inst = Self::default();
-        inst.chunk_size = chunk_size;
+        let inst = Self {
+            chunk_size,
+            ..Default::default()
+        };
         inst
     }
 
@@ -376,14 +378,12 @@ impl ExternalDataRegistry {
                     "Updated {} cache block: {:?}",
                     range_request.name, cache_block
                 );
-                let block = cache_block.get(start, end)?;
-                block
+                cache_block.get(start, end)?
             } else {
                 self.chunk_cache
                     .insert(range_request.name.clone(), cache_block);
                 let cache_block = self.chunk_cache.get_mut(&range_request.name).unwrap();
-                let block = cache_block.get(start, end)?;
-                block
+                cache_block.get(start, end)?
             };
             destination.data.extend_from_slice(&block);
             assert_eq!(destination.data.len(), range_request.length * z);
