@@ -855,6 +855,9 @@ mod test {
         }
         writer.close()?;
 
+        eprintln!("Path written to: {}", path.display());
+        eprintln!("Exists? {}", path.exists());
+
         let mut reader2 = MzMLbReader::open_path(&path)?;
         assert_eq!(reader.file_description(), reader2.file_description());
 

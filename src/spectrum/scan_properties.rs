@@ -583,7 +583,7 @@ Though most formats explicitly have a method of either conveying a processing le
 or an assumed level, the `Unknown` option is retained for partial initialization.
 */
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default, Hash, Eq)]
 pub enum SignalContinuity {
     #[default]
     Unknown = 0,

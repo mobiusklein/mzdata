@@ -243,9 +243,9 @@ impl<
 /// A trait defining some helper methods to make efficient use of indices
 /// automatic when opening a file from a path-like object.
 pub trait MZFileReader<
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
-    S: SpectrumBehavior<C, D>,
+    C: CentroidLike + Default = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
 >: ScanSource<C, D, S> + Sized
 {
     /// An on-trait method of constructing an index. Assumed

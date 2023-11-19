@@ -1,16 +1,23 @@
 #![allow(unused)]
-use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io;
 use std::path;
+use std::process;
+use std::thread::spawn;
 use std::time;
 
-use mzdata::io::prelude::*;
-use mzdata::io::{mgf, mzml, offset_index, ScanSource};
+use std::collections::HashMap;
+
+use std::thread;
+use std::sync::mpsc::sync_channel;
+
 #[cfg(feature = "mzmlb")]
 use mzdata::io::mzmlb;
-use mzdata::spectrum::{DeconvolutedSpectrum, MultiLayerSpectrum, SpectrumBehavior};
+use mzdata::io::prelude::*;
+use mzdata::io::{mgf, mzml, offset_index, ScanSource};
+use mzdata::spectrum::SignalContinuity;
+use mzdata::spectrum::{DeconvolutedSpectrum, MultiLayerSpectrum, PeakDataLevel, SpectrumBehavior};
 use mzpeaks::PeakCollection;
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
@@ -18,7 +25,6 @@ fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::MzMLRe
     let start = time::Instant::now();
     let reader = mzml::MzMLReader::open_path(path)?;
     let end = time::Instant::now();
-    println!("Index Loaded/Built in {} seconds", (end - start).as_secs());
     println!("{} spectra", reader.len());
     Ok(reader)
 }
@@ -27,7 +33,6 @@ fn load_mgf_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mgf::MGF
     let start = time::Instant::now();
     let reader = mgf::MGFReader::open_path(path)?;
     let end = time::Instant::now();
-    println!("Index Loaded/Built in {} seconds", (end - start).as_secs());
     println!("{} spectra", reader.len());
     Ok(reader)
 }
@@ -37,15 +42,12 @@ fn load_mzmlb_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzmlb:
     let start = time::Instant::now();
     let reader = mzmlb::MzMLbReader::open_path(&path.into())?;
     let end = time::Instant::now();
-    println!("Index Loaded/Built in {} seconds", (end - start).as_secs());
     let blosc_threads = match std::env::var("BLOSC_NUM_THREADS") {
-        Ok(val) => {
-            match val.parse() {
-                Ok(nt) => nt,
-                Err(e) => {
-                    eprintln!("Failed to parse BLOSC_NUM_THREADS env var: {}", e);
-                    4
-                },
+        Ok(val) => match val.parse() {
+            Ok(nt) => nt,
+            Err(e) => {
+                eprintln!("Failed to parse BLOSC_NUM_THREADS env var: {}", e);
+                4
             }
         },
         Err(e) => 4,
@@ -55,134 +57,185 @@ fn load_mzmlb_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzmlb:
     Ok(reader)
 }
 
-fn scan_file<
-    R: MZFileReader<
-        CentroidPeak,
-        DeconvolutedPeak,
-        MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>,
-    >,
->(
-    reader: &mut R,
-) -> (
-    HashMap<u8, usize>,
-    HashMap<i32, usize>,
-    usize,
-    HashMap<u8, HashMap<i32, usize>>,
-) {
-    let start = time::Instant::now();
-    let mut level_table: HashMap<u8, usize> = HashMap::new();
-    let mut charge_table: HashMap<i32, usize> = HashMap::new();
-    let mut peak_charge_table: HashMap<u8, HashMap<i32, usize>> = HashMap::new();
-    let mut peak_count: usize = 0;
-    for (i, scan) in reader.enumerate() {
-        if i % 10000 == 0 {
-            println!(
-                "\tScan {}: {} ({} seconds, {} peaks)",
-                i,
-                scan.id(),
-                (time::Instant::now() - start).as_secs_f64(),
-                peak_count
-            );
-        }
+#[derive(Default)]
+struct MSDataFileSummary {
+    pub level_table: HashMap<u8, usize>,
+    pub charge_table: HashMap<i32, usize>,
+    pub peak_charge_table: HashMap<u8, HashMap<i32, usize>>,
+    pub peak_mode_table: HashMap<SignalContinuity, usize>,
+}
+
+impl MSDataFileSummary {
+    pub fn handle_scan(&mut self, scan: MultiLayerSpectrum) {
         let level = scan.ms_level();
-        *level_table.entry(level).or_default() += 1;
+        *self.level_table.entry(level).or_default() += 1;
         if level > 1 {
             if let Some(charge) = scan.precursor().unwrap().ion.charge {
-                *charge_table.entry(charge).or_default() += 1;
+                *self.charge_table.entry(charge).or_default() += 1;
             } else {
-                *charge_table.entry(0).or_default() += 1;
+                *self.charge_table.entry(0).or_default() += 1;
             }
         }
-        peak_count += scan.peaks().len();
-        let has_charge = if let Some(ref arrays) = scan.arrays {
-            arrays.charges().is_ok()
-        } else {
-            false
+        *self
+            .peak_mode_table
+            .entry(scan.signal_continuity())
+            .or_default() += scan.peaks().len();
+        let has_charge = match scan.peaks() {
+            PeakDataLevel::Missing => false,
+            PeakDataLevel::RawData(arrays) => arrays.charges().is_ok(),
+            PeakDataLevel::Centroid(peaks) => false,
+            PeakDataLevel::Deconvoluted(peaks) => true,
         };
         if has_charge {
             let deconv_scan: DeconvolutedSpectrum = scan.try_into().unwrap();
             deconv_scan.deconvoluted_peaks.iter().for_each(|p| {
-                *(*peak_charge_table.entry(deconv_scan.ms_level()).or_default())
-                    .entry(p.charge)
-                    .or_default() += 1;
+                *(*self
+                    .peak_charge_table
+                    .entry(deconv_scan.ms_level())
+                    .or_default())
+                .entry(p.charge)
+                .or_default() += 1;
                 assert!((p.index as usize) < deconv_scan.deconvoluted_peaks.len())
             })
         }
     }
-    let end = time::Instant::now();
-    println!("Loaded in {} seconds", (end - start).as_secs_f64());
-    (level_table, charge_table, peak_count, peak_charge_table)
+
+    pub fn _scan_file<
+        R: MZFileReader,
+    >(&mut self, reader: &mut R) {
+        let start = time::Instant::now();
+        reader.enumerate().for_each(|(i, scan)| {
+            if i % 10000 == 0 && i > 0 {
+                println!(
+                    "\tScan {}: {} ({:0.3} seconds, {} peaks|points)",
+                    i,
+                    scan.id(),
+                    (time::Instant::now() - start).as_secs_f64(),
+                    self.peak_mode_table.values().sum::<usize>()
+                );
+            }
+            self.handle_scan(scan);
+        });
+        let end = time::Instant::now();
+        let elapsed = end - start;
+        println!("{:0.3} seconds elapsed", elapsed.as_secs_f64());
+    }
+
+    pub fn scan_file<
+        R: MZFileReader + Send + 'static,
+    >(&mut self, reader: R) {
+        self.scan_file_threaded(reader)
+    }
+
+    pub fn scan_file_threaded<
+        R: MZFileReader + Send + 'static,
+    >(&mut self, reader: R) {
+        let start = time::Instant::now();
+        let (sender, receiver) = sync_channel(2usize.pow(12));
+        let read_handle = spawn(move || {
+            reader.enumerate().for_each(|(i, scan)| {
+                sender.send((i, scan)).unwrap()
+            });
+        });
+        receiver.iter().for_each(|(i, scan)| {
+            if i % 10000 == 0 && i > 0 {
+                println!(
+                    "\tScan {}: {} ({:0.3} seconds, {} peaks|points)",
+                    i,
+                    scan.id(),
+                    (time::Instant::now() - start).as_secs_f64(),
+                    self.peak_mode_table.values().sum::<usize>()
+                );
+            }
+            self.handle_scan(scan);
+        });
+        read_handle.join();
+        let end = time::Instant::now();
+        let elapsed = end - start;
+        println!("{:0.3} seconds elapsed", elapsed.as_secs_f64());
+    }
+
+    pub fn write_out(&self) {
+        println!("MS Levels:");
+        let mut level_set: Vec<(&u8, &usize)> = self.level_table.iter().collect();
+        level_set.sort_by_key(|(a, b)| *a);
+        for (level, count) in level_set.iter() {
+            println!("\t{}: {}", level, count);
+        }
+
+        println!("Precursor Charge States:");
+        let mut charge_set: Vec<(&i32, &usize)> = self.charge_table.iter().collect();
+        charge_set.sort_by_key(|(a, b)| *a);
+        for (charge, count) in charge_set.iter() {
+            if **charge == 0 {
+                println!("\tCharge Not Reported: {}", count);
+            } else {
+                println!("\t{}: {}", charge, count);
+            }
+        }
+
+        let mut peak_charge_levels: Vec<_> = self.peak_charge_table.iter().collect();
+
+        peak_charge_levels.sort_by(|(level_a, _), (level_b, _)| level_a.cmp(level_b));
+
+        for (level, peak_charge_table) in peak_charge_levels {
+            if !peak_charge_table.is_empty() {
+                println!("Peak Charge States for MS level {}:", level);
+                let mut peak_charge_set: Vec<(&i32, &usize)> = peak_charge_table.iter().collect();
+                peak_charge_set.sort_by_key(|(a, b)| *a);
+                for (charge, count) in peak_charge_set.iter() {
+                    if **charge == 0 {
+                        println!("\tCharge Not Reported: {}", count);
+                    } else {
+                        println!("\t{}: {}", charge, count);
+                    }
+                }
+            }
+        }
+        self.peak_mode_table.iter().for_each(|(mode, count)| {
+            match mode {
+                SignalContinuity::Unknown => println!("Unknown continuity: {}", count),
+                SignalContinuity::Centroid => println!("Peaks: {}", count),
+                SignalContinuity::Profile => println!("Points: {}", count),
+            }
+        });
+    }
 }
 
 fn main() -> io::Result<()> {
     let path = path::PathBuf::from(
-        env::args().nth(1)
-            .unwrap_or("./test/data/small.mzML".to_owned()),
+        env::args()
+            .nth(1)
+            .unwrap_or_else(|| {
+                eprintln!("Please provide a path to an MS data file");
+                process::exit(1)
+            }),
     );
+    let mut summarizer = MSDataFileSummary::default();
 
-    let (level_table, charge_table, peak_count, peak_charge_table_by_level) =
-        if let Some(ext) = path.extension() {
-            if ext.to_string_lossy().to_lowercase() == "mzmlb" {
-                #[cfg(feature = "mzmlb")]
-                {
-                    let mut reader = load_mzmlb_file(path)?;
-                    scan_file(&mut reader)
-                }
-                #[cfg(not(feature = "mzmlb"))]
-                {
-                    panic!("Cannot read mzMLb file. Recompile enabling the `mzmlb` feature")
-                }
+    if let Some(ext) = path.extension() {
+        if ext.to_string_lossy().to_lowercase() == "mzmlb" {
+            #[cfg(feature = "mzmlb")]
+            {
+                let mut reader = load_mzmlb_file(path)?;
+                summarizer.scan_file(reader)
             }
-            else if ext.to_string_lossy().to_lowercase() == "mgf" {
-                let mut reader = load_mgf_file(path)?;
-                scan_file(&mut reader)
-            } else {
-                let mut reader = load_file(path)?;
-                scan_file(&mut reader)
+            #[cfg(not(feature = "mzmlb"))]
+            {
+                panic!("Cannot read mzMLb file. Recompile enabling the `mzmlb` feature")
             }
+        } else if ext.to_string_lossy().to_lowercase() == "mgf" {
+            let mut reader = load_mgf_file(path)?;
+            summarizer.scan_file(reader)
         } else {
             let mut reader = load_file(path)?;
-            scan_file(&mut reader)
-        };
-
-    println!("MS Levels:");
-    let mut level_set: Vec<(&u8, &usize)> = level_table.iter().collect();
-    level_set.sort_by_key(|(a, b)| *a);
-    for (level, count) in level_set.iter() {
-        println!("\t{}: {}", level, count);
-    }
-
-    println!("Charge States:");
-    let mut charge_set: Vec<(&i32, &usize)> = charge_table.iter().collect();
-    charge_set.sort_by_key(|(a, b)| *a);
-    for (charge, count) in charge_set.iter() {
-        if **charge == 0 {
-            println!("\tCharge Not Reported: {}", count);
-        } else {
-            println!("\t{}: {}", charge, count);
+            summarizer.scan_file(reader)
         }
-    }
+    } else {
+        let mut reader = load_file(path)?;
+        summarizer.scan_file(reader)
+    };
 
-    let mut peak_charge_levels: Vec<_> = peak_charge_table_by_level.iter().collect();
-
-    peak_charge_levels.sort_by(|(level_a, _), (level_b, _)| level_a.cmp(level_b));
-
-    for (level, peak_charge_table) in peak_charge_levels {
-        if !peak_charge_table.is_empty() {
-            println!("Peak Charge States for MS level {}:", level);
-            let mut peak_charge_set: Vec<(&i32, &usize)> = peak_charge_table.iter().collect();
-            peak_charge_set.sort_by_key(|(a, b)| *a);
-            for (charge, count) in peak_charge_set.iter() {
-                if **charge == 0 {
-                    println!("\tCharge Not Reported: {}", count);
-                } else {
-                    println!("\t{}: {}", charge, count);
-                }
-            }
-        }
-    }
-
-    println!("{} peaks read", peak_count);
-
+    summarizer.write_out();
     Ok(())
 }
