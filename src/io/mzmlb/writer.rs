@@ -21,7 +21,7 @@ use hdf5_sys::h5t::{H5T_cset_t, H5T_str_t, H5Tcopy, H5Tset_cset, H5Tset_size, H5
 use ndarray::Array1;
 
 use mzpeaks::peak_set::PeakSetVec;
-use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, Mass, MZ};
+use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, Mass, MZ, CentroidPeak, DeconvolutedPeak};
 use quick_xml::events::{BytesStart, Event};
 use thiserror::Error;
 
@@ -310,7 +310,7 @@ where
 }
 
 #[derive(Debug, Default)]
-pub struct MzMLBWriterBuilder<
+pub struct MzMLbWriterBuilder<
     C: CentroidLike + Default + 'static,
     D: DeconvolutedCentroidLike + Default + 'static,
 > where
@@ -325,7 +325,7 @@ pub struct MzMLBWriterBuilder<
 }
 
 impl<C: CentroidLike + Default + 'static, D: DeconvolutedCentroidLike + Default + 'static>
-    MzMLBWriterBuilder<C, D>
+    MzMLbWriterBuilder<C, D>
 where
     PeakSetVec<C, MZ>: BuildArrayMapFrom,
     PeakSetVec<D, Mass>: BuildArrayMapFrom,
@@ -363,12 +363,12 @@ where
 }
 
 impl<C: CentroidLike + Default + 'static, D: DeconvolutedCentroidLike + Default + 'static>
-    From<MzMLBWriterBuilder<C, D>> for MzMLbWriterType<C, D>
+    From<MzMLbWriterBuilder<C, D>> for MzMLbWriterType<C, D>
 where
     PeakSetVec<C, mzpeaks::MZ>: BuildArrayMapFrom,
     PeakSetVec<D, mzpeaks::Mass>: BuildArrayMapFrom,
 {
-    fn from(value: MzMLBWriterBuilder<C, D>) -> Self {
+    fn from(value: MzMLbWriterBuilder<C, D>) -> Self {
         value.create().unwrap()
     }
 }
@@ -799,6 +799,10 @@ where
     }
 }
 
+
+pub type MzMLbWriter = MzMLbWriterType<CentroidPeak, DeconvolutedPeak>;
+
+
 fn build_nullterm_fixed_ascii_type_id(size: usize) -> Result<hid_t, hdf5::Error> {
     let string_id = hdf5::h5try!(H5Tcopy(*H5T_C_S1));
     h5try!(H5Tset_cset(string_id, H5T_cset_t::H5T_CSET_ASCII));
@@ -844,7 +848,7 @@ mod test {
         let tmpdir = tempfile::tempdir()?;
         let path = tmpdir.path().join("duplicate.mzMLb");
         let mut reader = MzMLReader::open_path("test/data/small.mzML")?;
-        let mut writer = MzMLBWriterBuilder::new(&path)
+        let mut writer = MzMLbWriterBuilder::new(&path)
             .with_zlib_compression(9)
             .with_chunk_size(DEFAULT_CHUNK_SIZE)
             .create()?;

@@ -5,4 +5,4 @@ mod common;
 mod writer;
 
 pub use reader::{MzMLbReader, MzMLbError, MzMLbReaderType, MzMLbSpectrumBuilder};
-pub use writer::{MzMLbWriterType, MzMLbWriterError, MzMLBWriterBuilder};
+pub use writer::{MzMLbWriterType, MzMLbWriterError, MzMLbWriterBuilder, MzMLbWriter};

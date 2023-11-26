@@ -1788,4 +1788,19 @@ mod test {
         assert!(found);
         Ok(())
     }
+
+    #[test]
+    fn test_get_by_index() -> io::Result<()> {
+        let path = path::Path::new("./test/data/small.mzML");
+        let mut reader = MzMLReader::open_path(path)?;
+        let scan = reader.get_spectrum_by_index(0).unwrap();
+        assert_eq!(scan.index(), 0);
+
+        let scan = reader.get_spectrum_by_index(10).unwrap();
+        assert_eq!(scan.index(), 10);
+
+        let scan = reader.get_spectrum_by_index(30).unwrap();
+        assert_eq!(scan.index(), 30);
+        Ok(())
+    }
 }

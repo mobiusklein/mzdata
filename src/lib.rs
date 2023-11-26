@@ -51,10 +51,10 @@ pub use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 pub use mzpeaks::{PeakCollection, PeakSet};
 
 pub use crate::io::mgf::{MGFReader, MGFWriter, MGFError};
-pub use crate::io::mzml::{MzMLReader, MzMLWriter, MzMLParserError as MzMLError};
+pub use crate::io::mzml::{MzMLReader, MzMLWriter, MzMLParserError as MzMLError, MzMLWriterError};
 
 #[cfg(feature = "mzmlb")]
-pub use crate::io::mzmlb::MzMLbReader;
+pub use crate::io::mzmlb::{MzMLbReader, MzMLbError, MzMLbWriterBuilder, MzMLbWriterError, MzMLbWriter};
 
 pub use crate::params::{Param, ParamDescribed, ParamList};
 

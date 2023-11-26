@@ -24,6 +24,7 @@ use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, Software,
 };
 use crate::params::{ControlledVocabulary, Param, ParamDescribed, ParamLike};
+use crate::spectrum::SignalContinuity;
 use crate::spectrum::signal::{
     vec_as_bytes, ArrayType, BinaryArrayMap, BinaryDataArrayType, BuildArrayMapFrom,
     BuildFromArrayMap, DataArray,
@@ -256,8 +257,8 @@ impl<
             true
         } else if line.contains('=') {
             let (key, value) = line.split_once('=').unwrap();
-            
-            
+
+
             match key {
                 "TITLE" => builder.description.id = String::from(value),
                 "RTINSECONDS" => {
@@ -672,11 +673,11 @@ pub(crate) fn is_mgf(buf: &[u8]) -> bool {
 }
 
 pub struct MGFWriterType<
-    R: io::Write,
+    W: io::Write,
     C: CentroidPeakAdapting + From<CentroidPeak> = CentroidPeak,
     D: DeconvolutedPeakAdapting + From<DeconvolutedPeak> = DeconvolutedPeak,
 > {
-    pub handle: io::BufWriter<R>,
+    pub handle: io::BufWriter<W>,
     pub offset: usize,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
@@ -799,6 +800,28 @@ TITLE="#,
         }
         Ok(())
     }
+
+    pub fn write_arrays(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<()> {
+        match spectrum.signal_continuity() {
+            SignalContinuity::Centroid => {
+                match &spectrum.arrays {
+                    Some(arrays) => {
+                        for (mz, inten) in arrays.mzs()?.iter().zip(arrays.intensities()?.iter()) {
+                            self.handle.write_all(mz.to_string().as_bytes())?;
+                            self.handle.write_all(b" ")?;
+                            self.handle.write_all(inten.to_string().as_bytes())?;
+                            self.handle.write_all(b"\n")?;
+                        }
+                    },
+                    None => {},
+                }
+            },
+            SignalContinuity::Profile | SignalContinuity::Unknown => {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "MGF spectrum must be centroided"))
+            },
+        }
+        Ok(())
+    }
 }
 
 impl<
@@ -822,7 +845,9 @@ impl<
             self.write_deconvoluted_centroids(spectrum)?;
         } else if spectrum.peaks.is_some() {
             self.write_centroids(spectrum)?;
-        } 
+        } else if spectrum.arrays.is_some() {
+            self.write_arrays(spectrum)?;
+        }
         self.handle.write_all(b"END IONS\n")?;
         Ok(0)
     }
