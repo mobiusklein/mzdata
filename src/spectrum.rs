@@ -7,7 +7,7 @@ itself, plus all the metadata that describes how that data was acquired by
 the instrument.
 
 # Components
-- [`signal`](crate::spectrum::signal) includes structures for dealing with raw signal data arrays that may or may not
+- [`signal`] includes structures for dealing with raw signal data arrays that may or may not
 be byte-encoded but not strongly typed, though it does not include signal processing as that is outside the scope of
 this crate.
 
@@ -32,7 +32,7 @@ The [`SpectrumBehavior`] trait is included in the crate prelude, and gives the c
 read-only access to components that describe a spectrum's metadata, and
 ```rust
 use std::fs::File;
-use mzdata::io::prelude::*;
+use mzdata::prelude::*;
 use mzpeaks::{Tolerance, prelude::*};
 use mzdata::io::MzMLReader;
 use mzdata::spectrum::{SignalContinuity};

@@ -18,7 +18,7 @@ The [`SpectrumBehavior`] trait is included in the crate prelude, and gives the c
 read-only access to components that describe a spectrum's metadata, and
 ```rust
 use std::fs::File;
-use mzdata::io::prelude::*;
+use mzdata::prelude::*;
 use mzpeaks::{Tolerance, prelude::*};
 use mzdata::io::MzMLReader;
 use mzdata::spectrum::{SignalContinuity};

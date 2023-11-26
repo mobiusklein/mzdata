@@ -5,5 +5,6 @@ pub use crate::io::traits::{
 pub use crate::meta::MSDataFileMetadata;
 pub use crate::params::{ParamDescribed, ParamLike};
 pub use crate::spectrum::{IonProperties, PrecursorSelection, SpectrumBehavior};
+pub use crate::spectrum::signal::{ByteArrayView, ByteArrayViewMut, BuildArrayMapFrom, BuildFromArrayMap};
 pub use std::convert::TryInto;
 pub use std::io::prelude::*;
