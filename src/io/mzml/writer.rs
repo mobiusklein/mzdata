@@ -929,9 +929,7 @@ where
             self.handle
                 .write_param(&self.ms_cv.param_val("MS:1000041", "charge state", charge))?;
         }
-        for param in ion.params() {
-            self.handle.write_param(param)?
-        }
+        self.handle.write_param_list(ion.params().iter())?;
         end_event!(self, tag);
         end_event!(self, outer);
         Ok(())
@@ -1366,7 +1364,7 @@ pub type MzMLWriter<W> = MzMLWriterType<CentroidPeak, DeconvolutedPeak, W>;
 mod test {
     use super::super::reader::{MzMLReader, MzMLReaderType};
     use super::*;
-    use crate::io::prelude::*;
+    use crate::prelude::*;
     use std::fs;
     use std::path;
     use tempfile;

@@ -3,7 +3,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::fs;
 
 use mzdata::io::mzml::MzMLReader;
-use mzdata::io::prelude::*;
+use mzdata::prelude::*;
 
 fn serial(file_path: &str) {
     let file = fs::File::open(file_path).unwrap();

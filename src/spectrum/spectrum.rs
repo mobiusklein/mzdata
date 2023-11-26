@@ -159,6 +159,10 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
             PeakDataLevel::Deconvoluted(peaks) => peaks.len(),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 /// A trait for providing a uniform delegated access to spectrum metadata
@@ -408,7 +412,7 @@ pub struct CentroidSpectrumType<C: CentroidLike + Default> {
     pub peaks: MZPeakSetType<C>,
 }
 
-impl<'lifespan, C: CentroidLike + Default> SpectrumBehavior<C> for CentroidSpectrumType<C> {
+impl<C: CentroidLike + Default> SpectrumBehavior<C> for CentroidSpectrumType<C> {
     #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
@@ -444,7 +448,7 @@ pub struct DeconvolutedSpectrumType<D: DeconvolutedCentroidLike + Default> {
     pub deconvoluted_peaks: MassPeakSetType<D>,
 }
 
-impl<'lifespan, D: DeconvolutedCentroidLike + Default> SpectrumBehavior<CentroidPeak, D>
+impl<D: DeconvolutedCentroidLike + Default> SpectrumBehavior<CentroidPeak, D>
     for DeconvolutedSpectrumType<D>
 {
     #[inline]
@@ -720,7 +724,7 @@ impl TryFrom<Spectrum> for DeconvolutedSpectrum {
 mod test {
     use super::*;
     use crate::io::mzml::MzMLReader;
-    use crate::io::prelude::*;
+    use crate::prelude::*;
 
     #[test_log::test]
     fn test_profile_read() {
@@ -735,7 +739,7 @@ mod test {
 
         match scan.pick_peaks(1.0, PeakFitType::Quadratic) {
             Err(err) => {
-                panic!("Should not have an error! {:?}", err);
+                panic!("Should not have an error! {}", err);
             }
             Ok(_) => {}
         }

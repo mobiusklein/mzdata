@@ -25,7 +25,7 @@ use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, Mass, MZ, CentroidPeak, De
 use quick_xml::events::{BytesStart, Event};
 use thiserror::Error;
 
-use crate::io::prelude::MSDataFileMetadata;
+use crate::prelude::MSDataFileMetadata;
 use crate::io::traits::ScanWriter;
 use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software};
 use crate::params::ControlledVocabulary;
@@ -837,7 +837,7 @@ mod test {
     use tempfile;
     use test_log;
 
-    use crate::io::prelude::*;
+    use crate::prelude::*;
 
     use super::super::super::MzMLReader;
     use super::super::MzMLbReader;

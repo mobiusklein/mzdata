@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::io::SeekFrom;
 use std::{io, mem};
 
@@ -80,6 +81,13 @@ pub enum MzMLParserState {
     ChromatogramDone,
 
     ParserError,
+}
+
+
+impl Display for MzMLParserState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self))
+    }
 }
 
 /**
@@ -335,19 +343,44 @@ pub enum MzMLIndexingError {
 }
 
 
+impl From<MzMLIndexingError> for io::Error {
+    fn from(value: MzMLIndexingError) -> Self {
+        match value {
+            MzMLIndexingError::OffsetNotFound => {
+                io::Error::new(io::ErrorKind::InvalidData, value)
+            },
+            MzMLIndexingError::XMLError(e) => match &e {
+                XMLError::Io(e) => io::Error::new(e.kind(), e.clone()),
+                _ => io::Error::new(io::ErrorKind::InvalidData, e),
+            },
+            MzMLIndexingError::IOError(e) => e,
+        }
+    }
+}
+
+
 #[derive(Debug, Default, Clone)]
 pub struct IndexedMzMLIndexExtractor {
     pub spectrum_index: OffsetIndex,
     pub chromatogram_index: OffsetIndex,
+    pub state: IndexParserState,
     last_id: String,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum IndexParserState {
+    #[default]
     Start,
+    SeekingOffset,
     SpectrumIndexList,
     ChromatogramIndexList,
     Done,
+}
+
+impl Display for IndexParserState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self))
+    }
 }
 
 impl XMLParseBase for IndexedMzMLIndexExtractor {}
@@ -358,10 +391,12 @@ impl IndexedMzMLIndexExtractor {
             spectrum_index: OffsetIndex::new("spectrum".into()),
             chromatogram_index: OffsetIndex::new("chromatogram".into()),
             last_id: String::new(),
+            ..Default::default()
         }
     }
 
-    pub fn find_offset_from_reader<R: SeekRead>(&self, reader: &mut R) -> io::Result<Option<u64>> {
+    pub fn find_offset_from_reader<R: SeekRead>(&mut self, reader: &mut R) -> Result<Option<u64>, MzMLIndexingError> {
+        self.state = IndexParserState::SeekingOffset;
         reader.seek(SeekFrom::End(-200))?;
         let mut buf = Bytes::new();
         reader.read_to_end(&mut buf)?;
@@ -380,7 +415,7 @@ impl IndexedMzMLIndexExtractor {
         &mut self,
         event: &BytesStart,
         state: IndexParserState,
-    ) -> Result<IndexParserState, XMLError> {
+    ) -> Result<IndexParserState, MzMLIndexingError> {
         let elt_name = event.name();
         match elt_name.as_ref() {
             b"offset" => {
@@ -395,7 +430,7 @@ impl IndexedMzMLIndexExtractor {
                             }
                         }
                         Err(err) => {
-                            return Err(err.into());
+                            return Err(MzMLIndexingError::XMLError(err.into()));
                         }
                     }
                 }
@@ -410,8 +445,12 @@ impl IndexedMzMLIndexExtractor {
                                     .expect("Error decoding idRef")
                                     .to_string();
                                 match index_name.as_ref() {
-                                    "spectrum" => return Ok(IndexParserState::SpectrumIndexList),
+                                    "spectrum" => {
+                                        self.state = IndexParserState::SpectrumIndexList;
+                                        return Ok(IndexParserState::SpectrumIndexList)
+                                    },
                                     "chromatogram" => {
+                                        self.state = IndexParserState::ChromatogramIndexList;
                                         return Ok(IndexParserState::ChromatogramIndexList)
                                     }
                                     _ => {}
@@ -419,7 +458,7 @@ impl IndexedMzMLIndexExtractor {
                             }
                         }
                         Err(err) => {
-                            return Err(err.into());
+                            return Err(MzMLIndexingError::XMLError(err.into()));
                         }
                     }
                 }
@@ -435,7 +474,7 @@ impl IndexedMzMLIndexExtractor {
         &mut self,
         event: &BytesEnd,
         state: IndexParserState,
-    ) -> Result<IndexParserState, XMLError> {
+    ) -> Result<IndexParserState, MzMLIndexingError> {
         let elt_name = event.name();
         match elt_name.as_ref() {
             b"offset" => {}

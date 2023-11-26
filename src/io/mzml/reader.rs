@@ -23,7 +23,7 @@ use super::super::traits::{
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
-use crate::io::prelude::ParamLike;
+use crate::prelude::ParamLike;
 use crate::meta::file_description::FileDescription;
 use crate::meta::instrument::InstrumentConfiguration;
 use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
@@ -927,8 +927,10 @@ impl<
     fn parse_metadata(&mut self) -> Result<(), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
-        let mut accumulator = FileMetadataBuilder::default();
-        accumulator.instrument_id_map = Some(&mut self.instrument_id_map);
+        let mut accumulator = FileMetadataBuilder {
+            instrument_id_map: Some(&mut self.instrument_id_map),
+            ..Default::default()
+        };
         loop {
             match reader.read_event_into(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => {
@@ -993,7 +995,7 @@ impl<
                             continue;
                         } else {
                             self.error = Some(MzMLParserError::IncompleteElementError(
-                                String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
+                                String::from_utf8_lossy(&self.buffer).to_string(),
                                 self.state,
                             ));
                             self.state = MzMLParserState::ParserError;
@@ -1001,7 +1003,7 @@ impl<
                     }
                     _ => {
                         self.error = Some(MzMLParserError::IncompleteElementError(
-                            String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
+                            String::from_utf8_lossy(&self.buffer).to_string(),
                             self.state,
                         ));
                         self.state = MzMLParserState::ParserError;
@@ -1105,7 +1107,7 @@ impl<
                             continue;
                         } else {
                             self.error = Some(MzMLParserError::IncompleteElementError(
-                                String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
+                                String::from_utf8_lossy(&self.buffer).to_string(),
                                 self.state,
                             ));
                             self.state = MzMLParserState::ParserError;
@@ -1113,7 +1115,7 @@ impl<
                     }
                     _ => {
                         self.error = Some(MzMLParserError::IncompleteElementError(
-                            String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
+                            String::from_utf8_lossy(&self.buffer).to_string(),
                             self.state,
                         ));
                         self.state = MzMLParserState::ParserError;
@@ -1374,7 +1376,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
                     return Err(MzMLIndexingError::OffsetNotFound);
                 }
             }
-            Err(err) => return Err(MzMLIndexingError::IOError(err)),
+            Err(err) => return Err(err),
         };
         let mut indexer_state = IndexParserState::Start;
         self.handle
@@ -1395,7 +1397,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
                                 _ => {}
                             }
                         }
-                        Err(message) => return Err(MzMLIndexingError::XMLError(message)),
+                        Err(err) => return Err(err),
                     };
                 }
                 Ok(Event::End(ref e)) => {
@@ -1403,7 +1405,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
                         Ok(state) => {
                             indexer_state = state;
                         }
-                        Err(message) => return Err(MzMLIndexingError::XMLError(message)),
+                        Err(err) => return Err(err),
                     };
                 }
                 Ok(Event::Text(ref e)) => {
@@ -1687,7 +1689,7 @@ mod test {
         let path = path::Path::new("./test/data/small.mzML");
         let mut f = fs::File::open(path)?;
 
-        let index = IndexedMzMLIndexExtractor::new();
+        let mut index = IndexedMzMLIndexExtractor::new();
         if let Ok(offset) = index.find_offset_from_reader(&mut f) {
             if let Some(offset) = offset {
                 assert_eq!(offset, 5113415);
@@ -1722,7 +1724,7 @@ mod test {
         let file = fs::File::open(path)?;
         let mut reader = io::BufReader::new(file);
 
-        let indexer = IndexedMzMLIndexExtractor::new();
+        let mut indexer = IndexedMzMLIndexExtractor::new();
         let offset = indexer
             .find_offset_from_reader(&mut reader)?
             .expect("Failed to find index offset");

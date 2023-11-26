@@ -14,7 +14,7 @@ use std::sync::mpsc::sync_channel;
 
 #[cfg(feature = "mzmlb")]
 use mzdata::io::mzmlb;
-use mzdata::io::prelude::*;
+use mzdata::prelude::*;
 use mzdata::io::{mgf, mzml, offset_index, ScanSource};
 use mzdata::spectrum::SignalContinuity;
 use mzdata::spectrum::{DeconvolutedSpectrum, MultiLayerSpectrum, PeakDataLevel, SpectrumBehavior};

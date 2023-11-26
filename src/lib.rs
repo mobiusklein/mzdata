@@ -1,36 +1,37 @@
-//! mzdata provides basic access to raw and processed mass spectrometry data formats in
+//! `mzdata` provides basic access to raw and processed mass spectrometry data formats in
 //! Rust.
 //!
 //! The library currently supports reading:
 //!   1. MGF files using [`MGFReader`] in [`mzdata::io::mgf`](crate::io::mgf)
-//!   2. mzML files using [`MzMLReader`] in [`mzdata::io::mzml`](crate::io::mzml)
+//!   2. mzML & indexedmzML files using [`MzMLReader`] in [`mzdata::io::mzml`](crate::io::mzml)
 //!   3. mzMLb files using [`MzMLbReader`] in [`mzdata::io::mzmlb`](crate::io::mzmlb)
 //!
 //! and writing:
 //!   1. MGF files using [`MGFWriter`] in [`mzdata::io::mgf`](crate::io::mgf)
-//!   2. mzML files using [`MzMLWriter`] in [`mzdata::io::mzml`](crate::io::mzml)
+//!   2. mzML & indexedmzML files using [`MzMLWriter`] in [`mzdata::io::mzml`](crate::io::mzml)
+//!   3. mzMLb files using [`MzMLbWriter`] in [`mzdata::io::mzmlb`](crate::io::mzmlb)
 //!
 //! It also includes a set of representation layers for spectra in [`mzdata::spectrum`](crate::spectrum)
 //!
 //! # Example
-//! ```
-//! use std::fs;
-//! use mzdata::io::prelude::*;
-//! use mzdata::io::mzml::MzMLReader;
-//!
-//! let mut ms1_count = 0;
-//! let mut msn_count = 0;
-//! let mut reader = MzMLReader::open_path("./test/data/small.mzML").unwrap();
-//! for scan in reader {
-//!     if scan.ms_level() == 1 {
-//!         ms1_count += 1;
-//!     } else {
-//!         msn_count += 1;
-//!     }
-//! }
-//! println!("MS1 Count: {}\nMSn Count: {}", ms1_count, msn_count);
-//! assert_eq!(ms1_count, 14);
-//! assert_eq!(msn_count, 34);
+//! ```rust
+// use std::fs;
+// use mzdata::io::prelude::*;
+// use mzpeaks::{Tolerance, prelude::*};
+// use mzdata::io::MzMLReader;
+// use mzdata::spectrum::{SignalContinuity};
+
+// let reader = MzMLReader::new(fs::File::open("./test/data/small.mzML").unwrap());
+// for spectrum in reader {
+//     println!("Scan {} => BP {}", spectrum.id(), spectrum.peaks().base_peak().mz);
+//     if spectrum.signal_continuity() < SignalContinuity::Profile {
+//         let peak_picked = spectrum.into_centroid().unwrap();
+//         println!("Matches for 579.155: {:?}", peak_picked.peaks.all_peaks_for(579.155, Tolerance::Da(0.02)));
+//     }
+// }
+// println!("MS1 Count: {}\nMSn Count: {}", ms1_count, msn_count);
+// assert_eq!(ms1_count, 14);
+// assert_eq!(msn_count, 34);
 //! ```
 //!
 //! It uses [`mzpeaks`] to represent peaks and peak lists, and re-exports the basic types. While the high-level
@@ -39,11 +40,16 @@
 //! data arrays to peak lists.
 //!
 //!
+//! ## Traits
+//! The library makes heavy use of traits to abstract over the implementation details of different file formats.
+//! These traits are included in [`mzdata::prelude`](crate::prelude).
+//!
 pub mod io;
 pub mod meta;
 #[macro_use]
 pub mod params;
 pub mod spectrum;
+pub mod prelude;
 mod utils;
 
 pub use mzpeaks::Tolerance;

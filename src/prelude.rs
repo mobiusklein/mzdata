@@ -1,4 +1,4 @@
-pub use super::traits::{
+pub use crate::io::traits::{
     MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, ScanSource, ScanWriter, SeekRead,
     SpectrumGroup, SpectrumGrouping, SpectrumGroupingIterator, SpectrumIterator,
 };

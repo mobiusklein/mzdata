@@ -3,7 +3,6 @@ pub mod mzml;
 #[cfg(feature = "mzmlb")]
 pub mod mzmlb;
 pub mod offset_index;
-pub mod prelude;
 pub mod traits;
 pub mod utils;
 pub mod infer_format;

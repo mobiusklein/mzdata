@@ -6,12 +6,12 @@ A Rust library for reading mass spectrometry data file formats.
 ## Quickstart
 ```rust
 use std::fs;
-use mzdata::io::prelude::*;
+use mzdata::prelude::*;
 use mzpeaks::{Tolerance, prelude::*};
 use mzdata::io::MzMLReader;
 use mzdata::spectrum::{SignalContinuity};
 
-let reader = MzMLReader::new(File::open("./test/data/small.mzML").unwrap());
+let reader = MzMLReader::new(fs::File::open("./test/data/small.mzML").unwrap());
 for spectrum in reader {
     println!("Scan {} => BP {}", spectrum.id(), spectrum.peaks().base_peak().mz);
     if spectrum.signal_continuity() < SignalContinuity::Profile {

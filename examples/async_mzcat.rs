@@ -5,7 +5,7 @@ use tokio;
 use tokio::fs;
 
 use mzdata::io::mzml;
-use mzdata::io::prelude::*;
+use mzdata::prelude::*;
 
 async fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::AsyncMzMLReader<fs::File>> {
     let fh = fs::File::open(path.into()).await?;

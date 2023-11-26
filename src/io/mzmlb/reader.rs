@@ -20,7 +20,7 @@ use crate::io::mzml::{
     CVParamParse, IncrementingIdMap, MzMLParserError, MzMLParserState, MzMLReaderType, MzMLSAX,
     MzMLSpectrumBuilder, ParserResult, SpectrumBuilding,
 };
-use crate::io::prelude::{MSDataFileMetadata, ParamLike};
+use crate::prelude::{MSDataFileMetadata, ParamLike};
 use crate::io::traits::MZFileReader;
 use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, ScanAccessError, ScanSource};
 
@@ -132,7 +132,7 @@ impl Default for ExternalDataRegistry {
 
 impl ExternalDataRegistry {
     pub fn new(chunk_size: usize) -> Self {
-        
+
         Self {
             chunk_size,
             ..Default::default()

@@ -436,7 +436,7 @@ pub enum Unit {
 }
 
 impl Unit {
-    pub fn for_param(&self) -> (&'static str, &'static str) {
+    pub const fn for_param(&self) -> (&'static str, &'static str) {
         match self {
             Self::Millisecond => ("UO:0000028", "millisecond"),
             Self::Second => ("UO:0000010", "second"),
@@ -500,7 +500,7 @@ impl Unit {
         }
     }
 
-    pub fn from_param(param: &Param) -> Unit {
+    pub const fn from_param(param: &Param) -> Unit {
         param.unit
     }
 }

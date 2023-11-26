@@ -4,7 +4,7 @@ use std::time;
 use rayon::prelude::*;
 
 use mzdata::io::{mzml, mzmlb};
-use mzdata::io::prelude::*;
+use mzdata::prelude::*;
 use mzdata::spectrum::MultiLayerSpectrum;
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
