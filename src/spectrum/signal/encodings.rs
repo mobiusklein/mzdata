@@ -1,4 +1,4 @@
-use std::{ops::{Mul, AddAssign}, io};
+use std::{ops::{Mul, AddAssign}, io, fmt::Display};
 use bytemuck::{self, Pod};
 use thiserror::{self, Error};
 
@@ -41,6 +41,11 @@ pub enum ArrayType {
     NonStandardDataArray { name: Box<String> },
 }
 
+impl Display for ArrayType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 impl ArrayType {
     pub const fn preferred_dtype(&self) -> BinaryDataArrayType {
@@ -109,6 +114,12 @@ pub enum BinaryDataArrayType {
     ASCII,
 }
 
+impl Display for BinaryDataArrayType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 impl BinaryDataArrayType {
     pub const fn size_of(&self) -> usize {
         match self {
@@ -149,6 +160,11 @@ impl BinaryCompressionType {
     }
 }
 
+impl Display for BinaryCompressionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 
 /// A high level set of failure modes that an operation to retrieve a typed memory buffer

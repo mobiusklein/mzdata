@@ -64,4 +64,4 @@ pub use crate::io::mzmlb::{MzMLbReader, MzMLbError, MzMLbWriterBuilder, MzMLbWri
 
 pub use crate::params::{Param, ParamDescribed, ParamList};
 
-pub use crate::spectrum::{CentroidSpectrum, RawSpectrum, SpectrumBehavior};
+pub use crate::spectrum::{CentroidSpectrum, RawSpectrum, Spectrum, SpectrumBehavior};

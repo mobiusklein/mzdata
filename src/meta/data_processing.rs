@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::impl_param_described;
 use crate::params::{ParamList, Param, ParamCow, ControlledVocabulary};
 
@@ -42,6 +44,11 @@ pub enum DataTransformationAction {
     Other(Param)
 }
 
+impl Display for DataTransformationAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 pub enum DataProcessingAction {
@@ -57,6 +64,12 @@ pub enum DataProcessingAction {
     DataFiltering,
     AdductDeconvolution,
     IonMobilityDeconvolution,
+}
+
+impl Display for DataProcessingAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl DataProcessingAction {
@@ -102,6 +115,12 @@ impl DataProcessingAction {
 pub enum FormatConversion {
     ConversionToMzML,
     ConversionToMzMLb,
+}
+
+impl Display for FormatConversion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl FormatConversion {

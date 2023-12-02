@@ -577,6 +577,7 @@ where
         }
     }
 
+    #[cfg(feature = "mzsignal")]
     pub fn denoise(&mut self, scale: f32) -> Result<(), SpectrumProcessingError> {
         match &mut self.arrays {
             Some(arrays) => {
@@ -599,6 +600,7 @@ where
     }
 }
 
+#[cfg(feature = "mzsignal")]
 impl<
         C: CentroidLike + Default + From<FittedPeak>,
         D: DeconvolutedCentroidLike + Default,

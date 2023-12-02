@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumBehavior};
 use crate::io::traits::ScanSource;
 use crate::params::{ControlledVocabulary, Param, ParamLike, Unit};
@@ -14,6 +16,12 @@ pub enum IsolationWindowState {
     Offset,
     Explicit,
     Complete,
+}
+
+impl Display for IsolationWindowState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 
@@ -70,6 +78,11 @@ pub enum ScanCombination {
     Median,
 }
 
+impl Display for ScanCombination {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 impl ScanCombination {
     pub fn from_accession(
@@ -575,6 +588,11 @@ pub enum ScanPolarity {
     Negative = -1,
 }
 
+impl Display for ScanPolarity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 /**
 Describes the initial representation of the signal of a spectrum.
@@ -591,6 +609,11 @@ pub enum SignalContinuity {
     Profile = 5,
 }
 
+impl Display for SignalContinuity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 /**
 The set of descriptive metadata that give context for how a mass spectrum was acquired

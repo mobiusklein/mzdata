@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::impl_param_described;
 use crate::params::ParamList;
 
@@ -11,7 +13,11 @@ pub enum ComponentType {
     Unknown,
 }
 
-
+impl Display for ComponentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Component {
