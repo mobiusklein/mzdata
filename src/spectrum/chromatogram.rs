@@ -14,7 +14,7 @@ pub struct Chromatogram {
     pub arrays: BinaryArrayMap
 }
 
-pub trait ChromatogramBehavior {
+pub trait ChromatogramLike {
     /// The method to access the spectrum description itself, which supplies
     /// the data for most other methods on this trait.
     fn description(&self) -> &ChromatogramDescription;
@@ -95,7 +95,7 @@ impl Chromatogram {
 }
 
 
-impl ChromatogramBehavior for Chromatogram {
+impl ChromatogramLike for Chromatogram {
     fn description(&self) -> &ChromatogramDescription {
         &self.description
     }

@@ -1,30 +1,38 @@
+/*!
+Read and write [MGF](https://www.matrixscience.com/help/data_file_help.html#GEN) files.
+Supports random access when reading from a source that supports [`io::Seek`].
+*/
+
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::io::BufWriter;
-use std::mem;
 use std::fs;
 use std::io;
 use std::io::prelude::*;
+use std::io::BufWriter;
 use std::io::SeekFrom;
 use std::marker::PhantomData;
+use std::mem;
 use std::str;
 
 use log::warn;
 use thiserror::Error;
 
 use lazy_static::lazy_static;
-use mzpeaks::MZPeakSetType;
-use mzpeaks::MassPeakSetType;
+use mzpeaks::{
+    CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated, MZPeakSetType,
+    MassPeakSetType, PeakCollection, peak::KnownCharge
+};
 use regex::Regex;
 
-use mzpeaks::peak::KnownCharge;
-use mzpeaks::{CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated};
-
+use super::offset_index::OffsetIndex;
+use super::traits::{
+    MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, ScanSource, ScanWriter, SeekRead,
+};
+use super::utils::DetailLevel;
 use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, Software,
 };
 use crate::params::{ControlledVocabulary, Param, ParamDescribed, ParamLike};
-use crate::spectrum::SignalContinuity;
 use crate::spectrum::signal::{
     vec_as_bytes, ArrayType, BinaryArrayMap, BinaryDataArrayType, BuildArrayMapFrom,
     BuildFromArrayMap, DataArray,
@@ -32,15 +40,12 @@ use crate::spectrum::signal::{
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
 };
+use crate::spectrum::PeakDataLevel;
+use crate::spectrum::SignalContinuity;
 use crate::spectrum::{
-    Precursor, PrecursorSelection, SelectedIon, SpectrumBehavior, SpectrumDescription,
+    Precursor, PrecursorSelection, SelectedIon, SpectrumLike, SpectrumDescription,
 };
 use crate::utils::neutral_mass;
-
-use super::offset_index::OffsetIndex;
-use super::traits::{
-    MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, ScanSource, ScanWriter, SeekRead,
-};
 
 #[derive(PartialEq, Debug)]
 pub enum MGFParserState {
@@ -64,7 +69,11 @@ pub enum MGFError {
     #[error("Too many columns for peak line encountered")]
     TooManyColumnsForPeakLine,
     #[error("Encountered an IO error: {0}")]
-    IOError(#[from] #[source] io::Error),
+    IOError(
+        #[from]
+        #[source]
+        io::Error,
+    ),
 }
 
 #[derive(Debug, Default)]
@@ -77,6 +86,7 @@ struct SpectrumBuilderFlex<
     pub intensity_array: Vec<f32>,
     pub charge_array: Vec<i32>,
     pub has_charge: u32,
+    pub detail_level: DetailLevel,
     centroided_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
 }
@@ -177,9 +187,9 @@ where
 }
 
 /// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
-/// The parser produces [`crate::spectrum::Spectrum`] instances. These may be converted directly into [`crate::spectrum::CentroidSpectrum`]
-/// instances using [`spectrum::Spectrum.into_centroid`] or the [`From`] trait which better represent
-/// the nature of this preprocessed data type.
+/// The parser produces [`Spectrum`](crate::spectrum::Spectrum) instances. These may be
+/// converted directly into [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum)
+/// instances which better represent the nature of this preprocessed data type.
 pub struct MGFReaderType<
     R: io::Read,
     C: CentroidPeakAdapting = CentroidPeak,
@@ -194,6 +204,7 @@ pub struct MGFReaderType<
     instrument_configurations: HashMap<u32, InstrumentConfiguration>,
     softwares: Vec<Software>,
     data_processings: Vec<DataProcessing>,
+    pub detail_level: DetailLevel,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
 }
@@ -224,17 +235,19 @@ impl<
                 self.error = Some(MGFError::TooManyColumnsForPeakLine);
                 return None;
             }
-            let mz: f64 = parts[0].parse().unwrap();
-            let intensity: f32 = parts[1].parse().unwrap();
-            builder.mz_array.push(mz);
-            builder.intensity_array.push(intensity);
+            if !matches!(builder.detail_level, DetailLevel::MetadataOnly) {
+                let mz: f64 = parts[0].parse().unwrap();
+                let intensity: f32 = parts[1].parse().unwrap();
+                builder.mz_array.push(mz);
+                builder.intensity_array.push(intensity);
 
-            if nparts == 3 {
-                let charge = parts[2].parse().unwrap();
-                builder.charge_array.push(charge);
-                builder.has_charge += 1;
-            } else {
-                builder.charge_array.push(0);
+                if nparts == 3 {
+                    let charge = parts[2].parse().unwrap();
+                    builder.charge_array.push(charge);
+                    builder.has_charge += 1;
+                } else {
+                    builder.charge_array.push(0);
+                }
             }
 
             Some(true)
@@ -248,7 +261,9 @@ impl<
         line: &str,
         builder: &mut SpectrumBuilderFlex<C, D>,
     ) -> bool {
-        let peak_line = self.parse_peak_from_line_flex(line, builder).unwrap_or(false);
+        let peak_line = self
+            .parse_peak_from_line_flex(line, builder)
+            .unwrap_or(false);
         if peak_line {
             self.state = MGFParserState::Peaks;
             true
@@ -257,7 +272,6 @@ impl<
             true
         } else if line.contains('=') {
             let (key, value) = line.split_once('=').unwrap();
-
 
             match key {
                 "TITLE" => builder.description.id = String::from(value),
@@ -301,7 +315,9 @@ impl<
     }
 
     fn handle_peak_flex(&mut self, line: &str, builder: &mut SpectrumBuilderFlex<C, D>) -> bool {
-        let peak_line = self.parse_peak_from_line_flex(line, builder).unwrap_or(false);
+        let peak_line = self
+            .parse_peak_from_line_flex(line, builder)
+            .unwrap_or(false);
         if peak_line {
             true
         } else if line == "END IONS" {
@@ -396,7 +412,7 @@ impl<
                 let mut err = None;
                 mem::swap(&mut self.error, &mut err);
                 self.error = None;
-                return Err(err.unwrap())
+                return Err(err.unwrap());
             }
         }
         Ok(offset)
@@ -441,6 +457,7 @@ impl<
             data_processings: Vec::new(),
             softwares: Vec::new(),
             file_description: Self::default_file_description(),
+            detail_level: DetailLevel::Full,
         }
     }
 }
@@ -672,6 +689,7 @@ pub(crate) fn is_mgf(buf: &[u8]) -> bool {
     }
 }
 
+/// An MGF writer type
 pub struct MGFWriterType<
     W: io::Write,
     C: CentroidPeakAdapting + From<CentroidPeak> = CentroidPeak,
@@ -699,18 +717,19 @@ impl<
         }
     }
 
-    pub fn into_inner(self) ->BufWriter<W> {
+    pub fn into_inner(self) -> BufWriter<W> {
         self.handle
     }
 
     fn write_param<P: ParamLike>(&mut self, param: &P) -> io::Result<()> {
-        self.handle.write_all(param.name().to_uppercase().as_bytes())?;
+        self.handle
+            .write_all(param.name().to_uppercase().as_bytes())?;
         self.handle.write_all(param.value().as_bytes())?;
         self.handle.write_all(b"\n")?;
         Ok(())
     }
 
-    pub fn write_header<T: SpectrumBehavior<C, D>>(&mut self, spectrum: &T) -> io::Result<()> {
+    fn write_header<T: SpectrumLike<C, D>>(&mut self, spectrum: &T) -> io::Result<()> {
         let desc = spectrum.description();
         if desc.ms_level == 1 {
             log::warn!(
@@ -725,8 +744,7 @@ TITLE="#,
         )?;
         self.handle.write_all(desc.id.as_bytes())?;
         self.handle.write_all(b"\nRTINSECONDS=")?;
-        self
-            .handle
+        self.handle
             .write_all(spectrum.start_time().to_string().as_bytes())?;
         self.handle.write_all(b"\n")?;
         match &desc.precursor {
@@ -735,7 +753,8 @@ TITLE="#,
                 self.handle.write_all(b"PEPMASS=")?;
                 self.handle.write_all(ion.mz.to_string().as_bytes())?;
                 self.handle.write_all(b" ")?;
-                self.handle.write_all(ion.intensity.to_string().as_bytes())?;
+                self.handle
+                    .write_all(ion.intensity.to_string().as_bytes())?;
                 if let Some(charge) = ion.charge {
                     self.handle.write_all(b" ")?;
                     self.handle.write_all(charge.to_string().as_bytes())?;
@@ -759,68 +778,93 @@ TITLE="#,
             None => {}
         }
         for param in desc.params() {
-            self.handle.write_all(param.name.to_uppercase().as_bytes())?;
+            self.handle
+                .write_all(param.name.to_uppercase().as_bytes())?;
             self.handle.write_all(param.value.as_bytes())?;
         }
 
         Ok(())
     }
 
-    pub fn write_deconvoluted_centroids(
+    fn write_deconvoluted_centroids(&mut self, centroids: &[D]) -> io::Result<()> {
+        for peak in centroids.iter().map(|p| p.as_centroid()) {
+            self.handle.write_all(peak.mz().to_string().as_bytes())?;
+            self.handle.write_all(b" ")?;
+            self.handle
+                .write_all(peak.intensity().to_string().as_bytes())?;
+            self.handle.write_all(b" ")?;
+            self.handle
+                .write_all(peak.charge().to_string().as_bytes())?;
+            self.handle.write_all(b"\n")?;
+        }
+        Ok(())
+    }
+
+    fn write_centroids(&mut self, centroids: &[C]) -> io::Result<()> {
+        for peak in centroids {
+            self.handle.write_all(peak.mz().to_string().as_bytes())?;
+            self.handle.write_all(b" ")?;
+            self.handle
+                .write_all(peak.intensity().to_string().as_bytes())?;
+            self.handle.write_all(b"\n")?;
+        }
+        Ok(())
+    }
+
+    fn write_arrays(
         &mut self,
-        spectrum: &MultiLayerSpectrum<C, D>,
+        description: &SpectrumDescription,
+        arrays: &BinaryArrayMap,
     ) -> io::Result<()> {
-        match &spectrum.deconvoluted_peaks {
-            Some(centroids) => {
-                for peak in centroids.iter().map(|p| p.as_centroid()) {
-                    self.handle.write_all(peak.mz().to_string().as_bytes())?;
-                    self.handle.write_all(b" ")?;
-                    self.handle.write_all(peak.intensity().to_string().as_bytes())?;
-                    self.handle.write_all(b" ")?;
-                    self.handle.write_all(peak.charge().to_string().as_bytes())?;
-                    self.handle.write_all(b"\n")?;
-                }
-            }
-            None => {}
-        }
-        Ok(())
-    }
-
-    pub fn write_centroids(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<()> {
-        match &spectrum.peaks {
-            Some(centroids) => {
-                for peak in centroids {
-                    self.handle.write_all(peak.mz().to_string().as_bytes())?;
-                    self.handle.write_all(b" ")?;
-                    self.handle.write_all(peak.intensity().to_string().as_bytes())?;
-                    self.handle.write_all(b"\n")?;
-                }
-            }
-            None => {}
-        }
-        Ok(())
-    }
-
-    pub fn write_arrays(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<()> {
-        match spectrum.signal_continuity() {
+        match description.signal_continuity {
             SignalContinuity::Centroid => {
-                match &spectrum.arrays {
-                    Some(arrays) => {
-                        for (mz, inten) in arrays.mzs()?.iter().zip(arrays.intensities()?.iter()) {
-                            self.handle.write_all(mz.to_string().as_bytes())?;
-                            self.handle.write_all(b" ")?;
-                            self.handle.write_all(inten.to_string().as_bytes())?;
-                            self.handle.write_all(b"\n")?;
-                        }
-                    },
-                    None => {},
+                for (mz, inten) in arrays.mzs()?.iter().zip(arrays.intensities()?.iter()) {
+                    self.handle.write_all(mz.to_string().as_bytes())?;
+                    self.handle.write_all(b" ")?;
+                    self.handle.write_all(inten.to_string().as_bytes())?;
+                    self.handle.write_all(b"\n")?;
                 }
-            },
+            }
             SignalContinuity::Profile | SignalContinuity::Unknown => {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "MGF spectrum must be centroided"))
-            },
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "MGF spectrum must be centroided",
+                ))
+            }
         }
         Ok(())
+    }
+
+    pub fn write<S: SpectrumLike<C, D> + 'static>(
+        &mut self,
+        spectrum: &S,
+    ) -> io::Result<usize> {
+        let description = spectrum.description();
+        if description.ms_level == 1 {
+            log::warn!(
+                "Attempted to write an MS1 spectrum to MGF, {}, skipping.",
+                description.id
+            );
+            return Ok(0);
+        }
+        self.write_header(spectrum)?;
+        match spectrum.peaks() {
+            PeakDataLevel::Missing => {
+                log::warn!(
+                    "Attempting to write a spectrum without any peak data, {}",
+                    description.id
+                )
+            }
+            PeakDataLevel::RawData(arrays) => self.write_arrays(description, arrays)?,
+            PeakDataLevel::Centroid(centroids) => {
+                self.write_centroids(&centroids[0..centroids.len()])?
+            }
+            PeakDataLevel::Deconvoluted(deconvoluted) => {
+                self.write_deconvoluted_centroids(&deconvoluted[0..deconvoluted.len()])?
+            }
+        }
+        self.handle.write_all(b"END IONS\n")?;
+        Ok(0)
     }
 }
 
@@ -831,25 +875,8 @@ impl<
         D: DeconvolutedPeakAdapting + From<DeconvolutedPeak> + 'static,
     > ScanWriter<'a, C, D> for MGFWriterType<W, C, D>
 {
-    fn write(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> io::Result<usize> {
-        let desc = spectrum.description();
-        if desc.ms_level == 1 {
-            log::warn!(
-                "Attempted to write an MS1 spectrum to MGF, {}, skipping.",
-                desc.id
-            );
-            return Ok(0);
-        }
-        self.write_header(spectrum)?;
-        if spectrum.deconvoluted_peaks.is_some() {
-            self.write_deconvoluted_centroids(spectrum)?;
-        } else if spectrum.peaks.is_some() {
-            self.write_centroids(spectrum)?;
-        } else if spectrum.arrays.is_some() {
-            self.write_arrays(spectrum)?;
-        }
-        self.handle.write_all(b"END IONS\n")?;
-        Ok(0)
+    fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
+        self.write(spectrum)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -857,6 +884,7 @@ impl<
     }
 }
 
+/// A convenient alias for [`MGFWriterType`] with the peak types specified
 pub type MGFWriter<W> = MGFWriterType<W, CentroidPeak, DeconvolutedPeak>;
 
 #[cfg(test)]
@@ -873,7 +901,7 @@ mod test {
     fn test_reader() {
         let path = path::Path::new("./test/data/small.mgf");
         let file = fs::File::open(path).expect("Test file doesn't exist");
-        let reader = MGFReaderType::<_, CentroidPeak, DeconvolutedPeak>::new(file);
+        let reader = MGFReaderType::<_>::new(file);
         let mut ms1_count = 0;
         let mut msn_count = 0;
         for scan in reader {
@@ -933,7 +961,6 @@ mod test {
         let buffer = inner_writer.into_inner();
         let reader2 = MGFReader::new(io::Cursor::new(buffer));
         assert_eq!(reader2.len(), reader.len());
-
 
         // Not including platform-specific line endings
         Ok(())

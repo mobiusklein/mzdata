@@ -59,8 +59,8 @@ pub(crate) mod chromatogram;
 pub use crate::spectrum::scan_properties::*;
 pub use crate::spectrum::signal::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray};
 pub use crate::spectrum::spectrum::{
-    SpectrumBehavior, PeakDataLevel,
+    SpectrumLike, PeakDataLevel,
     SpectrumConversionError, SpectrumProcessingError,
     CentroidSpectrum, RawSpectrum, Spectrum, DeconvolutedSpectrum,
     MultiLayerSpectrum, CentroidSpectrumType, DeconvolutedSpectrumType};
-pub use crate::spectrum::chromatogram::{Chromatogram, ChromatogramBehavior};
+pub use crate::spectrum::chromatogram::{Chromatogram, ChromatogramLike};

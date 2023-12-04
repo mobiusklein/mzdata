@@ -22,7 +22,7 @@ use crate::io::compression::{is_gzipped, is_gzipped_extension};
 use super::traits::MZFileReader;
 
 
-/// Mass spectrometry file formats that [`mzdata`]
+/// Mass spectrometry file formats that [`mzdata`](crate)
 /// supports
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MassSpectrometryFormat {
@@ -36,7 +36,7 @@ pub enum MassSpectrometryFormat {
 
 /// Given a path, infer the file format and whether or not the file at that path is
 /// GZIP compressed
-pub(crate) fn infer_from_path<P: Into<path::PathBuf>,>(path: P) -> (MassSpectrometryFormat, bool) {
+pub fn infer_from_path<P: Into<path::PathBuf>,>(path: P) -> (MassSpectrometryFormat, bool) {
     let path: path::PathBuf = path.into();
     let (is_gzipped, path) = is_gzipped_extension(path);
     if let Some(ext) = path.extension() {
@@ -60,7 +60,7 @@ pub(crate) fn infer_from_path<P: Into<path::PathBuf>,>(path: P) -> (MassSpectrom
 
 /// Given a stream of bytes, infer the file format and whether or not the
 /// stream is GZIP compressed. This assumes the stream is seekable.
-pub(crate) fn infer_from_stream<R: Read + Seek>(stream: &mut R) -> io::Result<(MassSpectrometryFormat, bool)> {
+pub fn infer_from_stream<R: Read + Seek>(stream: &mut R) -> io::Result<(MassSpectrometryFormat, bool)> {
     let mut buf = Vec::with_capacity(100);
     let current_pos = stream.stream_position()?;
     stream.read_exact(buf.as_mut_slice())?;
@@ -86,7 +86,7 @@ pub(crate) fn infer_from_stream<R: Read + Seek>(stream: &mut R) -> io::Result<(M
 /// Given a path, infer the file format and whether or not the file at that path is
 /// GZIP compressed, using both the file name and by trying to open and read the file
 /// header
-pub(crate) fn infer_format<P: Into<path::PathBuf>>(path: P) -> io::Result<(MassSpectrometryFormat, bool)> {
+pub fn infer_format<P: Into<path::PathBuf>>(path: P) -> io::Result<(MassSpectrometryFormat, bool)> {
     let path: path::PathBuf = path.into();
 
     let (format, is_gzipped) = infer_from_path(&path);
@@ -142,7 +142,7 @@ pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<Box<dyn ScanSour
 
 #[cfg(test)]
 mod test {
-    use crate::{SpectrumBehavior, spectrum::{Spectrum, ArrayType}};
+    use crate::{SpectrumLike, spectrum::{Spectrum, ArrayType}};
 
     use super::*;
 

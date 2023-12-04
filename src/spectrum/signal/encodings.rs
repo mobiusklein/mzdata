@@ -158,6 +158,23 @@ impl BinaryCompressionType {
             None => format!("Cannot decode array compressed with {:?}", self)
         }
     }
+
+    pub const fn as_param(&self) -> Option<ParamCow> {
+        let (name, accession) = match self {
+            BinaryCompressionType::NoCompression => ("no compression", 1000576),
+            BinaryCompressionType::Zlib => ("zlib compression", 1000574),
+            BinaryCompressionType::NumpressLinear => ("MS-Numpress linear prediction compression", 1002312),
+            BinaryCompressionType::NumpressSLOF => ("MS-Numpress positive integer compression", 1002313),
+            BinaryCompressionType::NumpressPIC => ("MS-Numpress short logged float compression", 1002314),
+            BinaryCompressionType::NumpressLinearZlib => ("MS-Numpress linear prediction compression followed by zlib compression", 1002746),
+            BinaryCompressionType::NumpressSLOFZlib => ("MS-Numpress positive integer compression followed by zlib compression", 1002477),
+            BinaryCompressionType::NumpressPICZlib => ("MS-Numpress short logged float compression followed by zlib compression", 1002478),
+            BinaryCompressionType::LinearPrediction => todo!(),
+            BinaryCompressionType::DeltaPrediction => todo!(),
+            BinaryCompressionType::Decoded => return None,
+        };
+        Some(ControlledVocabulary::MS.const_param_ident(name, accession))
+    }
 }
 
 impl Display for BinaryCompressionType {

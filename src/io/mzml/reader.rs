@@ -24,8 +24,8 @@ use super::super::traits::{
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 use crate::prelude::ParamLike;
-use crate::meta::file_description::FileDescription;
-use crate::meta::instrument::InstrumentConfiguration;
+use crate::meta::FileDescription;
+use crate::meta::InstrumentConfiguration;
 use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
 use crate::params::{Param, ParamList, Unit};
 use crate::spectrum::scan_properties::*;
@@ -39,7 +39,9 @@ use crate::spectrum::spectrum::{
     RawSpectrum, Spectrum,
 };
 use crate::ParamDescribed;
-use crate::SpectrumBehavior;
+use crate::SpectrumLike;
+
+use crate::io::utils::DetailLevel;
 
 use super::reading_shared::{
     CVParamParse, FileMetadataBuilder, IncrementingIdMap, IndexParserState,
@@ -54,7 +56,7 @@ pub trait SpectrumBuilding<
     'a,
     C: CentroidLike + Default,
     D: DeconvolutedPeakAdapting,
-    S: SpectrumBehavior<C, D>,
+    S: SpectrumLike<C, D>,
 >
 {
     /// Get the last isolation window being constructed
@@ -173,15 +175,15 @@ pub trait SpectrumBuilding<
     fn fill_selected_ion(&mut self, param: Param) {
         match param.name.as_ref() {
             "selected ion m/z" => {
-                self.selected_ion_mut().mz = param.coerce().expect("Failed to parse ion m/z");
+                self.selected_ion_mut().mz = param.parse().expect("Failed to parse ion m/z");
             }
             "peak intensity" => {
                 self.selected_ion_mut().intensity =
-                    param.coerce().expect("Failed to parse peak intensity");
+                    param.parse().expect("Failed to parse peak intensity");
             }
             "charge state" => {
                 self.selected_ion_mut().charge =
-                    Some(param.coerce().expect("Failed to parse ion charge"));
+                    Some(param.parse().expect("Failed to parse ion charge"));
             }
             &_ => {
                 self.selected_ion_mut().add_param(param);
@@ -194,7 +196,7 @@ pub trait SpectrumBuilding<
         match param.name.as_ref() {
             "isolation window target m/z" => {
                 window.target = param
-                    .coerce()
+                    .parse()
                     .expect("Failed to parse isolation window target");
                 window.flags = match window.flags {
                     IsolationWindowState::Unknown => IsolationWindowState::Complete,
@@ -209,7 +211,7 @@ pub trait SpectrumBuilding<
             }
             "isolation window lower offset" => {
                 let lower_bound = param
-                    .coerce()
+                    .parse()
                     .expect("Failed to parse isolation window limit");
                 match window.flags {
                     IsolationWindowState::Unknown => {
@@ -224,7 +226,7 @@ pub trait SpectrumBuilding<
             }
             "isolation window upper offset" => {
                 let upper_bound = param
-                    .coerce()
+                    .parse()
                     .expect("Failed to parse isolation window limit");
                 match window.flags {
                     IsolationWindowState::Unknown => {
@@ -239,7 +241,7 @@ pub trait SpectrumBuilding<
             }
             "isolation window lower limit" => {
                 let lower_bound = param
-                    .coerce()
+                    .parse()
                     .expect("Failed to parse isolation window limit");
                 if let IsolationWindowState::Unknown = window.flags {
                     window.flags = IsolationWindowState::Explicit;
@@ -248,7 +250,7 @@ pub trait SpectrumBuilding<
             }
             "isolation window upper limit" => {
                 let upper_bound = param
-                    .coerce()
+                    .parse()
                     .expect("Failed to parse isolation window limit");
                 if let IsolationWindowState::Unknown = window.flags {
                     window.flags = IsolationWindowState::Explicit;
@@ -263,10 +265,10 @@ pub trait SpectrumBuilding<
         let window = self.scan_window_mut();
         match param.name.as_ref() {
             "scan window lower limit" => {
-                window.lower_bound = param.coerce().expect("Failed to parse scan window limit");
+                window.lower_bound = param.parse().expect("Failed to parse scan window limit");
             }
             "scan window upper limit" => {
-                window.upper_bound = param.coerce().expect("Failed to parse scan window limit");
+                window.upper_bound = param.parse().expect("Failed to parse scan window limit");
             }
             &_ => {}
         }
@@ -299,10 +301,11 @@ pub struct MzMLSpectrumBuilder<
     pub polarity: ScanPolarity,
     pub signal_continuity: SignalContinuity,
     pub has_precursor: bool,
-
+    pub detail_level: DetailLevel,
     pub(crate) instrument_id_map: Option<&'a mut IncrementingIdMap>,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
+
 }
 
 impl<'a, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> XMLParseBase
@@ -380,7 +383,7 @@ impl<
     fn fill_spectrum<P: ParamLike + Into<Param>>(&mut self, param: P) {
         match param.name() {
             "ms level" => {
-                self.ms_level = param.coerce().expect("Failed to parse ms level");
+                self.ms_level = param.parse().expect("Failed to parse ms level");
             }
             "positive scan" => {
                 self.polarity = ScanPolarity::Positive;
@@ -413,7 +416,12 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
     MzMLSpectrumBuilder<'inner, C, D>
 {
     pub fn new() -> MzMLSpectrumBuilder<'inner, C, D> {
-        MzMLSpectrumBuilder {
+        Self::with_detail_level(DetailLevel::Full)
+    }
+
+    pub fn with_detail_level(detail_level: DetailLevel) -> MzMLSpectrumBuilder<'inner, C, D> {
+        Self {
+            detail_level,
             ..Default::default()
         }
     }
@@ -476,7 +484,7 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                 match param.name.as_bytes() {
                     b"scan start time" => {
                         let value: f64 = param
-                            .coerce()
+                            .parse()
                             .expect("Expected floating point number for scan time");
                         let value = match &param.unit {
                             Unit::Minute => value,
@@ -491,7 +499,7 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                     }
                     b"ion injection time" => {
                         event.injection_time = param
-                            .coerce()
+                            .parse()
                             .expect("Expected floating point number for injection time");
                     }
                     _ => event.add_param(param),
@@ -518,7 +526,7 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                     match param.name.as_ref() {
                         "collision energy" | "activation energy" => {
                             self.precursor.activation.energy =
-                                param.coerce().expect("Failed to parse collision energy");
+                                param.parse().expect("Failed to parse collision energy");
                         }
                         &_ => {
                             self.precursor.activation.add_param(param);
@@ -697,7 +705,7 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                             match param.name.as_bytes() {
                                 b"scan start time" => {
                                     let value: f64 = param
-                                        .coerce()
+                                        .parse()
                                         .expect("Expected floating point number for scan time");
                                     let value = match &param.unit {
                                         Unit::Minute => value,
@@ -712,7 +720,7 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                                 }
                                 b"ion injection time" => {
                                     event.injection_time = param
-                                        .coerce()
+                                        .parse()
                                         .expect("Expected floating point number for injection time");
                                 }
                                 _ => event.add_param(param.into()),
@@ -742,7 +750,7 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                                 match param.name.as_ref() {
                                     "collision energy" | "activation energy" => {
                                         self.precursor.activation.energy =
-                                            param.coerce().expect("Failed to parse collision energy");
+                                            param.parse().expect("Failed to parse collision energy");
                                     }
                                     &_ => {
                                         self.precursor.activation.add_param(param.into());
@@ -786,9 +794,11 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
             }
             b"binaryDataArray" => {
                 let mut array = mem::take(&mut self.current_array);
-                array
-                    .decode_and_store()
-                    .expect("Error during decoding and storing of array data");
+                if self.detail_level == DetailLevel::Full {
+                    array
+                        .decode_and_store()
+                        .expect("Error during decoding and storing of array data");
+                }
                 self.arrays.add(array);
                 return Ok(MzMLParserState::BinaryDataArrayList);
             }
@@ -800,7 +810,7 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
     }
 
     fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult {
-        if state == MzMLParserState::Binary {
+        if state == MzMLParserState::Binary && self.detail_level != DetailLevel::MetadataOnly {
             let bin = event
                 .unescape()
                 .expect("Failed to unescape binary data array content");
@@ -876,6 +886,7 @@ pub struct MzMLReaderType<
     pub data_processings: Vec<DataProcessing>,
     /// A cache of repeated paramters
     pub reference_param_groups: HashMap<String, Vec<Param>>,
+    pub detail_level: DetailLevel,
 
     buffer: Bytes,
     centroid_type: PhantomData<C>,
@@ -894,10 +905,15 @@ impl<
         D: DeconvolutedPeakAdapting,
     > MzMLReaderType<R, C, D>
 {
+
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
     /// provided with an `[io::BufReader`] and parses the metadata section of the file.
     pub fn new(file: R) -> MzMLReaderType<R, C, D> {
-        let handle = BufReader::with_capacity(BUFFER_SIZE, file);
+        Self::with_buffer_capacity_and_detail_level(file, BUFFER_SIZE, DetailLevel::Full)
+    }
+
+    pub fn with_buffer_capacity_and_detail_level(file: R, capacity: usize, detail_level: DetailLevel) -> MzMLReaderType<R, C, D> {
+        let handle = BufReader::with_capacity(capacity, file);
         let mut inst = MzMLReaderType {
             handle,
             state: MzMLParserState::Start,
@@ -910,6 +926,7 @@ impl<
             softwares: Vec::new(),
             data_processings: Vec::new(),
             reference_param_groups: HashMap::new(),
+            detail_level,
 
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
@@ -1150,7 +1167,7 @@ impl<
         &mut self,
         spectrum: &mut MultiLayerSpectrum<C, D>,
     ) -> Result<usize, MzMLParserError> {
-        let accumulator = MzMLSpectrumBuilder::<C, D>::new();
+        let accumulator = MzMLSpectrumBuilder::<C, D>::with_detail_level(self.detail_level);
         if self.state == MzMLParserState::SpectrumDone {
             self.state = MzMLParserState::Resume;
         }
@@ -1352,6 +1369,26 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
         reader
     }
 
+    fn _read_index(&mut self) {
+        if let Err(err) =  self.read_index_from_end() {
+            debug!("Failed to read index from the end of the file: {}", err);
+            match self.seek(SeekFrom::Start(0)) {
+                Ok(_) => {
+                    self.build_index();
+                }
+                Err(error) => {
+                    panic!("Unrecoverable IO Error during file pointer reset {} while handling {:?}", error, err);
+                }
+            }
+        }
+    }
+
+    pub fn with_buffer_capacity_and_detail_level_indexed(file: R, capacity: usize, detail_level: DetailLevel) -> MzMLReaderType<R, C, D> {
+        let mut reader = Self::with_buffer_capacity_and_detail_level(file, capacity, detail_level);
+        reader._read_index();
+        reader
+    }
+
     pub fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.handle.seek(pos)
     }
@@ -1546,7 +1583,7 @@ pub(crate) fn is_mzml(buf: &[u8]) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::spectrum::spectrum::SpectrumBehavior;
+    use crate::spectrum::spectrum::SpectrumLike;
     use std::fs;
     use std::path;
 
@@ -1803,6 +1840,33 @@ mod test {
 
         let scan = reader.get_spectrum_by_index(30).unwrap();
         assert_eq!(scan.index(), 30);
+        Ok(())
+    }
+
+    #[test]
+    fn test_with_detail_level() -> io::Result<()> {
+        let path = path::Path::new("./test/data/small.mzML");
+        let mut reader = MzMLReader::open_path(path)?;
+        assert_eq!(reader.detail_level, DetailLevel::Full);
+
+        let scan_full = reader.get_spectrum_by_index(0).unwrap();
+        scan_full.arrays.as_ref().unwrap().iter().for_each(|(_, v)| {
+            assert!(matches!(v.compression, BinaryCompressionType::Decoded));
+        });
+
+        reader.detail_level = DetailLevel::Lazy;
+        let scan_lazy = reader.get_spectrum_by_index(0).unwrap();
+        scan_lazy.arrays.as_ref().unwrap().iter().for_each(|(_, v)| {
+            assert!(matches!(v.compression, BinaryCompressionType::NoCompression));
+        });
+
+        reader.detail_level = DetailLevel::MetadataOnly;
+        let scan_lazy = reader.get_spectrum_by_index(0).unwrap();
+        scan_lazy.arrays.as_ref().unwrap().iter().for_each(|(_, v)| {
+            assert!(matches!(v.compression, BinaryCompressionType::NoCompression));
+            assert!(v.data.len() == 0);
+        });
+
         Ok(())
     }
 }

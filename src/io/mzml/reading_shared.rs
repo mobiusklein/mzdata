@@ -18,7 +18,7 @@ use crate::params::{ParamCow, Param, Unit, ControlledVocabulary, curie_to_num};
 use super::reader::Bytes;
 
 /**
-The different states the [`MzMLReaderType`] can enter while parsing
+The different states the [`MzMLReaderType`](crate::io::mzml::MzMLReaderType) can enter while parsing
 different phases of the document. This information is really only
 needed by the module consumer to determine where in the document an
 error occurred.

@@ -8,7 +8,7 @@ use std::path::{self, PathBuf};
 
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 
-use crate::spectrum::spectrum::{MultiLayerSpectrum, SpectrumBehavior};
+use crate::spectrum::spectrum::{MultiLayerSpectrum, SpectrumLike};
 
 use super::utils::FileSource;
 use super::OffsetIndex;
@@ -22,7 +22,7 @@ impl<T: io::Read + io::Seek> SeekRead for T {}
 pub trait ScanSource<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
-    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+    S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 >: Iterator<Item = S>
 {
     fn reset(&mut self);
@@ -123,7 +123,7 @@ pub struct SpectrumIterator<
     'lifespan,
     C: CentroidLike + Default,
     D: DeconvolutedCentroidLike + Default,
-    S: SpectrumBehavior<C, D>,
+    S: SpectrumLike<C, D>,
     R: ScanSource<C, D, S>,
 > {
     source: &'lifespan mut R,
@@ -139,7 +139,7 @@ impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         R: ScanSource<C, D, S>,
-        S: SpectrumBehavior<C, D>,
+        S: SpectrumLike<C, D>,
     > SpectrumIterator<'lifespan, C, D, S, R>
 {
     pub fn new(source: &mut R) -> SpectrumIterator<C, D, S, R> {
@@ -159,7 +159,7 @@ impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         R: ScanSource<C, D, S>,
-        S: SpectrumBehavior<C, D>,
+        S: SpectrumLike<C, D>,
     > Iterator for SpectrumIterator<'lifespan, C, D, S, R>
 {
     type Item = S;
@@ -179,7 +179,7 @@ impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         R: ScanSource<C, D, S>,
-        S: SpectrumBehavior<C, D>,
+        S: SpectrumLike<C, D>,
     > ExactSizeIterator for SpectrumIterator<'lifespan, C, D, S, R>
 {
     fn len(&self) -> usize {
@@ -192,7 +192,7 @@ impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         R: ScanSource<C, D, S>,
-        S: SpectrumBehavior<C, D>,
+        S: SpectrumLike<C, D>,
     > DoubleEndedIterator for SpectrumIterator<'lifespan, C, D, S, R>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
@@ -210,7 +210,7 @@ impl<
         'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
-        S: SpectrumBehavior<C, D>,
+        S: SpectrumLike<C, D>,
         R: ScanSource<C, D, S>,
     > ScanSource<C, D, S> for SpectrumIterator<'lifespan, C, D, S, R>
 {
@@ -245,7 +245,7 @@ impl<
 pub trait MZFileReader<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
-    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+    S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 >: ScanSource<C, D, S> + Sized
 {
     /// An on-trait method of constructing an index. Assumed
@@ -314,7 +314,7 @@ pub trait MZFileReader<
 fn _save_index<
     C: CentroidLike + Default,
     D: DeconvolutedCentroidLike + Default,
-    S: SpectrumBehavior<C, D>,
+    S: SpectrumLike<C, D>,
 >(index_path: &PathBuf, reader: &impl MZFileReader<C, D, S>) -> io::Result<()> {
     let index_stream = fs::File::create(index_path)?;
     match reader.write_index(Box::new(io::BufWriter::new(index_stream))) {
@@ -347,7 +347,7 @@ impl std::error::Error for ScanAccessError {}
 pub trait RandomAccessSpectrumIterator<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
-    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+    S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 >: ScanSource<C, D, S>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, ScanAccessError>;
@@ -359,7 +359,7 @@ impl<
         'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
-        S: SpectrumBehavior<C, D>,
+        S: SpectrumLike<C, D>,
         R: ScanSource<C, D, S>,
     > RandomAccessSpectrumIterator<C, D, S> for SpectrumIterator<'lifespan, C, D, S, R>
 {
@@ -406,7 +406,7 @@ impl<
 pub trait SpectrumGrouping<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
-    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+    S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 >: Default
 {
     /// Get the precursor spectrum, which may be absent
@@ -431,7 +431,7 @@ pub struct SpectrumGroup<C = CentroidPeak, D = DeconvolutedPeak, S = MultiLayerS
 where
     C: CentroidLike + Default,
     D: DeconvolutedCentroidLike + Default,
-    S: SpectrumBehavior<C, D>,
+    S: SpectrumLike<C, D>,
 {
     /// The MS1 spectrum of a group. This may be absent when the source does not contain any MS1 spectra
     pub precursor: Option<S>,
@@ -445,7 +445,7 @@ where
 impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
-        S: SpectrumBehavior<C, D>,
+        S: SpectrumLike<C, D>,
     > Default for SpectrumGroup<C, D, S>
 {
     fn default() -> Self {
@@ -462,7 +462,7 @@ impl<C, D, S> SpectrumGrouping<C, D, S> for SpectrumGroup<C, D, S>
 where
     C: CentroidLike + Default,
     D: DeconvolutedCentroidLike + Default,
-    S: SpectrumBehavior<C, D>,
+    S: SpectrumLike<C, D>,
 {
     fn precursor(&self) -> Option<&S> {
         match &self.precursor {
@@ -587,7 +587,7 @@ pub struct SpectrumGroupingIterator<
     R: ScanSource<C, D, S>,
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
-    S: SpectrumBehavior<C, D> = MultiLayerSpectrum<C, D>,
+    S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
     G: SpectrumGrouping<C, D, S> = SpectrumGroup<C, D, S>,
 > {
     pub source: SpectrumIterator<'lifespan, C, D, S, R>,
@@ -611,7 +611,7 @@ impl<
         R: ScanSource<C, D, S>,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
-        S: SpectrumBehavior<C, D>,
+        S: SpectrumLike<C, D>,
         G: SpectrumGrouping<C, D, S>,
     > SpectrumGroupingIterator<'lifespan, R, C, D, S, G>
 {
@@ -814,7 +814,7 @@ impl<
         R: ScanSource<C, D, S>,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
-        S: SpectrumBehavior<C, D>,
+        S: SpectrumLike<C, D>,
         G: SpectrumGrouping<C, D, S> + Default,
     > Iterator for SpectrumGroupingIterator<'lifespan, R, C, D, S, G>
 {
@@ -830,7 +830,7 @@ impl<
         R: RandomAccessSpectrumIterator<C, D, S>,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
-        S: SpectrumBehavior<C, D>,
+        S: SpectrumLike<C, D>,
         G: SpectrumGrouping<C, D, S> + Default,
     > SpectrumGroupingIterator<'lifespan, R, C, D, S, G>
 {
@@ -870,17 +870,16 @@ pub trait ScanWriter<
     'a,
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
-    S: SpectrumBehavior<C, D> + 'static = MultiLayerSpectrum<C, D>,
 >
 {
-    /// Write out a single spectrum, returning the number of bytes written
-    fn write(&mut self, spectrum: &'a S) -> io::Result<usize>;
+    /// Write out a single spectrum
+    fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &'a S) -> io::Result<usize>;
 
     /// As [`std::io::Write::flush`]
     fn flush(&mut self) -> io::Result<()>;
 
     /// Consume an [`Iterator`] over [`Spectrum`](crate::spectrum::MultiLayerSpectrum) references
-    fn write_all<T: Iterator<Item = &'a S>>(&mut self, iterator: T) -> io::Result<usize> {
+    fn write_all<S: SpectrumLike<C, D> + 'static, T: Iterator<Item = &'a S>>(&mut self, iterator: T) -> io::Result<usize> {
         let mut n = 0;
         for spectrum in iterator {
             n += self.write(spectrum)?;
@@ -888,8 +887,8 @@ pub trait ScanWriter<
         Ok(n)
     }
 
-    /// Write a [`SpectrumGroup`] out in order, returning the number of bytes written
-    fn write_group<G: SpectrumGrouping<C, D, S> + 'static>(
+    /// Write a [`SpectrumGroup`] out in order
+    fn write_group<S: SpectrumLike<C, D> + 'static, G: SpectrumGrouping<C, D, S> + 'static>(
         &mut self,
         group: &'a G,
     ) -> io::Result<usize> {
@@ -904,7 +903,7 @@ pub trait ScanWriter<
     }
 
     /// Consume an [`Iterator`] over [`SpectrumGroup`] references
-    fn write_all_groups<G: SpectrumGrouping<C, D, S> + 'static, T: Iterator<Item = &'a G>>(
+    fn write_all_groups<S: SpectrumLike<C, D> + 'static, G: SpectrumGrouping<C, D, S> + 'static, T: Iterator<Item = &'a G>>(
         &mut self,
         iterator: T,
     ) -> io::Result<usize> {

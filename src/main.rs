@@ -14,13 +14,11 @@ use std::sync::mpsc::sync_channel;
 
 
 use mzdata::prelude::*;
-use mzdata::io::{mgf, mzml, offset_index, ScanSource};
+use mzdata::io::{mgf, mzml};
 #[cfg(feature = "mzmlb")]
 use mzdata::io::mzmlb;
-use mzdata::spectrum::SignalContinuity;
-use mzdata::spectrum::{DeconvolutedSpectrum, MultiLayerSpectrum, PeakDataLevel, SpectrumBehavior};
-use mzpeaks::PeakCollection;
-use mzpeaks::{CentroidPeak, DeconvolutedPeak};
+use mzdata::spectrum::{DeconvolutedSpectrum, MultiLayerSpectrum, PeakDataLevel, SpectrumLike, SignalContinuity};
+use mzpeaks::{CentroidPeak, DeconvolutedPeak, PeakCollection};
 
 fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::MzMLReader<fs::File>> {
     let start = time::Instant::now();

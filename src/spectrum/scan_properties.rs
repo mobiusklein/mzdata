@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumBehavior};
+use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
 use crate::io::traits::ScanSource;
 use crate::params::{ControlledVocabulary, Param, ParamLike, Unit};
 use crate::{impl_param_described, ParamList};
@@ -490,7 +490,7 @@ impl Precursor {
     where
         C: CentroidPeakAdapting,
         D: DeconvolutedPeakAdapting,
-        S: SpectrumBehavior<C, D>,
+        S: SpectrumLike<C, D>,
         R: ScanSource<C, D, S>,
     {
         match self.precursor_id.as_ref() {
@@ -506,7 +506,7 @@ impl Precursor {
     where
         C: CentroidPeakAdapting,
         D: DeconvolutedPeakAdapting,
-        S: SpectrumBehavior<C, D>,
+        S: SpectrumLike<C, D>,
         R: ScanSource<C, D, S>,
     {
         match self.product_id.as_ref() {

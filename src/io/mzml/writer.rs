@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::{io, mem};
 use std::io::{BufWriter, Seek, Write};
 use std::marker::PhantomData;
+use std::{io, mem};
 
 use log::warn;
 use thiserror::Error;
@@ -19,16 +19,17 @@ use super::super::utils::MD5HashingStream;
 
 use mzpeaks::{peak_set::PeakSetVec, CentroidPeak, DeconvolutedPeak, Mass, MZ};
 
-use crate::meta::file_description::FileDescription;
-use crate::meta::instrument::{ComponentType, InstrumentConfiguration};
-use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
+use crate::meta::{
+    ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
+    Software,
+};
 use crate::params::{ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, Unit};
 use crate::spectrum::signal::{
-    ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType,
-    BuildArrayMapFrom, ByteArrayView, DataArray, to_bytes
+    to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType,
+    BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
 };
-use crate::spectrum::spectrum::{MultiLayerSpectrum, SpectrumBehavior};
-use crate::spectrum::{scan_properties::*, Chromatogram, ChromatogramBehavior};
+use crate::spectrum::spectrum::SpectrumLike;
+use crate::spectrum::{scan_properties::*, Chromatogram, ChromatogramLike, PeakDataLevel};
 
 const BUFFER_SIZE: usize = 10000;
 
@@ -173,7 +174,7 @@ impl<W: io::Write> InnerXMLWriter<W> {
         Ok(())
     }
 
-    pub fn write_param_list<'a, T: Iterator<Item = &'a Param>>(
+    pub fn write_param_list<'a, P: ParamLike + 'a, T: Iterator<Item = &'a P>>(
         &mut self,
         params: T,
     ) -> WriterResult {
@@ -290,12 +291,10 @@ impl From<ChromatogramCollector> for Chromatogram {
 }
 
 /**
-An indexed mzML writer that handles [`Spectrum`](crate::spectrum::Spectrum)
-by reference.
+An indexed mzML writer that writes [`MultiLayerSpectrum`](crate::spectrum::MultiLayerSpectrum).
 
-Does not buffer spectra in-memory, writing them out immediately.
-
-Currently, no chromatograms are written (including no TIC or base peak chromatograms).
+Does not buffer spectra in-memory, writing them out immediately but summary chromatogram information
+is accumulated.
 */
 #[derive(Debug)]
 pub struct MzMLWriterType<
@@ -354,7 +353,7 @@ where
     PeakSetVec<C, MZ>: BuildArrayMapFrom,
     PeakSetVec<D, Mass>: BuildArrayMapFrom,
 {
-    fn write(&mut self, spectrum: &'a MultiLayerSpectrum<C, D>) -> io::Result<usize> {
+    fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &'a S) -> io::Result<usize> {
         match self.write_spectrum(spectrum) {
             Ok(()) => {
                 let pos = self.stream_position()?;
@@ -384,15 +383,26 @@ where
     PeakSetVec<C, MZ>: BuildArrayMapFrom,
     PeakSetVec<D, Mass>: BuildArrayMapFrom,
 {
-    const PSIMS_VERSION: &'static str = "4.1.57";
+    const PSIMS_VERSION: &'static str = "4.1.135";
     const UNIT_VERSION: &'static str = "releases/2020-03-10";
 
     pub const fn get_indent_size() -> u64 {
         InnerXMLWriter::<W>::INDENT_SIZE
     }
 
-    pub fn new_with_index(file: W, write_index: bool) -> MzMLWriterType<W, C, D> {
+    pub fn new_with_index_and_compression(
+        file: W,
+        write_index: bool,
+        data_array_compression: BinaryCompressionType,
+    ) -> MzMLWriterType<W, C, D> {
         let handle = InnerXMLWriter::new(file);
+        let data_array_compression = match data_array_compression {
+            BinaryCompressionType::Decoded => {
+                warn!("The mzML writer was asked to use the `Decoded` array compression, using `Zlib` instead");
+                BinaryCompressionType::Zlib
+            }
+            _ => data_array_compression,
+        };
         MzMLWriterType {
             handle,
             file_description: FileDescription::default(),
@@ -413,9 +423,13 @@ where
             tic_collector: ChromatogramCollector::of(ChromatogramType::TotalIonCurrentChromatogram),
             bic_collector: ChromatogramCollector::of(ChromatogramType::BasePeakChromatogram),
             ms_cv: ControlledVocabulary::MS,
-            data_array_compression: BinaryCompressionType::Zlib,
+            data_array_compression,
             wrote_summaries: false,
         }
+    }
+
+    pub fn new_with_index(file: W, write_index: bool) -> MzMLWriterType<W, C, D> {
+        Self::new_with_index_and_compression(file, write_index, BinaryCompressionType::Zlib)
     }
 
     /// Wrap a new [`std::io::Write`]-able type, constructing a new [`MzMLWriterType`]
@@ -1008,25 +1022,23 @@ where
                 )
             }
         }
-        if self.data_array_compression == BinaryCompressionType::NoCompression {
-            self.handle
-                .write_param(&self.ms_cv.param("MS:1000576", "no compression"))?;
-        } else {
-            self.handle
-                .write_param(&self.ms_cv.param("MS:1000574", "zlib compression"))?;
-        }
+
+        self.handle.write_param(
+            self.data_array_compression
+                .clone()
+                .as_param()
+                .as_ref()
+                .unwrap(),
+        )?;
+
         match &array.name {
-            ArrayType::MZArray => self.handle.write_param(&array.name.as_param_const())?,
-            ArrayType::IntensityArray => self.handle.write_param(&array.name.as_param_const())?,
-            ArrayType::ChargeArray => self.handle.write_param(&array.name.as_param_const())?,
-            ArrayType::TimeArray => self.handle.write_param(&array.name.as_param_const())?,
-            ArrayType::RawIonMobilityArray => self
-                .handle
-                .write_param(&array.name.as_param_with_unit_const(array.unit))?,
-            ArrayType::MeanIonMobilityArray => self
-                .handle
-                .write_param(&array.name.as_param_with_unit_const(array.unit))?,
-            ArrayType::DeconvolutedIonMobilityArray => self
+            ArrayType::MZArray | ArrayType::IntensityArray | ArrayType::ChargeArray => {
+                self.handle.write_param(&array.name.as_param_const())?
+            }
+            ArrayType::TimeArray
+            | ArrayType::RawIonMobilityArray
+            | ArrayType::MeanIonMobilityArray
+            | ArrayType::DeconvolutedIonMobilityArray => self
                 .handle
                 .write_param(&array.name.as_param_with_unit_const(array.unit))?,
             ArrayType::NonStandardDataArray { name } => {
@@ -1065,22 +1077,19 @@ where
         Ok(())
     }
 
-    pub fn start_spectrum(
+    pub fn start_spectrum<S: SpectrumLike<C, D> + 'static>(
         &mut self,
-        spectrum: &MultiLayerSpectrum<C, D>,
+        spectrum: &S,
         outer: &mut BytesStart,
     ) -> WriterResult {
         attrib!("id", spectrum.id(), outer);
         let count = self.spectrum_counter.to_string();
         attrib!("index", count, outer);
-        let default_array_len = if let Some(mass_peaks) = &spectrum.deconvoluted_peaks {
-            mass_peaks.len()
-        } else if let Some(mz_peaks) = &spectrum.peaks {
-            mz_peaks.len()
-        } else if let Some(arrays) = &spectrum.arrays {
-            arrays.mzs().unwrap().len()
-        } else {
-            0
+        let default_array_len = match spectrum.peaks() {
+            PeakDataLevel::RawData(a) => a.mzs().unwrap().len(),
+            PeakDataLevel::Centroid(a) => a.len(),
+            PeakDataLevel::Deconvoluted(a) => a.len(),
+            PeakDataLevel::Missing => todo!(),
         }
         .to_string();
 
@@ -1091,7 +1100,10 @@ where
         Ok(())
     }
 
-    fn write_ms_level(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> WriterResult {
+    fn write_ms_level<S: SpectrumLike<C, D> + 'static>(
+        &mut self,
+        spectrum: &S,
+    ) -> WriterResult {
         let ms_level = spectrum.ms_level();
         if ms_level == 1 {
             self.handle.write_param(&MS1_SPECTRUM)?;
@@ -1106,7 +1118,10 @@ where
         Ok(())
     }
 
-    fn write_polarity(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> WriterResult {
+    fn write_polarity<S: SpectrumLike<C, D> + 'static>(
+        &mut self,
+        spectrum: &S,
+    ) -> WriterResult {
         match spectrum.polarity() {
             ScanPolarity::Negative => self.handle.write_param(&NEGATIVE_SCAN),
             ScanPolarity::Positive => self.handle.write_param(&POSITIVE_SCAN),
@@ -1120,7 +1135,10 @@ where
         }
     }
 
-    fn write_continuity(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> WriterResult {
+    fn write_continuity<S: SpectrumLike<C, D> + 'static>(
+        &mut self,
+        spectrum: &S,
+    ) -> WriterResult {
         match spectrum.signal_continuity() {
             SignalContinuity::Profile => self.handle.write_param(&PROFILE_SPECTRUM),
             SignalContinuity::Unknown => {
@@ -1134,9 +1152,9 @@ where
         }
     }
 
-    pub fn write_spectrum_descriptors(
+    pub fn write_spectrum_descriptors<S: SpectrumLike<C, D> + 'static>(
         &mut self,
-        spectrum: &MultiLayerSpectrum<C, D>,
+        spectrum: &S,
     ) -> WriterResult {
         self.write_ms_level(spectrum)?;
         self.write_polarity(spectrum)?;
@@ -1150,8 +1168,7 @@ where
     }
 
     /**
-    Write a [`MultiLayerSpectrum`] out to the mzML file, encoding the highest procressing
-    degree peak data present.
+    Write a spectrum  out to the mzML file, encoding the highest procressing degree peak data present.
 
     ## Side-Effects
     If the writer has not already started writing the spectra, this will cause all the metadata
@@ -1159,7 +1176,10 @@ where
     from being written to this stream. Furthermore, this writes the spectrum count out, so the value
     may no longer be changed.
     */
-    pub fn write_spectrum(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> WriterResult {
+    pub fn write_spectrum<S: SpectrumLike<C, D> + 'static>(
+        &mut self,
+        spectrum: &S,
+    ) -> WriterResult {
         match self.state {
             MzMLWriterState::SpectrumList => {}
             state if state < MzMLWriterState::SpectrumList => {
@@ -1188,14 +1208,17 @@ where
             spectrum.peaks().base_peak().intensity,
         );
 
-        if let Some(mass_peaks) = &spectrum.deconvoluted_peaks {
-            let arrays: BinaryArrayMap = mass_peaks.as_arrays();
-            self.write_binary_data_arrays(&arrays)?
-        } else if let Some(mz_peaks) = &spectrum.peaks {
-            let arrays = mz_peaks.as_arrays();
-            self.write_binary_data_arrays(&arrays)?
-        } else if let Some(arrays) = &spectrum.arrays {
-            self.write_binary_data_arrays(arrays)?
+        match spectrum.peaks() {
+            PeakDataLevel::RawData(arrays) => {
+                self.write_binary_data_arrays(arrays)?;
+            }
+            PeakDataLevel::Centroid(arrays) => {
+                self.write_binary_data_arrays(&arrays.as_arrays())?
+            }
+            PeakDataLevel::Deconvoluted(arrays) => {
+                self.write_binary_data_arrays(&arrays.as_arrays())?
+            }
+            PeakDataLevel::Missing => todo!(),
         }
 
         end_event!(self, outer);
@@ -1345,7 +1368,7 @@ where
         self.handle.write_param(param)
     }
 
-    pub fn write_param_list<'a, T: Iterator<Item = &'a Param>>(
+    pub fn write_param_list<'a, P: ParamLike + 'a, T: Iterator<Item = &'a P>>(
         &mut self,
         params: T,
     ) -> WriterResult {
@@ -1403,13 +1426,21 @@ mod test {
             assert_eq!(a.index(), b.index());
             for (x, y) in a
                 .arrays
+                .as_ref()
                 .unwrap()
                 .mzs()
                 .unwrap()
                 .iter()
                 .zip(b.arrays.unwrap().mzs().unwrap().iter())
             {
-                assert!((x - y).abs() < 1e-3)
+                assert!(
+                    (x - y).abs() < 1e-3,
+                    "{}: {} - {} = {}",
+                    a.id(),
+                    x,
+                    y,
+                    x - y
+                )
             }
         }
 

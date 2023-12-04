@@ -4,12 +4,12 @@ use std::io::{self, prelude::*, SeekFrom};
 use std::path::Path;
 use std::{fs, mem};
 
-use hdf5::types::{VarLenAscii, FixedUnicode, VarLenUnicode, FixedAscii};
-use thiserror::Error;
 use filename;
+use hdf5::types::{FixedAscii, FixedUnicode, VarLenAscii, VarLenUnicode};
 use hdf5::{self, filters, Dataset, Selection};
 use log::{debug, warn};
 use ndarray::Ix1;
+use thiserror::Error;
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
@@ -20,9 +20,10 @@ use crate::io::mzml::{
     CVParamParse, IncrementingIdMap, MzMLParserError, MzMLParserState, MzMLReaderType, MzMLSAX,
     MzMLSpectrumBuilder, ParserResult, SpectrumBuilding,
 };
-use crate::prelude::{MSDataFileMetadata, ParamLike};
 use crate::io::traits::MZFileReader;
+use crate::io::utils::DetailLevel;
 use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, ScanAccessError, ScanSource};
+use crate::prelude::{MSDataFileMetadata, ParamLike};
 
 use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software};
 use crate::params::{ControlledVocabulary, Param};
@@ -50,7 +51,6 @@ impl From<MzMLbError> for io::Error {
         Self::new(io::ErrorKind::Other, value)
     }
 }
-
 
 #[allow(unused)]
 pub(crate) fn is_mzmlb(buf: &[u8]) -> bool {
@@ -132,7 +132,6 @@ impl Default for ExternalDataRegistry {
 
 impl ExternalDataRegistry {
     pub fn new(chunk_size: usize) -> Self {
-
         Self {
             chunk_size,
             ..Default::default()
@@ -262,7 +261,7 @@ impl ExternalDataRegistry {
                         let buffer = numpress_decompress(&buffer)?;
                         data.data = vec_as_bytes(buffer);
                         data.compression = BinaryCompressionType::Decoded;
-                    },
+                    }
                     _ => {
                         return Err(ArrayRetrievalError::DecompressionError(
                             data.compression.unsupported_msg(Some(
@@ -274,7 +273,7 @@ impl ExternalDataRegistry {
                 Err(ArrayRetrievalError::DecompressionError(
                     data.compression.unsupported_msg(None),
                 ))
-            },
+            }
             #[cfg(not(feature = "numpress"))]
             BinaryCompressionType::NumpressLinear => Err(ArrayRetrievalError::DecompressionError(
                 data.compression.unsupported_msg(None),
@@ -365,10 +364,8 @@ impl ExternalDataRegistry {
             let cache_block = Self::read_slice_to_bytes(dset, start, block_end)?;
             let cache_block = DataArray::wrap(&destination.name, dtype.into(), cache_block);
             let mut cache_block = CacheInterval::new(start, block_end, cache_block);
-            let block = if let Some(cache_block) = self
-                .chunk_cache
-                .get_mut(&range_request.name)
-                .map(|prev| {
+            let block = if let Some(cache_block) =
+                self.chunk_cache.get_mut(&range_request.name).map(|prev| {
                     mem::swap(prev, &mut cache_block);
                     prev
                 }) {
@@ -460,6 +457,10 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbSpectrumBuil
     pub fn new() -> Self {
         Self::default()
     }
+
+    pub fn with_detail_level(detail_level: DetailLevel) -> Self {
+        Self { inner: MzMLSpectrumBuilder::with_detail_level(detail_level), ..Default::default() }
+    }
 }
 
 impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
@@ -484,7 +485,11 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
             b"cvParam" | b"userParam" => {
                 match &state {
                     MzMLParserState::BinaryDataArray => {
-                        match MzMLSpectrumBuilder::<'a, C, D>::handle_param(event, reader_position, state) {
+                        match MzMLSpectrumBuilder::<'a, C, D>::handle_param(
+                            event,
+                            reader_position,
+                            state,
+                        ) {
                             Ok(param) => {
                                 match &state {
                                     MzMLParserState::BinaryDataArray => {
@@ -501,10 +506,12 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
                                                         && !param.value.starts_with('/')
                                                     {
                                                         self.current_data_range_query
-                                                            .name.push('/');
+                                                            .name
+                                                            .push('/');
                                                     }
                                                     self.current_data_range_query
-                                                        .name.push_str(&param.value);
+                                                        .name
+                                                        .push_str(&param.value);
                                                 }
                                                 // external offset
                                                 1002842 => {
@@ -514,12 +521,10 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
                                                         .expect("Failed to extract external offset")
                                                 }
                                                 // external array length
-                                                1002843 => {
-                                                    self.current_data_range_query.length = param
-                                                        .value
-                                                        .parse()
-                                                        .expect("Failed to extract external array length")
-                                                }
+                                                1002843 => self.current_data_range_query.length =
+                                                    param.value.parse().expect(
+                                                        "Failed to extract external array length",
+                                                    ),
                                                 _ => self.inner.fill_param_into(param, state),
                                             }
                                         }
@@ -530,8 +535,8 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
                             }
                             Err(err) => return Err(err),
                         }
-                    },
-                    _ => return self.inner.empty_element(event, state, reader_position)
+                    }
+                    _ => return self.inner.empty_element(event, state, reader_position),
                 }
             }
             _ => {}
@@ -553,39 +558,38 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
                         MzMLParserState::BinaryDataArray,
                     ));
                 }
+                let detail_level = self.inner.detail_level;
                 let data_request = mem::take(&mut self.current_data_range_query);
                 let array = self.inner.current_array_mut();
-                self.data_registry
-                    .as_mut()
-                    .expect("Did not provide data registry")
-                    .get(&data_request, array)
-            }
-            _ => {
-                Ok(())
-            }
-        };
-        match res {
-            Ok(()) => {},
-            Err(e) => {
-                match e {
-                    MzMLbError::HDF5Error(e) => {
-                        match e {
-                            hdf5::Error::HDF5(_) => {
-                                Err(MzMLParserError::IOError(state, io::Error::new(io::ErrorKind::Other, e)))?
-                            },
-                            hdf5::Error::Internal(e) => {
-                                Err(MzMLParserError::IOError(state, io::Error::new(io::ErrorKind::Other, e)))?
-                            },
-                        }
-                    },
-                    MzMLbError::MzMLError(e) => {
-                        Err(e)?
-                    },
-                    MzMLbError::ArrayRetrievalError(e) => {
-                        Err(MzMLParserError::IOError(state, e.into()))?
-                    }
+                if !matches!(detail_level, DetailLevel::MetadataOnly) {
+                    self.data_registry
+                        .as_mut()
+                        .expect("Did not provide data registry")
+                        .get(&data_request, array)
+                } else {
+                    Ok(())
                 }
             }
+            _ => Ok(()),
+        };
+        match res {
+            Ok(()) => {}
+            Err(e) => match e {
+                MzMLbError::HDF5Error(e) => match e {
+                    hdf5::Error::HDF5(_) => Err(MzMLParserError::IOError(
+                        state,
+                        io::Error::new(io::ErrorKind::Other, e),
+                    ))?,
+                    hdf5::Error::Internal(e) => Err(MzMLParserError::IOError(
+                        state,
+                        io::Error::new(io::ErrorKind::Other, e),
+                    ))?,
+                },
+                MzMLbError::MzMLError(e) => Err(e)?,
+                MzMLbError::ArrayRetrievalError(e) => {
+                    Err(MzMLParserError::IOError(state, e.into()))?
+                }
+            },
         }
         self.inner.end_element(event, state)
     }
@@ -672,17 +676,21 @@ pub struct MzMLbReaderType<
 
     pub schema_version: String,
 
+    pub detail_level: DetailLevel,
+
     mzml_parser: MzMLReaderType<ByteReader, C, D>,
     data_buffers: ExternalDataRegistry,
 }
 
 impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbReaderType<C, D> {
     /// Create a new `[MzMLbReader]` with an internal cache size of `chunk_size` elements
-    /// per data array to reduce the number of disk reads needed to populate spectra.
-    ///
-    /// The default chunk size is 2**20 elements, which can use as much as 8.4 MB for 64-bit
-    /// data types like those used to store m/z.
-    pub fn with_chunk_size<P: AsRef<Path>>(path: &P, chunk_size: usize) -> io::Result<Self> {
+    /// per data array to reduce the number of disk reads needed to populate spectra, and
+    /// sets the `[DetailLevel]`.
+    pub fn with_chunk_size_and_detail_level<P: AsRef<Path>>(
+        path: &P,
+        chunk_size: usize,
+        detail_level: DetailLevel,
+    ) -> io::Result<Self> {
         let handle = match hdf5::File::open(path.as_ref()) {
             Ok(handle) => handle,
             Err(e) => Err(io::Error::new(io::ErrorKind::Other, e))?,
@@ -712,12 +720,22 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbRead
             instrument_configurations: mzml_parser.instrument_configurations.clone(),
             softwares: mzml_parser.softwares.clone(),
             data_processings: mzml_parser.data_processings.clone(),
+            detail_level,
             mzml_parser,
             schema_version,
             data_buffers,
         };
 
         Ok(inst)
+    }
+
+    /// Create a new `[MzMLbReader]` with an internal cache size of `chunk_size` elements
+    /// per data array to reduce the number of disk reads needed to populate spectra.
+    ///
+    /// The default chunk size is 2**20 elements, which can use as much as 8.4 MB for 64-bit
+    /// data types like those used to store m/z.
+    pub fn with_chunk_size<P: AsRef<Path>>(path: &P, chunk_size: usize) -> io::Result<Self> {
+        Self::with_chunk_size_and_detail_level(path, chunk_size, DetailLevel::Full)
     }
 
     fn read_schema_version(mzml_ds: &Dataset) -> Result<String, hdf5::Error> {
@@ -728,19 +746,19 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbRead
             hdf5::types::TypeDescriptor::FixedAscii(_) => {
                 let val: FixedAscii<9> = schema_version_attr.read_scalar()?;
                 val.to_string()
-            },
+            }
             hdf5::types::TypeDescriptor::FixedUnicode(_) => {
                 let val: FixedUnicode<9> = schema_version_attr.read_scalar()?;
                 val.to_string()
-            },
+            }
             hdf5::types::TypeDescriptor::VarLenAscii => {
                 let val: VarLenAscii = schema_version_attr.read_scalar()?;
                 val.to_string()
-            },
+            }
             hdf5::types::TypeDescriptor::VarLenUnicode => {
                 let val: VarLenUnicode = schema_version_attr.read_scalar()?;
                 val.to_string()
-            },
+            }
             _ => {
                 let val: [u8; 9] = schema_version_attr.as_reader().read_scalar()?;
                 String::from_utf8_lossy(&val).to_string()
@@ -813,7 +831,7 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbRead
         &mut self,
         spectrum: &mut MultiLayerSpectrum<C, D>,
     ) -> Result<usize, MzMLbError> {
-        let accumulator = MzMLbSpectrumBuilder::<C, D>::new();
+        let accumulator = MzMLbSpectrumBuilder::<C, D>::with_detail_level(self.detail_level);
         match self._parse_into(accumulator) {
             Ok((accumulator, sz)) => {
                 accumulator.into_spectrum(spectrum);
@@ -873,7 +891,10 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
         self.mzml_parser
             .seek(SeekFrom::Start(offset))
             .expect("Failed to seek to offset");
-        debug_assert!(self.mzml_parser.check_stream("spectrum").unwrap(), "The next XML tag was not `spectrum`");
+        debug_assert!(
+            self.mzml_parser.check_stream("spectrum").unwrap(),
+            "The next XML tag was not `spectrum`"
+        );
         let result = self.read_next();
         self.mzml_parser
             .seek(SeekFrom::Start(start))
@@ -889,8 +910,13 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
             .mzml_parser
             .stream_position()
             .expect("Failed to save checkpoint");
-        self.mzml_parser.seek(SeekFrom::Start(byte_offset)).expect("Failed to seek to offset");
-        debug_assert!(self.mzml_parser.check_stream("spectrum").unwrap(), "The next XML tag was not `spectrum`");
+        self.mzml_parser
+            .seek(SeekFrom::Start(byte_offset))
+            .expect("Failed to seek to offset");
+        debug_assert!(
+            self.mzml_parser.check_stream("spectrum").unwrap(),
+            "The next XML tag was not `spectrum`"
+        );
         let result = self.read_next();
         self.mzml_parser
             .seek(SeekFrom::Start(start))
@@ -976,7 +1002,7 @@ pub type MzMLbReader = MzMLbReaderType<CentroidPeak, DeconvolutedPeak>;
 
 #[cfg(test)]
 mod test {
-    use crate::{MzMLReader, SpectrumBehavior};
+    use crate::{MzMLReader, SpectrumLike};
 
     use super::*;
 

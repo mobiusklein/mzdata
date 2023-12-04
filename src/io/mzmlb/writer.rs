@@ -33,9 +33,9 @@ use crate::spectrum::signal::{
     ArrayRetrievalError, BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
 };
 use crate::spectrum::{
-    ArrayType, BinaryArrayMap, Chromatogram, ChromatogramBehavior, MultiLayerSpectrum,
+    ArrayType, BinaryArrayMap, Chromatogram, ChromatogramLike, PeakDataLevel,
 };
-use crate::SpectrumBehavior;
+use crate::SpectrumLike;
 
 use crate::io::mzml::{MzMLWriterError, MzMLWriterState, MzMLWriterType};
 
@@ -293,7 +293,7 @@ where
     PeakSetVec<C, MZ>: BuildArrayMapFrom,
     PeakSetVec<D, Mass>: BuildArrayMapFrom,
 {
-    fn write(&mut self, spectrum: &'a MultiLayerSpectrum<C, D>) -> io::Result<usize> {
+    fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &'a S) -> io::Result<usize> {
         match self.write_spectrum(spectrum) {
             Ok(()) => {
                 let pos = self.mzml_writer.stream_position()?;
@@ -556,7 +556,7 @@ where
         Ok(())
     }
 
-    pub fn write_spectrum(&mut self, spectrum: &MultiLayerSpectrum<C, D>) -> WriterResult {
+    pub fn write_spectrum<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
         match self.mzml_writer.state {
             MzMLWriterState::SpectrumList => {}
             state if state < MzMLWriterState::SpectrumList => {
@@ -587,14 +587,17 @@ where
             spectrum.peaks().base_peak().intensity,
         );
 
-        if let Some(mass_peaks) = &spectrum.deconvoluted_peaks {
-            let arrays: BinaryArrayMap = mass_peaks.as_arrays();
-            self.write_binary_data_arrays(&arrays, BufferContext::Spectrum)?
-        } else if let Some(mz_peaks) = &spectrum.peaks {
-            let arrays = mz_peaks.as_arrays();
-            self.write_binary_data_arrays(&arrays, BufferContext::Spectrum)?
-        } else if let Some(arrays) = &spectrum.arrays {
-            self.write_binary_data_arrays(arrays, BufferContext::Spectrum)?
+        match spectrum.peaks() {
+            PeakDataLevel::RawData(arrays) => {
+                self.write_binary_data_arrays(arrays, BufferContext::Spectrum)?
+            },
+            PeakDataLevel::Centroid(arrays) => {
+                self.write_binary_data_arrays(&arrays.as_arrays(), BufferContext::Spectrum)?
+            },
+            PeakDataLevel::Deconvoluted(arrays) => {
+                self.write_binary_data_arrays(&arrays.as_arrays(), BufferContext::Spectrum)?
+            },
+            PeakDataLevel::Missing => todo!(),
         }
 
         end_event!(self, outer);

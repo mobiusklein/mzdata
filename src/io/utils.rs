@@ -19,6 +19,17 @@ pub enum FileWrapper<T: io::Read> {
 }
 
 
+/// Controls the level of spectral detail read from an MS data file
+#[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum DetailLevel {
+    #[default]
+    /// Read all spectral data, including peak data, eagerly decoding it. This is the default
+    Full,
+    /// Read all spectral data, including peak data but defer decoding until later if possible
+    Lazy,
+    /// Read only the metadata of spectra, ignoring peak data entirely
+    MetadataOnly
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct FileSource<T: io::Read> {

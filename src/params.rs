@@ -32,7 +32,12 @@ pub trait ParamLike {
             false
         }
     }
-    fn coerce<T: str::FromStr>(&self) -> Result<T, T::Err> {
+
+    // fn parse<T: str::FromStr>(&self) -> Result<T, T::Err> {
+    //     self.value().parse::<T>()
+    // }
+
+    fn parse<T: str::FromStr>(&self) -> Result<T, T::Err> {
         self.value().parse::<T>()
     }
 
@@ -78,7 +83,7 @@ impl<'a> ParamCow<'a> {
         }
     }
 
-    pub fn coerce<T: str::FromStr>(&self) -> Result<T, T::Err> {
+    pub fn parse<T: str::FromStr>(&self) -> Result<T, T::Err> {
         self.value.parse::<T>()
     }
 
@@ -164,7 +169,7 @@ impl Param {
         inst
     }
 
-    pub fn coerce<T: str::FromStr>(&self) -> Result<T, T::Err> {
+    pub fn parse<T: str::FromStr>(&self) -> Result<T, T::Err> {
         self.value.parse::<T>()
     }
 

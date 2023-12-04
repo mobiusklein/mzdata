@@ -24,10 +24,11 @@ use quick_xml::Error as XMLError;
 use quick_xml::Reader;
 
 
-use crate::SpectrumBehavior;
+use crate::SpectrumLike;
 
-use crate::meta::file_description::FileDescription;
-use crate::meta::instrument::InstrumentConfiguration;
+use crate::io::utils::DetailLevel;
+use crate::meta::FileDescription;
+use crate::meta::InstrumentConfiguration;
 use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
 use crate::params::Param;
 use crate::spectrum::spectrum::{
@@ -76,6 +77,8 @@ pub struct MzMLReaderType<
     /// A cache of repeated paramters
     pub reference_param_groups: HashMap<String, Vec<Param>>,
 
+    pub detail_level: DetailLevel,
+
     pub(crate) instrument_id_map: IncrementingIdMap,
     buffer: Bytes,
     centroid_type: PhantomData<C>,
@@ -84,10 +87,15 @@ pub struct MzMLReaderType<
 }
 
 impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D: DeconvolutedPeakAdapting + Send + Sync> MzMLReaderType<R, C, D> {
-    /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
+
+    /// Create a new [`MzMLReaderType`] instance, wrapping the [`tokio::io::Read`] handle
     /// provided with an `[io::BufReader`] and parses the metadata section of the file.
     pub async fn new(file: R) -> MzMLReaderType<R, C, D> {
-        let handle = BufReader::with_capacity(BUFFER_SIZE, file);
+        Self::with_buffer_capacity_and_detail_level(file, BUFFER_SIZE, DetailLevel::Full).await
+    }
+
+    pub async fn with_buffer_capacity_and_detail_level(file: R, capacity: usize, detail_level: DetailLevel) -> MzMLReaderType<R, C, D> {
+        let handle = BufReader::with_capacity(capacity, file);
         let mut inst = MzMLReaderType {
             handle,
             state: MzMLParserState::Start,
@@ -100,6 +108,7 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
             softwares: Vec::new(),
             data_processings: Vec::new(),
             reference_param_groups: HashMap::new(),
+            detail_level,
 
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
@@ -227,7 +236,6 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
-
 
     async fn _parse_into(
         &'a mut self,
@@ -699,7 +707,7 @@ impl<R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Sync, C: CentroidPeak
 mod test {
     use std::path;
 
-    use crate::{SpectrumBehavior, ParamDescribed};
+    use crate::{SpectrumLike, ParamDescribed};
 
     use super::*;
     use tokio::{fs, io};

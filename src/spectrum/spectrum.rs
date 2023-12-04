@@ -154,7 +154,10 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
     pub fn len(&self) -> usize {
         match self {
             PeakDataLevel::Missing => 0,
-            PeakDataLevel::RawData(arrays) => arrays.mzs().expect("Failed to locate m/z array while computing size").len(),
+            PeakDataLevel::RawData(arrays) => arrays
+                .mzs()
+                .expect("Failed to locate m/z array while computing size")
+                .len(),
             PeakDataLevel::Centroid(peaks) => peaks.len(),
             PeakDataLevel::Deconvoluted(peaks) => peaks.len(),
         }
@@ -166,7 +169,7 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
 }
 
 /// A trait for providing a uniform delegated access to spectrum metadata
-pub trait SpectrumBehavior<
+pub trait SpectrumLike<
     C: CentroidLike = CentroidPeak,
     D: DeconvolutedCentroidLike = DeconvolutedPeak,
 >
@@ -266,7 +269,11 @@ pub enum SpectrumConversionError {
     #[error("No peak data of any kind was found")]
     NoPeakData,
     #[error("An error occurred while accessing raw data arrays: {0}")]
-    ArrayRetrievalError(#[from] #[source] ArrayRetrievalError),
+    ArrayRetrievalError(
+        #[from]
+        #[source]
+        ArrayRetrievalError,
+    ),
 }
 
 #[derive(Debug, Clone, Error)]
@@ -280,10 +287,18 @@ pub enum SpectrumProcessingError {
     PeakPickerError(PeakPickerError),
 
     #[error("An error occurred while trying to convert spectrum types: {0}")]
-    SpectrumConversionError(#[from] #[source] SpectrumConversionError),
+    SpectrumConversionError(
+        #[from]
+        #[source]
+        SpectrumConversionError,
+    ),
 
     #[error("An error occurred while accessing raw data arrays: {0}")]
-    ArrayRetrievalError(#[from] #[source] ArrayRetrievalError),
+    ArrayRetrievalError(
+        #[from]
+        #[source]
+        ArrayRetrievalError,
+    ),
 }
 
 impl<'transient, 'lifespan: 'transient> RawSpectrum {
@@ -392,7 +407,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
     }
 }
 
-impl<'lifespan> SpectrumBehavior for RawSpectrum {
+impl SpectrumLike for RawSpectrum {
     #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
@@ -412,7 +427,7 @@ pub struct CentroidSpectrumType<C: CentroidLike + Default> {
     pub peaks: MZPeakSetType<C>,
 }
 
-impl<C: CentroidLike + Default> SpectrumBehavior<C> for CentroidSpectrumType<C> {
+impl<C: CentroidLike + Default> SpectrumLike<C> for CentroidSpectrumType<C> {
     #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
@@ -448,7 +463,7 @@ pub struct DeconvolutedSpectrumType<D: DeconvolutedCentroidLike + Default> {
     pub deconvoluted_peaks: MassPeakSetType<D>,
 }
 
-impl<D: DeconvolutedCentroidLike + Default> SpectrumBehavior<CentroidPeak, D>
+impl<D: DeconvolutedCentroidLike + Default> SpectrumLike<CentroidPeak, D>
     for DeconvolutedSpectrumType<D>
 {
     #[inline]
@@ -484,8 +499,8 @@ pub struct MultiLayerSpectrum<
     pub deconvoluted_peaks: Option<MassPeakSetType<D>>,
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
-    SpectrumBehavior<C, D> for MultiLayerSpectrum<C, D>
+impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> SpectrumLike<C, D>
+    for MultiLayerSpectrum<C, D>
 {
     #[inline]
     fn description(&self) -> &SpectrumDescription {
@@ -505,8 +520,7 @@ impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     }
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
-    MultiLayerSpectrum<C, D>
+impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> MultiLayerSpectrum<C, D>
 where
     MZPeakSetType<C>: BuildFromArrayMap + BuildArrayMapFrom,
     MassPeakSetType<D>: BuildFromArrayMap,
@@ -601,10 +615,8 @@ where
 }
 
 #[cfg(feature = "mzsignal")]
-impl<
-        C: CentroidLike + Default + From<FittedPeak>,
-        D: DeconvolutedCentroidLike + Default,
-    > MultiLayerSpectrum<C, D>
+impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike + Default>
+    MultiLayerSpectrum<C, D>
 {
     pub fn pick_peaks_with(
         &mut self,
@@ -739,11 +751,8 @@ mod test {
         assert_eq!(scan.polarity(), ScanPolarity::Positive);
         assert!(scan.precursor().is_none());
 
-        match scan.pick_peaks(1.0, PeakFitType::Quadratic) {
-            Err(err) => {
-                panic!("Should not have an error! {}", err);
-            }
-            Ok(_) => {}
+        if let Err(err) = scan.pick_peaks(1.0, PeakFitType::Quadratic) {
+            panic!("Should not have an error! {}", err);
         }
 
         if let Some(peaks) = &scan.peaks {
