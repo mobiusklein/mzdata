@@ -8,7 +8,7 @@ use rayon::prelude::*;
 
 use mzpeaks::Tolerance;
 
-use super::bindata::DataArray;
+use super::array::DataArray;
 use super::encodings::{ArrayType, ArrayRetrievalError, BinaryCompressionType};
 use super::traits::{ByteArrayView, ByteArrayViewMut};
 

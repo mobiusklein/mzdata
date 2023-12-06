@@ -7,7 +7,7 @@ use mzpeaks::{
 
 use crate::utils::neutral_mass;
 
-use super::bindata::DataArray;
+use super::array::DataArray;
 use super::encodings::{
     ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType,
 };

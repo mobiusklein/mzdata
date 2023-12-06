@@ -29,7 +29,7 @@ use crate::prelude::MSDataFileMetadata;
 use crate::io::traits::ScanWriter;
 use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software};
 use crate::params::ControlledVocabulary;
-use crate::spectrum::signal::{
+use crate::spectrum::bindata::{
     ArrayRetrievalError, BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
 };
 use crate::spectrum::{

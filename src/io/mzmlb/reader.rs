@@ -27,7 +27,7 @@ use crate::prelude::{MSDataFileMetadata, ParamLike};
 
 use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software};
 use crate::params::{ControlledVocabulary, Param};
-use crate::spectrum::signal::{
+use crate::spectrum::bindata::{
     as_bytes, delta_decoding, linear_prediction_decoding, ArrayRetrievalError,
     BinaryCompressionType, BinaryDataArrayType, ByteArrayView, ByteArrayViewMut, DataArray,
 };

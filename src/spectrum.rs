@@ -52,12 +52,12 @@ for spectrum in reader {
 */
 
 pub(crate) mod scan_properties;
-pub mod signal;
+pub mod bindata;
 pub(crate) mod spectrum;
 pub(crate) mod chromatogram;
 
 pub use crate::spectrum::scan_properties::*;
-pub use crate::spectrum::signal::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray};
+pub use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray};
 pub use crate::spectrum::spectrum::{
     SpectrumLike, PeakDataLevel,
     SpectrumConversionError, SpectrumProcessingError,

@@ -24,7 +24,7 @@ use crate::meta::{
     Software,
 };
 use crate::params::{ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, Unit};
-use crate::spectrum::signal::{
+use crate::spectrum::bindata::{
     to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType,
     BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
 };

@@ -59,9 +59,9 @@ use crate::params::ParamList;
 use crate::spectrum::scan_properties::{
     Acquisition, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
 };
-use crate::spectrum::signal::{ArrayType, BinaryArrayMap, BinaryDataArrayType};
+use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType};
 
-use super::signal::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
+use super::bindata::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
 
 pub trait CentroidPeakAdapting: CentroidLike + Default {}
 impl<C: CentroidLike + Default> CentroidPeakAdapting for C {}

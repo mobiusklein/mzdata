@@ -4,7 +4,7 @@ use crate::params::Param;
 use crate::spectrum::scan_properties::{
     Precursor, ScanPolarity, ChromatogramType, ChromatogramDescription,
 };
-use super::signal::{ArrayType, BinaryArrayMap, ArrayRetrievalError, ByteArrayView};
+use super::bindata::{ArrayType, BinaryArrayMap, ArrayRetrievalError, ByteArrayView};
 
 
 

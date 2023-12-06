@@ -33,7 +33,7 @@ use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, Software,
 };
 use crate::params::{ControlledVocabulary, Param, ParamDescribed, ParamLike};
-use crate::spectrum::signal::{
+use crate::spectrum::bindata::{
     vec_as_bytes, ArrayType, BinaryArrayMap, BinaryDataArrayType, BuildArrayMapFrom,
     BuildFromArrayMap, DataArray,
 };

@@ -29,10 +29,9 @@ use crate::meta::InstrumentConfiguration;
 use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
 use crate::params::{Param, ParamList, Unit};
 use crate::spectrum::scan_properties::*;
-use crate::spectrum::signal::BuildArrayMapFrom;
-use crate::spectrum::signal::BuildFromArrayMap;
-use crate::spectrum::signal::{
+use crate::spectrum::bindata::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
+    BuildFromArrayMap, BuildArrayMapFrom
 };
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,

@@ -1,10 +1,10 @@
-mod bindata;
+mod array;
 mod conversion;
 mod encodings;
 mod map;
 mod traits;
 
-pub use bindata::{DataArray, DataArraySlice};
+pub use array::{DataArray, DataArraySlice};
 pub use encodings::{
     as_bytes, delta_decoding, delta_encoding, linear_prediction_decoding,
     linear_prediction_encoding, to_bytes, vec_as_bytes, ArrayRetrievalError, ArrayType,
