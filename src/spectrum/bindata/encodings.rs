@@ -132,7 +132,7 @@ impl BinaryDataArrayType {
 
 
 /// The range of compression and encoding states that a raw byte buffer
-/// might be in during different stages of decoding. Other than `[BinaryCompressionType::Decoded]`,
+/// might be in during different stages of decoding. Other than `Decoded`,
 /// these states may or may not include intermediate base64 encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Default)]
 pub enum BinaryCompressionType {

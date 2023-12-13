@@ -7,7 +7,7 @@ itself, plus all the metadata that describes how that data was acquired by
 the instrument.
 
 # Components
-- [`signal`] includes structures for dealing with raw signal data arrays that may or may not
+- [`bindata`] includes structures for dealing with raw binary data arrays that may or may not
 be byte-encoded but not strongly typed, though it does not include signal processing as that is outside the scope of
 this crate.
 
@@ -26,9 +26,9 @@ to unify access:
 3. [`Spectrum`] for representing a multi-layer representation of a spectrum where both
        raw data and a distinct peak list are available.
 
-These structures all implement the [`SpectrumBehavior`] trait
+These structures all implement the [`SpectrumDescription`] trait
 
-The [`SpectrumBehavior`] trait is included in the crate prelude, and gives the caller
+The [`SpectrumDescription`] trait is included in the crate prelude, and gives the caller
 read-only access to components that describe a spectrum's metadata, and
 ```rust
 use std::fs::File;

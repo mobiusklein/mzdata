@@ -417,7 +417,7 @@ pub trait SpectrumGrouping<
     fn set_precursor(&mut self, prec: S);
 
     /// Get a reference to the collection of product spectra
-    fn products(&self) -> &Vec<S>;
+    fn products(&self) -> &[S];
 
     /// Get a mutable reference to the collection of product spectra
     fn products_mut(&mut self) -> &mut Vec<S>;
@@ -482,7 +482,7 @@ where
         self.precursor = Some(prec)
     }
 
-    fn products(&self) -> &Vec<S> {
+    fn products(&self) -> &[S] {
         &self.products
     }
 
@@ -648,7 +648,11 @@ impl<
                     ent.or_default().push(scan);
                 },
                 None => {
-                    self.product_scan_mapping.entry(MISSING_SCAN_ID.to_owned()).or_default().push(scan);
+                    let buffer = self.product_scan_mapping.entry(MISSING_SCAN_ID.to_owned()).or_default();
+                    buffer.push(scan);
+                    if buffer.len() % 1000 == 0 && buffer.len() > 0 {
+                        log::warn!("Unassociated MSn scan buffer size is {}", buffer.len());
+                    }
                 }
             }
         } else if !self.queue.is_empty() {
@@ -662,7 +666,11 @@ impl<
                 .push(scan);
         } else {
             let ent = self.product_scan_mapping.entry(MISSING_SCAN_ID.to_owned());
-            ent.or_default().push(scan);
+            let buffer = ent.or_default();
+            buffer.push(scan);
+            if buffer.len() % 1000 == 0 && buffer.len() > 0 {
+                log::warn!("Unassociated MSn scan buffer size is {}", buffer.len());
+            }
         }
     }
 

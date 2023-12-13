@@ -530,6 +530,10 @@ pub trait PrecursorSelection {
     fn product_id(&self) -> Option<&String>;
     /// The activation process applied to the precursor ion
     fn activation(&self) -> &Activation;
+
+    fn ion_mut(&mut self) -> &mut SelectedIon;
+    fn activation_mut(&mut self) -> &mut Activation;
+    fn isolation_window_mut(&mut self) -> &mut IsolationWindow;
 }
 
 impl PrecursorSelection for Precursor {
@@ -551,6 +555,18 @@ impl PrecursorSelection for Precursor {
 
     fn activation(&self) -> &Activation {
         &self.activation
+    }
+
+    fn ion_mut(&mut self) -> &mut SelectedIon {
+        &mut self.ion
+    }
+
+    fn activation_mut(&mut self) -> &mut Activation {
+        &mut self.activation
+    }
+
+    fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
+        &mut self.isolation_window
     }
 }
 
@@ -617,7 +633,7 @@ impl Display for SignalContinuity {
 
 /**
 The set of descriptive metadata that give context for how a mass spectrum was acquired
-within a particular run. This forms the basis for a large portion of the [`SpectrumBehavior`]
+within a particular run. This forms the basis for a large portion of the [`SpectrumDescription`]
 trait.
 */
 #[derive(Debug, Default, Clone, PartialEq)]

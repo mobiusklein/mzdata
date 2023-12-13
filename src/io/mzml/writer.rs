@@ -17,7 +17,7 @@ use super::super::offset_index::OffsetIndex;
 use super::super::traits::ScanWriter;
 use super::super::utils::MD5HashingStream;
 
-use mzpeaks::{peak_set::PeakSetVec, CentroidPeak, DeconvolutedPeak, Mass, MZ};
+use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 use crate::meta::{
     ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
@@ -73,6 +73,24 @@ const PROFILE_SPECTRUM: ParamCow =
     ControlledVocabulary::MS.const_param_ident("profile spectrum", 1000128);
 const CENTROID_SPECTRUM: ParamCow =
     ControlledVocabulary::MS.const_param_ident("centroid spectrum", 1000127);
+
+const TIC_TERM: (&'static str, u32, Unit) = ("total ion current", 1000285, Unit::DetectorCounts);
+const BPI_TERM: (&'static str, u32, Unit) = ("base peak intensity", 1000505, Unit::DetectorCounts);
+const BPMZ_TERM: (&'static str, u32, Unit) = ("base peak m/z", 1000504, Unit::MZ);
+const LOWEST_MZ_TERM: (&'static str, u32, Unit) = ("lowest observed m/z", 1000528, Unit::MZ);
+const HIGHEST_MZ_TERM: (&'static str, u32, Unit) = ("highest observed m/z", 1000527, Unit::MZ);
+
+
+macro_rules! param_pack {
+    ($term:ident, $value:expr) => {
+        {
+            let mut par = ControlledVocabulary::MS.param_val(format!("{}:{}", ControlledVocabulary::MS.prefix(), $term.1), $term.0, $value);
+            par.unit = $term.2;
+            par
+        }
+    };
+}
+
 
 #[derive(Debug, Error)]
 pub enum MzMLWriterError {
@@ -350,8 +368,8 @@ pub struct MzMLWriterType<
 impl<'a, W: Write + Seek, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     ScanWriter<'a, C, D> for MzMLWriterType<W, C, D>
 where
-    PeakSetVec<C, MZ>: BuildArrayMapFrom,
-    PeakSetVec<D, Mass>: BuildArrayMapFrom,
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &'a S) -> io::Result<usize> {
         match self.write_spectrum(spectrum) {
@@ -380,8 +398,8 @@ impl<W: Write + Seek, C: CentroidLike + Default, D: DeconvolutedCentroidLike + D
 impl<W: Write + Seek, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     MzMLWriterType<W, C, D>
 where
-    PeakSetVec<C, MZ>: BuildArrayMapFrom,
-    PeakSetVec<D, Mass>: BuildArrayMapFrom,
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
 {
     const PSIMS_VERSION: &'static str = "4.1.135";
     const UNIT_VERSION: &'static str = "releases/2020-03-10";
@@ -989,12 +1007,17 @@ where
         Ok(())
     }
 
-    pub fn write_binary_data_array(&mut self, array: &DataArray) -> WriterResult {
+    pub fn write_binary_data_array(&mut self, array: &DataArray, default_array_len: usize) -> WriterResult {
         let mut outer = bstart!("binaryDataArray");
 
         let encoded = array.encode_bytestring(self.data_array_compression);
         let encoded_len = encoded.len().to_string();
         attrib!("encodedLength", encoded_len, outer);
+        let array_len = array.data_len()?;
+        if array_len != default_array_len {
+            let array_len = array_len.to_string();
+            attrib!("arrayLength", array_len, outer);
+        }
 
         start_event!(self, outer);
         match &array.dtype {
@@ -1063,7 +1086,7 @@ where
         Ok(())
     }
 
-    pub fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap) -> WriterResult {
+    pub fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap, default_array_len: usize) -> WriterResult {
         let count = arrays.len().to_string();
         let mut outer = bstart!("binaryDataArrayList");
         attrib!("count", count, outer);
@@ -1071,7 +1094,7 @@ where
         let mut array_pairs: Vec<(&ArrayType, &DataArray)> = arrays.iter().collect();
         array_pairs.sort_by_key(|f| f.0);
         for (_tp, array) in array_pairs {
-            self.write_binary_data_array(array)?
+            self.write_binary_data_array(array, default_array_len)?
         }
         end_event!(self, outer);
         Ok(())
@@ -1081,23 +1104,23 @@ where
         &mut self,
         spectrum: &S,
         outer: &mut BytesStart,
-    ) -> WriterResult {
+    ) -> Result<usize, MzMLWriterError> {
         attrib!("id", spectrum.id(), outer);
         let count = self.spectrum_counter.to_string();
         attrib!("index", count, outer);
-        let default_array_len = match spectrum.peaks() {
+        let default_array_len_u = match spectrum.peaks() {
             PeakDataLevel::RawData(a) => a.mzs().unwrap().len(),
             PeakDataLevel::Centroid(a) => a.len(),
             PeakDataLevel::Deconvoluted(a) => a.len(),
             PeakDataLevel::Missing => todo!(),
-        }
-        .to_string();
+        };
+        let default_array_len = default_array_len_u.to_string();
 
         attrib!("defaultArrayLength", default_array_len, outer);
 
         self.handle.write_event(Event::Start(outer.borrow()))?;
         self.spectrum_counter += 1;
-        Ok(())
+        Ok(default_array_len_u)
     }
 
     fn write_ms_level<S: SpectrumLike<C, D> + 'static>(
@@ -1152,6 +1175,27 @@ where
         }
     }
 
+    fn write_signal_properties<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
+        let peaks = spectrum.peaks();
+        let bp = peaks.base_peak();
+        let tic = peaks.tic();
+        let (min_mz, max_mz) = peaks.mz_range();
+
+        let tic_param = param_pack!(TIC_TERM, tic);
+        let bpmz_param = param_pack!(BPMZ_TERM, bp.mz);
+        let bpi_param = param_pack!(BPI_TERM, bp.intensity);
+        let low_mz_param = param_pack!(LOWEST_MZ_TERM, min_mz);
+        let high_mz_param = param_pack!(HIGHEST_MZ_TERM, max_mz);
+
+        self.write_param(&tic_param)?;
+        self.write_param(&bpmz_param)?;
+        self.write_param(&bpi_param)?;
+        self.write_param(&low_mz_param)?;
+        self.write_param(&high_mz_param)?;
+
+        Ok(())
+    }
+
     pub fn write_spectrum_descriptors<S: SpectrumLike<C, D> + 'static>(
         &mut self,
         spectrum: &S,
@@ -1159,8 +1203,9 @@ where
         self.write_ms_level(spectrum)?;
         self.write_polarity(spectrum)?;
         self.write_continuity(spectrum)?;
-        self.write_scan_list(spectrum.acquisition())?;
+        self.write_signal_properties(spectrum)?;
 
+        self.write_scan_list(spectrum.acquisition())?;
         if let Some(precursor) = spectrum.precursor() {
             self.write_precursor(precursor)?;
         };
@@ -1197,7 +1242,7 @@ where
             .insert(spectrum.id().to_string(), pos);
 
         let mut outer = bstart!("spectrum");
-        self.start_spectrum(spectrum, &mut outer)?;
+        let default_array_len = self.start_spectrum(spectrum, &mut outer)?;
 
         self.write_spectrum_descriptors(spectrum)?;
 
@@ -1210,13 +1255,13 @@ where
 
         match spectrum.peaks() {
             PeakDataLevel::RawData(arrays) => {
-                self.write_binary_data_arrays(arrays)?;
+                self.write_binary_data_arrays(arrays, default_array_len)?;
             }
             PeakDataLevel::Centroid(arrays) => {
-                self.write_binary_data_arrays(&arrays.as_arrays())?
+                self.write_binary_data_arrays(&C::as_arrays(&arrays[0..]), default_array_len)?
             }
             PeakDataLevel::Deconvoluted(arrays) => {
-                self.write_binary_data_arrays(&arrays.as_arrays())?
+                self.write_binary_data_arrays(&D::as_arrays(&arrays[0..]), default_array_len)?
             }
             PeakDataLevel::Missing => todo!(),
         }
@@ -1229,22 +1274,22 @@ where
         &mut self,
         chromatogram: &Chromatogram,
         outer: &mut BytesStart,
-    ) -> WriterResult {
+    ) -> Result<usize, MzMLWriterError> {
         attrib!("id", chromatogram.id(), outer);
         let count = self.chromatogram_count.to_string();
         attrib!("index", count, outer);
-        let default_array_len = chromatogram
+        let default_array_len_u = chromatogram
             .arrays
             .get(&ArrayType::TimeArray)
             .unwrap()
-            .data_len()?
-            .to_string();
+            .data_len()?;
+        let default_array_len = default_array_len_u.to_string();
 
         attrib!("defaultArrayLength", default_array_len, outer);
 
         self.handle.write_event(Event::Start(outer.borrow()))?;
         self.chromatogram_count += 1;
-        Ok(())
+        Ok(default_array_len_u)
     }
 
     pub fn write_chromatogram(&mut self, chromatogram: &Chromatogram) -> WriterResult {
@@ -1265,14 +1310,14 @@ where
             .insert(chromatogram.id().to_string(), pos);
 
         let mut outer = bstart!("chromatogram");
-        self.start_chromatogram(chromatogram, &mut outer)?;
+        let default_array_len = self.start_chromatogram(chromatogram, &mut outer)?;
         self.write_param_list(chromatogram.params().iter())?;
 
         if let Some(precursor) = chromatogram.precursor() {
             self.write_precursor(precursor)?;
         }
 
-        self.write_binary_data_arrays(&chromatogram.arrays)?;
+        self.write_binary_data_arrays(&chromatogram.arrays, default_array_len)?;
         end_event!(self, outer);
         Ok(())
     }
@@ -1385,7 +1430,7 @@ pub type MzMLWriter<W> = MzMLWriterType<CentroidPeak, DeconvolutedPeak, W>;
 
 #[cfg(test)]
 mod test {
-    use super::super::reader::{MzMLReader, MzMLReaderType};
+    use super::super::reader::MzMLReader;
     use super::*;
     use crate::prelude::*;
     use std::fs;
@@ -1398,7 +1443,7 @@ mod test {
         let dest_path = tmpdir.path().join("duplicate.mzML");
         let path = path::Path::new("./test/data/small.mzML");
         let mut reader =
-            MzMLReaderType::<_, _, _>::open_path(path).expect("Test file doesn't exist?");
+            MzMLReader::<_>::open_path(path).expect("Test file doesn't exist?");
 
         let n = reader.len();
         assert_eq!(n, 48);

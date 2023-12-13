@@ -19,8 +19,7 @@ use thiserror::Error;
 
 use lazy_static::lazy_static;
 use mzpeaks::{
-    CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated, MZPeakSetType,
-    MassPeakSetType, PeakCollection, peak::KnownCharge
+    CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated, PeakCollection, peak::KnownCharge
 };
 use regex::Regex;
 
@@ -177,8 +176,8 @@ impl<
         D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
     > From<SpectrumBuilderFlex<C, D>> for CentroidSpectrumType<C>
 where
-    MZPeakSetType<C>: BuildFromArrayMap + BuildArrayMapFrom,
-    MassPeakSetType<D>: BuildFromArrayMap + BuildArrayMapFrom,
+    C: BuildFromArrayMap + BuildArrayMapFrom,
+    D: BuildFromArrayMap + BuildArrayMapFrom,
 {
     fn from(builder: SpectrumBuilderFlex<C, D>) -> CentroidSpectrumType<C> {
         let spec: MultiLayerSpectrum<C, D> = builder.into();
@@ -281,7 +280,7 @@ impl<
                         .acquisition
                         .first_scan_mut()
                         .expect("Automatically adds scan event");
-                    scan_ev.start_time = value.parse().unwrap()
+                    scan_ev.start_time = value.parse::<f64>().unwrap() / 60.0
                 }
                 "PEPMASS" => {
                     let mut parts = value.split_ascii_whitespace();

@@ -20,8 +20,7 @@ use hdf5_sys::h5t::{H5T_cset_t, H5T_str_t, H5Tcopy, H5Tset_cset, H5Tset_size, H5
 
 use ndarray::Array1;
 
-use mzpeaks::peak_set::PeakSetVec;
-use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, Mass, MZ, CentroidPeak, DeconvolutedPeak};
+use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, CentroidPeak, DeconvolutedPeak};
 use quick_xml::events::{BytesStart, Event};
 use thiserror::Error;
 
@@ -92,8 +91,8 @@ impl From<MzMLbWriterError> for io::Error {
 impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> MSDataFileMetadata
     for MzMLbWriterType<C, D>
 where
-    PeakSetVec<C, MZ>: BuildArrayMapFrom,
-    PeakSetVec<D, Mass>: BuildArrayMapFrom,
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
 {
     fn data_processings(&self) -> &Vec<DataProcessing> {
         self.mzml_writer.data_processings()
@@ -290,8 +289,8 @@ pub type WriterResult = Result<(), MzMLbWriterError>;
 impl<'a, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> ScanWriter<'a, C, D>
     for MzMLbWriterType<C, D>
 where
-    PeakSetVec<C, MZ>: BuildArrayMapFrom,
-    PeakSetVec<D, Mass>: BuildArrayMapFrom,
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &'a S) -> io::Result<usize> {
         match self.write_spectrum(spectrum) {
@@ -314,8 +313,8 @@ pub struct MzMLbWriterBuilder<
     C: CentroidLike + Default + 'static,
     D: DeconvolutedCentroidLike + Default + 'static,
 > where
-    PeakSetVec<C, MZ>: BuildArrayMapFrom,
-    PeakSetVec<D, Mass>: BuildArrayMapFrom,
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
 {
     path: PathBuf,
     chunk_size: Option<usize>,
@@ -327,8 +326,8 @@ pub struct MzMLbWriterBuilder<
 impl<C: CentroidLike + Default + 'static, D: DeconvolutedCentroidLike + Default + 'static>
     MzMLbWriterBuilder<C, D>
 where
-    PeakSetVec<C, MZ>: BuildArrayMapFrom,
-    PeakSetVec<D, Mass>: BuildArrayMapFrom,
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
 {
     pub fn new<P: Into<PathBuf>>(path: P) -> Self {
         Self {
@@ -343,12 +342,12 @@ where
     }
 
     pub fn with_zlib_compression(mut self, compression_level: u8) -> Self {
-        self.filters = Some(MzMLbWriterType::zlib_compression(compression_level));
+        self.filters = Some(MzMLbWriterType::<C, D>::zlib_compression(compression_level));
         self
     }
 
     pub fn with_blosc_zstd_compression(mut self, compression_level: u8) -> Self {
-        self.filters = Some(MzMLbWriterType::blosc_zstd(compression_level));
+        self.filters = Some(MzMLbWriterType::<C, D>::blosc_zstd(compression_level));
         self
     }
 
@@ -357,7 +356,7 @@ where
             &self.path,
             self.chunk_size.unwrap_or(DEFAULT_CHUNK_SIZE),
         )?;
-        inst.filters = self.filters.unwrap_or(MzMLbWriterType::zlib_compression(9));
+        inst.filters = self.filters.unwrap_or(MzMLbWriterType::<C, D>::zlib_compression(9));
         Ok(inst)
     }
 }
@@ -365,8 +364,8 @@ where
 impl<C: CentroidLike + Default + 'static, D: DeconvolutedCentroidLike + Default + 'static>
     From<MzMLbWriterBuilder<C, D>> for MzMLbWriterType<C, D>
 where
-    PeakSetVec<C, mzpeaks::MZ>: BuildArrayMapFrom,
-    PeakSetVec<D, mzpeaks::Mass>: BuildArrayMapFrom,
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
 {
     fn from(value: MzMLbWriterBuilder<C, D>) -> Self {
         value.create().unwrap()
@@ -379,8 +378,8 @@ pub struct MzMLbWriterType<
     C: CentroidLike + Default + 'static,
     D: DeconvolutedCentroidLike + Default + 'static,
 > where
-    PeakSetVec<C, MZ>: BuildArrayMapFrom,
-    PeakSetVec<D, Mass>: BuildArrayMapFrom,
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
 {
     handle: hdf5::File,
     mzml_writer: MzMLWriterType<io::Cursor<Vec<u8>>, C, D>,
@@ -392,8 +391,8 @@ pub struct MzMLbWriterType<
 impl<C: CentroidLike + Default + 'static, D: DeconvolutedCentroidLike + Default + 'static>
     MzMLbWriterType<C, D>
 where
-    PeakSetVec<C, MZ>: BuildArrayMapFrom,
-    PeakSetVec<D, Mass>: BuildArrayMapFrom,
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
 {
     pub fn new<P: AsRef<Path>>(path: &P) -> io::Result<Self> {
         Self::new_with_chunk_size(path, DEFAULT_CHUNK_SIZE)
@@ -426,12 +425,16 @@ where
         &mut self,
         array: &DataArray,
         context: BufferContext,
+        default_array_size: usize
     ) -> WriterResult {
         let mut outer = bstart!("binaryDataArray");
 
         let size = array.data_len()?;
         let size_str = size.to_string();
         attrib!("encodedLength", "0", outer);
+        if size != default_array_size {
+            attrib!("arrayLength", size_str, outer);
+        }
 
         start_event!(self, outer);
         match &array.dtype {
@@ -542,6 +545,7 @@ where
         &mut self,
         arrays: &BinaryArrayMap,
         context: BufferContext,
+        default_array_size: usize
     ) -> WriterResult {
         let count = arrays.len().to_string();
         let mut outer = bstart!("binaryDataArrayList");
@@ -550,7 +554,7 @@ where
         let mut array_pairs: Vec<(&ArrayType, &DataArray)> = arrays.iter().collect();
         array_pairs.sort_by_key(|f| f.0);
         for (_tp, array) in array_pairs {
-            self.write_binary_data_array(array, context)?
+            self.write_binary_data_array(array, context, default_array_size)?
         }
         end_event!(self, outer);
         Ok(())
@@ -575,7 +579,7 @@ where
             .insert(spectrum.id().to_string(), pos);
 
         let mut outer = bstart!("spectrum");
-        self.mzml_writer.start_spectrum(spectrum, &mut outer)?;
+        let default_array_size = self.mzml_writer.start_spectrum(spectrum, &mut outer)?;
 
         self.mzml_writer.write_spectrum_descriptors(spectrum)?;
 
@@ -589,13 +593,13 @@ where
 
         match spectrum.peaks() {
             PeakDataLevel::RawData(arrays) => {
-                self.write_binary_data_arrays(arrays, BufferContext::Spectrum)?
+                self.write_binary_data_arrays(arrays, BufferContext::Spectrum, default_array_size)?
             },
             PeakDataLevel::Centroid(arrays) => {
-                self.write_binary_data_arrays(&arrays.as_arrays(), BufferContext::Spectrum)?
+                self.write_binary_data_arrays(&C::as_arrays(&arrays[0..]), BufferContext::Spectrum, default_array_size)?
             },
             PeakDataLevel::Deconvoluted(arrays) => {
-                self.write_binary_data_arrays(&arrays.as_arrays(), BufferContext::Spectrum)?
+                self.write_binary_data_arrays(&D::as_arrays(&arrays[0..]), BufferContext::Spectrum, default_array_size)?
             },
             PeakDataLevel::Missing => todo!(),
         }
@@ -624,7 +628,7 @@ where
             .insert(chromatogram.id().to_string(), pos);
 
         let mut outer = bstart!("chromatogram");
-        self.mzml_writer
+        let default_array_size = self.mzml_writer
             .start_chromatogram(chromatogram, &mut outer)?;
         self.mzml_writer
             .write_param_list(chromatogram.params().iter())?;
@@ -632,7 +636,7 @@ where
         if let Some(precursor) = chromatogram.precursor() {
             self.mzml_writer.write_precursor(precursor)?;
         }
-        self.write_binary_data_arrays(&chromatogram.arrays, BufferContext::Chromatogram)?;
+        self.write_binary_data_arrays(&chromatogram.arrays, BufferContext::Chromatogram, default_array_size)?;
 
         end_event!(self, outer);
         Ok(())

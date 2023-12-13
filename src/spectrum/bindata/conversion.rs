@@ -2,7 +2,7 @@ use std::mem;
 
 use mzpeaks::{
     CentroidLike, CentroidPeak, CoordinateLike, DeconvolutedPeak, DeconvolutedPeakSet,
-    IntensityMeasurement, KnownCharge, MZPeakSetType, PeakCollection, PeakSet,
+    IntensityMeasurement, KnownCharge, MZPeakSetType, PeakCollection, PeakSet
 };
 
 use crate::utils::neutral_mass;
@@ -154,45 +154,45 @@ pub trait BuildFromArrayMap: Sized {
         None
     }
 
-    fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Self, ArrayRetrievalError>;
+    fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Vec<Self>, ArrayRetrievalError>;
 
-    fn from_arrays(arrays: &BinaryArrayMap) -> Self {
+    fn from_arrays(arrays: &BinaryArrayMap) -> Vec<Self> {
         Self::try_from_arrays(arrays).unwrap()
     }
 }
 
-pub trait BuildArrayMapFrom {
+pub trait BuildArrayMapFrom : Sized {
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {
         None
     }
 
-    fn as_arrays(&self) -> BinaryArrayMap;
+    fn as_arrays(source: &[Self]) -> BinaryArrayMap;
 }
 
-impl BuildArrayMapFrom for MZPeakSetType<CentroidPeak> {
+impl BuildArrayMapFrom for CentroidPeak {
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {
         Some(vec![ArrayType::MZArray, ArrayType::IntensityArray])
     }
 
-    fn as_arrays(&self) -> BinaryArrayMap {
+    fn as_arrays(source: &[Self]) -> BinaryArrayMap {
         let mut arrays = BinaryArrayMap::new();
 
         let mut mz_array = DataArray::from_name_type_size(
             &ArrayType::MZArray,
             BinaryDataArrayType::Float64,
-            self.len() * BinaryDataArrayType::Float64.size_of(),
+            source.len() * BinaryDataArrayType::Float64.size_of(),
         );
 
         let mut intensity_array = DataArray::from_name_type_size(
             &ArrayType::IntensityArray,
             BinaryDataArrayType::Float32,
-            self.len() * BinaryDataArrayType::Float32.size_of(),
+            source.len() * BinaryDataArrayType::Float32.size_of(),
         );
 
         mz_array.compression = BinaryCompressionType::Decoded;
         intensity_array.compression = BinaryCompressionType::Decoded;
 
-        for p in self.iter() {
+        for p in source.iter() {
             let mz: f64 = p.coordinate();
             let inten: f32 = p.intensity();
 
@@ -209,8 +209,8 @@ impl BuildArrayMapFrom for MZPeakSetType<CentroidPeak> {
     }
 }
 
-impl BuildFromArrayMap for MZPeakSetType<CentroidPeak> {
-    fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Self, ArrayRetrievalError> {
+impl BuildFromArrayMap for CentroidPeak {
+    fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Vec<Self>, ArrayRetrievalError> {
         let mz_array = arrays.mzs()?;
         let intensity_array = arrays.intensities()?;
         let mut peaks = Vec::with_capacity(mz_array.len());
@@ -222,7 +222,7 @@ impl BuildFromArrayMap for MZPeakSetType<CentroidPeak> {
                 index: i as u32,
             })
         }
-        Ok(MZPeakSetType::new(peaks))
+        Ok(peaks)
     }
 
     fn arrays_required(&self) -> Option<Vec<ArrayType>> {
@@ -230,33 +230,33 @@ impl BuildFromArrayMap for MZPeakSetType<CentroidPeak> {
     }
 }
 
-impl BuildArrayMapFrom for DeconvolutedPeakSet {
-    fn as_arrays(&self) -> BinaryArrayMap {
+impl BuildArrayMapFrom for DeconvolutedPeak {
+    fn as_arrays(source: &[Self]) -> BinaryArrayMap {
         let mut arrays = BinaryArrayMap::new();
 
         let mut mz_array = DataArray::from_name_type_size(
             &ArrayType::MZArray,
             BinaryDataArrayType::Float64,
-            self.len() * BinaryDataArrayType::Float64.size_of(),
+            source.len() * BinaryDataArrayType::Float64.size_of(),
         );
 
         let mut intensity_array = DataArray::from_name_type_size(
             &ArrayType::IntensityArray,
             BinaryDataArrayType::Float32,
-            self.len() * BinaryDataArrayType::Float32.size_of(),
+            source.len() * BinaryDataArrayType::Float32.size_of(),
         );
 
         let mut charge_array = DataArray::from_name_type_size(
             &ArrayType::ChargeArray,
             BinaryDataArrayType::Int32,
-            self.len() * BinaryDataArrayType::Int32.size_of(),
+            source.len() * BinaryDataArrayType::Int32.size_of(),
         );
 
         mz_array.compression = BinaryCompressionType::Decoded;
         intensity_array.compression = BinaryCompressionType::Decoded;
         charge_array.compression = BinaryCompressionType::Decoded;
 
-        for p in self.iter() {
+        for p in source.iter() {
             let mz: f64 = p.mz();
             let inten: f32 = p.intensity();
             let charge = p.charge();
@@ -286,8 +286,8 @@ impl BuildArrayMapFrom for DeconvolutedPeakSet {
     }
 }
 
-impl BuildFromArrayMap for DeconvolutedPeakSet {
-    fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Self, ArrayRetrievalError> {
+impl BuildFromArrayMap for DeconvolutedPeak {
+    fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Vec<Self>, ArrayRetrievalError> {
         let mz_array = arrays.mzs()?;
         let intensity_array = arrays.intensities()?;
         let charge_array = arrays.charges()?;
@@ -306,6 +306,6 @@ impl BuildFromArrayMap for DeconvolutedPeakSet {
             })
         }
 
-        Ok(DeconvolutedPeakSet::new(peaks))
+        Ok(peaks)
     }
 }

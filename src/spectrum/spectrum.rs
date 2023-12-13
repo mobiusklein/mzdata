@@ -60,6 +60,7 @@ use crate::spectrum::scan_properties::{
     Acquisition, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
 };
 use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType};
+use crate::utils::mass_charge_ratio;
 
 use super::bindata::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
 
@@ -130,6 +131,40 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
         }
     }
 
+    pub fn mz_range(&self) -> (f64, f64) {
+        match self {
+            PeakDataLevel::Missing => (0.0, 0.0),
+            PeakDataLevel::RawData(arrays) => {
+                let mzs = arrays.mzs().unwrap();
+                if mzs.len() == 0 {
+                    (0.0, 0.0)
+                } else {
+                    (*mzs.first().unwrap(), *mzs.last().unwrap())
+                }
+            },
+            PeakDataLevel::Centroid(peaks) => {
+                if peaks.len() == 0 {
+                    (0.0, 0.0)
+                } else {
+                    (peaks[0].mz(), peaks[peaks.len() - 1].mz())
+                }
+            },
+            PeakDataLevel::Deconvoluted(peaks) => {
+                if peaks.len() == 0 {
+                    (0.0, 0.0)
+                } else {
+                    peaks.iter().map(|p| {
+                        let m = p.neutral_mass();
+                        let z = p.charge();
+                        mass_charge_ratio(m, z)
+                    }).fold((f64::MAX, f64::MIN), |state, mz| {
+                        (state.0.min(mz), state.1.max(mz))
+                    })
+                }
+            },
+        }
+    }
+
     pub fn tic(&self) -> f32 {
         match self {
             PeakDataLevel::Missing => 0.0,
@@ -178,6 +213,8 @@ pub trait SpectrumLike<
     /// the data for most other methods on this trait.
     fn description(&self) -> &SpectrumDescription;
 
+    fn description_mut(&mut self) -> &mut SpectrumDescription;
+
     /// Access the acquisition information for this spectrum.
     #[inline]
     fn acquisition(&self) -> &Acquisition {
@@ -189,6 +226,15 @@ pub trait SpectrumLike<
     fn precursor(&self) -> Option<&Precursor> {
         let desc = self.description();
         if let Some(precursor) = &desc.precursor {
+            Some(precursor)
+        } else {
+            None
+        }
+    }
+
+    fn precursor_mut(&mut self) -> Option<&mut Precursor> {
+        let desc = self.description_mut();
+        if let Some(precursor) = desc.precursor.as_mut() {
             Some(precursor)
         } else {
             None
@@ -307,7 +353,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         self,
     ) -> Result<CentroidSpectrumType<C>, SpectrumConversionError>
     where
-        MZPeakSetType<C>: BuildFromArrayMap,
+        C: BuildFromArrayMap,
     {
         if !matches!(
             self.description.signal_continuity,
@@ -316,8 +362,8 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
             return Err(SpectrumConversionError::NotCentroided);
         }
 
-        let peaks = match MZPeakSetType::<C>::try_from_arrays(&self.arrays) {
-            Ok(peaks) => peaks,
+        let peaks = match C::try_from_arrays(&self.arrays) {
+            Ok(peaks) => peaks.into(),
             Err(e) => return Err(e.into()),
         };
         let mut centroid = CentroidSpectrumType::<C> {
@@ -354,7 +400,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         self,
     ) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
     where
-        MZPeakSetType<C>: BuildFromArrayMap,
+        C: BuildFromArrayMap,
     {
         Ok(MultiLayerSpectrum::<C, D> {
             arrays: Some(self.arrays),
@@ -413,6 +459,10 @@ impl SpectrumLike for RawSpectrum {
         &self.description
     }
 
+    fn description_mut(&mut self) -> &mut SpectrumDescription {
+        &mut self.description
+    }
+
     fn peaks(&'_ self) -> PeakDataLevel<'_, CentroidPeak, DeconvolutedPeak> {
         PeakDataLevel::RawData(&self.arrays)
     }
@@ -431,6 +481,10 @@ impl<C: CentroidLike + Default> SpectrumLike<C> for CentroidSpectrumType<C> {
     #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
+    }
+
+    fn description_mut(&mut self) -> &mut SpectrumDescription {
+        &mut self.description
     }
 
     fn peaks(&'_ self) -> PeakDataLevel<'_, C, DeconvolutedPeak> {
@@ -471,6 +525,10 @@ impl<D: DeconvolutedCentroidLike + Default> SpectrumLike<CentroidPeak, D>
         &self.description
     }
 
+    fn description_mut(&mut self) -> &mut SpectrumDescription {
+        &mut self.description
+    }
+
     fn peaks(&'_ self) -> PeakDataLevel<'_, CentroidPeak, D> {
         PeakDataLevel::Deconvoluted(&self.deconvoluted_peaks)
     }
@@ -507,13 +565,17 @@ impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> SpectrumL
         &self.description
     }
 
+    fn description_mut(&mut self) -> &mut SpectrumDescription {
+        &mut self.description
+    }
+
     fn peaks(&'_ self) -> PeakDataLevel<'_, C, D> {
-        if let Some(peaks) = &self.peaks {
+        if let Some(peaks) = &self.deconvoluted_peaks {
+            PeakDataLevel::Deconvoluted(peaks)
+        } else if let Some(peaks) = &self.peaks {
             PeakDataLevel::Centroid(peaks)
         } else if let Some(arrays) = &self.arrays {
             PeakDataLevel::RawData(arrays)
-        } else if let Some(peaks) = &self.deconvoluted_peaks {
-            PeakDataLevel::Deconvoluted(peaks)
         } else {
             PeakDataLevel::Missing
         }
@@ -522,9 +584,47 @@ impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> SpectrumL
 
 impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> MultiLayerSpectrum<C, D>
 where
-    MZPeakSetType<C>: BuildFromArrayMap + BuildArrayMapFrom,
-    MassPeakSetType<D>: BuildFromArrayMap,
+    C: BuildFromArrayMap + BuildArrayMapFrom,
+    D: BuildFromArrayMap,
 {
+    pub fn try_build_centroids(&mut self) -> Result<&MZPeakSetType<C>, SpectrumConversionError> {
+        if self.peaks.is_some() {
+            Ok(self.peaks.as_ref().unwrap())
+        } else if let Some(arrays) = self.arrays.as_ref() {
+            match self.signal_continuity() {
+                SignalContinuity::Centroid => {
+                    let peaks = C::try_from_arrays(arrays)?.into();
+                    self.peaks = Some(peaks);
+                    Ok(self.peaks.as_ref().unwrap())
+                },
+                _ => {
+                    Err(SpectrumConversionError::NotCentroided)
+                }
+            }
+        } else {
+            Err(SpectrumConversionError::NoPeakData)
+        }
+    }
+
+    pub fn try_build_deconvoluted_centroids(&mut self) -> Result<&MassPeakSetType<D>, SpectrumConversionError> {
+        if let Some(ref peaks) = self.deconvoluted_peaks {
+            Ok(peaks)
+        } else if let Some(ref arrays) = self.arrays {
+            match self.signal_continuity() {
+                SignalContinuity::Centroid => {
+                    let peaks = D::try_from_arrays(arrays)?.into();
+                    self.deconvoluted_peaks = Some(peaks);
+                    Ok(self.deconvoluted_peaks.as_ref().unwrap())
+                },
+                _ => {
+                    Err(SpectrumConversionError::NotCentroided)
+                }
+            }
+        } else {
+            Err(SpectrumConversionError::NoPeakData)
+        }
+    }
+
     /// Convert a spectrum into a [`CentroidSpectrumType`]
     pub fn into_centroid(self) -> Result<CentroidSpectrumType<C>, SpectrumConversionError> {
         if let Some(peaks) = self.peaks {
@@ -536,7 +636,7 @@ where
             return Ok(result);
         } else if self.signal_continuity() == SignalContinuity::Centroid {
             if let Some(arrays) = &self.arrays {
-                let peaks = MZPeakSetType::<C>::try_from_arrays(arrays)?;
+                let peaks = C::try_from_arrays(arrays)?.into();
                 let mut centroid = CentroidSpectrumType::<C> {
                     description: self.description,
                     peaks,
@@ -574,7 +674,7 @@ where
             result.description.signal_continuity = SignalContinuity::Centroid;
             Ok(result)
         } else if let Some(peaks) = self.peaks {
-            let arrays = MZPeakSetType::<C>::as_arrays(&peaks);
+            let arrays = C::as_arrays(&peaks[0..]);
 
             let mut result = RawSpectrum {
                 arrays,
@@ -658,8 +758,8 @@ impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike +
 impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     TryFrom<MultiLayerSpectrum<C, D>> for CentroidSpectrumType<C>
 where
-    MZPeakSetType<C>: BuildFromArrayMap + BuildArrayMapFrom,
-    MassPeakSetType<D>: BuildFromArrayMap + BuildArrayMapFrom,
+    C: BuildFromArrayMap + BuildArrayMapFrom,
+    D: BuildFromArrayMap + BuildArrayMapFrom,
 {
     type Error = SpectrumConversionError;
 
@@ -683,8 +783,8 @@ impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> From<Cent
 impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> From<RawSpectrum>
     for MultiLayerSpectrum<C, D>
 where
-    MZPeakSetType<C>: BuildFromArrayMap,
-    MassPeakSetType<D>: BuildFromArrayMap,
+    C: BuildFromArrayMap,
+    D: BuildFromArrayMap,
 {
     fn from(spectrum: RawSpectrum) -> MultiLayerSpectrum<C, D> {
         spectrum.into_spectrum().unwrap()
@@ -694,8 +794,8 @@ where
 impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     From<MultiLayerSpectrum<C, D>> for RawSpectrum
 where
-    MZPeakSetType<C>: BuildFromArrayMap + BuildArrayMapFrom,
-    MassPeakSetType<D>: BuildFromArrayMap + BuildArrayMapFrom,
+    C: BuildFromArrayMap + BuildArrayMapFrom,
+    D: BuildFromArrayMap + BuildArrayMapFrom,
 {
     fn from(spectrum: MultiLayerSpectrum<C, D>) -> RawSpectrum {
         spectrum.into_raw().unwrap()
@@ -704,7 +804,7 @@ where
 
 impl<C: CentroidLike + Default> TryFrom<RawSpectrum> for CentroidSpectrumType<C>
 where
-    MZPeakSetType<C>: BuildFromArrayMap,
+    C: BuildFromArrayMap,
 {
     type Error = SpectrumConversionError;
 

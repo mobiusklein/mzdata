@@ -10,8 +10,6 @@ use log::debug;
 use log::warn;
 
 use mzpeaks::CentroidLike;
-use mzpeaks::MZPeakSetType;
-use mzpeaks::MassPeakSetType;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
 use quick_xml::Reader;
@@ -487,8 +485,8 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                             .expect("Expected floating point number for scan time");
                         let value = match &param.unit {
                             Unit::Minute => value,
-                            Unit::Second => value * 60.0,
-                            Unit::Millisecond => value * 60000.0,
+                            Unit::Second => value / 60.0,
+                            Unit::Millisecond => value / 60000.0,
                             _ => {
                                 warn!("Could not infer unit for {:?}", param);
                                 value
@@ -708,8 +706,8 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                                         .expect("Expected floating point number for scan time");
                                     let value = match &param.unit {
                                         Unit::Minute => value,
-                                        Unit::Second => value * 60.0,
-                                        Unit::Millisecond => value * 60000.0,
+                                        Unit::Second => value / 60.0,
+                                        Unit::Millisecond => value / 60000.0,
                                         _ => {
                                             warn!("Could not infer unit for {:?}", param);
                                             value
@@ -822,8 +820,8 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
 impl<'a, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> From<MzMLSpectrumBuilder<'a, C, D>>
     for CentroidSpectrumType<C>
 where
-    MZPeakSetType<C>: BuildFromArrayMap + BuildArrayMapFrom,
-    MassPeakSetType<D>: BuildFromArrayMap + BuildArrayMapFrom,
+    C: BuildFromArrayMap + BuildArrayMapFrom,
+    D: BuildFromArrayMap + BuildArrayMapFrom,
 {
     fn from(val: MzMLSpectrumBuilder<'a, C, D>) -> Self {
         let mut spec = MultiLayerSpectrum::<C, D>::default();
@@ -1582,6 +1580,7 @@ pub(crate) fn is_mzml(buf: &[u8]) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::io::traits::SpectrumGrouping;
     use crate::spectrum::spectrum::SpectrumLike;
     use std::fs;
     use std::path;
@@ -1866,6 +1865,22 @@ mod test {
             assert!(v.data.len() == 0);
         });
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_interleaved_groups() -> io::Result<()> {
+        let path = path::Path::new("./test/data/batching_test.mzML");
+        let mut reader = MzMLReader::open_path(path)?;
+        let groups: Vec<_> = reader.groups().collect();
+        let grp = &groups[10];
+        let prec = grp.precursor().unwrap();
+        assert_eq!(prec.id(), "controllerType=0 controllerNumber=1 scan=25869");
+        assert_eq!(prec.index(), 129);
+        let min_msn_idx = grp.products().iter().map(|scan| {
+            scan.index()
+        }).min().unwrap();
+        assert_eq!(min_msn_idx, 142);
         Ok(())
     }
 }

@@ -33,7 +33,7 @@
 //!
 //! It uses [`mzpeaks`] to represent peaks and peak lists, and re-exports the basic types. While the high-level
 //! types are templated on simple peak types, more complex, application-specific peak types can be substituted.
-//! See [`mzdata::spectrum::signal`](crate::spectrum::signal) for more information about how to directly convert
+//! See [`mzdata::spectrum::bindata`](crate::spectrum::bindata) for more information about how to directly convert
 //! data arrays to peak lists.
 //!
 //!
