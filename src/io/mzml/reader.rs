@@ -1580,6 +1580,7 @@ pub(crate) fn is_mzml(buf: &[u8]) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::io::traits::SpectrumAveragingIterator;
     use crate::io::traits::SpectrumGrouping;
     use crate::spectrum::spectrum::SpectrumLike;
     use std::fs;
@@ -1881,6 +1882,42 @@ mod test {
             scan.index()
         }).min().unwrap();
         assert_eq!(min_msn_idx, 142);
+        Ok(())
+    }
+
+    #[test]
+    fn test_averaging() -> io::Result<()> {
+        let path = path::Path::new("./test/data/small.mzML");
+        let mut reader = MzMLReader::open_path(path)?;
+        let groups: Vec<_> = reader.groups().collect();
+
+        reader.reset();
+        let averaging_iter = SpectrumAveragingIterator::new(reader.groups(), 1, 100.0, 2200.0, 0.005);
+        let avg_groups: Vec<_> = averaging_iter.collect();
+        assert_eq!(groups.len(), avg_groups.len());
+
+        let raw_tic = &groups[0].precursor.as_ref().unwrap().peaks().tic();
+
+
+        let avg_group = &avg_groups[0];
+        let prec = avg_group.precursor().unwrap();
+        let prec_arrays = prec.arrays.as_ref().unwrap();
+
+        let avg_mzs = prec_arrays.mzs()?;
+        let avg_intens = prec_arrays.intensities()?;
+
+        assert_eq!(avg_mzs.len(), avg_intens.len());
+
+        let low = avg_mzs.first().unwrap();
+        let high = avg_mzs.last().unwrap();
+        eprintln!("{low} {high}");
+        assert!((low - 100.0).abs() < 1e-3);
+        assert!((high - (2200.0 - 0.005)).abs() < 1e-3);
+
+        let tic = prec.peaks().tic();
+        let base_peak = prec.peaks().base_peak();
+        eprintln!("{base_peak:?} {tic} {raw_tic}");
+
         Ok(())
     }
 }

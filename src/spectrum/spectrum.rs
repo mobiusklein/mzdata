@@ -39,11 +39,12 @@ for spectrum in reader {
 use std::borrow::Cow;
 use std::convert::TryFrom;
 
+use mzpeaks::peak_set::PeakSetVec;
 use thiserror::Error;
 
 use mzpeaks::{prelude::*, IndexType};
 use mzpeaks::{
-    CentroidLike, DeconvolutedCentroidLike, DeconvolutedPeakSet, MZPeakSetType, MassPeakSetType,
+    CentroidLike, DeconvolutedCentroidLike, MZPeakSetType, MassPeakSetType,
     PeakSet,
 };
 use mzpeaks::{CentroidPeak, DeconvolutedPeak, Tolerance};
@@ -290,6 +291,8 @@ pub trait SpectrumLike<
     /// Retrieve the most processed representation of the mass spectrum's
     /// signal
     fn peaks(&'_ self) -> PeakDataLevel<'_, C, D>;
+
+    fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap>;
 }
 
 #[derive(Default, Debug, Clone)]
@@ -466,6 +469,10 @@ impl SpectrumLike for RawSpectrum {
     fn peaks(&'_ self) -> PeakDataLevel<'_, CentroidPeak, DeconvolutedPeak> {
         PeakDataLevel::RawData(&self.arrays)
     }
+
+    fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap> {
+        Some(&self.arrays)
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -489,6 +496,10 @@ impl<C: CentroidLike + Default> SpectrumLike<C> for CentroidSpectrumType<C> {
 
     fn peaks(&'_ self) -> PeakDataLevel<'_, C, DeconvolutedPeak> {
         PeakDataLevel::Centroid(&self.peaks)
+    }
+
+    fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap> {
+        None
     }
 }
 
@@ -531,6 +542,10 @@ impl<D: DeconvolutedCentroidLike + Default> SpectrumLike<CentroidPeak, D>
 
     fn peaks(&'_ self) -> PeakDataLevel<'_, CentroidPeak, D> {
         PeakDataLevel::Deconvoluted(&self.deconvoluted_peaks)
+    }
+
+    fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap> {
+        None
     }
 }
 
@@ -580,12 +595,16 @@ impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> SpectrumL
             PeakDataLevel::Missing
         }
     }
+
+    fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap> {
+        self.arrays.as_ref()
+    }
 }
 
 impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> MultiLayerSpectrum<C, D>
 where
     C: BuildFromArrayMap + BuildArrayMapFrom,
-    D: BuildFromArrayMap,
+    D: BuildFromArrayMap + BuildArrayMapFrom,
 {
     pub fn try_build_centroids(&mut self) -> Result<&MZPeakSetType<C>, SpectrumConversionError> {
         if self.peaks.is_some() {
@@ -663,10 +682,7 @@ where
                 description: self.description,
             })
         } else if let Some(peaks) = self.deconvoluted_peaks {
-            let arrays = BinaryArrayMap::from(&DeconvolutedPeakSet::wrap(
-                peaks.into_iter().map(|p| p.as_centroid()).collect(),
-            ));
-
+            let arrays = D::as_arrays(&peaks[0..]);
             let mut result = RawSpectrum {
                 arrays,
                 description: self.description,
@@ -688,6 +704,21 @@ where
                 arrays,
                 description: self.description,
             })
+        }
+    }
+
+    pub fn from_arrays_and_description(arrays: BinaryArrayMap, description: SpectrumDescription) -> Self {
+        Self {
+            description,
+            arrays: Some(arrays),
+            ..Default::default()
+        }
+    }
+
+    pub fn from_description(description: SpectrumDescription) -> Self {
+        Self {
+            description,
+            ..Default::default()
         }
     }
 
@@ -813,26 +844,62 @@ where
     }
 }
 
-impl TryFrom<Spectrum> for DeconvolutedSpectrum {
+impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+    TryFrom<MultiLayerSpectrum<C, D>> for DeconvolutedSpectrumType<D>
+where
+    C: BuildFromArrayMap + BuildArrayMapFrom,
+    D: BuildFromArrayMap + BuildArrayMapFrom, {
+
     type Error = SpectrumConversionError;
 
-    fn try_from(spectrum: Spectrum) -> Result<Self, Self::Error> {
-        if spectrum.signal_continuity() == SignalContinuity::Profile {
-            Err(SpectrumConversionError::NotCentroided)
-        } else if let Some(arrays) = &spectrum.arrays {
-            if arrays.has_array(&ArrayType::ChargeArray) {
-                let peaks: DeconvolutedPeakSet = DeconvolutedPeakSet::from(arrays);
-                return Ok(DeconvolutedSpectrum {
-                    description: spectrum.description,
+    fn try_from(value: MultiLayerSpectrum<C, D>) -> Result<Self, Self::Error> {
+        match value.peaks() {
+            PeakDataLevel::Deconvoluted(_) => {
+                let peaks = value.deconvoluted_peaks.unwrap();
+                Ok(DeconvolutedSpectrumType {
+                    description: value.description,
                     deconvoluted_peaks: peaks,
-                });
+                })
+            },
+            PeakDataLevel::RawData(arrays) => {
+                let peaks = match D::try_from_arrays(arrays) {
+                    Ok(peaks) => peaks,
+                    Err(e) => {
+                        return Err(SpectrumConversionError::ArrayRetrievalError(e))
+                    },
+                };
+                Ok(DeconvolutedSpectrumType {
+                    description: value.description,
+                    deconvoluted_peaks: PeakSetVec::new(peaks),
+                })
             }
-            Err(Self::Error::NotDeconvoluted)
-        } else {
-            Err(Self::Error::NoPeakData)
+            _ => {
+                Err(SpectrumConversionError::NotDeconvoluted)
+            }
         }
     }
 }
+
+// impl TryFrom<Spectrum> for DeconvolutedSpectrum {
+//     type Error = SpectrumConversionError;
+
+//     fn try_from(spectrum: Spectrum) -> Result<Self, Self::Error> {
+//         if spectrum.signal_continuity() == SignalContinuity::Profile {
+//             Err(SpectrumConversionError::NotCentroided)
+//         } else if let Some(arrays) = &spectrum.arrays {
+//             if arrays.has_array(&ArrayType::ChargeArray) {
+//                 let peaks: DeconvolutedPeakSet = DeconvolutedPeakSet::from(arrays);
+//                 return Ok(DeconvolutedSpectrum {
+//                     description: spectrum.description,
+//                     deconvoluted_peaks: peaks,
+//                 });
+//             }
+//             Err(Self::Error::NotDeconvoluted)
+//         } else {
+//             Err(Self::Error::NoPeakData)
+//         }
+//     }
+// }
 
 #[cfg(test)]
 mod test {

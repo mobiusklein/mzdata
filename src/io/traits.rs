@@ -8,7 +8,15 @@ use std::path::{self, PathBuf};
 
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 
+use crate::spectrum::bindata::{to_bytes, BuildArrayMapFrom, BuildFromArrayMap};
 use crate::spectrum::spectrum::{MultiLayerSpectrum, SpectrumLike};
+use crate::spectrum::{
+    ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, SignalContinuity,
+};
+
+// #[cfg(feature = "mzsignal")]
+use mzsignal::average::SignalAverager;
+use mzsignal::ArrayPair;
 
 use super::utils::FileSource;
 use super::OffsetIndex;
@@ -315,7 +323,10 @@ fn _save_index<
     C: CentroidLike + Default,
     D: DeconvolutedCentroidLike + Default,
     S: SpectrumLike<C, D>,
->(index_path: &PathBuf, reader: &impl MZFileReader<C, D, S>) -> io::Result<()> {
+>(
+    index_path: &PathBuf,
+    reader: &impl MZFileReader<C, D, S>,
+) -> io::Result<()> {
     let index_stream = fs::File::create(index_path)?;
     match reader.write_index(Box::new(io::BufWriter::new(index_stream))) {
         Ok(_) => {}
@@ -421,6 +432,67 @@ pub trait SpectrumGrouping<
 
     /// Get a mutable reference to the collection of product spectra
     fn products_mut(&mut self) -> &mut Vec<S>;
+
+    /// The total number of spectra in the group
+    fn total_spectra(&self) -> usize {
+        self.precursor().is_some() as usize + self.products().len()
+    }
+
+    /// The spectrum that occurred first chronologically
+    fn earliest_spectrum(&self) -> Option<&S> {
+        self.precursor().or_else(|| {
+            self.products().into_iter().min_by(|a, b| {
+                a.acquisition()
+                    .start_time()
+                    .total_cmp(&b.acquisition().start_time())
+            })
+        })
+    }
+
+    /// The spectrum that occurred last chronologically
+    fn latest_spectrum(&self) -> Option<&S> {
+        self.precursor().or_else(|| {
+            self.products().into_iter().max_by(|a, b| {
+                a.acquisition()
+                    .start_time()
+                    .total_cmp(&b.acquisition().start_time())
+            })
+        })
+    }
+
+    /// The lowest MS level in the group
+    fn lowest_ms_level(&self) -> Option<u8> {
+        let prec_level = self
+            .precursor()
+            .and_then(|p| Some(p.ms_level()))
+            .unwrap_or_else(|| u8::MAX);
+        let val = self
+            .products()
+            .into_iter()
+            .fold(prec_level, |state, s| state.min(s.ms_level()));
+        if val > 0 {
+            Some(val)
+        } else {
+            None
+        }
+    }
+
+    /// The highest MS level in the group
+    fn highest_ms_level(&self) -> Option<u8> {
+        let prec_level = self
+            .precursor()
+            .and_then(|p| Some(p.ms_level()))
+            .unwrap_or_else(|| u8::MIN);
+        let val = self
+            .products()
+            .into_iter()
+            .fold(prec_level, |state, s| state.max(s.ms_level()));
+        if val > 0 {
+            Some(val)
+        } else {
+            None
+        }
+    }
 }
 
 /**
@@ -442,11 +514,8 @@ where
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
-        S: SpectrumLike<C, D>,
-    > Default for SpectrumGroup<C, D, S>
+impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default, S: SpectrumLike<C, D>>
+    Default for SpectrumGroup<C, D, S>
 {
     fn default() -> Self {
         Self {
@@ -640,15 +709,16 @@ impl<
         if let Some(precursor) = scan.precursor() {
             match precursor.precursor_id.as_ref() {
                 Some(prec_id) => {
-                    let ent = self
-                        .product_scan_mapping
-                        .entry(prec_id.clone());
+                    let ent = self.product_scan_mapping.entry(prec_id.clone());
                     self.generation_tracker
                         .add(prec_id.clone(), self.generation);
                     ent.or_default().push(scan);
-                },
+                }
                 None => {
-                    let buffer = self.product_scan_mapping.entry(MISSING_SCAN_ID.to_owned()).or_default();
+                    let buffer = self
+                        .product_scan_mapping
+                        .entry(MISSING_SCAN_ID.to_owned())
+                        .or_default();
                     buffer.push(scan);
                     if buffer.len() % 1000 == 0 && buffer.len() > 0 {
                         log::warn!("Unassociated MSn scan buffer size is {}", buffer.len());
@@ -873,6 +943,220 @@ impl<
     }
 }
 
+pub struct SpectrumAveragingIterator<
+    'lifespan,
+    C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+    R: RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>>,
+> {
+    source: SpectrumGroupingIterator<
+        'lifespan,
+        R,
+        C,
+        D,
+        MultiLayerSpectrum<C, D>,
+        SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>,
+    >,
+    averaging_width_index: usize,
+    buffer: VecDeque<SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>>,
+    output_buffer: VecDeque<SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>>,
+    averager: SignalAverager<'lifespan>,
+}
+
+impl<
+        'lifespan,
+        C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+        R: RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>>,
+    > SpectrumAveragingIterator<'lifespan, C, D, R>
+{
+    pub fn new(
+        source: SpectrumGroupingIterator<
+            'lifespan,
+            R,
+            C,
+            D,
+            MultiLayerSpectrum<C, D>,
+            SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>,
+        >,
+        averaging_width_index: usize,
+        mz_start: f64,
+        mz_end: f64,
+        dx: f64,
+    ) -> Self {
+        let mut inst = Self {
+            source,
+            averaging_width_index,
+            buffer: VecDeque::with_capacity(averaging_width_index * 2 + 1),
+            output_buffer: VecDeque::with_capacity(averaging_width_index * 2 + 1),
+            averager: SignalAverager::new(mz_start, mz_end, dx),
+        };
+        inst.initial_feed();
+        inst
+    }
+
+    const fn half_capacity(&self) -> usize {
+        self.averaging_width_index + 1
+    }
+
+    const fn capacity(&self) -> usize {
+        self.averaging_width_index * 2 + 1
+    }
+
+    fn copy_out_arrays(
+        &self,
+        group: &SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>,
+    ) -> Option<ArrayPair<'static>> {
+        group.precursor().and_then(|scan| {
+            if scan.signal_continuity() == SignalContinuity::Profile {
+                if let Some(array_map) = scan.raw_arrays() {
+                    let mz = array_map.mzs().unwrap().to_vec();
+                    let inten = array_map.intensities().unwrap().to_vec();
+                    Some(ArrayPair::from((mz, inten)))
+                } else {
+                    warn!("{} did not have raw data arrays", scan.id());
+                    None
+                }
+            } else {
+                warn!("{} was not in profile mode", scan.id());
+                None
+            }
+        })
+    }
+
+    fn initial_feed(&mut self) {
+        for _ in 0..self.capacity() {
+            let group_opt = self.source.next();
+            self.buffer.extend(group_opt.into_iter());
+        }
+        let mut arrays = VecDeque::with_capacity(self.capacity());
+        self.buffer.iter().for_each(|group| {
+            if let Some(pair) = self.copy_out_arrays(group) {
+                arrays.push_back(pair)
+            }
+        });
+
+        for _ in 0..self.half_capacity() {
+            if let Some(pair) = arrays.pop_front() {
+                self.averager.push(pair);
+            }
+        }
+        let next_group = self._next_group_no_pop();
+        self.output_buffer.extend(next_group.into_iter());
+        for _ in 0..self.averaging_width_index {
+            if let Some(pair) = arrays.pop_front() {
+                self.averager.push(pair);
+                let next_group = self._next_group_no_pop();
+                self.output_buffer.extend(next_group.into_iter());
+            }
+        }
+    }
+
+    fn _next_group_no_pop(&mut self) -> Option<SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>> {
+        let array_map = self.average_spectra();
+        if let Some(mut group) = self.buffer.pop_front() {
+            group.precursor.as_mut().and_then(|precursor| {
+                precursor.arrays = Some(array_map);
+                Some(())
+            });
+            Some(group)
+        } else {
+            None
+        }
+    }
+
+    fn update_group(&mut self) -> Option<SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>> {
+        let result = self._next_group_no_pop();
+        if let Some(group) = self.source.next_group() {
+            self.averager.pop();
+            if let Some(pair) = self.copy_out_arrays(&group) {
+                self.averager.push(pair);
+            }
+            self.buffer.push_back(group);
+        }
+        result
+    }
+
+    fn average_spectra(&self) -> BinaryArrayMap {
+        let first_intensity = self.averager.interpolate();
+        let first_mz = self.averager.mz_grid.as_slice();
+
+        let mz_array = DataArray::wrap(
+            &ArrayType::MZArray,
+            BinaryDataArrayType::Float64,
+            to_bytes(first_mz),
+        );
+        let intensity_array = DataArray::wrap(
+            &ArrayType::IntensityArray,
+            BinaryDataArrayType::Float32,
+            to_bytes(&first_intensity),
+        );
+
+        let mut array_map = BinaryArrayMap::new();
+        array_map.add(mz_array);
+        array_map.add(intensity_array);
+        array_map
+    }
+
+    fn next_group(&mut self) -> Option<SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>> {
+        if let Some(group) = self.output_buffer.pop_front() {
+            Some(group)
+        } else {
+            self.update_group()
+        }
+    }
+}
+
+impl<
+        'lifespan,
+        C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+        R: RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>>,
+    > Iterator for SpectrumAveragingIterator<'lifespan, C, D, R>
+{
+    type Item = SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_group()
+    }
+}
+
+impl<
+        'lifespan,
+        C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+        R: RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>>,
+    >
+    SpectrumGroupingIterator<
+        'lifespan,
+        R,
+        C,
+        D,
+        MultiLayerSpectrum<C, D>,
+        SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>,
+    >
+{
+    /// Average MS1 spectra across `[SpectrumGroup]` from this iterator
+    ///
+    /// # Arguments
+    ///
+    /// * `averaging_width_index` - The number of groups before and after the current group to average MS1 scans across
+    /// * `mz_start` - The minimum m/z to average from
+    /// * `mz_end` - The maximum m/z to average up to
+    /// * `dx` - The m/z spacing in the averaged spectra
+    ///
+    ///
+    pub fn averaging(
+        self,
+        averaging_width_index: usize,
+        mz_start: f64,
+        mz_end: f64,
+        dx: f64,
+    ) -> SpectrumAveragingIterator<'lifespan, C, D, R> {
+        SpectrumAveragingIterator::new(self, averaging_width_index, mz_start, mz_end, dx)
+    }
+}
+
 /// Common interface for spectrum writing
 pub trait ScanWriter<
     'a,
@@ -887,7 +1171,10 @@ pub trait ScanWriter<
     fn flush(&mut self) -> io::Result<()>;
 
     /// Consume an [`Iterator`] over [`Spectrum`](crate::spectrum::MultiLayerSpectrum) references
-    fn write_all<S: SpectrumLike<C, D> + 'static, T: Iterator<Item = &'a S>>(&mut self, iterator: T) -> io::Result<usize> {
+    fn write_all<S: SpectrumLike<C, D> + 'static, T: Iterator<Item = &'a S>>(
+        &mut self,
+        iterator: T,
+    ) -> io::Result<usize> {
         let mut n = 0;
         for spectrum in iterator {
             n += self.write(spectrum)?;
@@ -911,7 +1198,11 @@ pub trait ScanWriter<
     }
 
     /// Consume an [`Iterator`] over [`SpectrumGroup`] references
-    fn write_all_groups<S: SpectrumLike<C, D> + 'static, G: SpectrumGrouping<C, D, S> + 'static, T: Iterator<Item = &'a G>>(
+    fn write_all_groups<
+        S: SpectrumLike<C, D> + 'static,
+        G: SpectrumGrouping<C, D, S> + 'static,
+        T: Iterator<Item = &'a G>,
+    >(
         &mut self,
         iterator: T,
     ) -> io::Result<usize> {

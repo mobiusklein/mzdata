@@ -10,9 +10,9 @@ a formal schema defined at <https://www.psidev.info/mzML>.
 
 This crate supports both reading and writing (indexed) mzML documents with spectra
 of varying degrees of complexity (raw profiles, centroids, processed centroids), though
-extensive customization of the coercion process relies on the [`BuildFromArrayMap`](crate::spectrum::signal::BuildFromArrayMap) and
-[`BuildArrayMapFrom`](crate::spectrum::signal::BuildArrayMapFrom) traits
-for reading and writing conversion to [`BinaryArrayMap`](crate::spectrum::signal::BinaryArrayMap).
+extensive customization of the coercion process relies on the [`BuildFromArrayMap`](crate::spectrum::bindata::BuildFromArrayMap) and
+[`BuildArrayMapFrom`](crate::spectrum::bindata::BuildArrayMapFrom) traits
+for reading and writing conversion to [`BinaryArrayMap`](crate::spectrum::bindata::BinaryArrayMap).
 
 */
 
