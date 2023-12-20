@@ -44,4 +44,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features intel-mkl,parallelism,mzmlb,async -- --nocapture --show-output --test-threads 1
+          args: --no-default-features --features intel-mkl,parallelism,mzmlb,async,mzsignal -- --nocapture --show-output --test-threads 1
