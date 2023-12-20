@@ -53,8 +53,10 @@ for spectrum in reader {
 
 pub(crate) mod scan_properties;
 pub mod bindata;
+pub(crate) mod group;
 pub(crate) mod spectrum;
 pub(crate) mod chromatogram;
+pub mod utils;
 
 pub use crate::spectrum::scan_properties::*;
 pub use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray};
@@ -64,3 +66,8 @@ pub use crate::spectrum::spectrum::{
     CentroidSpectrum, RawSpectrum, Spectrum, DeconvolutedSpectrum,
     MultiLayerSpectrum, CentroidSpectrumType, DeconvolutedSpectrumType};
 pub use crate::spectrum::chromatogram::{Chromatogram, ChromatogramLike};
+
+pub use group::{SpectrumGroup, SpectrumGroupIter, SpectrumGroupingIterator};
+
+#[cfg(feature = "mzsignal")]
+pub use group::{average_spectra, SpectrumAveragingIterator};

@@ -1580,7 +1580,6 @@ pub(crate) fn is_mzml(buf: &[u8]) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::io::traits::SpectrumAveragingIterator;
     use crate::io::traits::SpectrumGrouping;
     use crate::spectrum::spectrum::SpectrumLike;
     use std::fs;
@@ -1885,8 +1884,11 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "mzsignal")]
     #[test]
     fn test_averaging() -> io::Result<()> {
+        use crate::spectrum::group::SpectrumAveragingIterator;
+
         let path = path::Path::new("./test/data/small.mzML");
         let mut reader = MzMLReader::open_path(path)?;
         let groups: Vec<_> = reader.groups().collect();

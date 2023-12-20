@@ -1,7 +1,8 @@
 pub use crate::io::traits::{
     MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, ScanSource, ScanWriter, SeekRead,
-    SpectrumGroup, SpectrumGrouping, SpectrumGroupingIterator, SpectrumIterator,
+    SpectrumGrouping, SpectrumIterator,
 };
+
 pub use crate::meta::MSDataFileMetadata;
 pub use crate::params::{ParamDescribed, ParamLike};
 pub use crate::spectrum::{IonProperties, PrecursorSelection, SpectrumLike};

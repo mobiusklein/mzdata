@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::io::{BufWriter, Seek, Write};
+use std::io::{BufWriter, Write};
 use std::marker::PhantomData;
 use std::{io, mem};
 
@@ -80,17 +80,17 @@ const BPMZ_TERM: (&'static str, u32, Unit) = ("base peak m/z", 1000504, Unit::MZ
 const LOWEST_MZ_TERM: (&'static str, u32, Unit) = ("lowest observed m/z", 1000528, Unit::MZ);
 const HIGHEST_MZ_TERM: (&'static str, u32, Unit) = ("highest observed m/z", 1000527, Unit::MZ);
 
-
 macro_rules! param_pack {
-    ($term:ident, $value:expr) => {
-        {
-            let mut par = ControlledVocabulary::MS.param_val(format!("{}:{}", ControlledVocabulary::MS.prefix(), $term.1), $term.0, $value);
-            par.unit = $term.2;
-            par
-        }
-    };
+    ($term:ident, $value:expr) => {{
+        let mut par = ControlledVocabulary::MS.param_val(
+            format!("{}:{}", ControlledVocabulary::MS.prefix(), $term.1),
+            $term.0,
+            $value,
+        );
+        par.unit = $term.2;
+        par
+    }};
 }
-
 
 #[derive(Debug, Error)]
 pub enum MzMLWriterError {
@@ -124,10 +124,74 @@ pub enum MzMLWriterError {
     InvalidActionError(MzMLWriterState),
 }
 
+impl From<MzMLWriterError> for io::Error {
+    fn from(value: MzMLWriterError) -> Self {
+        match value {
+            MzMLWriterError::XMLError(e) => match e {
+                XMLError::Io(o) => io::Error::new(o.kind(), o),
+                _ => io::Error::new(io::ErrorKind::InvalidData, e)
+            },
+            MzMLWriterError::StateTransitionError { from_state: _, to_state: _ } => {
+                io::Error::new(io::ErrorKind::InvalidData, value)
+            },
+            MzMLWriterError::IOError(o) => o,
+            MzMLWriterError::ArrayRetrievalError(e) => {
+                io::Error::new(io::ErrorKind::InvalidData, e)
+            },
+            MzMLWriterError::InvalidActionError(_) => {
+                io::Error::new(io::ErrorKind::InvalidData, value)
+            },
+        }
+    }
+}
+
 pub type WriterResult = Result<(), MzMLWriterError>;
 
+struct ByteCountingStream<W: io::Write> {
+    stream: BufWriter<MD5HashingStream<W>>,
+    bytes_written: u64,
+}
+
+impl<W: io::Write> ByteCountingStream<W> {
+    pub fn new(stream: BufWriter<MD5HashingStream<W>>) -> Self {
+        Self {
+            stream,
+            bytes_written: 0,
+        }
+    }
+
+    pub fn bytes_written(&self) -> u64 {
+        self.bytes_written
+    }
+
+    pub fn checksum(&self) -> md5::Digest {
+        self.stream.get_ref().compute()
+    }
+
+    pub fn get_mut(&mut self) -> &mut W {
+        self.stream.get_mut().get_mut()
+    }
+
+    pub fn into_inner(self) -> Result<MD5HashingStream<W>, io::IntoInnerError<BufWriter<MD5HashingStream<W>>>> {
+        self.stream.into_inner()
+    }
+}
+
+impl<W: Write> Write for ByteCountingStream<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let wrote = self.stream.write(buf)?;
+        self.bytes_written += wrote as u64;
+        Ok(wrote)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.stream.flush()
+    }
+}
+
+
 struct InnerXMLWriter<W: io::Write> {
-    pub handle: Writer<BufWriter<MD5HashingStream<W>>>,
+    pub handle: Writer<ByteCountingStream<W>>,
 }
 
 impl<W: Write> Debug for InnerXMLWriter<W> {
@@ -142,14 +206,14 @@ impl<W: io::Write> InnerXMLWriter<W> {
     const INDENT_SIZE: u64 = 2;
 
     pub fn new(file: W) -> InnerXMLWriter<W> {
-        let handle = BufWriter::with_capacity(BUFFER_SIZE, MD5HashingStream::new(file));
+        let handle = ByteCountingStream::new(BufWriter::with_capacity(BUFFER_SIZE, MD5HashingStream::new(file)));
         Self {
             handle: Writer::new_with_indent(handle, b' ', 2),
         }
     }
 
     pub fn digest(&mut self) -> String {
-        let digest = self.handle.get_mut().get_ref().compute();
+        let digest = self.handle.get_ref().checksum();
         format!("{:x}", digest)
     }
 
@@ -261,11 +325,12 @@ impl ChromatogramCollector {
                         .const_param_ident("total ion current chromatogram", 1000235)
                         .into(),
                 );
-                let time_array = DataArray::wrap(
+                let mut time_array = DataArray::wrap(
                     &ArrayType::TimeArray,
                     BinaryDataArrayType::Float64,
                     to_bytes(&self.time),
                 );
+                time_array.unit = Unit::Minute;
 
                 let intensity_array = DataArray::wrap(
                     &ArrayType::IntensityArray,
@@ -282,11 +347,12 @@ impl ChromatogramCollector {
                         .const_param_ident("basepeak chromatogram", 1000628)
                         .into(),
                 );
-                let time_array = DataArray::wrap(
+                let mut time_array = DataArray::wrap(
                     &ArrayType::TimeArray,
                     BinaryDataArrayType::Float64,
                     to_bytes(&self.time),
                 );
+                time_array.unit = Unit::Minute;
 
                 let intensity_array = DataArray::wrap(
                     &ArrayType::IntensityArray,
@@ -316,7 +382,7 @@ is accumulated.
 */
 #[derive(Debug)]
 pub struct MzMLWriterType<
-    W: Write + Seek,
+    W: Write,
     C: CentroidLike + Default + 'static = CentroidPeak,
     D: DeconvolutedCentroidLike + Default + 'static = DeconvolutedPeak,
 > {
@@ -365,7 +431,7 @@ pub struct MzMLWriterType<
     ms_cv: ControlledVocabulary,
 }
 
-impl<'a, W: Write + Seek, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<'a, W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     ScanWriter<'a, C, D> for MzMLWriterType<W, C, D>
 where
     C: BuildArrayMapFrom,
@@ -389,13 +455,13 @@ where
     }
 }
 
-impl<W: Write + Seek, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     MSDataFileMetadata for MzMLWriterType<W, C, D>
 {
     crate::impl_metadata_trait!();
 }
 
-impl<W: Write + Seek, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     MzMLWriterType<W, C, D>
 where
     C: BuildArrayMapFrom,
@@ -463,7 +529,7 @@ where
     }
 
     pub fn stream_position(&mut self) -> io::Result<u64> {
-        self.handle.handle.get_mut().stream_position()
+        Ok(self.handle.handle.get_mut().bytes_written())
     }
 
     fn make_psi_ms_cv(&self) -> BytesStart<'static> {
@@ -1007,7 +1073,11 @@ where
         Ok(())
     }
 
-    pub fn write_binary_data_array(&mut self, array: &DataArray, default_array_len: usize) -> WriterResult {
+    pub fn write_binary_data_array(
+        &mut self,
+        array: &DataArray,
+        default_array_len: usize,
+    ) -> WriterResult {
         let mut outer = bstart!("binaryDataArray");
 
         let encoded = array.encode_bytestring(self.data_array_compression);
@@ -1086,7 +1156,11 @@ where
         Ok(())
     }
 
-    pub fn write_binary_data_arrays(&mut self, arrays: &BinaryArrayMap, default_array_len: usize) -> WriterResult {
+    pub fn write_binary_data_arrays(
+        &mut self,
+        arrays: &BinaryArrayMap,
+        default_array_len: usize,
+    ) -> WriterResult {
         let count = arrays.len().to_string();
         let mut outer = bstart!("binaryDataArrayList");
         attrib!("count", count, outer);
@@ -1123,10 +1197,7 @@ where
         Ok(default_array_len_u)
     }
 
-    fn write_ms_level<S: SpectrumLike<C, D> + 'static>(
-        &mut self,
-        spectrum: &S,
-    ) -> WriterResult {
+    fn write_ms_level<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
         let ms_level = spectrum.ms_level();
         if ms_level == 1 {
             self.handle.write_param(&MS1_SPECTRUM)?;
@@ -1141,10 +1212,7 @@ where
         Ok(())
     }
 
-    fn write_polarity<S: SpectrumLike<C, D> + 'static>(
-        &mut self,
-        spectrum: &S,
-    ) -> WriterResult {
+    fn write_polarity<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
         match spectrum.polarity() {
             ScanPolarity::Negative => self.handle.write_param(&NEGATIVE_SCAN),
             ScanPolarity::Positive => self.handle.write_param(&POSITIVE_SCAN),
@@ -1158,10 +1226,7 @@ where
         }
     }
 
-    fn write_continuity<S: SpectrumLike<C, D> + 'static>(
-        &mut self,
-        spectrum: &S,
-    ) -> WriterResult {
+    fn write_continuity<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
         match spectrum.signal_continuity() {
             SignalContinuity::Profile => self.handle.write_param(&PROFILE_SPECTRUM),
             SignalContinuity::Unknown => {
@@ -1175,7 +1240,10 @@ where
         }
     }
 
-    fn write_signal_properties<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
+    fn write_signal_properties<S: SpectrumLike<C, D> + 'static>(
+        &mut self,
+        spectrum: &S,
+    ) -> WriterResult {
         let peaks = spectrum.peaks();
         let bp = peaks.base_peak();
         let tic = peaks.tic();
@@ -1395,11 +1463,11 @@ where
     pub fn get_mut(&mut self) -> io::Result<&mut W> {
         let inner = self.handle.handle.get_mut();
         let inner = inner.get_mut();
-        Ok(inner.get_mut())
+        Ok(inner)
     }
 
     pub fn into_inner(self) -> io::Result<W> {
-        let mut inner: BufWriter<MD5HashingStream<W>> = self.handle.handle.into_inner();
+        let mut inner = self.handle.handle.into_inner();
         inner.flush()?;
         let stream = inner.into_inner()?;
         Ok(stream.into_inner())
@@ -1426,7 +1494,7 @@ where
 }
 
 /// A specialization of [`MzMLWriterType`] for the default peak types, for common use.
-pub type MzMLWriter<W> = MzMLWriterType<CentroidPeak, DeconvolutedPeak, W>;
+pub type MzMLWriter<W> = MzMLWriterType<W, CentroidPeak, DeconvolutedPeak>;
 
 #[cfg(test)]
 mod test {
@@ -1442,8 +1510,7 @@ mod test {
         let tmpdir = tempfile::tempdir()?;
         let dest_path = tmpdir.path().join("duplicate.mzML");
         let path = path::Path::new("./test/data/small.mzML");
-        let mut reader =
-            MzMLReader::<_>::open_path(path).expect("Test file doesn't exist?");
+        let mut reader = MzMLReader::<_>::open_path(path).expect("Test file doesn't exist?");
 
         let n = reader.len();
         assert_eq!(n, 48);
