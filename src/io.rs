@@ -9,7 +9,7 @@ mod infer_format;
 
 pub(crate) mod compression;
 
-pub use crate::io::utils::DetailLevel;
+pub use crate::io::utils::{DetailLevel, PreBufferedStream};
 pub use crate::io::mgf::{MGFReader, MGFError, MGFWriter};
 pub use crate::io::mzml::{MzMLReader, MzMLParserError, MzMLWriter};
 #[cfg(feature = "async")]

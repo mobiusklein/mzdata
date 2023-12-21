@@ -103,6 +103,3 @@ harness = false
 [package.metadata.docs.rs]
 features = ["openblas", "parallelism"]
 no-default-features = true
-
-[patch.crates-io]
-mzsignal = { path = "../mzsignal/" }
