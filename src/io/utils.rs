@@ -172,7 +172,7 @@ impl<R: io::Read> io::Seek for PreBufferedStream<R> {
                 }
                 self.position = offset as usize;
                 let r = self.buffer.seek(pos);
-                eprintln!("Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
+                eprintln!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
                 r
             }
             io::SeekFrom::End(_) => {
@@ -197,7 +197,7 @@ impl<R: io::Read> io::Seek for PreBufferedStream<R> {
                     } else {
                         self.position = self.position.saturating_sub(offset.abs() as usize);
                         let r = self.buffer.seek(io::SeekFrom::Start(self.position as u64));
-                        eprintln!("Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
+                        eprintln!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
                         r
                     }
                 } else {
@@ -208,12 +208,16 @@ impl<R: io::Read> io::Seek for PreBufferedStream<R> {
                         ));
                     } else {
                         let r = self.buffer.seek(io::SeekFrom::Current(offset));
-                        eprintln!("Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
+                        eprintln!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
                         r
                     }
                 }
             }
         }
+    }
+
+    fn stream_position(&mut self) -> io::Result<u64> {
+        Ok(self.position as u64)
     }
 }
 
@@ -221,15 +225,15 @@ impl<R: io::Read> io::Read for PreBufferedStream<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let n_total = buf.len();
         let before = self.position;
-        let n_remaining = if self.position < self.buffer_size {
+        let (n_remaining, n_from_buffer) = if self.position < self.buffer_size {
             let n_from_buffer = self.buffer.read(buf)?;
             self.position += n_from_buffer;
-            n_total.saturating_sub(n_from_buffer)
+            (n_total.saturating_sub(n_from_buffer), n_from_buffer)
         } else {
-            n_total
+            (n_total, 0)
         };
         if n_remaining > 0 {
-            let n_rest = self.stream.read(buf)?;
+            let n_rest = self.stream.read(&mut buf[n_from_buffer..])?;
             self.position += n_rest;
         }
         let total_read = self.position - before;

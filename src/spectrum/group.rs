@@ -571,6 +571,7 @@ mod mzsignal_impl {
     use super::*;
 
     use log::warn;
+    use mzpeaks::{PeakCollection, MZLocated};
     use mzsignal::average::{average_signal, SignalAverager};
     use mzsignal::reprofile::reprofile;
     use mzsignal::{ArrayPair, FittedPeak};
@@ -691,12 +692,20 @@ mod mzsignal_impl {
             averager.array_pairs.clear();
 
             for arrays in self.ms1_context.iter() {
-                let mp = arrays.mz_array.as_ptr();
-                let ip = arrays.intensity_array.as_ptr();
-                let unsafe_mzs = unsafe { std::slice::from_raw_parts(mp, arrays.mz_array.len()) };
-                let unsafe_intens = unsafe { std::slice::from_raw_parts(ip, arrays.intensity_array.len()) };
-                let pair = ArrayPair::from((unsafe_mzs, unsafe_intens));
-                averager.push(pair);
+                if arrays.is_profile {
+                    let mp = arrays.mz_array.as_ptr();
+                    let ip = arrays.intensity_array.as_ptr();
+                    let unsafe_mzs = unsafe { std::slice::from_raw_parts(mp, arrays.mz_array.len()) };
+                    let unsafe_intens = unsafe { std::slice::from_raw_parts(ip, arrays.intensity_array.len()) };
+                    let pair = ArrayPair::from((unsafe_mzs, unsafe_intens));
+                    averager.push(pair);
+                } else {
+                    let peaks: Vec<_> = arrays.mz_array.iter().zip(arrays.intensity_array.iter()).map(|(mz, intensity)| {
+                        FittedPeak { mz: *mz, intensity: *intensity, full_width_at_half_max: 0.01, ..Default::default()}
+                    }).collect();
+                    let pair = reprofile(peaks.iter(), averager.dx).to_owned();
+                    averager.push(pair);
+                }
             }
 
             let avg_intens = averager.interpolate();
@@ -805,8 +814,27 @@ mod mzsignal_impl {
                         None
                     }
                 } else {
-                    warn!("{} was not profile mode", scan.id());
-                    None
+                    if let Some(peaks) = &scan.peaks {
+                        let mut mz = Vec::with_capacity(peaks.len());
+                        let mut inten = Vec::with_capacity(peaks.len());
+                        for p in peaks {
+                            mz.push(p.mz());
+                            inten.push(p.intensity());
+                        }
+                        let mz_a = Arc::new(mz);
+                        let inten_a = Arc::new(inten);
+                        Some(ArcArrays::new(mz_a, inten_a, false))
+                    } else if let Some(array_map) = scan.raw_arrays() {
+                        let mz = array_map.mzs().unwrap().to_vec();
+                        let inten = array_map.intensities().unwrap().to_vec();
+                        let mz_a = Arc::new(mz);
+                        let inten_a = Arc::new(inten);
+                        Some(ArcArrays::new(mz_a, inten_a, false))
+
+                    } else {
+                        warn!("{} did not have raw data arrays", scan.id());
+                        None
+                    }
                 }
             })
         }

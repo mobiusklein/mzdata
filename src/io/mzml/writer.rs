@@ -310,6 +310,7 @@ impl ChromatogramCollector {
     }
 
     pub fn add(&mut self, time: f64, intensity: f32) {
+        log::debug!("Storing {time:0.3} {intensity:0.2} ({:?})", self.name);
         self.time.extend(time.to_le_bytes());
         self.intensity.extend(intensity.to_le_bytes());
     }
