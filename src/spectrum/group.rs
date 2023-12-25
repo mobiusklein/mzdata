@@ -571,9 +571,9 @@ mod mzsignal_impl {
     use super::*;
 
     use log::warn;
-    use mzpeaks::{PeakCollection, MZLocated};
+    use mzpeaks::{MZLocated, PeakCollection};
     use mzsignal::average::{average_signal, SignalAverager};
-    use mzsignal::reprofile::reprofile;
+    use mzsignal::reprofile::{reprofile, PeakSetReprofiler, PeakShape, PeakShapeModel};
     use mzsignal::{ArrayPair, FittedPeak};
 
     impl From<ArrayPair<'_>> for BinaryArrayMap {
@@ -659,6 +659,31 @@ mod mzsignal_impl {
                 is_profile,
             }
         }
+
+        pub fn reprofile_on(&self, reprofiler: &PeakSetReprofiler, fwhm: f32) -> ArrayPair<'static> {
+            let models: Vec<_> = self
+                .mz_array
+                .iter()
+                .zip(self.intensity_array.iter())
+                .map(|(mz, inten)| {
+                    PeakShapeModel::from_centroid(*mz, *inten, fwhm, PeakShape::Gaussian)
+                })
+                .collect();
+            let profiles = reprofiler.reprofile_from_models(&models).to_owned();
+            profiles
+        }
+
+        pub fn reprofile_with(mut self, reprofiler: &PeakSetReprofiler, fwhm: f32) -> Self {
+            if self.is_profile {
+                self
+            } else {
+                let profiles = self.reprofile_on(reprofiler, fwhm);
+                self.mz_array = Arc::new(profiles.mz_array.into());
+                self.intensity_array = Arc::new(profiles.intensity_array.into());
+                self.is_profile = true;
+                self
+            }
+        }
     }
 
     #[derive(Debug)]
@@ -682,6 +707,49 @@ mod mzsignal_impl {
             Self { group, ms1_context }
         }
 
+        pub fn reprofile_with(mut self, reprofiler: &PeakSetReprofiler, fwhm: f32) -> Self {
+            if self.ms1_context.iter().all(|ctx| ctx.is_profile) {
+                return self;
+            }
+            let ms1_context: Vec<_> = self
+                .ms1_context
+                .into_iter()
+                .map(|ctx| {
+                    ctx.reprofile_with(reprofiler, fwhm)
+                })
+                .collect();
+            self.ms1_context = ms1_context;
+            self
+        }
+
+        pub fn reprofile_with_average_with(self, averager: &mut SignalAverager, reprofiler: &PeakSetReprofiler) -> (SpectrumGroup<C, D>, ArrayPair<'static>) {
+            averager.array_pairs.clear();
+
+            for arrays in self.ms1_context.iter() {
+                if arrays.is_profile {
+                    let mp = arrays.mz_array.as_ptr();
+                    let ip = arrays.intensity_array.as_ptr();
+                    let unsafe_mzs =
+                        unsafe { std::slice::from_raw_parts(mp, arrays.mz_array.len()) };
+                    let unsafe_intens =
+                        unsafe { std::slice::from_raw_parts(ip, arrays.intensity_array.len()) };
+                    let pair = ArrayPair::from((unsafe_mzs, unsafe_intens));
+                    averager.push(pair);
+                } else {
+                    let pair = arrays.reprofile_on(reprofiler, 0.01);
+                    averager.push(pair);
+                }
+            }
+
+            let avg_intens = averager.interpolate();
+            let mz_grid = averager.mz_grid.clone();
+
+            let pair_avgd = ArrayPair::from((mz_grid, avg_intens));
+
+            averager.array_pairs.clear();
+            (self.group, pair_avgd)
+        }
+
         pub fn average_with(
             self,
             averager: &mut SignalAverager,
@@ -695,14 +763,24 @@ mod mzsignal_impl {
                 if arrays.is_profile {
                     let mp = arrays.mz_array.as_ptr();
                     let ip = arrays.intensity_array.as_ptr();
-                    let unsafe_mzs = unsafe { std::slice::from_raw_parts(mp, arrays.mz_array.len()) };
-                    let unsafe_intens = unsafe { std::slice::from_raw_parts(ip, arrays.intensity_array.len()) };
+                    let unsafe_mzs =
+                        unsafe { std::slice::from_raw_parts(mp, arrays.mz_array.len()) };
+                    let unsafe_intens =
+                        unsafe { std::slice::from_raw_parts(ip, arrays.intensity_array.len()) };
                     let pair = ArrayPair::from((unsafe_mzs, unsafe_intens));
                     averager.push(pair);
                 } else {
-                    let peaks: Vec<_> = arrays.mz_array.iter().zip(arrays.intensity_array.iter()).map(|(mz, intensity)| {
-                        FittedPeak { mz: *mz, intensity: *intensity, full_width_at_half_max: 0.01, ..Default::default()}
-                    }).collect();
+                    let peaks: Vec<_> = arrays
+                        .mz_array
+                        .iter()
+                        .zip(arrays.intensity_array.iter())
+                        .map(|(mz, intensity)| FittedPeak {
+                            mz: *mz,
+                            intensity: *intensity,
+                            full_width_at_half_max: 0.01,
+                            ..Default::default()
+                        })
+                        .collect();
                     let pair = reprofile(peaks.iter(), averager.dx).to_owned();
                     averager.push(pair);
                 }
@@ -830,7 +908,6 @@ mod mzsignal_impl {
                         let mz_a = Arc::new(mz);
                         let inten_a = Arc::new(inten);
                         Some(ArcArrays::new(mz_a, inten_a, false))
-
                     } else {
                         warn!("{} did not have raw data arrays", scan.id());
                         None
@@ -1191,10 +1268,12 @@ mod mzsignal_impl {
         ) -> (
             MS1BufferingIterator<'lifespan, C, D, R>,
             SignalAverager<'lifespan>,
+            PeakSetReprofiler
         ) {
             let iter = MS1BufferingIterator::new(self, averaging_width_index);
             let averager = SignalAverager::new(mz_start, mz_end, dx);
-            (iter, averager)
+            let reprofiler = PeakSetReprofiler::new(mz_start, mz_end, dx);
+            (iter, averager, reprofiler)
         }
     }
 }
