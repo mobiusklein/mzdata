@@ -8,7 +8,6 @@ use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, Deconvoluted
 use crate::{
     io::{
         traits::SpectrumGrouping, RandomAccessSpectrumIterator, ScanAccessError, ScanSource,
-        SpectrumIterator,
     },
     SpectrumLike,
 };
@@ -268,14 +267,13 @@ of yield individual [`Spectrum`](crate::spectrum::spectrum::Spectrum), it yields
 implements the [`Iterator`] trait.
 */
 pub struct SpectrumGroupingIterator<
-    'lifespan,
-    R: ScanSource<C, D, S>,
+    R: Iterator<Item=S>,
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
     G: SpectrumGrouping<C, D, S> = SpectrumGroup<C, D, S>,
 > {
-    pub source: SpectrumIterator<'lifespan, C, D, S, R>,
+    pub source: R,
     pub queue: VecDeque<S>,
     pub product_scan_mapping: HashMap<String, Vec<S>>,
     generation_tracker: GenerationTracker,
@@ -292,19 +290,19 @@ pub struct SpectrumGroupingIterator<
 const MISSING_SCAN_ID: &str = "___MISSING_PRECURSOR_ID___";
 
 impl<
-        'lifespan,
-        R: ScanSource<C, D, S>,
+
+        R: Iterator<Item=S>,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D>,
         G: SpectrumGrouping<C, D, S>,
-    > SpectrumGroupingIterator<'lifespan, R, C, D, S, G>
+    > SpectrumGroupingIterator<R, C, D, S, G>
 {
     /// Construct a new [`SpectrumGroupingIterator`] around a [`SpectrumIterator`] with a default
     /// buffering level of 3.
     pub fn new(
-        source: SpectrumIterator<'lifespan, C, D, S, R>,
-    ) -> SpectrumGroupingIterator<'lifespan, R, C, D, S, G> {
+        source: R,
+    ) -> SpectrumGroupingIterator<R, C, D, S, G> {
         SpectrumGroupingIterator::<R, C, D, S, G> {
             source,
             generation_tracker: GenerationTracker::default(),
@@ -504,13 +502,12 @@ impl<
 }
 
 impl<
-        'lifespan,
         R: ScanSource<C, D, S>,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D>,
         G: SpectrumGrouping<C, D, S> + Default,
-    > Iterator for SpectrumGroupingIterator<'lifespan, R, C, D, S, G>
+    > Iterator for SpectrumGroupingIterator<R, C, D, S, G>
 {
     type Item = G;
 
@@ -520,13 +517,12 @@ impl<
 }
 
 impl<
-        'lifespan,
         R: RandomAccessSpectrumIterator<C, D, S>,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D>,
         G: SpectrumGrouping<C, D, S> + Default,
-    > SpectrumGroupingIterator<'lifespan, R, C, D, S, G>
+    > SpectrumGroupingIterator<R, C, D, S, G>
 {
     pub fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
         match self.source.start_from_id(id) {
@@ -797,13 +793,11 @@ mod mzsignal_impl {
     }
 
     pub struct MS1BufferingIterator<
-        'lifespan,
         C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
         R: ScanSource<C, D, MultiLayerSpectrum<C, D>>,
     > {
         source: SpectrumGroupingIterator<
-            'lifespan,
             R,
             C,
             D,
@@ -817,11 +811,10 @@ mod mzsignal_impl {
     }
 
     impl<
-            'lifespan,
             C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             R: ScanSource<C, D, MultiLayerSpectrum<C, D>>,
-        > Iterator for MS1BufferingIterator<'lifespan, C, D, R>
+        > Iterator for MS1BufferingIterator<C, D, R>
     {
         type Item = SpectrumAveragingContext<C, D>;
 
@@ -831,15 +824,13 @@ mod mzsignal_impl {
     }
 
     impl<
-            'lifespan,
             C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             R: ScanSource<C, D, MultiLayerSpectrum<C, D>>,
-        > MS1BufferingIterator<'lifespan, C, D, R>
+        > MS1BufferingIterator<C, D, R>
     {
         pub fn new(
             source: SpectrumGroupingIterator<
-                'lifespan,
                 R,
                 C,
                 D,
@@ -859,11 +850,11 @@ mod mzsignal_impl {
             inst
         }
 
-        pub fn into_inner(self) -> SpectrumGroupingIterator<'lifespan, R, C, D> {
+        pub fn into_inner(self) -> SpectrumGroupingIterator<R, C, D> {
             self.source
         }
 
-        pub fn get_ref(&self) -> &SpectrumGroupingIterator<'lifespan, R, C, D> {
+        pub fn get_ref(&self) -> &SpectrumGroupingIterator<R, C, D> {
             &self.source
         }
 
@@ -986,7 +977,6 @@ mod mzsignal_impl {
         R: ScanSource<C, D, MultiLayerSpectrum<C, D>>,
     > {
         source: SpectrumGroupingIterator<
-            'lifespan,
             R,
             C,
             D,
@@ -1008,7 +998,6 @@ mod mzsignal_impl {
     {
         pub fn new(
             source: SpectrumGroupingIterator<
-                'lifespan,
                 R,
                 C,
                 D,
@@ -1031,11 +1020,11 @@ mod mzsignal_impl {
             inst
         }
 
-        pub fn into_inner(self) -> SpectrumGroupingIterator<'lifespan, R, C, D> {
+        pub fn into_inner(self) -> SpectrumGroupingIterator<R, C, D> {
             self.source
         }
 
-        pub fn get_ref(&self) -> &SpectrumGroupingIterator<'lifespan, R, C, D> {
+        pub fn get_ref(&self) -> &SpectrumGroupingIterator<R, C, D> {
             &self.source
         }
 
@@ -1231,7 +1220,6 @@ mod mzsignal_impl {
             R: ScanSource<C, D, MultiLayerSpectrum<C, D>>,
         >
         SpectrumGroupingIterator<
-            'lifespan,
             R,
             C,
             D,
@@ -1266,7 +1254,7 @@ mod mzsignal_impl {
             mz_end: f64,
             dx: f64,
         ) -> (
-            MS1BufferingIterator<'lifespan, C, D, R>,
+            MS1BufferingIterator<C, D, R>,
             SignalAverager<'lifespan>,
             PeakSetReprofiler
         ) {

@@ -955,6 +955,9 @@ impl<
                                 MzMLParserState::Run
                                 | MzMLParserState::SpectrumList
                                 | MzMLParserState::Spectrum => break,
+                                MzMLParserState::ParserError => {
+                                    eprintln!("Encountered an error while starting {:?}", String::from_utf8_lossy(&self.buffer));
+                                }
                                 _ => {}
                             }
                         }
@@ -1069,6 +1072,12 @@ impl<
                     match accumulator.start_element(e, self.state) {
                         Ok(state) => {
                             self.state = state;
+                            match state {
+                                MzMLParserState::ParserError => {
+                                    eprintln!("Encountered an error while starting {:?}", String::from_utf8_lossy(&self.buffer));
+                                }
+                                _ => {}
+                            }
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
@@ -1148,10 +1157,14 @@ impl<
         }
         match self.state {
             MzMLParserState::SpectrumDone => Ok((accumulator, offset)),
-            MzMLParserState::ParserError => {
+            MzMLParserState::ParserError if self.error.is_some() => {
                 let mut error = None;
                 mem::swap(&mut error, &mut self.error);
                 Err(error.unwrap())
+            }
+            MzMLParserState::ParserError if self.error.is_none() => {
+                eprintln!("Terminated with ParserError but no error set: {:?}", self.error);
+                Ok((accumulator, offset))
             }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
@@ -1881,6 +1894,24 @@ mod test {
             scan.index()
         }).min().unwrap();
         assert_eq!(min_msn_idx, 142);
+        assert_eq!(groups.len(), 188);
+        Ok(())
+    }
+
+    #[test]
+    fn test_interleaved_into_groups() -> io::Result<()> {
+        let path = path::Path::new("./test/data/batching_test.mzML");
+        let reader = MzMLReader::open_path(path)?;
+        let groups: Vec<_> = reader.into_groups().collect();
+        let grp = &groups[10];
+        let prec = grp.precursor().unwrap();
+        assert_eq!(prec.id(), "controllerType=0 controllerNumber=1 scan=25869");
+        assert_eq!(prec.index(), 129);
+        let min_msn_idx = grp.products().iter().map(|scan| {
+            scan.index()
+        }).min().unwrap();
+        assert_eq!(min_msn_idx, 142);
+        assert_eq!(groups.len(), 188);
         Ok(())
     }
 

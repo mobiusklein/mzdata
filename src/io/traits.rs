@@ -109,11 +109,15 @@ pub trait ScanSource<
         SpectrumIterator::new(self)
     }
 
-    fn groups(&mut self) -> SpectrumGroupingIterator<Self, C, D, S>
+    fn groups(&mut self) -> SpectrumGroupingIterator<SpectrumIterator<'_, C, D, S, Self>, C, D, S>
     where
         Self: Sized,
     {
         SpectrumGroupingIterator::new(self.iter())
+    }
+
+    fn into_groups<'lifespan>(self) -> SpectrumGroupingIterator<Self, C, D, S> where Self: Sized {
+        SpectrumGroupingIterator::new(self)
     }
 }
 

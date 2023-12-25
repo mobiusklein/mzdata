@@ -28,7 +28,8 @@ fn main() -> io::Result<()> {
 
     let start = Instant::now();
     let reader_task = thread::spawn(move || {
-        let (grouper, averager) = reader.groups().averaging_deferred(1, 120.0, 2000.1, 0.005);
+        let (grouper, averager, _reprofiler) =
+            reader.groups().averaging_deferred(1, 120.0, 2000.1, 0.005);
         grouper
             .enumerate()
             .par_bridge()
