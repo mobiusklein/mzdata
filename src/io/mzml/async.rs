@@ -4,25 +4,20 @@ use std::marker::PhantomData;
 use std::mem;
 use std::pin::Pin;
 
+use super::reader::{Bytes, MzMLSpectrumBuilder, SpectrumBuilding};
 use super::reading_shared::{
-    MzMLSAX, MzMLParserError, MzMLParserState,
-    XMLParseBase, IndexParserState, MzMLIndexingError,
-    FileMetadataBuilder, IncrementingIdMap
-};
-use super::reader::{
-    SpectrumBuilding,
-    Bytes, MzMLSpectrumBuilder
+    FileMetadataBuilder, IncrementingIdMap, IndexParserState, MzMLIndexingError, MzMLParserError,
+    MzMLParserState, MzMLSAX, XMLParseBase,
 };
 
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, BufReader};
 use tokio::{self, io};
-use tokio::io::{AsyncSeek, AsyncRead, BufReader, AsyncSeekExt, AsyncReadExt};
 
 use log::{debug, warn};
 
-use quick_xml::events::{Event, BytesStart, BytesEnd, BytesText};
+use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
 use quick_xml::Reader;
-
 
 use crate::SpectrumLike;
 
@@ -41,9 +36,9 @@ use super::super::offset_index::OffsetIndex;
 //     MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, ScanSource,
 // };
 
-pub trait AsyncReadType : AsyncRead + AsyncReadExt {}
+pub trait AsyncReadType: AsyncRead + AsyncReadExt {}
 
-impl<T> AsyncReadType for T where T : AsyncRead + AsyncReadExt {}
+impl<T> AsyncReadType for T where T: AsyncRead + AsyncReadExt {}
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
@@ -80,21 +75,40 @@ pub struct MzMLReaderType<
     pub detail_level: DetailLevel,
 
     pub(crate) instrument_id_map: IncrementingIdMap,
+
+    // Run attributes
+    pub run_id: Option<String>,
+    pub default_instrument_config: Option<u32>,
+    pub default_source_file: Option<String>,
+    pub start_timestamp: Option<String>,
+
+    // SpectrumList attributes
+    pub default_data_processing: Option<String>,
+    num_spectra: Option<u64>,
+
     buffer: Bytes,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
-
 }
 
-impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync, D: DeconvolutedPeakAdapting + Send + Sync> MzMLReaderType<R, C, D> {
-
+impl<
+        'a,
+        R: AsyncReadType + Unpin + Sync,
+        C: CentroidPeakAdapting + Send + Sync,
+        D: DeconvolutedPeakAdapting + Send + Sync,
+    > MzMLReaderType<R, C, D>
+{
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`tokio::io::Read`] handle
     /// provided with an `[io::BufReader`] and parses the metadata section of the file.
     pub async fn new(file: R) -> MzMLReaderType<R, C, D> {
         Self::with_buffer_capacity_and_detail_level(file, BUFFER_SIZE, DetailLevel::Full).await
     }
 
-    pub async fn with_buffer_capacity_and_detail_level(file: R, capacity: usize, detail_level: DetailLevel) -> MzMLReaderType<R, C, D> {
+    pub async fn with_buffer_capacity_and_detail_level(
+        file: R,
+        capacity: usize,
+        detail_level: DetailLevel,
+    ) -> MzMLReaderType<R, C, D> {
         let handle = BufReader::with_capacity(capacity, file);
         let mut inst = MzMLReaderType {
             handle,
@@ -112,7 +126,13 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
 
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
-            instrument_id_map: IncrementingIdMap::default()
+            instrument_id_map: IncrementingIdMap::default(),
+            run_id: None,
+            default_instrument_config: None,
+            default_source_file: None,
+            start_timestamp: None,
+            default_data_processing: None,
+            num_spectra: None,
         };
         match inst.parse_metadata().await {
             Ok(()) => {}
@@ -225,6 +245,13 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
         self.softwares = accumulator.softwares;
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
+
+        self.run_id = accumulator.run_id;
+        self.default_instrument_config = accumulator.default_instrument_config;
+        self.default_source_file = accumulator.default_source_file;
+        self.start_timestamp = accumulator.start_timestamp;
+        self.num_spectra = accumulator.num_spectra;
+        self.default_data_processing = accumulator.default_data_processing;
 
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
@@ -364,27 +391,26 @@ impl<'a, R: AsyncReadType + Unpin + Sync, C: CentroidPeakAdapting + Send  + Sync
     pub async fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
         let mut spectrum = MultiLayerSpectrum::<C, D>::default();
         match self.read_into(&mut spectrum).await {
-            Ok(_sz) => {
-                Some(spectrum)
-            },
+            Ok(_sz) => Some(spectrum),
             Err(err) => {
                 debug!("Failed to read next spectrum: {err}");
                 None
-            },
+            }
         }
     }
 }
 
-impl<R: AsyncReadType + Unpin, C: CentroidPeakAdapting + Send + Sync, D: DeconvolutedPeakAdapting + Send + Sync> MSDataFileMetadata
-    for MzMLReaderType<R, C, D>
+impl<
+        R: AsyncReadType + Unpin,
+        C: CentroidPeakAdapting + Send + Sync,
+        D: DeconvolutedPeakAdapting + Send + Sync,
+    > MSDataFileMetadata for MzMLReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
 }
 
 /// A specialization of [`MzMLReaderType`] for the default peak types, for common use.
 pub type MzMLReader<R> = MzMLReaderType<R, CentroidPeak, DeconvolutedPeak>;
-
-
 
 #[derive(Debug, Default, Clone)]
 pub struct IndexedMzMLIndexExtractor {
@@ -404,7 +430,10 @@ impl IndexedMzMLIndexExtractor {
         }
     }
 
-    pub async fn find_offset_from_reader<R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin>(&self, reader: &mut Pin<&mut R>) -> io::Result<Option<u64>> {
+    pub async fn find_offset_from_reader<R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin>(
+        &self,
+        reader: &mut Pin<&mut R>,
+    ) -> io::Result<Option<u64>> {
         reader.seek(SeekFrom::End(-200)).await?;
         let mut buf = Bytes::new();
         reader.read_to_end(&mut buf).await?;
@@ -433,7 +462,8 @@ impl IndexedMzMLIndexExtractor {
                             if attr.key.as_ref() == b"idRef" {
                                 self.last_id = attr
                                     .unescape_value()
-                                    .expect("Error decoding idRef").to_string();
+                                    .expect("Error decoding idRef")
+                                    .to_string();
                             }
                         }
                         Err(err) => {
@@ -449,7 +479,8 @@ impl IndexedMzMLIndexExtractor {
                             if attr.key.as_ref() == b"name" {
                                 let index_name = attr
                                     .unescape_value()
-                                    .expect("Error decoding idRef").to_string();
+                                    .expect("Error decoding idRef")
+                                    .to_string();
                                 match index_name.as_ref() {
                                     "spectrum" => return Ok(IndexParserState::SpectrumIndexList),
                                     "chromatogram" => {
@@ -525,8 +556,12 @@ impl IndexedMzMLIndexExtractor {
     }
 }
 
-
-impl<R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Sync, C: CentroidPeakAdapting  + Send + Sync, D: DeconvolutedPeakAdapting  + Send + Sync> MzMLReaderType<R, C, D> {
+impl<
+        R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Sync,
+        C: CentroidPeakAdapting + Send + Sync,
+        D: DeconvolutedPeakAdapting + Send + Sync,
+    > MzMLReaderType<R, C, D>
+{
     pub async fn read_index_from_end(&mut self) -> Result<u64, MzMLIndexingError> {
         let mut indexer = IndexedMzMLIndexExtractor::new();
         let current_position = match self.handle.stream_position().await {
@@ -545,7 +580,10 @@ impl<R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Sync, C: CentroidPeak
             Err(err) => return Err(MzMLIndexingError::IOError(err)),
         };
         let mut indexer_state = IndexParserState::Start;
-        self.handle.seek(SeekFrom::Start(offset)).await.expect("Failed to seek to the index offset");
+        self.handle
+            .seek(SeekFrom::Start(offset))
+            .await
+            .expect("Failed to seek to the index offset");
 
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
@@ -590,7 +628,10 @@ impl<R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Sync, C: CentroidPeak
         self.buffer.clear();
         self.index = indexer.spectrum_index;
         self.index.init = true;
-        self.handle.seek(SeekFrom::Start(current_position)).await.unwrap();
+        self.handle
+            .seek(SeekFrom::Start(current_position))
+            .await
+            .unwrap();
         Ok(self.index.len() as u64)
     }
 
@@ -658,34 +699,47 @@ impl<R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Sync, C: CentroidPeak
         let offset = offset_ref.expect("Failed to retrieve offset");
         let start = self
             .handle
-            .stream_position().await
+            .stream_position()
+            .await
             .expect("Failed to save checkpoint");
-        self.handle.seek(SeekFrom::Start(offset)).await
+        self.handle
+            .seek(SeekFrom::Start(offset))
+            .await
             .expect("Failed to move seek to offset");
         let result = self.read_next().await;
-        self.handle.seek(SeekFrom::Start(start)).await
+        self.handle
+            .seek(SeekFrom::Start(start))
+            .await
             .expect("Failed to restore offset");
         result
     }
 
     /// Retrieve a spectrum by it's integer index
-    pub async fn get_spectrum_by_index(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
+    pub async fn get_spectrum_by_index(
+        &mut self,
+        index: usize,
+    ) -> Option<MultiLayerSpectrum<C, D>> {
         let (_id, offset) = self.index.get_index(index)?;
         let byte_offset = offset;
         let start = self
             .handle
-            .stream_position().await
+            .stream_position()
+            .await
             .expect("Failed to save checkpoint");
         self.handle.seek(SeekFrom::Start(byte_offset)).await.ok()?;
         let result = self.read_next().await;
-        self.handle.seek(SeekFrom::Start(start)).await
+        self.handle
+            .seek(SeekFrom::Start(start))
+            .await
             .expect("Failed to restore offset");
         result
     }
 
     /// Return the data stream to the beginning
     pub async fn reset(&mut self) {
-        self.handle.seek(SeekFrom::Start(0)).await
+        self.handle
+            .seek(SeekFrom::Start(0))
+            .await
             .expect("Failed to reset file stream");
     }
 
@@ -701,17 +755,14 @@ impl<R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Sync, C: CentroidPeak
     }
 }
 
-
-
 #[cfg(test)]
 mod test {
     use std::path;
 
-    use crate::{SpectrumLike, ParamDescribed};
+    use crate::{ParamDescribed, SpectrumLike};
 
     use super::*;
     use tokio::{fs, io};
-
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_open() -> io::Result<()> {
@@ -722,7 +773,12 @@ mod test {
         let mut ms1_counter = 0;
         let mut msn_counter = 0;
         while let Some(spec) = reader.read_next().await {
-            let filter_string = spec.acquisition().first_scan().unwrap().get_param_by_accession("MS:1000512").unwrap();
+            let filter_string = spec
+                .acquisition()
+                .first_scan()
+                .unwrap()
+                .get_param_by_accession("MS:1000512")
+                .unwrap();
             let configs = spec.acquisition().instrument_configuration_ids();
             let conf = configs[0];
             println!("Processing scan {}", spec.index());
@@ -737,7 +793,6 @@ mod test {
             } else {
                 ms1_counter += 1;
             }
-
         }
 
         assert_eq!(ms1_counter, 14);

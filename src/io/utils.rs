@@ -172,7 +172,7 @@ impl<R: io::Read> io::Seek for PreBufferedStream<R> {
                 }
                 self.position = offset as usize;
                 let r = self.buffer.seek(pos);
-                eprintln!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
+                log::trace!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
                 r
             }
             io::SeekFrom::End(_) => {
@@ -197,7 +197,7 @@ impl<R: io::Read> io::Seek for PreBufferedStream<R> {
                     } else {
                         self.position = self.position.saturating_sub(offset.abs() as usize);
                         let r = self.buffer.seek(io::SeekFrom::Start(self.position as u64));
-                        eprintln!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
+                        log::trace!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
                         r
                     }
                 } else {
@@ -208,7 +208,7 @@ impl<R: io::Read> io::Seek for PreBufferedStream<R> {
                         ));
                     } else {
                         let r = self.buffer.seek(io::SeekFrom::Current(offset));
-                        eprintln!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
+                        log::trace!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
                         r
                     }
                 }

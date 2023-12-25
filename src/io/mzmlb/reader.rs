@@ -996,6 +996,10 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
     for MzMLbReaderType<C, D>
 {
     crate::impl_metadata_trait!();
+
+    fn spectrum_count_hint(&self) -> Option<u64> {
+        Some(self.index.len() as u64)
+    }
 }
 
 pub type MzMLbReader = MzMLbReaderType<CentroidPeak, DeconvolutedPeak>;

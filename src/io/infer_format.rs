@@ -62,6 +62,7 @@ pub fn infer_from_path<P: Into<path::PathBuf>,>(path: P) -> (MassSpectrometryFor
 /// stream is GZIP compressed. This assumes the stream is seekable.
 pub fn infer_from_stream<R: Read + Seek>(stream: &mut R) -> io::Result<(MassSpectrometryFormat, bool)> {
     let mut buf = Vec::with_capacity(100);
+    buf.resize(100, b'\0');
     let current_pos = stream.stream_position()?;
     stream.read_exact(buf.as_mut_slice())?;
     let is_stream_gzipped = is_gzipped(buf.as_slice());

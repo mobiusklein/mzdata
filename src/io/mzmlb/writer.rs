@@ -125,6 +125,10 @@ where
     fn softwares_mut(&mut self) -> &mut Vec<Software> {
         self.mzml_writer.softwares_mut()
     }
+
+    fn copy_metadata_from<T: MSDataFileMetadata>(&mut self, source: &T) {
+        self.mzml_writer.copy_metadata_from(source)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]

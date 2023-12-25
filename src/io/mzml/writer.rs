@@ -129,18 +129,19 @@ impl From<MzMLWriterError> for io::Error {
         match value {
             MzMLWriterError::XMLError(e) => match e {
                 XMLError::Io(o) => io::Error::new(o.kind(), o),
-                _ => io::Error::new(io::ErrorKind::InvalidData, e)
+                _ => io::Error::new(io::ErrorKind::InvalidData, e),
             },
-            MzMLWriterError::StateTransitionError { from_state: _, to_state: _ } => {
-                io::Error::new(io::ErrorKind::InvalidData, value)
-            },
+            MzMLWriterError::StateTransitionError {
+                from_state: _,
+                to_state: _,
+            } => io::Error::new(io::ErrorKind::InvalidData, value),
             MzMLWriterError::IOError(o) => o,
             MzMLWriterError::ArrayRetrievalError(e) => {
                 io::Error::new(io::ErrorKind::InvalidData, e)
-            },
+            }
             MzMLWriterError::InvalidActionError(_) => {
                 io::Error::new(io::ErrorKind::InvalidData, value)
-            },
+            }
         }
     }
 }
@@ -172,7 +173,9 @@ impl<W: io::Write> ByteCountingStream<W> {
         self.stream.get_mut().get_mut()
     }
 
-    pub fn into_inner(self) -> Result<MD5HashingStream<W>, io::IntoInnerError<BufWriter<MD5HashingStream<W>>>> {
+    pub fn into_inner(
+        self,
+    ) -> Result<MD5HashingStream<W>, io::IntoInnerError<BufWriter<MD5HashingStream<W>>>> {
         self.stream.into_inner()
     }
 }
@@ -188,7 +191,6 @@ impl<W: Write> Write for ByteCountingStream<W> {
         self.stream.flush()
     }
 }
-
 
 struct InnerXMLWriter<W: io::Write> {
     pub handle: Writer<ByteCountingStream<W>>,
@@ -206,7 +208,10 @@ impl<W: io::Write> InnerXMLWriter<W> {
     const INDENT_SIZE: u64 = 2;
 
     pub fn new(file: W) -> InnerXMLWriter<W> {
-        let handle = ByteCountingStream::new(BufWriter::with_capacity(BUFFER_SIZE, MD5HashingStream::new(file)));
+        let handle = ByteCountingStream::new(BufWriter::with_capacity(
+            BUFFER_SIZE,
+            MD5HashingStream::new(file),
+        ));
         Self {
             handle: Writer::new_with_indent(handle, b' ', 2),
         }
@@ -456,10 +461,20 @@ where
     }
 }
 
-impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
-    MSDataFileMetadata for MzMLWriterType<W, C, D>
+impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> MSDataFileMetadata
+    for MzMLWriterType<W, C, D>
 {
     crate::impl_metadata_trait!();
+
+    fn copy_metadata_from<T: MSDataFileMetadata>(&mut self, source: &T) {
+        *self.data_processings_mut() = source.data_processings().clone();
+        *self.instrument_configurations_mut() = source.instrument_configurations().clone();
+        *self.file_description_mut() = source.file_description().clone();
+        *self.softwares_mut() = source.softwares().clone();
+        if let Some(value) = source.spectrum_count_hint() {
+            self.spectrum_count = value;
+        }
+    }
 }
 
 impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>

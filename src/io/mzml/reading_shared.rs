@@ -9,11 +9,14 @@ use quick_xml::Error as XMLError;
 
 use thiserror::Error;
 
-use crate::ParamDescribed;
-use crate::io::OffsetIndex;
 use crate::io::traits::SeekRead;
-use crate::meta::{FileDescription, InstrumentConfiguration, Software, DataProcessing, SourceFile, ComponentType, Component, ProcessingMethod};
-use crate::params::{ParamCow, Param, Unit, ControlledVocabulary, curie_to_num};
+use crate::io::OffsetIndex;
+use crate::meta::{
+    Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration,
+    ProcessingMethod, Software, SourceFile,
+};
+use crate::params::{curie_to_num, ControlledVocabulary, Param, ParamCow, Unit};
+use crate::ParamDescribed;
 
 use super::reader::Bytes;
 
@@ -83,7 +86,6 @@ pub enum MzMLParserState {
     ParserError,
 }
 
-
 impl Display for MzMLParserState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{:?}", self))
@@ -107,7 +109,6 @@ pub enum MzMLParserError {
     IOError(MzMLParserState, #[source] io::Error),
 }
 
-
 impl From<MzMLParserError> for io::Error {
     fn from(value: MzMLParserError) -> Self {
         match value {
@@ -116,7 +117,6 @@ impl From<MzMLParserError> for io::Error {
         }
     }
 }
-
 
 pub type ParserResult = Result<MzMLParserState, MzMLParserError>;
 
@@ -169,9 +169,9 @@ pub trait CVParamParse: XMLParseBase {
                         });
                         controlled_vocabulary = cv_id
                             .parse::<ControlledVocabulary>()
-                            .unwrap_or_else(|_|
+                            .unwrap_or_else(|_| {
                                 panic!("Failed to parse controlled vocabulary ID {}", cv_id)
-                            )
+                            })
                             .as_option();
                     }
                     b"accession" => {
@@ -257,9 +257,9 @@ pub trait CVParamParse: XMLParseBase {
                         });
                         param.controlled_vocabulary = cv_id
                             .parse::<ControlledVocabulary>()
-                            .unwrap_or_else(|_|
+                            .unwrap_or_else(|_| {
                                 panic!("Failed to parse controlled vocabulary ID {}", cv_id)
-                            )
+                            })
                             .as_option();
                     }
                     b"accession" => {
@@ -331,24 +331,28 @@ pub trait MzMLSAX {
     fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult;
 }
 
-
 #[derive(Debug, Error)]
 pub enum MzMLIndexingError {
     #[error("Offset index not found")]
     OffsetNotFound,
     #[error("XML error {0} occurred while reading out mzML index")]
-    XMLError(#[from] #[source] XMLError),
+    XMLError(
+        #[from]
+        #[source]
+        XMLError,
+    ),
     #[error("IO error {0} occurred while reading out mzML index")]
-    IOError(#[from] #[source] io::Error),
+    IOError(
+        #[from]
+        #[source]
+        io::Error,
+    ),
 }
-
 
 impl From<MzMLIndexingError> for io::Error {
     fn from(value: MzMLIndexingError) -> Self {
         match value {
-            MzMLIndexingError::OffsetNotFound => {
-                io::Error::new(io::ErrorKind::InvalidData, value)
-            },
+            MzMLIndexingError::OffsetNotFound => io::Error::new(io::ErrorKind::InvalidData, value),
             MzMLIndexingError::XMLError(e) => match &e {
                 XMLError::Io(e) => io::Error::new(e.kind(), e.clone()),
                 _ => io::Error::new(io::ErrorKind::InvalidData, e),
@@ -357,7 +361,6 @@ impl From<MzMLIndexingError> for io::Error {
         }
     }
 }
-
 
 #[derive(Debug, Default, Clone)]
 pub struct IndexedMzMLIndexExtractor {
@@ -395,7 +398,10 @@ impl IndexedMzMLIndexExtractor {
         }
     }
 
-    pub fn find_offset_from_reader<R: SeekRead>(&mut self, reader: &mut R) -> Result<Option<u64>, MzMLIndexingError> {
+    pub fn find_offset_from_reader<R: SeekRead>(
+        &mut self,
+        reader: &mut R,
+    ) -> Result<Option<u64>, MzMLIndexingError> {
         self.state = IndexParserState::SeekingOffset;
         reader.seek(SeekFrom::End(-200))?;
         let mut buf = Bytes::new();
@@ -447,11 +453,11 @@ impl IndexedMzMLIndexExtractor {
                                 match index_name.as_ref() {
                                     "spectrum" => {
                                         self.state = IndexParserState::SpectrumIndexList;
-                                        return Ok(IndexParserState::SpectrumIndexList)
-                                    },
+                                        return Ok(IndexParserState::SpectrumIndexList);
+                                    }
                                     "chromatogram" => {
                                         self.state = IndexParserState::ChromatogramIndexList;
-                                        return Ok(IndexParserState::ChromatogramIndexList)
+                                        return Ok(IndexParserState::ChromatogramIndexList);
                                     }
                                     _ => {}
                                 }
@@ -523,7 +529,6 @@ impl IndexedMzMLIndexExtractor {
     }
 }
 
-
 /**A SAX-style parser for building up the metadata section prior to the `<run>` element
 of an mzML file.*/
 #[derive(Debug, Default)]
@@ -535,6 +540,16 @@ pub struct FileMetadataBuilder<'a> {
     pub reference_param_groups: HashMap<String, Vec<Param>>,
     pub last_group: String,
     pub(crate) instrument_id_map: Option<&'a mut IncrementingIdMap>,
+
+    // Run attributes
+    pub run_id: Option<String>,
+    pub default_instrument_config: Option<u32>,
+    pub default_source_file: Option<String>,
+    pub start_timestamp: Option<String>,
+
+    // SpectrumList attributes
+    pub num_spectra: Option<u64>,
+    pub default_data_processing: Option<String>,
 }
 
 impl<'a> XMLParseBase for FileMetadataBuilder<'a> {}
@@ -788,7 +803,70 @@ impl<'a> FileMetadataBuilder<'a> {
                     .push(method);
                 return Ok(MzMLParserState::ProcessingMethod);
             }
-            b"run" => return Ok(MzMLParserState::Run),
+            b"run" => {
+                for attr_parsed in event.attributes() {
+                    if let Ok(attr) = attr_parsed {
+                        match attr.key.as_ref() {
+                            b"id" => {
+                                self.run_id = Some(
+                                    attr.unescape_value()
+                                        .expect("Error decoding run ID")
+                                        .to_string(),
+                                );
+                            }
+                            b"defaultInstrumentConfigurationRef" => {
+                                let value = attr
+                                    .unescape_value()
+                                    .expect("Error decoding default instrument configuration ID");
+                                self.default_instrument_config = self
+                                    .instrument_id_map
+                                    .as_mut()
+                                    .and_then(|m| Some(m.get(&value)));
+                            }
+                            b"defaultSourceFileRef" => {
+                                self.default_source_file = Some(
+                                    attr.unescape_value()
+                                        .expect("Error decoding default source file reference")
+                                        .to_string(),
+                                );
+                            }
+                            b"startTimeStamp" => {
+                                self.start_timestamp = Some(
+                                    attr.unescape_value()
+                                        .expect("Error decoding start timestamp")
+                                        .to_string(),
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                return Ok(MzMLParserState::Run);
+            }
+            b"spectrumList" => {
+                for attr_parsed in event.attributes() {
+                    if let Ok(attr) = attr_parsed {
+                        match attr.key.as_ref() {
+                            b"count" => {
+                                self.num_spectra = Some(
+                                    attr.unescape_value()
+                                        .expect("Error decoding spectrum list size")
+                                        .parse()
+                                        .expect("Error parsing spectrum list size"),
+                                );
+                            }
+                            b"defaultDataProcessingRef" => {
+                                let value = attr
+                                    .unescape_value()
+                                    .expect("Error decoding default instrument configuration ID");
+                                self.default_data_processing = Some(value.to_string())
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                return Ok(MzMLParserState::SpectrumList);
+            }
             _ => {}
         }
 
@@ -852,7 +930,8 @@ impl<'a> FileMetadataBuilder<'a> {
                 }
                 Err(err) => return Err(err),
             },
-            b"softwareRef" => if state == MzMLParserState::InstrumentConfiguration {
+            b"softwareRef" => {
+                if state == MzMLParserState::InstrumentConfiguration {
                     let ic = self.instrument_configurations.last_mut().unwrap();
                     for attr_parsed in event.attributes() {
                         match attr_parsed {
@@ -869,7 +948,8 @@ impl<'a> FileMetadataBuilder<'a> {
                             }
                         }
                     }
-                },
+                }
+            }
             b"referenceableParamGroupRef" => {
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
@@ -937,7 +1017,6 @@ impl<'a> FileMetadataBuilder<'a> {
         Ok(state)
     }
 }
-
 
 #[derive(Debug, Default, Clone)]
 pub struct IncrementingIdMap {

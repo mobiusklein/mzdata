@@ -109,6 +109,7 @@ pub trait ScanSource<
         SpectrumIterator::new(self)
     }
 
+    /// Create a new `SpectrumIterator` over `self` and use that state to drive a `SpectrumGroupIterator`
     fn groups(&mut self) -> SpectrumGroupingIterator<SpectrumIterator<'_, C, D, S, Self>, C, D, S>
     where
         Self: Sized,
@@ -116,6 +117,8 @@ pub trait ScanSource<
         SpectrumGroupingIterator::new(self.iter())
     }
 
+    /// Consume `self` to create a `SpectrumGroupIterator`. This is ideal for non-rewindable sources
+    /// like `STDIN`
     fn into_groups<'lifespan>(self) -> SpectrumGroupingIterator<Self, C, D, S> where Self: Sized {
         SpectrumGroupingIterator::new(self)
     }
@@ -425,7 +428,7 @@ pub struct StreamingSpectrumIterator<
 
 impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default, S: SpectrumLike<C, D>, I: Iterator<Item = S>> ScanSource<C, D, S> for StreamingSpectrumIterator<C, D, S, I> {
     fn reset(&mut self) {
-        log::warn!("Cannot reset StreamingSpectrumIterator")
+        panic!("Cannot reset StreamingSpectrumIterator")
     }
 
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<S> {

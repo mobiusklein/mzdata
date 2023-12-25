@@ -1,4 +1,4 @@
-#![allow(unused)]
+
 use std::env;
 use std::fs;
 use std::io;
@@ -9,38 +9,31 @@ use std::time;
 
 use std::collections::HashMap;
 
-use std::thread;
 use std::sync::mpsc::sync_channel;
 
-
+use mzdata::io::MassSpectrometryFormat;
+use mzdata::io::PreBufferedStream;
+use mzdata::io::infer_from_stream;
 use mzdata::prelude::*;
 use mzdata::io::{mgf, mzml};
 #[cfg(feature = "mzmlb")]
 use mzdata::io::mzmlb;
 use mzdata::spectrum::{DeconvolutedSpectrum, MultiLayerSpectrum, PeakDataLevel, SpectrumLike, SignalContinuity};
-use mzpeaks::{CentroidPeak, DeconvolutedPeak, PeakCollection};
+use mzpeaks::PeakCollection;
 
 fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::MzMLReader<fs::File>> {
-    let start = time::Instant::now();
     let reader = mzml::MzMLReader::open_path(path)?;
-    let end = time::Instant::now();
-    println!("{} spectra", reader.len());
     Ok(reader)
 }
 
 fn load_mgf_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mgf::MGFReader<fs::File>> {
-    let start = time::Instant::now();
     let reader = mgf::MGFReader::open_path(path)?;
-    let end = time::Instant::now();
-    println!("{} spectra", reader.len());
     Ok(reader)
 }
 
 #[cfg(feature = "mzmlb")]
 fn load_mzmlb_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzmlb::MzMLbReader> {
-    let start = time::Instant::now();
     let reader = mzmlb::MzMLbReader::open_path(&path.into())?;
-    let end = time::Instant::now();
     let blosc_threads = match std::env::var("BLOSC_NUM_THREADS") {
         Ok(val) => match val.parse() {
             Ok(nt) => nt,
@@ -49,10 +42,9 @@ fn load_mzmlb_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzmlb:
                 4
             }
         },
-        Err(e) => 4,
+        Err(_) => 4,
     };
     mzmlb::MzMLbReader::set_blosc_nthreads(blosc_threads);
-    println!("{} spectra", reader.len());
     Ok(reader)
 }
 
@@ -82,8 +74,8 @@ impl MSDataFileSummary {
         let has_charge = match scan.peaks() {
             PeakDataLevel::Missing => false,
             PeakDataLevel::RawData(arrays) => arrays.charges().is_ok(),
-            PeakDataLevel::Centroid(peaks) => false,
-            PeakDataLevel::Deconvoluted(peaks) => true,
+            PeakDataLevel::Centroid(_) => false,
+            PeakDataLevel::Deconvoluted(_) => true,
         };
         if has_charge {
             let deconv_scan: DeconvolutedSpectrum = scan.try_into().unwrap();
@@ -100,7 +92,7 @@ impl MSDataFileSummary {
     }
 
     pub fn _scan_file<
-        R: MZFileReader,
+        R: ScanSource,
     >(&mut self, reader: &mut R) {
         let start = time::Instant::now();
         reader.enumerate().for_each(|(i, scan)| {
@@ -121,13 +113,13 @@ impl MSDataFileSummary {
     }
 
     pub fn scan_file<
-        R: MZFileReader + Send + 'static,
+        R: ScanSource + Send + 'static,
     >(&mut self, reader: R) {
         self.scan_file_threaded(reader)
     }
 
     pub fn scan_file_threaded<
-        R: MZFileReader + Send + 'static,
+        R: ScanSource + Send + 'static,
     >(&mut self, reader: R) {
         let start = time::Instant::now();
         let (sender, receiver) = sync_channel(2usize.pow(12));
@@ -148,7 +140,7 @@ impl MSDataFileSummary {
             }
             self.handle_scan(scan);
         });
-        read_handle.join();
+        read_handle.join().unwrap();
         let end = time::Instant::now();
         let elapsed = end - start;
         println!("{:0.3} seconds elapsed", elapsed.as_secs_f64());
@@ -157,14 +149,14 @@ impl MSDataFileSummary {
     pub fn write_out(&self) {
         println!("MS Levels:");
         let mut level_set: Vec<(&u8, &usize)> = self.level_table.iter().collect();
-        level_set.sort_by_key(|(a, b)| *a);
+        level_set.sort_by_key(|(a, _)| *a);
         for (level, count) in level_set.iter() {
             println!("\t{}: {}", level, count);
         }
 
         println!("Precursor Charge States:");
         let mut charge_set: Vec<(&i32, &usize)> = self.charge_table.iter().collect();
-        charge_set.sort_by_key(|(a, b)| *a);
+        charge_set.sort_by_key(|(a, _)| *a);
         for (charge, count) in charge_set.iter() {
             if **charge == 0 {
                 println!("\tCharge Not Reported: {}", count);
@@ -181,7 +173,7 @@ impl MSDataFileSummary {
             if !peak_charge_table.is_empty() {
                 println!("Peak Charge States for MS level {}:", level);
                 let mut peak_charge_set: Vec<(&i32, &usize)> = peak_charge_table.iter().collect();
-                peak_charge_set.sort_by_key(|(a, b)| *a);
+                peak_charge_set.sort_by_key(|(a, _)| *a);
                 for (charge, count) in peak_charge_set.iter() {
                     if **charge == 0 {
                         println!("\tCharge Not Reported: {}", count);
@@ -212,11 +204,32 @@ fn main() -> io::Result<()> {
     );
     let mut summarizer = MSDataFileSummary::default();
 
-    if let Some(ext) = path.extension() {
+    if path.as_os_str() == "-" {
+        let mut stream = PreBufferedStream::new(io::stdin())?;
+        match infer_from_stream(&mut stream)? {
+            (MassSpectrometryFormat::MGF, false) => {
+                let reader = mgf::MGFReader::new(io::BufReader::new(stream));
+                summarizer.scan_file(reader)
+            },
+            (MassSpectrometryFormat::MzML, false) => {
+                let reader = mzml::MzMLReader::new(stream);
+                summarizer.scan_file(reader)
+            },
+            (MassSpectrometryFormat::MzMLb, _) => {
+                eprintln!("Cannot read mzMLb files from STDIN");
+                process::exit(1);
+            },
+            (_, _) => {
+                eprintln!("Could not infer format from STDIN");
+                process::exit(1);
+            },
+        }
+    }
+    else if let Some(ext) = path.extension() {
         if ext.to_string_lossy().to_lowercase() == "mzmlb" {
             #[cfg(feature = "mzmlb")]
             {
-                let mut reader = load_mzmlb_file(path)?;
+                let reader = load_mzmlb_file(path)?;
                 summarizer.scan_file(reader)
             }
             #[cfg(not(feature = "mzmlb"))]
@@ -224,14 +237,14 @@ fn main() -> io::Result<()> {
                 panic!("Cannot read mzMLb file. Recompile enabling the `mzmlb` feature")
             }
         } else if ext.to_string_lossy().to_lowercase() == "mgf" {
-            let mut reader = load_mgf_file(path)?;
+            let reader = load_mgf_file(path)?;
             summarizer.scan_file(reader)
         } else {
-            let mut reader = load_file(path)?;
+            let reader = load_file(path)?;
             summarizer.scan_file(reader)
         }
     } else {
-        let mut reader = load_file(path)?;
+        let reader = load_file(path)?;
         summarizer.scan_file(reader)
     };
 

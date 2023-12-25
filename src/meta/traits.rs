@@ -21,6 +21,10 @@ pub trait MSDataFileMetadata {
         *self.file_description_mut() = source.file_description().clone();
         *self.softwares_mut() = source.softwares().clone();
     }
+
+    fn spectrum_count_hint(&self) -> Option<u64> {
+        None
+    }
 }
 
 #[macro_export]

@@ -19,7 +19,8 @@ use thiserror::Error;
 
 use lazy_static::lazy_static;
 use mzpeaks::{
-    CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated, PeakCollection, peak::KnownCharge
+    peak::KnownCharge, CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated,
+    PeakCollection,
 };
 use regex::Regex;
 
@@ -42,7 +43,7 @@ use crate::spectrum::spectrum::{
 use crate::spectrum::PeakDataLevel;
 use crate::spectrum::SignalContinuity;
 use crate::spectrum::{
-    Precursor, PrecursorSelection, SelectedIon, SpectrumLike, SpectrumDescription,
+    Precursor, PrecursorSelection, SelectedIon, SpectrumDescription, SpectrumLike,
 };
 use crate::utils::neutral_mass;
 
@@ -273,7 +274,7 @@ impl<
             let (key, value) = line.split_once('=').unwrap();
 
             match key {
-                "TITLE" => builder.description.id = String::from(value),
+                "TITLE" => builder.description.id = value.to_string(),
                 "RTINSECONDS" => {
                     let scan_ev = builder
                         .description
@@ -285,7 +286,9 @@ impl<
                 "PEPMASS" => {
                     let mut parts = value.split_ascii_whitespace();
                     let mz: f64 = parts.next().unwrap().parse().unwrap();
-                    let intensity: f32 = parts.next().unwrap().parse().unwrap();
+                    let intensity: f32 = parts.next().and_then(|v| {
+                        Some(v.parse().unwrap())
+                    }).unwrap_or_default();
                     let charge: Option<i32> = parts.next().map(|c| c.parse().unwrap());
                     builder.description.precursor = Some(Precursor {
                         ion: SelectedIon {
@@ -672,6 +675,14 @@ impl<
     > MSDataFileMetadata for MGFReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
+
+    fn spectrum_count_hint(&self) -> Option<u64> {
+        if self.index.init {
+            Some(self.index.len() as u64)
+        } else {
+            None
+        }
+    }
 }
 
 pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
@@ -834,10 +845,7 @@ TITLE="#,
         Ok(())
     }
 
-    pub fn write<S: SpectrumLike<C, D> + 'static>(
-        &mut self,
-        spectrum: &S,
-    ) -> io::Result<usize> {
+    pub fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
         let description = spectrum.description();
         if description.ms_level == 1 {
             log::warn!(

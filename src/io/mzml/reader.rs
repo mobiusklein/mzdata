@@ -21,16 +21,16 @@ use super::super::traits::{
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
-use crate::prelude::ParamLike;
 use crate::meta::FileDescription;
 use crate::meta::InstrumentConfiguration;
 use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
 use crate::params::{Param, ParamList, Unit};
-use crate::spectrum::scan_properties::*;
+use crate::prelude::ParamLike;
 use crate::spectrum::bindata::{
-    ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray,
-    BuildFromArrayMap, BuildArrayMapFrom
+    ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, BuildArrayMapFrom,
+    BuildFromArrayMap, DataArray,
 };
+use crate::spectrum::scan_properties::*;
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
     RawSpectrum, Spectrum,
@@ -302,7 +302,6 @@ pub struct MzMLSpectrumBuilder<
     pub(crate) instrument_id_map: Option<&'a mut IncrementingIdMap>,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
-
 }
 
 impl<'a, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> XMLParseBase
@@ -677,12 +676,10 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
             //     }
             //     Err(err) => return Err(err),
             // },
-            b"cvParam" | b"userParam" => match Self::handle_param_borrowed(event, reader_position, state) {
-                Ok(param) => {
-                    match state {
-                        MzMLParserState::Spectrum => {
-                            self.fill_spectrum(param)
-                        }
+            b"cvParam" | b"userParam" => {
+                match Self::handle_param_borrowed(event, reader_position, state) {
+                    Ok(param) => match state {
+                        MzMLParserState::Spectrum => self.fill_spectrum(param),
                         MzMLParserState::ScanList => {
                             if param.is_controlled() {
                                 if let Some(comb) = ScanCombination::from_accession(
@@ -716,9 +713,9 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                                     event.start_time = value;
                                 }
                                 b"ion injection time" => {
-                                    event.injection_time = param
-                                        .parse()
-                                        .expect("Expected floating point number for injection time");
+                                    event.injection_time = param.parse().expect(
+                                        "Expected floating point number for injection time",
+                                    );
                                 }
                                 _ => event.add_param(param.into()),
                             }
@@ -746,8 +743,9 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                             } else {
                                 match param.name.as_ref() {
                                     "collision energy" | "activation energy" => {
-                                        self.precursor.activation.energy =
-                                            param.parse().expect("Failed to parse collision energy");
+                                        self.precursor.activation.energy = param
+                                            .parse()
+                                            .expect("Failed to parse collision energy");
                                     }
                                     &_ => {
                                         self.precursor.activation.add_param(param.into());
@@ -763,9 +761,9 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                             warn!("cvParam found for {:?} where none are allowed", &state);
                         }
                         _ => {}
-                    }
-                },
-                Err(err) => return Err(err),
+                    },
+                    Err(err) => return Err(err),
+                }
             }
             &_ => {}
         }
@@ -885,6 +883,16 @@ pub struct MzMLReaderType<
     pub reference_param_groups: HashMap<String, Vec<Param>>,
     pub detail_level: DetailLevel,
 
+    // Run attributes
+    pub run_id: Option<String>,
+    pub default_instrument_config: Option<u32>,
+    pub default_source_file: Option<String>,
+    pub start_timestamp: Option<String>,
+
+    // SpectrumList attributes
+    pub default_data_processing: Option<String>,
+    num_spectra: Option<u64>,
+
     buffer: Bytes,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
@@ -902,14 +910,17 @@ impl<
         D: DeconvolutedPeakAdapting,
     > MzMLReaderType<R, C, D>
 {
-
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
     /// provided with an `[io::BufReader`] and parses the metadata section of the file.
     pub fn new(file: R) -> MzMLReaderType<R, C, D> {
         Self::with_buffer_capacity_and_detail_level(file, BUFFER_SIZE, DetailLevel::Full)
     }
 
-    pub fn with_buffer_capacity_and_detail_level(file: R, capacity: usize, detail_level: DetailLevel) -> MzMLReaderType<R, C, D> {
+    pub fn with_buffer_capacity_and_detail_level(
+        file: R,
+        capacity: usize,
+        detail_level: DetailLevel,
+    ) -> MzMLReaderType<R, C, D> {
         let handle = BufReader::with_capacity(capacity, file);
         let mut inst = MzMLReaderType {
             handle,
@@ -928,6 +939,12 @@ impl<
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
             instrument_id_map: IncrementingIdMap::default(),
+            run_id: None,
+            default_instrument_config: None,
+            default_source_file: None,
+            start_timestamp: None,
+            num_spectra: None,
+            default_data_processing: None,
         };
         match inst.parse_metadata() {
             Ok(()) => {}
@@ -952,11 +969,12 @@ impl<
                         Ok(state) => {
                             self.state = state;
                             match &self.state {
-                                MzMLParserState::Run
-                                | MzMLParserState::SpectrumList
-                                | MzMLParserState::Spectrum => break,
+                                MzMLParserState::SpectrumList | MzMLParserState::Spectrum => break,
                                 MzMLParserState::ParserError => {
-                                    eprintln!("Encountered an error while starting {:?}", String::from_utf8_lossy(&self.buffer));
+                                    eprintln!(
+                                        "Encountered an error while starting {:?}",
+                                        String::from_utf8_lossy(&self.buffer)
+                                    );
                                 }
                                 _ => {}
                             }
@@ -1045,6 +1063,14 @@ impl<
         self.softwares = accumulator.softwares;
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
+
+        self.run_id = accumulator.run_id;
+        self.default_instrument_config = accumulator.default_instrument_config;
+        self.default_source_file = accumulator.default_source_file;
+        self.start_timestamp = accumulator.start_timestamp;
+        self.num_spectra = accumulator.num_spectra;
+        self.default_data_processing = accumulator.default_data_processing;
+
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
             MzMLParserState::ParserError => {
@@ -1074,7 +1100,10 @@ impl<
                             self.state = state;
                             match state {
                                 MzMLParserState::ParserError => {
-                                    eprintln!("Encountered an error while starting {:?}", String::from_utf8_lossy(&self.buffer));
+                                    eprintln!(
+                                        "Encountered an error while starting {:?}",
+                                        String::from_utf8_lossy(&self.buffer)
+                                    );
                                 }
                                 _ => {}
                             }
@@ -1163,7 +1192,10 @@ impl<
                 Err(error.unwrap())
             }
             MzMLParserState::ParserError if self.error.is_none() => {
-                eprintln!("Terminated with ParserError but no error set: {:?}", self.error);
+                eprintln!(
+                    "Terminated with ParserError but no error set: {:?}",
+                    self.error
+                );
                 Ok((accumulator, offset))
             }
             _ => Err(MzMLParserError::IncompleteSpectrum),
@@ -1203,52 +1235,66 @@ impl<
     }
 }
 
-impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D>  {
+impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLReaderType<R, C, D> {
     pub fn check_stream(&mut self, next_tag: &str) -> Result<bool, MzMLParserError> {
         let position = match self.stream_position() {
             Ok(pos) => pos,
-            Err(err) => return Err(MzMLParserError::IOError(self.state, err))
+            Err(err) => return Err(MzMLParserError::IOError(self.state, err)),
         };
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         let matched_tag = match reader.read_event_into(&mut self.buffer) {
-            Ok(event) => {
-                match event {
-                    Event::Start(ref e) => {
-                        debug!("From {}, the next element started was {}", position, String::from_utf8_lossy(e.name().0));
-                        e.name().0 == next_tag.as_bytes()
-                    },
-                    Event::End(ref e) => {
-                        debug!("From {}, the next element ended was {}", position, String::from_utf8_lossy(e.name().0));
-                        false
-                    },
-                    Event::Empty(ref e) => {
-                        debug!("From {}, the next empty element was {}", position, String::from_utf8_lossy(e.name().0));
-                        e.name().0 == next_tag.as_bytes()
-                    },
-                    Event::Text(ref e) => {
-                        debug!("From {}, the next was a text node of {} bytes", position, e.len());
-                        false
-                    },
-                    Event::Eof => {
-                        debug!("From {}, the next was EOF", position);
-                        false
-                    },
-                    e => {
-                        debug!("From {}, the next was {:?}", position, e);
-                        false
-                    }
+            Ok(event) => match event {
+                Event::Start(ref e) => {
+                    debug!(
+                        "From {}, the next element started was {}",
+                        position,
+                        String::from_utf8_lossy(e.name().0)
+                    );
+                    e.name().0 == next_tag.as_bytes()
+                }
+                Event::End(ref e) => {
+                    debug!(
+                        "From {}, the next element ended was {}",
+                        position,
+                        String::from_utf8_lossy(e.name().0)
+                    );
+                    false
+                }
+                Event::Empty(ref e) => {
+                    debug!(
+                        "From {}, the next empty element was {}",
+                        position,
+                        String::from_utf8_lossy(e.name().0)
+                    );
+                    e.name().0 == next_tag.as_bytes()
+                }
+                Event::Text(ref e) => {
+                    debug!(
+                        "From {}, the next was a text node of {} bytes",
+                        position,
+                        e.len()
+                    );
+                    false
+                }
+                Event::Eof => {
+                    debug!("From {}, the next was EOF", position);
+                    false
+                }
+                e => {
+                    debug!("From {}, the next was {:?}", position, e);
+                    false
                 }
             },
             Err(err) => {
                 self.buffer.clear();
-                return Err(MzMLParserError::XMLError(self.state, err))
-            },
+                return Err(MzMLParserError::XMLError(self.state, err));
+            }
         };
         self.buffer.clear();
         match self.seek(SeekFrom::Start(position)) {
-            Ok(_) => {},
-            Err(err) => return Err(MzMLParserError::IOError(self.state, err))
+            Ok(_) => {}
+            Err(err) => return Err(MzMLParserError::IOError(self.state, err)),
         }
         Ok(matched_tag)
     }
@@ -1280,7 +1326,10 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
             .expect("Failed to save checkpoint");
         self.seek(SeekFrom::Start(offset))
             .expect("Failed to move seek to offset");
-        debug_assert!(self.check_stream("spectrum").unwrap(), "The next XML tag was not `spectrum`");
+        debug_assert!(
+            self.check_stream("spectrum").unwrap(),
+            "The next XML tag was not `spectrum`"
+        );
         let result = self.read_next();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
@@ -1296,7 +1345,10 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
             .stream_position()
             .expect("Failed to save checkpoint");
         self.seek(SeekFrom::Start(byte_offset)).ok()?;
-        debug_assert!(self.check_stream("spectrum").unwrap(), "The next XML tag was not `spectrum`");
+        debug_assert!(
+            self.check_stream("spectrum").unwrap(),
+            "The next XML tag was not `spectrum`"
+        );
         let result = self.read_next();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
@@ -1380,20 +1432,27 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLRead
     }
 
     fn _read_index(&mut self) {
-        if let Err(err) =  self.read_index_from_end() {
+        if let Err(err) = self.read_index_from_end() {
             debug!("Failed to read index from the end of the file: {}", err);
             match self.seek(SeekFrom::Start(0)) {
                 Ok(_) => {
                     self.build_index();
                 }
                 Err(error) => {
-                    panic!("Unrecoverable IO Error during file pointer reset {} while handling {:?}", error, err);
+                    panic!(
+                        "Unrecoverable IO Error during file pointer reset {} while handling {:?}",
+                        error, err
+                    );
                 }
             }
         }
     }
 
-    pub fn with_buffer_capacity_and_detail_level_indexed(file: R, capacity: usize, detail_level: DetailLevel) -> MzMLReaderType<R, C, D> {
+    pub fn with_buffer_capacity_and_detail_level_indexed(
+        file: R,
+        capacity: usize,
+        detail_level: DetailLevel,
+    ) -> MzMLReaderType<R, C, D> {
         let mut reader = Self::with_buffer_capacity_and_detail_level(file, capacity, detail_level);
         reader._read_index();
         reader
@@ -1564,6 +1623,10 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMe
     for MzMLReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
+
+    fn spectrum_count_hint(&self) -> Option<u64> {
+        self.num_spectra
+    }
 }
 
 /// A specialization of [`MzMLReaderType`] for the default peak types, for common use.
@@ -1861,22 +1924,43 @@ mod test {
         assert_eq!(reader.detail_level, DetailLevel::Full);
 
         let scan_full = reader.get_spectrum_by_index(0).unwrap();
-        scan_full.arrays.as_ref().unwrap().iter().for_each(|(_, v)| {
-            assert!(matches!(v.compression, BinaryCompressionType::Decoded));
-        });
+        scan_full
+            .arrays
+            .as_ref()
+            .unwrap()
+            .iter()
+            .for_each(|(_, v)| {
+                assert!(matches!(v.compression, BinaryCompressionType::Decoded));
+            });
 
         reader.detail_level = DetailLevel::Lazy;
         let scan_lazy = reader.get_spectrum_by_index(0).unwrap();
-        scan_lazy.arrays.as_ref().unwrap().iter().for_each(|(_, v)| {
-            assert!(matches!(v.compression, BinaryCompressionType::NoCompression));
-        });
+        scan_lazy
+            .arrays
+            .as_ref()
+            .unwrap()
+            .iter()
+            .for_each(|(_, v)| {
+                assert!(matches!(
+                    v.compression,
+                    BinaryCompressionType::NoCompression
+                ));
+            });
 
         reader.detail_level = DetailLevel::MetadataOnly;
         let scan_lazy = reader.get_spectrum_by_index(0).unwrap();
-        scan_lazy.arrays.as_ref().unwrap().iter().for_each(|(_, v)| {
-            assert!(matches!(v.compression, BinaryCompressionType::NoCompression));
-            assert!(v.data.len() == 0);
-        });
+        scan_lazy
+            .arrays
+            .as_ref()
+            .unwrap()
+            .iter()
+            .for_each(|(_, v)| {
+                assert!(matches!(
+                    v.compression,
+                    BinaryCompressionType::NoCompression
+                ));
+                assert!(v.data.len() == 0);
+            });
 
         Ok(())
     }
@@ -1890,9 +1974,12 @@ mod test {
         let prec = grp.precursor().unwrap();
         assert_eq!(prec.id(), "controllerType=0 controllerNumber=1 scan=25869");
         assert_eq!(prec.index(), 129);
-        let min_msn_idx = grp.products().iter().map(|scan| {
-            scan.index()
-        }).min().unwrap();
+        let min_msn_idx = grp
+            .products()
+            .iter()
+            .map(|scan| scan.index())
+            .min()
+            .unwrap();
         assert_eq!(min_msn_idx, 142);
         assert_eq!(groups.len(), 188);
         Ok(())
@@ -1907,9 +1994,12 @@ mod test {
         let prec = grp.precursor().unwrap();
         assert_eq!(prec.id(), "controllerType=0 controllerNumber=1 scan=25869");
         assert_eq!(prec.index(), 129);
-        let min_msn_idx = grp.products().iter().map(|scan| {
-            scan.index()
-        }).min().unwrap();
+        let min_msn_idx = grp
+            .products()
+            .iter()
+            .map(|scan| scan.index())
+            .min()
+            .unwrap();
         assert_eq!(min_msn_idx, 142);
         assert_eq!(groups.len(), 188);
         Ok(())
@@ -1925,12 +2015,12 @@ mod test {
         let groups: Vec<_> = reader.groups().collect();
 
         reader.reset();
-        let averaging_iter = SpectrumAveragingIterator::new(reader.groups(), 1, 100.0, 2200.0, 0.005);
+        let averaging_iter =
+            SpectrumAveragingIterator::new(reader.groups(), 1, 100.0, 2200.0, 0.005);
         let avg_groups: Vec<_> = averaging_iter.collect();
         assert_eq!(groups.len(), avg_groups.len());
 
         let raw_tic = &groups[0].precursor.as_ref().unwrap().peaks().tic();
-
 
         let avg_group = &avg_groups[0];
         let prec = avg_group.precursor().unwrap();
