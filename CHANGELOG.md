@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
-## [Unreleased]
+## [0.7.0] - 2023-12-25
 
 ### Added
 
@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.5.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/mobiusklein/mzdata/compare/v0.5.0...v0.7.0
 [0.5.0]: https://github.com/mobiusklein/mzdata/compare/v0.1.0...v0.5.0
 [0.1.0]: https://github.com/mobiusklein/mzdata/releases/tag/v0.1.0
