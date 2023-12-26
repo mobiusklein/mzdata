@@ -4,7 +4,7 @@ pub mod mzml;
 #[cfg(feature = "mzmlb")]
 pub mod mzmlb;
 mod offset_index;
-pub mod traits;
+pub(crate) mod traits;
 mod utils;
 
 pub(crate) mod compression;
@@ -14,12 +14,13 @@ pub use crate::io::infer_format::{
 };
 pub use crate::io::mgf::{MGFError, MGFReader, MGFWriter};
 #[cfg(feature = "async")]
-pub use crate::io::mzml::AsyncMzMLReaderType;
+pub use crate::io::mzml::AsyncMzMLReader;
 pub use crate::io::mzml::{MzMLParserError, MzMLReader, MzMLWriter};
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::{MzMLbError, MzMLbReader};
 pub use crate::io::offset_index::OffsetIndex;
 pub use crate::io::traits::{
-    RandomAccessSpectrumIterator, ScanAccessError, ScanSource, SpectrumIterator,
+    MZFileReader, RandomAccessSpectrumIterator, SpectrumAccessError, ScanSource, ScanWriter,
+    SpectrumGrouping, SpectrumIterator, StreamingSpectrumIterator,
 };
 pub use crate::io::utils::{DetailLevel, PreBufferedStream};

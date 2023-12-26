@@ -105,7 +105,7 @@ impl<T: Send> Collator<T> {
     }
 
 
-    /// As [`collate_sync`], but with an unbounded channel
+    /// As [`collate_sync`](Collator::collate_sync), but with an unbounded channel
     pub fn collate(receiver: Receiver<(usize, T)>, sender: Sender<(usize, T)>) {
         let mut collator = Self::default();
         loop {

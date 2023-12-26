@@ -26,6 +26,7 @@ use crate::meta::FileDescription;
 use crate::meta::InstrumentConfiguration;
 use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
 use crate::params::Param;
+use crate::spectrum::bindata::BuildFromArrayMap;
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
 };
@@ -44,6 +45,8 @@ use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 const BUFFER_SIZE: usize = 10000;
 
+/// An asynchronous version of [`MzMLReaderType`](crate::io::mzml::MzMLReaderType) that
+/// works with the `tokio` runtime.
 pub struct MzMLReaderType<
     R: AsyncReadType + Unpin,
     C: CentroidPeakAdapting + Send + Sync = CentroidPeak,
@@ -52,23 +55,23 @@ pub struct MzMLReaderType<
     /// The state the parser was in last.
     pub state: MzMLParserState,
     /// The raw reader
-    pub handle: BufReader<R>,
+    handle: BufReader<R>,
     /// A place to store the last error the parser encountered
     error: Option<MzMLParserError>,
     /// A spectrum ID to byte offset for fast random access
     pub index: OffsetIndex,
     /// The description of the file's contents and the previous data files that were
     /// consumed to produce it.
-    pub file_description: FileDescription,
+    pub(crate) file_description: FileDescription,
     /// A mapping of different instrument configurations (source, analyzer, detector) components
     /// by ID string.
-    pub instrument_configurations: HashMap<u32, InstrumentConfiguration>,
+    pub(crate) instrument_configurations: HashMap<u32, InstrumentConfiguration>,
     /// The different software components that were involved in the processing and creation of this
     /// file.
-    pub softwares: Vec<Software>,
+    pub(crate) softwares: Vec<Software>,
     /// The data processing and signal transformation operations performed on the raw data in previous
     /// source files to produce this file's contents.
-    pub data_processings: Vec<DataProcessing>,
+    pub(crate) data_processings: Vec<DataProcessing>,
     /// A cache of repeated paramters
     pub reference_param_groups: HashMap<String, Vec<Param>>,
 
@@ -94,11 +97,11 @@ pub struct MzMLReaderType<
 impl<
         'a,
         R: AsyncReadType + Unpin + Sync,
-        C: CentroidPeakAdapting + Send + Sync,
-        D: DeconvolutedPeakAdapting + Send + Sync,
+        C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
     > MzMLReaderType<R, C, D>
 {
-    /// Create a new [`MzMLReaderType`] instance, wrapping the [`tokio::io::Read`] handle
+    /// Create a new [`MzMLReaderType`] instance, wrapping the [`tokio::io::AsyncRead`] handle
     /// provided with an `[io::BufReader`] and parses the metadata section of the file.
     pub async fn new(file: R) -> MzMLReaderType<R, C, D> {
         Self::with_buffer_capacity_and_detail_level(file, BUFFER_SIZE, DetailLevel::Full).await
@@ -367,7 +370,7 @@ impl<
         }
     }
 
-    /// Populate a new [`Spectrum`] in-place on the next available spectrum data.
+    /// Populate a new [`Spectrum`](crate::spectrum::MultiLayerSpectrum) in-place on the next available spectrum data.
     /// This allocates memory to build the spectrum's attributes but then moves it
     /// into `spectrum` rather than copying it.
     pub async fn read_into(
@@ -409,11 +412,11 @@ impl<
     crate::impl_metadata_trait!();
 }
 
-/// A specialization of [`MzMLReaderType`] for the default peak types, for common use.
+/// A specialization of [`AsyncMzMLReaderType`](crate::io::mzml::AsyncMzMLReaderType) for the default peak types, for common use.
 pub type MzMLReader<R> = MzMLReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
 #[derive(Debug, Default, Clone)]
-pub struct IndexedMzMLIndexExtractor {
+struct IndexedMzMLIndexExtractor {
     spectrum_index: OffsetIndex,
     chromatogram_index: OffsetIndex,
     last_id: String,
@@ -556,12 +559,20 @@ impl IndexedMzMLIndexExtractor {
     }
 }
 
+/// When the underlying stream supports random access, this type can read the index at the end of
+/// an `indexedmzML` document and use the offset map to jump to immediately jump to a specific spectrum.
+///
+/// **Note**: Because async traits are not yet stable, and this is currently the only asynchronous reader
+/// in the library, this also re-creates the [`ScanSource`](crate::io::traits::ScanSource) API with
+/// asynchronous execution.
 impl<
         R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Sync,
-        C: CentroidPeakAdapting + Send + Sync,
-        D: DeconvolutedPeakAdapting + Send + Sync,
+        C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
     > MzMLReaderType<R, C, D>
 {
+
+    /// Jump to the end of the document and read the offset indices, if they are available
     pub async fn read_index_from_end(&mut self) -> Result<u64, MzMLIndexingError> {
         let mut indexer = IndexedMzMLIndexExtractor::new();
         let current_position = match self.handle.stream_position().await {
@@ -656,12 +667,15 @@ impl<
         }
     }
 
+    /// Read the length of the spectrum offset index
     pub fn len(&self) -> usize {
         self.index.len()
     }
 
     /// Retrieve a spectrum by its scan start time
-    /// Considerably more complex than seeking by ID or index.
+    /// Considerably more complex than seeking by ID or index, this involves
+    /// a binary search over the spectrum index and assumes that spectra are stored
+    /// in chronological order.
     pub async fn get_spectrum_by_time(&mut self, time: f64) -> Option<MultiLayerSpectrum<C, D>> {
         let n = self.len();
         let mut lo: usize = 0;

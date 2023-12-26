@@ -29,7 +29,8 @@ to unify access:
 These structures all implement the [`SpectrumDescription`] trait
 
 The [`SpectrumDescription`] trait is included in the crate prelude, and gives the caller
-read-only access to components that describe a spectrum's metadata, and
+read-only access to components that describe a spectrum's metadata.
+
 ```rust
 use std::fs::File;
 use mzdata::prelude::*;

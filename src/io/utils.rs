@@ -148,6 +148,12 @@ impl<T: io::Seek + io::Write> io::Seek for MD5HashingStream<T> {
     }
 }
 
+/// A wrapper around an [`io::Read`] to provide limited [`io::Seek`] access even if the
+/// underlying stream does not support it. It pre-buffers the next *n* bytes of content
+/// in memory and permits seek operations within that range, but fails all seeks beyond
+/// that range.
+///
+/// This is useful for working with [`io::stdin`] or a network stream.
 pub struct PreBufferedStream<R: io::Read> {
     stream: R,
     buffer: io::Cursor<Vec<u8>>,
@@ -244,10 +250,16 @@ impl<R: io::Read> io::Read for PreBufferedStream<R> {
 const BUFFER_SIZE: usize = 2usize.pow(16);
 
 impl<R: io::Read> PreBufferedStream<R> {
+    /// Create a new pre-buffered stream wrapping `stream` with a buffer size of 2<sup>16</sup> bytes.
+    ///
+    /// This method fails if attempting to fill the buffer fails.
     pub fn new(stream: R) -> io::Result<Self> {
         Self::new_with_buffer_size(stream, BUFFER_SIZE)
     }
 
+    /// Create a new pre-buffered stream wrapping `stream` with a buffer size of `buffer_size` bytes.
+    ///
+    /// This method fails if attempting to fill the buffer fails.
     pub fn new_with_buffer_size(stream: R, buffer_size: usize) -> io::Result<Self> {
         let buffer = io::Cursor::new(Vec::with_capacity(buffer_size));
         let mut inst = Self {

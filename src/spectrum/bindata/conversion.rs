@@ -149,8 +149,15 @@ impl From<&DeconvolutedPeakSet> for BinaryArrayMap {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum ArraysAvailable {
+    Unknown,
+    Ok,
+    MissingArrays(Vec<ArrayType>)
+}
+
 pub trait BuildFromArrayMap: Sized {
-    fn arrays_required(&self) -> Option<Vec<ArrayType>> {
+    fn arrays_required() -> Option<Vec<ArrayType>> {
         None
     }
 
@@ -158,6 +165,20 @@ pub trait BuildFromArrayMap: Sized {
 
     fn from_arrays(arrays: &BinaryArrayMap) -> Vec<Self> {
         Self::try_from_arrays(arrays).unwrap()
+    }
+
+    /// A pre-emptive check for the presence of the required arrays.
+    fn has_arrays_for(arrays: &BinaryArrayMap) -> ArraysAvailable {
+        if let Some(arrays_required) = Self::arrays_required() {
+            let missing: Vec<_> = arrays_required.into_iter().filter(|array_type| !arrays.has_array(array_type)).collect();
+            if missing.len() > 0 {
+                ArraysAvailable::MissingArrays(missing)
+            } else {
+                ArraysAvailable::Ok
+            }
+        } else {
+            ArraysAvailable::Unknown
+        }
     }
 }
 
@@ -225,7 +246,7 @@ impl BuildFromArrayMap for CentroidPeak {
         Ok(peaks)
     }
 
-    fn arrays_required(&self) -> Option<Vec<ArrayType>> {
+    fn arrays_required() -> Option<Vec<ArrayType>> {
         Some(vec![ArrayType::MZArray, ArrayType::IntensityArray])
     }
 }

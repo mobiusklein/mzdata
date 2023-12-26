@@ -29,6 +29,14 @@ name = "mzdata"
 name = "async_mzcat"
 required-features = ["async"]
 
+[[example]]
+name = "mzcat"
+required-features = ["parallelism"]
+
+[[example]]
+name = "averaging_writer"
+required-features = ["parallelism", "mzsignal", "nalgebra"]
+
 
 [lib]
 name = "mzdata"
@@ -39,12 +47,13 @@ lto = true
 debug = true
 
 [features]
-default = ["nalgebra", "parallelism", "mzsignal", "mzmlb", "zlib-ng-compat", ]
+# default = ["nalgebra", "parallelism", "mzsignal", "mzmlb", "zlib-ng-compat", ]
+default = ["zlib-ng-compat", ]
 
-openblas = ["mzsignal/openblas"]
-netlib = ["mzsignal/netlib"]
-intel-mkl = ["mzsignal/intel-mkl"]
-nalgebra = ["mzsignal/nalgebra"]
+openblas = ["mzsignal", "mzsignal/openblas"]
+netlib = ["mzsignal", "mzsignal/netlib"]
+intel-mkl = ["mzsignal", "mzsignal/intel-mkl"]
+nalgebra = ["mzsignal", "mzsignal/nalgebra"]
 parallelism = ["rayon", "mzsignal/parallelism"]
 
 # The zlib feature makes the code faster unoptimized, but with LTO the default
@@ -57,6 +66,7 @@ miniz_oxide = ["flate2/rust_backend"]
 
 plotting = ["mzsignal", "mzsignal/plotting"]
 
+# Enables reading mzMLb
 mzmlb = ["hdf5", "ndarray", "hdf5-sys"]
 
 async = ["tokio", "quick-xml/async-tokio"]
@@ -67,7 +77,6 @@ lazy_static = "1.4.0"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
 quick-xml = { version = "0.30", features = [ "serialize" ] }
-base64 = "0.21.3"
 flate2 = {version = "1.0.20"}
 num-traits = "0.2"
 indexmap = { version = "2.0.0", features = [ "serde" ] }
@@ -101,5 +110,5 @@ harness = false
 
 
 [package.metadata.docs.rs]
-features = ["openblas", "parallelism"]
+features = ["parallelism", "mzsignal", "nalgebra", "mzmlb", "async"]
 no-default-features = true

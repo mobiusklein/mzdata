@@ -26,7 +26,7 @@ use regex::Regex;
 
 use super::offset_index::OffsetIndex;
 use super::traits::{
-    MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, ScanSource, ScanWriter, SeekRead,
+    MZFileReader, RandomAccessSpectrumIterator, SpectrumAccessError, ScanSource, ScanWriter, SeekRead,
 };
 use super::utils::DetailLevel;
 use crate::meta::{
@@ -363,7 +363,7 @@ impl<
                 }
             }
             Err(err) => {
-                println!("An error was encountered: {:?}", err);
+                eprintln!("An error was encountered: {err:?}");
                 None
             }
         }
@@ -623,33 +623,33 @@ impl<
         D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
     > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
-    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, ScanAccessError> {
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
-                Err(err) => Err(ScanAccessError::IOError(Some(err))),
+                Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
             },
-            None => Err(ScanAccessError::ScanNotFound),
+            None => Err(SpectrumAccessError::SpectrumIdNotFound(id.to_string())),
         }
     }
 
-    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, ScanAccessError> {
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_index(index) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
-                Err(err) => Err(ScanAccessError::IOError(Some(err))),
+                Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
             },
-            None => Err(ScanAccessError::ScanNotFound),
+            None => Err(SpectrumAccessError::SpectrumIndexNotFound(index)),
         }
     }
 
-    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, ScanAccessError> {
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_time(time) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
-                Err(err) => Err(ScanAccessError::IOError(Some(err))),
+                Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
             },
-            None => Err(ScanAccessError::ScanNotFound),
+            None => Err(SpectrumAccessError::SpectrumNotFound),
         }
     }
 }

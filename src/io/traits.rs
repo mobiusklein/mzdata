@@ -35,7 +35,9 @@ pub trait ScanSource<
     fn get_spectrum_by_index(&mut self, index: usize) -> Option<S>;
 
     /// Retrieve a spectrum by its scan start time
-    /// Considerably more complex than seeking by ID or index.
+    /// Considerably more complex than seeking by ID or index, this involves
+    /// a binary search over the spectrum index and assumes that spectra are stored
+    /// in chronological order.
     fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {
         let n = self.len();
         let mut lo: usize = 0;
@@ -341,14 +343,26 @@ fn _save_index<
     Ok(())
 }
 
+/// Errors that may occur when reading a spectrum from a [`RandomAccessSpectrumIterator`]
 #[derive(Debug, Error)]
-pub enum ScanAccessError {
-    #[error("The requested scan was not found")]
-    ScanNotFound,
+pub enum SpectrumAccessError {
+    /// An undetermined error failing to locate the requested spectrum
+    #[error("The requested spectrum was not found")]
+    SpectrumNotFound,
+    /// An error resolving a spectrum by it's native ID
+    #[error("The requested spectrum native ID {0} was not found")]
+    SpectrumIdNotFound(String),
+    /// An error resolving a spectrum by it's index
+    #[error("The requested spectrum index {0} was not found")]
+    SpectrumIndexNotFound(usize),
+    /// An I/O error prevented reading the spectrum, even if it could be found.
     #[error("I/O error occurred while reading: {0:?}")]
-    IOError(Option<io::Error>),
+    IOError(#[source] Option<io::Error>),
 }
 
+
+/// An extension of [`ScanSource`] that supports relocatable iteration relative to a
+/// specific spectrum coordinate or identifier.
 pub trait RandomAccessSpectrumIterator<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
@@ -356,13 +370,13 @@ pub trait RandomAccessSpectrumIterator<
 >: ScanSource<C, D, S>
 {
     /// Start iterating from the spectrum whose native ID matches `id`
-    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, ScanAccessError>;
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError>;
 
     /// Start iterating from the spectrum whose index is `index`
-    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, ScanAccessError>;
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError>;
 
     /// Start iterating from the spectrum starting closest to `time`
-    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, ScanAccessError>;
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError>;
 }
 
 impl<
@@ -374,29 +388,29 @@ impl<
     > RandomAccessSpectrumIterator<C, D, S> for SpectrumIterator<'lifespan, C, D, S, R>
 {
     /// Start iterating from the spectrum whose native ID matches `id`
-    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, ScanAccessError> {
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         if let Some(scan) = self.get_spectrum_by_id(id) {
             self.index = scan.index();
             self.back_index = 0;
             Ok(self)
         } else if self.get_index().contains_key(id) {
-            Err(ScanAccessError::IOError(None))
+            Err(SpectrumAccessError::IOError(None))
         } else {
-            Err(ScanAccessError::ScanNotFound)
+            Err(SpectrumAccessError::SpectrumIdNotFound(id.to_string()))
         }
     }
 
-    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, ScanAccessError> {
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
         if index < self.len() {
             self.index = index;
             self.back_index = 0;
             Ok(self)
         } else {
-            Err(ScanAccessError::ScanNotFound)
+            Err(SpectrumAccessError::SpectrumIndexNotFound(index))
         }
     }
 
-    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, ScanAccessError> {
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
         if let Some(scan) = self.get_spectrum_by_time(time) {
             self.index = scan.index();
             self.back_index = 0;
@@ -407,13 +421,14 @@ impl<
             .start_time()
             < time
         {
-            Err(ScanAccessError::ScanNotFound)
+            Err(SpectrumAccessError::SpectrumNotFound)
         } else {
-            Err(ScanAccessError::IOError(None))
+            Err(SpectrumAccessError::IOError(None))
         }
     }
 }
 
+/// An alternative implementation of [`ScanSource`] for non-rewindable underlying streams
 pub struct StreamingSpectrumIterator<
     C: CentroidLike + Default,
     D: DeconvolutedCentroidLike + Default,
@@ -489,6 +504,8 @@ impl<
     }
 }
 
+
+/// An abstraction over [`SpectrumGroup`](crate::spectrum::SpectrumGroup)'s interface.
 pub trait SpectrumGrouping<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
@@ -668,32 +685,32 @@ impl<
         S: SpectrumLike<C, D> + Clone,
     > RandomAccessSpectrumIterator<C, D, S> for MemoryScanSource<C, D, S>
 {
-    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, ScanAccessError> {
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self.offsets.get(id) {
             Some(offset) => {
                 self.position = offset as usize;
                 Ok(self)
             }
-            None => Err(ScanAccessError::ScanNotFound),
+            None => Err(SpectrumAccessError::SpectrumNotFound),
         }
     }
 
-    fn start_from_index(&mut self, id: usize) -> Result<&mut Self, ScanAccessError> {
+    fn start_from_index(&mut self, id: usize) -> Result<&mut Self, SpectrumAccessError> {
         match self.offsets.get_index(id) {
             Some((_, offset)) => {
                 self.position = offset as usize;
                 Ok(self)
             }
-            None => Err(ScanAccessError::ScanNotFound),
+            None => Err(SpectrumAccessError::SpectrumNotFound),
         }
     }
 
-    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, ScanAccessError> {
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
         if let Some(scan) = self.get_spectrum_by_time(time) {
             self.position = scan.index();
             Ok(self)
         } else {
-            Err(ScanAccessError::ScanNotFound)
+            Err(SpectrumAccessError::SpectrumNotFound)
         }
     }
 }
@@ -734,7 +751,7 @@ pub trait ScanWriter<
         Ok(n)
     }
 
-    /// Write a [`SpectrumGroup`] out in order
+    /// Write a [`SpectrumGroup`](crate::spectrum::SpectrumGroup) out in order
     fn write_group<S: SpectrumLike<C, D> + 'static, G: SpectrumGrouping<C, D, S> + 'static>(
         &mut self,
         group: &'a G,
@@ -749,7 +766,7 @@ pub trait ScanWriter<
         Ok(n)
     }
 
-    /// Consume an [`Iterator`] over [`SpectrumGroup`] references
+    /// Consume an [`Iterator`] over [`SpectrumGroup`](crate::spectrum::SpectrumGroup) references
     fn write_all_groups<
         S: SpectrumLike<C, D> + 'static,
         G: SpectrumGrouping<C, D, S> + 'static,

@@ -118,7 +118,7 @@ impl From<MzMLParserError> for io::Error {
     }
 }
 
-pub type ParserResult = Result<MzMLParserState, MzMLParserError>;
+pub(crate) type ParserResult = Result<MzMLParserState, MzMLParserError>;
 
 /**
 Common XML error handling behaviors
@@ -316,6 +316,7 @@ pub trait CVParamParse: XMLParseBase {
     }
 }
 
+/// SAX-style start/end/text/empty event handlers
 pub trait MzMLSAX {
     fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult;
 
@@ -331,6 +332,7 @@ pub trait MzMLSAX {
     fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult;
 }
 
+/// Errors that can occur while extracting the trailing index of an `indexedmzML` document
 #[derive(Debug, Error)]
 pub enum MzMLIndexingError {
     #[error("Offset index not found")]
@@ -1018,6 +1020,9 @@ impl<'a> FileMetadataBuilder<'a> {
     }
 }
 
+/// A mapping from [`String`] to [`u32`] that automatically increments when
+/// a new key is provided. A relatively safe means of maintaining an internally
+/// consistent mapping from a textual source ID to an in-memory numeric ID.
 #[derive(Debug, Default, Clone)]
 pub struct IncrementingIdMap {
     id_map: HashMap<String, u32>,
@@ -1025,6 +1030,8 @@ pub struct IncrementingIdMap {
 }
 
 impl IncrementingIdMap {
+    /// Get the numeric ID for a textual ID, automatically issuing a new
+    /// numeric ID when a new textual ID is provided.
     pub fn get(&mut self, key: &str) -> u32 {
         if let Some(value) = self.id_map.get(key) {
             *value

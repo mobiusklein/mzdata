@@ -1,5 +1,5 @@
 pub use crate::io::traits::{
-    MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, ScanSource, ScanWriter, SeekRead,
+    MZFileReader, RandomAccessSpectrumIterator, SpectrumAccessError, ScanSource, ScanWriter, SeekRead,
     SpectrumGrouping, SpectrumIterator,
 };
 

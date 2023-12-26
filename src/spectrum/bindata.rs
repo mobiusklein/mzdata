@@ -10,6 +10,6 @@ pub use encodings::{
     linear_prediction_encoding, to_bytes, vec_as_bytes, ArrayRetrievalError, ArrayType,
     BinaryCompressionType, BinaryDataArrayType, Bytes,
 };
-pub use conversion::{BuildArrayMapFrom, BuildFromArrayMap};
+pub use conversion::{BuildArrayMapFrom, BuildFromArrayMap, ArraysAvailable};
 pub use map::BinaryArrayMap;
 pub use traits::{ByteArrayView, ByteArrayViewMut};

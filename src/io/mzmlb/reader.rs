@@ -22,14 +22,14 @@ use crate::io::mzml::{
 };
 use crate::io::traits::MZFileReader;
 use crate::io::utils::DetailLevel;
-use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, ScanAccessError, ScanSource};
+use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, SpectrumAccessError, ScanSource};
 use crate::prelude::{MSDataFileMetadata, ParamLike};
 
 use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software};
 use crate::params::{ControlledVocabulary, Param};
 use crate::spectrum::bindata::{
     as_bytes, delta_decoding, linear_prediction_decoding, ArrayRetrievalError,
-    BinaryCompressionType, BinaryDataArrayType, ByteArrayView, ByteArrayViewMut, DataArray,
+    BinaryCompressionType, BinaryDataArrayType, ByteArrayView, ByteArrayViewMut, DataArray, vec_as_bytes, BuildFromArrayMap,
 };
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
@@ -447,13 +447,13 @@ pub trait DataRegistryBorrower<'a> {
 }
 
 #[derive(Default)]
-pub struct MzMLbSpectrumBuilder<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> {
+pub struct MzMLbSpectrumBuilder<'a, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap> {
     inner: MzMLSpectrumBuilder<'a, C, D>,
     data_registry: Option<&'a mut ExternalDataRegistry>,
     current_data_range_query: DataRangeRequest,
 }
 
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbSpectrumBuilder<'a, C, D> {
+impl<'a, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap> MzMLbSpectrumBuilder<'a, C, D> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -463,7 +463,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbSpectrumBuil
     }
 }
 
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
+impl<'a, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap> MzMLSAX
     for MzMLbSpectrumBuilder<'a, C, D>
 {
     fn start_element(
@@ -603,7 +603,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLSAX
     }
 }
 
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> DataRegistryBorrower<'a>
+impl<'a, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap> DataRegistryBorrower<'a>
     for MzMLbSpectrumBuilder<'a, C, D>
 {
     fn borrow_data_registry(mut self, data_registry: &'a mut ExternalDataRegistry) -> Self {
@@ -612,7 +612,7 @@ impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> DataRegistryBorro
     }
 }
 
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+impl<'a, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>
     SpectrumBuilding<'a, C, D, MultiLayerSpectrum<C, D>> for MzMLbSpectrumBuilder<'a, C, D>
 {
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
@@ -682,7 +682,7 @@ pub struct MzMLbReaderType<
     data_buffers: ExternalDataRegistry,
 }
 
-impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbReaderType<C, D> {
+impl<'a, 'b: 'a, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap> MzMLbReaderType<C, D> {
     /// Create a new `[MzMLbReader]` with an internal cache size of `chunk_size` elements
     /// per data array to reduce the number of disk reads needed to populate spectra, and
     /// sets the `[DetailLevel]`.
@@ -867,7 +867,7 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MzMLbRead
 }
 
 /// [`MzMLReaderType`] instances are [`Iterator`]s over [`MultiLayerSpectrum`]
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator for MzMLbReaderType<C, D> {
+impl<C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap> Iterator for MzMLbReaderType<C, D> {
     type Item = MultiLayerSpectrum<C, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -877,7 +877,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Iterator for MzMLbRea
 
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+impl<C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>
     ScanSource<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
 {
     /// Retrieve a spectrum by it's native ID
@@ -945,41 +945,41 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
 
 /// The iterator can also be updated to move to a different location in the
 /// stream efficiently.
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+impl<C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>
     RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
 {
-    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, ScanAccessError> {
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.mzml_parser.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
-                Err(err) => Err(ScanAccessError::IOError(Some(err))),
+                Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
             },
-            None => Err(ScanAccessError::ScanNotFound),
+            None => Err(SpectrumAccessError::SpectrumIdNotFound(id.to_string())),
         }
     }
 
-    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, ScanAccessError> {
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_index(index) {
             Some(offset) => match self.mzml_parser.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
-                Err(err) => Err(ScanAccessError::IOError(Some(err))),
+                Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
             },
-            None => Err(ScanAccessError::ScanNotFound),
+            None => Err(SpectrumAccessError::SpectrumIndexNotFound(index)),
         }
     }
 
-    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, ScanAccessError> {
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_time(time) {
             Some(offset) => match self.mzml_parser.seek(SeekFrom::Start(offset)) {
                 Ok(_) => Ok(self),
-                Err(err) => Err(ScanAccessError::IOError(Some(err))),
+                Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
             },
-            None => Err(ScanAccessError::ScanNotFound),
+            None => Err(SpectrumAccessError::SpectrumNotFound),
         }
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+impl<C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>
     MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
 {
     fn open_file(source: fs::File) -> Self {

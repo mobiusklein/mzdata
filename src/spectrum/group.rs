@@ -7,7 +7,7 @@ use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, Deconvoluted
 
 use crate::{
     io::{
-        traits::SpectrumGrouping, RandomAccessSpectrumIterator, ScanAccessError, ScanSource,
+        traits::SpectrumGrouping, RandomAccessSpectrumIterator, SpectrumAccessError, ScanSource,
     },
     SpectrumLike,
 };
@@ -52,6 +52,8 @@ enum SpectrumGroupIterState {
     Done,
 }
 
+
+/// Iterate over the spectra in [`SpectrumGroup`]
 pub struct SpectrumGroupIter<
     'a,
     C: CentroidLike + Default = CentroidPeak,
@@ -258,13 +260,12 @@ impl GenerationTracker {
 }
 
 /**
-A wrapper for [`SpectrumIterator`]-implementors that will batch together
+A wrapper for [`Iterator`]-implementors that will batch together
 all MSn spectra with their associated MS1 spectrum, producing [`SpectrumGroup`]
 instances.
 
-This type emulates the same interface that [`SpectrumIterator`] exposes, save that instead
-of yield individual [`Spectrum`](crate::spectrum::spectrum::Spectrum), it yields [`SpectrumGroup`] instead. Naturally, it aslo
-implements the [`Iterator`] trait.
+This type emulates the same interface that [`Iterator`] exposes, save that instead
+of yield individual [`Spectrum`](crate::spectrum::spectrum::Spectrum), it yields [`SpectrumGroup`] instead.
 */
 pub struct SpectrumGroupingIterator<
     R: Iterator<Item=S>,
@@ -298,7 +299,7 @@ impl<
         G: SpectrumGrouping<C, D, S>,
     > SpectrumGroupingIterator<R, C, D, S, G>
 {
-    /// Construct a new [`SpectrumGroupingIterator`] around a [`SpectrumIterator`] with a default
+    /// Construct a new [`SpectrumGroupingIterator`] around a [`Iterator`] with a default
     /// buffering level of 3.
     pub fn new(
         source: R,
@@ -524,7 +525,7 @@ impl<
         G: SpectrumGrouping<C, D, S> + Default,
     > SpectrumGroupingIterator<R, C, D, S, G>
 {
-    pub fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
+    pub fn start_from_id(&mut self, id: &str) -> Result<&Self, SpectrumAccessError> {
         match self.source.start_from_id(id) {
             Ok(_) => {
                 self.clear();
@@ -534,7 +535,7 @@ impl<
         }
     }
 
-    pub fn start_from_index(&mut self, index: usize) -> Result<&Self, ScanAccessError> {
+    pub fn start_from_index(&mut self, index: usize) -> Result<&Self, SpectrumAccessError> {
         match self.source.start_from_index(index) {
             Ok(_) => {
                 self.clear();
@@ -544,7 +545,7 @@ impl<
         }
     }
 
-    pub fn start_from_time(&mut self, time: f64) -> Result<&Self, ScanAccessError> {
+    pub fn start_from_time(&mut self, time: f64) -> Result<&Self, SpectrumAccessError> {
         match self.source.start_from_time(time) {
             Ok(_) => {
                 self.clear();
@@ -1176,7 +1177,7 @@ mod mzsignal_impl {
             R: RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>>,
         > SpectrumAveragingIterator<'lifespan, C, D, R>
     {
-        pub fn start_from_id(&mut self, id: &str) -> Result<&Self, ScanAccessError> {
+        pub fn start_from_id(&mut self, id: &str) -> Result<&Self, SpectrumAccessError> {
             match self.source.start_from_id(id) {
                 Ok(_) => {
                     self.buffer.clear();
@@ -1188,7 +1189,7 @@ mod mzsignal_impl {
             }
         }
 
-        pub fn start_from_index(&mut self, index: usize) -> Result<&Self, ScanAccessError> {
+        pub fn start_from_index(&mut self, index: usize) -> Result<&Self, SpectrumAccessError> {
             match self.source.start_from_index(index) {
                 Ok(_) => {
                     self.buffer.clear();
@@ -1200,7 +1201,7 @@ mod mzsignal_impl {
             }
         }
 
-        pub fn start_from_time(&mut self, time: f64) -> Result<&Self, ScanAccessError> {
+        pub fn start_from_time(&mut self, time: f64) -> Result<&Self, SpectrumAccessError> {
             match self.source.start_from_time(time) {
                 Ok(_) => {
                     self.buffer.clear();

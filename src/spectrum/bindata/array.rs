@@ -3,8 +3,6 @@ use std::fmt::{self, Formatter};
 use std::io::prelude::*;
 use std::mem;
 
-use base64;
-use base64::{engine::general_purpose::STANDARD as Base64Std, Engine as _};
 use base64_simd;
 use bytemuck::Pod;
 use flate2::write::{ZlibDecoder, ZlibEncoder};
@@ -17,6 +15,8 @@ use super::encodings::{
     BinaryDataArrayType, Bytes,
 };
 use super::traits::{ByteArrayView, ByteArrayViewMut};
+#[allow(unused)]
+use super::vec_as_bytes;
 
 /// Represents a data array
 #[derive(Default, Clone)]
@@ -221,8 +221,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             #[cfg(feature = "numpress")]
             BinaryCompressionType::NumpressLinear => match self.dtype {
                 BinaryDataArrayType::Float64 => {
-                    let mut bytestring = Base64Std
-                        .decode(&self.data)
+                    let mut bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
                         .expect("Failed to decode base64 array");
                     let decoded = Self::decompres_numpress_linear(&mut bytestring)?;
                     let view = vec_as_bytes(decoded);
@@ -252,14 +251,12 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         match self.compression {
             BinaryCompressionType::Decoded => Ok(Cow::Borrowed(&self.data.as_slice()[start..end])),
             BinaryCompressionType::NoCompression => {
-                let bytestring = Base64Std
-                    .decode(&self.data)
+                let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
                     .expect("Failed to decode base64 array");
                 Ok(Cow::Owned(bytestring[start..end].to_vec()))
             }
             BinaryCompressionType::Zlib => {
-                let bytestring = Base64Std
-                    .decode(&self.data)
+                let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
                     .expect("Failed to decode base64 array");
                 Ok(Cow::Owned(
                     Self::decompres_zlib(&bytestring)[start..end].to_vec(),
@@ -276,16 +273,14 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         match self.compression {
             BinaryCompressionType::Decoded => Ok(&mut self.data),
             BinaryCompressionType::NoCompression => {
-                let bytestring = Base64Std
-                    .decode(&self.data)
+                let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
                     .expect("Failed to decode base64 array");
                 self.data = bytestring;
                 self.compression = BinaryCompressionType::Decoded;
                 Ok(&mut self.data)
             }
             BinaryCompressionType::Zlib => {
-                let bytestring = Base64Std
-                    .decode(&self.data)
+                let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
                     .expect("Failed to decode base64 array");
                 self.data = bytestring;
                 self.compression = BinaryCompressionType::Decoded;

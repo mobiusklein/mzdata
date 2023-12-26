@@ -215,6 +215,7 @@ fn main() -> io::Result<()> {
                 let reader = mzml::MzMLReader::new(stream);
                 summarizer.scan_file(reader)
             },
+            #[cfg(feature = "mzmlb")]
             (MassSpectrometryFormat::MzMLb, _) => {
                 eprintln!("Cannot read mzMLb files from STDIN");
                 process::exit(1);

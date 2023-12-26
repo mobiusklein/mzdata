@@ -92,6 +92,8 @@ macro_rules! param_pack {
     }};
 }
 
+
+/// All the ways that mzML writing can go wrong
 #[derive(Debug, Error)]
 pub enum MzMLWriterError {
     #[error("An XML error occurred: {0}")]

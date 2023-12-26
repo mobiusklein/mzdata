@@ -46,13 +46,16 @@ impl PartialEq for IsolationWindow {
     }
 }
 
+/// The m/z range which was scanned
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct ScanWindow {
+    /// The minimum m/z scanned
     pub lower_bound: f32,
+    /// The maximum m/z scanned
     pub upper_bound: f32,
 }
 
-pub type ScanWindowList = Vec<ScanWindow>;
+type ScanWindowList = Vec<ScanWindow>;
 
 #[derive(Default, Debug, Clone, PartialEq)]
 /// Describes a single scan event. Unless additional post-processing is done,
@@ -65,8 +68,10 @@ pub struct ScanEvent {
     pub params: Option<Box<ParamList>>,
 }
 
-pub type ScanEventList = Vec<ScanEvent>;
+type ScanEventList = Vec<ScanEvent>;
 
+/// Represents means by which a spectrum is generated using
+/// one or more instrument analyzers
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default)]
 pub enum ScanCombination {
     // MS:1000795
@@ -172,9 +177,13 @@ impl Acquisition {
     }
 }
 
+/// Describe the precursor ion that this entity represents
 pub trait IonProperties {
+    /// The selected ion m/z
     fn mz(&self) -> f64;
+    /// The selected ion's estimated neutral mass, given the m/z and charge
     fn neutral_mass(&self) -> f64;
+    /// The expected charge state of the selected ion, if known
     fn charge(&self) -> Option<i32>;
     fn has_charge(&self) -> bool {
         self.charge().is_some()
@@ -654,6 +663,7 @@ impl_param_described!(Activation, SpectrumDescription);
 impl_param_described_deferred!(SelectedIon, Acquisition, ScanEvent);
 
 
+/// Types of chromatograms enumerated in the PSI-MS controlled vocabulary
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum ChromatogramType {
     #[default]
@@ -665,6 +675,8 @@ pub enum ChromatogramType {
 }
 
 
+/// The set of descriptive metadata that give context for how a chromatogram was
+/// recorded.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct ChromatogramDescription {
     pub id: String,

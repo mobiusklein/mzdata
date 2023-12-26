@@ -1,41 +1,3 @@
-/*!
-Represent the collection of attributes and data that compose a single mass spectrum.
-
-Because a mass spectrum may be obtained from sources with varying levels of detail,
-several alternative structures are provided with a common set of trait-based methods
-to unify access:
-
-1. [`RawSpectrum`] for representing a spectrum that has not been decoded into distinct
-       peaks yet, but whose data may be continuous or discrete.
-2. [`CentroidSpectrum`] for representing spectra from sources which are guaranteed to
-       be pre-centroided, like those from MGF files or other simple text representations.
-3. [`Spectrum`] for representing a multi-layer representation of a spectrum where both
-       raw data and a distinct peak list are available.
-
-These structures all implement the [`SpectrumBehavior`] trait
-
-The [`SpectrumBehavior`] trait is included in the crate prelude, and gives the caller
-read-only access to components that describe a spectrum's metadata, and
-```rust
-use std::fs::File;
-use mzdata::prelude::*;
-use mzpeaks::{Tolerance, prelude::*};
-use mzdata::io::MzMLReader;
-use mzdata::spectrum::{SignalContinuity};
-
-let reader = MzMLReader::new(File::open("./test/data/small.mzML").unwrap());
-for spectrum in reader {
-    println!("Scan {} => BP {}", spectrum.id(), spectrum.peaks().base_peak().mz);
-    if spectrum.signal_continuity() < SignalContinuity::Profile {
-        let peak_picked = spectrum.into_centroid().unwrap();
-        println!("Matches for 579.155: {:?}",
-                 peak_picked.peaks.all_peaks_for(
-                     579.155, Tolerance::Da(0.02)));
-    }
-}
-```
-
-*/
 use std::borrow::Cow;
 use std::convert::TryFrom;
 
@@ -60,6 +22,7 @@ use crate::params::ParamList;
 use crate::spectrum::scan_properties::{
     Acquisition, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
 };
+#[allow(unused)]
 use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType};
 use crate::utils::mass_charge_ratio;
 
@@ -520,6 +483,7 @@ impl<C: CentroidLike + Default> CentroidSpectrumType<C> {
 
 pub type CentroidSpectrum = CentroidSpectrumType<CentroidPeak>;
 
+/// Represents a spectrum that has been centroided, deisotoped, and charge state deconvolved
 #[derive(Default, Debug, Clone)]
 pub struct DeconvolutedSpectrumType<D: DeconvolutedCentroidLike + Default> {
     /// The spectrum metadata describing acquisition conditions and details.
@@ -903,12 +867,13 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::io::mzml::MzMLReader;
-    use crate::prelude::*;
 
+    #[cfg(feature = "mzsignal")]
     #[test_log::test]
     fn test_profile_read() {
+        use super::*;
+        use crate::io::mzml::MzMLReader;
+        use crate::prelude::*;
         let mut reader = MzMLReader::open_path("./test/data/three_test_scans.mzML")
             .expect("Failed to open test file");
         reader.reset();
