@@ -1,6 +1,6 @@
 /*!
 The data structures and components that represent a mass spectrum and how
-we access their data.
+to access their data.
 
 A mass spectrum is made up of multiple components, the spectrum's signal data
 itself, plus all the metadata that describes how that data was acquired by

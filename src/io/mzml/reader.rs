@@ -14,6 +14,8 @@ use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
 use quick_xml::Reader;
 
+use crate::prelude::*;
+
 use super::super::offset_index::OffsetIndex;
 use super::super::traits::{
     MZFileReader, RandomAccessSpectrumIterator, SpectrumAccessError, ScanSource, SeekRead,
@@ -35,8 +37,6 @@ use crate::spectrum::spectrum::{
     CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
     RawSpectrum, Spectrum,
 };
-use crate::ParamDescribed;
-use crate::SpectrumLike;
 
 use crate::io::utils::DetailLevel;
 

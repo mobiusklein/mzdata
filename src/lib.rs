@@ -55,6 +55,6 @@ pub use crate::io::mzml::{MzMLReader, MzMLWriter, MzMLParserError as MzMLError, 
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::{MzMLbReader, MzMLbError, MzMLbWriterBuilder, MzMLbWriterError, MzMLbWriter};
 
-pub use crate::params::{Param, ParamDescribed, ParamList};
+pub use crate::params::{Param, ParamList};
 
 pub use crate::spectrum::{CentroidSpectrum, RawSpectrum, Spectrum, SpectrumLike};

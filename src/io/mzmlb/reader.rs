@@ -13,9 +13,6 @@ use thiserror::Error;
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
-#[cfg(feature = "numpress")]
-use numpress::numpress_decompress;
-
 use crate::io::mzml::{
     CVParamParse, IncrementingIdMap, MzMLParserError, MzMLParserState, MzMLReaderType, MzMLSAX,
     MzMLSpectrumBuilder, ParserResult, SpectrumBuilding,
@@ -29,8 +26,14 @@ use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Soft
 use crate::params::{ControlledVocabulary, Param};
 use crate::spectrum::bindata::{
     as_bytes, delta_decoding, linear_prediction_decoding, ArrayRetrievalError,
-    BinaryCompressionType, BinaryDataArrayType, ByteArrayView, ByteArrayViewMut, DataArray, vec_as_bytes, BuildFromArrayMap,
+    BinaryCompressionType, BinaryDataArrayType, ByteArrayView, ByteArrayViewMut, DataArray, BuildFromArrayMap,
 };
+
+#[cfg(feature = "numpress")]
+use crate::spectrum::bindata::vec_as_bytes;
+#[cfg(feature = "numpress")]
+use numpress::numpress_decompress;
+
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
 };

@@ -1,7 +1,19 @@
+//! Elements of controlled vocabularies used to describe mass spectra and their components.
+//!
+//! Directly maps to the usage of the PSI-MS controlled vocabulary in mzML
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::str::{self, FromStr};
+
+#[doc(hidden)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum ValueType {
+    String(Box<String>),
+    Integer(i64),
+    Float(f64),
+    Other(Box<Vec<u8>>)
+}
 
 pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<u32>) {
     let mut parts = curie.split(':');
@@ -19,6 +31,7 @@ pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<u32>) 
     }
 }
 
+/// Describe a controlled vocabulary parameter or a user-defined parameter
 pub trait ParamLike {
     fn name(&self) -> &str;
     fn value(&self) -> &str;
@@ -57,6 +70,8 @@ pub trait ParamLike {
     }
 }
 
+
+/// A statically allocate-able or non-owned data version of [`Param`]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ParamCow<'a> {
     pub name: Cow<'a, str>,
@@ -64,6 +79,24 @@ pub struct ParamCow<'a> {
     pub accession: Option<u32>,
     pub controlled_vocabulary: Option<ControlledVocabulary>,
     pub unit: Unit,
+}
+
+impl ParamCow<'static> {
+    pub const fn const_new(
+        name: &'static str,
+        value: &'static str,
+        accession: Option<u32>,
+        controlled_vocabulary: Option<ControlledVocabulary>,
+        unit: Unit,
+    ) -> Self {
+        Self {
+            name: Cow::Borrowed(name),
+            value: Cow::Borrowed(value),
+            accession,
+            controlled_vocabulary,
+            unit,
+        }
+    }
 }
 
 impl<'a> ParamCow<'a> {
@@ -126,6 +159,7 @@ impl<'a> From<ParamCow<'a>> for Param {
     }
 }
 
+/// A controlled vocabulary or user parameter
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Param {
     pub name: String,
@@ -224,6 +258,8 @@ impl ParamLike for Param {
     }
 }
 
+
+/// Controlled vocabularies used in mass spectrometry data files
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ControlledVocabulary {
     MS,
@@ -316,6 +352,7 @@ impl ControlledVocabulary {
     }
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub enum ControlledVocabularyResolutionError {}
 
@@ -382,6 +419,7 @@ macro_rules! impl_param_described {
     )+};
 }
 
+#[doc(hidden)]
 pub const _EMPTY_PARAM: &[Param] = &[];
 
 #[macro_export]

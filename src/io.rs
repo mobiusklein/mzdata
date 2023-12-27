@@ -1,3 +1,8 @@
+//! Reading and writing mass spectrometry data file formats and abstractions over them.
+//!
+//! There are many data file formats for recording mass spectrometry data.
+//!
+
 mod infer_format;
 pub mod mgf;
 pub mod mzml;

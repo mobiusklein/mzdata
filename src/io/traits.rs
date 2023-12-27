@@ -1,4 +1,5 @@
 use log::warn;
+use std::collections::VecDeque;
 use std::fs;
 use std::io;
 use std::marker::PhantomData;
@@ -121,7 +122,10 @@ pub trait ScanSource<
 
     /// Consume `self` to create a `SpectrumGroupIterator`. This is ideal for non-rewindable sources
     /// like `STDIN`
-    fn into_groups<'lifespan>(self) -> SpectrumGroupingIterator<Self, C, D, S> where Self: Sized {
+    fn into_groups<'lifespan>(self) -> SpectrumGroupingIterator<Self, C, D, S>
+    where
+        Self: Sized,
+    {
         SpectrumGroupingIterator::new(self)
     }
 }
@@ -360,7 +364,6 @@ pub enum SpectrumAccessError {
     IOError(#[source] Option<io::Error>),
 }
 
-
 /// An extension of [`ScanSource`] that supports relocatable iteration relative to a
 /// specific spectrum coordinate or identifier.
 pub trait RandomAccessSpectrumIterator<
@@ -436,12 +439,19 @@ pub struct StreamingSpectrumIterator<
     I: Iterator<Item = S>,
 > {
     source: I,
+    buffer: VecDeque<S>,
     _index: OffsetIndex,
     _c: PhantomData<C>,
     _d: PhantomData<D>,
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default, S: SpectrumLike<C, D>, I: Iterator<Item = S>> ScanSource<C, D, S> for StreamingSpectrumIterator<C, D, S, I> {
+impl<
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumLike<C, D>,
+        I: Iterator<Item = S>,
+    > ScanSource<C, D, S> for StreamingSpectrumIterator<C, D, S, I>
+{
     fn reset(&mut self) {
         panic!("Cannot reset StreamingSpectrumIterator")
     }
@@ -449,7 +459,7 @@ impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default, S: Spectr
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<S> {
         while let Some(s) = self.next() {
             if s.id() == id {
-                return Some(s)
+                return Some(s);
             }
         }
         None
@@ -458,7 +468,27 @@ impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default, S: Spectr
     fn get_spectrum_by_index(&mut self, index: usize) -> Option<S> {
         while let Some(s) = self.next() {
             if s.index() == index {
-                return Some(s)
+                return Some(s);
+            }
+        }
+        None
+    }
+
+    fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {
+        let mut placeholder: Option<S> = None;
+        let mut delta = f64::INFINITY;
+        while let Some(s) = self.next() {
+            let new_delta = (s.start_time() - time).abs();
+            if s.start_time() < time {
+                placeholder = Some(s);
+                delta = new_delta;
+            } else if s.start_time() >= time {
+                if new_delta < delta {
+                    return Some(s);
+                } else {
+                    self.push_front(s);
+                    return placeholder;
+                }
             }
         }
         None
@@ -483,7 +513,11 @@ impl<
     type Item = S;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.source.next()
+        if self.buffer.len() > 0 {
+            self.buffer.pop_front()
+        } else {
+            self.source.next()
+        }
     }
 }
 
@@ -497,13 +531,55 @@ impl<
     pub fn new(source: I) -> Self {
         Self {
             source,
+            buffer: VecDeque::new(),
             _index: OffsetIndex::new("spectrum".to_string()),
             _c: PhantomData,
             _d: PhantomData,
         }
     }
+
+    fn push_front(&mut self, spectrum: S) {
+        self.buffer.push_front(spectrum);
+    }
 }
 
+impl<
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumLike<C, D>,
+        I: Iterator<Item = S>,
+    > RandomAccessSpectrumIterator<C, D, S> for StreamingSpectrumIterator<C, D, S, I>
+{
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
+        match self.get_spectrum_by_id(id) {
+            Some(s) => {
+                self.push_front(s);
+                Ok(self)
+            }
+            None => Err(SpectrumAccessError::SpectrumIdNotFound(id.to_string())),
+        }
+    }
+
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
+        match self.get_spectrum_by_index(index) {
+            Some(s) => {
+                self.push_front(s);
+                Ok(self)
+            }
+            None => Err(SpectrumAccessError::SpectrumIndexNotFound(index)),
+        }
+    }
+
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
+        match self.get_spectrum_by_time(time) {
+            Some(s) => {
+                self.push_front(s);
+                Ok(self)
+            }
+            None => Err(SpectrumAccessError::SpectrumNotFound),
+        }
+    }
+}
 
 /// An abstraction over [`SpectrumGroup`](crate::spectrum::SpectrumGroup)'s interface.
 pub trait SpectrumGrouping<

@@ -9,6 +9,7 @@ use quick_xml::Error as XMLError;
 
 use thiserror::Error;
 
+use crate::prelude::*;
 use crate::io::traits::SeekRead;
 use crate::io::OffsetIndex;
 use crate::meta::{
@@ -16,7 +17,6 @@ use crate::meta::{
     ProcessingMethod, Software, SourceFile,
 };
 use crate::params::{curie_to_num, ControlledVocabulary, Param, ParamCow, Unit};
-use crate::ParamDescribed;
 
 use super::reader::Bytes;
 

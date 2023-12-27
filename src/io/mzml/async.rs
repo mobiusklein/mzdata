@@ -773,7 +773,7 @@ impl<
 mod test {
     use std::path;
 
-    use crate::{ParamDescribed, SpectrumLike};
+    use crate::prelude::*;
 
     use super::*;
     use tokio::{fs, io};
