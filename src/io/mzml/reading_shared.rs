@@ -59,10 +59,8 @@ pub enum MzMLParserState {
 
     // Spectrum and Chromatogram List Elements
     Spectrum,
-    SpectrumDone,
 
     SpectrumList,
-    SpectrumListDone,
 
     BinaryDataArrayList,
     BinaryDataArray,
@@ -80,10 +78,14 @@ pub enum MzMLParserState {
     SelectedIon,
     Activation,
 
+    SpectrumDone,
+    SpectrumListDone,
+
     Chromatogram,
     ChromatogramDone,
 
     ParserError,
+    EOF
 }
 
 impl Display for MzMLParserState {
@@ -107,6 +109,8 @@ pub enum MzMLParserError {
     XMLError(MzMLParserState, #[source] XMLError),
     #[error("An IO error {1} was encountered in {0:?}")]
     IOError(MzMLParserState, #[source] io::Error),
+    #[error("The {0} section is over")]
+    SectionOver(&'static str)
 }
 
 impl From<MzMLParserError> for io::Error {

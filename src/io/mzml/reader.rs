@@ -1090,6 +1090,11 @@ impl<
         &'b mut self,
         mut accumulator: B,
     ) -> Result<(B, usize), MzMLParserError> {
+
+        if self.state == MzMLParserState::EOF {
+            return Err(MzMLParserError::SectionOver("spectrum"))
+        }
+
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         accumulator = accumulator.borrow_instrument_configuration(&mut self.instrument_id_map);
@@ -1097,6 +1102,9 @@ impl<
         loop {
             match reader.read_event_into(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => {
+                    if log::log_enabled!(log::Level::Trace) {
+                        log::trace!("Starting mzML element: {}", String::from_utf8_lossy(e.name().as_ref()));
+                    }
                     match accumulator.start_element(e, self.state) {
                         Ok(state) => {
                             self.state = state;
@@ -1117,6 +1125,9 @@ impl<
                     };
                 }
                 Ok(Event::End(ref e)) => {
+                    if log::log_enabled!(log::Level::Trace) {
+                        log::trace!("Ending mzML element: {}", String::from_utf8_lossy(e.name().as_ref()));
+                    }
                     match accumulator.end_element(e, self.state) {
                         Ok(state) => {
                             self.state = state;
@@ -1150,6 +1161,8 @@ impl<
                     }
                 }
                 Ok(Event::Eof) => {
+                    log::trace!("Reached EOF");
+                    self.state = MzMLParserState::EOF;
                     break;
                 }
                 Err(err) => match &err {
@@ -1165,11 +1178,12 @@ impl<
                                 self.state,
                             ));
                             self.state = MzMLParserState::ParserError;
+                            log::trace!("Expected element {expected}, found {_found}");
                         }
                     }
-                    _ => {
+                    e => {
                         self.error = Some(MzMLParserError::IncompleteElementError(
-                            String::from_utf8_lossy(&self.buffer).to_string(),
+                            e.to_string(),
                             self.state,
                         ));
                         self.state = MzMLParserState::ParserError;
@@ -1212,8 +1226,17 @@ impl<
         spectrum: &mut MultiLayerSpectrum<C, D>,
     ) -> Result<usize, MzMLParserError> {
         let accumulator = MzMLSpectrumBuilder::<C, D>::with_detail_level(self.detail_level);
-        if self.state == MzMLParserState::SpectrumDone {
-            self.state = MzMLParserState::Resume;
+        match self.state {
+            MzMLParserState::SpectrumDone => {
+                self.state = MzMLParserState::Resume;
+            },
+            MzMLParserState::ParserError => {
+                eprintln!("Starting parsing from error: {:?}", self.error);
+            }
+            state if state > MzMLParserState::SpectrumDone => {
+                eprintln!("Attempting to start parsing a spectrum in state {}", self.state);
+            }
+            _ => {}
         }
         match self._parse_into(accumulator) {
             Ok((accumulator, sz)) => {
@@ -1226,6 +1249,9 @@ impl<
 
     /// Read the next spectrum directly. Used to implement iteration.
     pub fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
+        if self.state == MzMLParserState::EOF {
+            return None
+        }
         let mut spectrum = MultiLayerSpectrum::<C, D>::default();
         match self.read_into(&mut spectrum) {
             Ok(_sz) => Some(spectrum),
@@ -1335,6 +1361,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPe
             self.check_stream("spectrum").unwrap(),
             "The next XML tag was not `spectrum`"
         );
+        self.state = MzMLParserState::Resume;
         let result = self.read_next();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
@@ -1354,6 +1381,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPe
             self.check_stream("spectrum").unwrap(),
             "The next XML tag was not `spectrum`"
         );
+        self.state = MzMLParserState::Resume;
         let result = self.read_next();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
@@ -1362,6 +1390,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPe
 
     /// Return the data stream to the beginning
     fn reset(&mut self) {
+        self.state = MzMLParserState::Resume;
         self.seek(SeekFrom::Start(0))
             .expect("Failed to reset file stream");
     }
@@ -1990,7 +2019,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[test_log::test]
     fn test_interleaved_into_groups() -> io::Result<()> {
         let path = path::Path::new("./test/data/batching_test.mzML");
         let reader = MzMLReader::open_path(path)?;
