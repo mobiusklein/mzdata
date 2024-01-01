@@ -281,6 +281,15 @@ impl<
                 Ok(Event::Start(ref e)) => {
                     match accumulator.start_element(e, self.state) {
                         Ok(state) => {
+                            match state {
+                                MzMLParserState::ParserError => {
+                                    eprintln!(
+                                        "Encountered an error while starting {:?}",
+                                        String::from_utf8_lossy(&self.buffer)
+                                    );
+                                }
+                                _ => {}
+                            }
                             self.state = state;
                         }
                         Err(message) => {
@@ -292,6 +301,9 @@ impl<
                 Ok(Event::End(ref e)) => {
                     match accumulator.end_element(e, self.state) {
                         Ok(state) => {
+                            if log::log_enabled!(log::Level::Trace) {
+                                log::trace!("Ending mzML element: {}", String::from_utf8_lossy(e.name().as_ref()));
+                            }
                             self.state = state;
                         }
                         Err(message) => {
@@ -323,6 +335,8 @@ impl<
                     }
                 }
                 Ok(Event::Eof) => {
+                    log::trace!("Reached EOF");
+                    self.state = MzMLParserState::EOF;
                     break;
                 }
                 Err(err) => match &err {
@@ -338,6 +352,7 @@ impl<
                                 self.state,
                             ));
                             self.state = MzMLParserState::ParserError;
+                            log::trace!("Expected element {expected}, found {_found}");
                         }
                     }
                     _ => {
@@ -361,10 +376,17 @@ impl<
         }
         match self.state {
             MzMLParserState::SpectrumDone => Ok((offset, accumulator)),
-            MzMLParserState::ParserError => {
+            MzMLParserState::ParserError if self.error.is_some() => {
                 let mut error = None;
                 mem::swap(&mut error, &mut self.error);
                 Err(error.unwrap())
+            }
+            MzMLParserState::ParserError if self.error.is_none() => {
+                eprintln!(
+                    "Terminated with ParserError but no error set: {:?}",
+                    self.error
+                );
+                Ok((offset, accumulator))
             }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
@@ -378,8 +400,17 @@ impl<
         spectrum: &mut MultiLayerSpectrum<C, D>,
     ) -> Result<usize, MzMLParserError> {
         let accumulator = MzMLSpectrumBuilder::<C, D>::new();
-        if self.state == MzMLParserState::SpectrumDone {
-            self.state = MzMLParserState::Resume;
+        match self.state {
+            MzMLParserState::SpectrumDone => {
+                self.state = MzMLParserState::Resume;
+            },
+            MzMLParserState::ParserError => {
+                eprintln!("Starting parsing from error: {:?}", self.error);
+            }
+            state if state > MzMLParserState::SpectrumDone => {
+                eprintln!("Attempting to start parsing a spectrum in state {}", self.state);
+            }
+            _ => {}
         }
         match self._parse_into(accumulator).await {
             Ok((sz, accumulator)) => {
@@ -720,6 +751,7 @@ impl<
             .seek(SeekFrom::Start(offset))
             .await
             .expect("Failed to move seek to offset");
+        self.state = MzMLParserState::Resume;
         let result = self.read_next().await;
         self.handle
             .seek(SeekFrom::Start(start))
@@ -741,6 +773,7 @@ impl<
             .await
             .expect("Failed to save checkpoint");
         self.handle.seek(SeekFrom::Start(byte_offset)).await.ok()?;
+        self.state = MzMLParserState::Resume;
         let result = self.read_next().await;
         self.handle
             .seek(SeekFrom::Start(start))
@@ -751,6 +784,7 @@ impl<
 
     /// Return the data stream to the beginning
     pub async fn reset(&mut self) {
+        self.state = MzMLParserState::Resume;
         self.handle
             .seek(SeekFrom::Start(0))
             .await
