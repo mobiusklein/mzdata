@@ -6,9 +6,7 @@ use std::{
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 
 use crate::{
-    io::{
-        traits::SpectrumGrouping, RandomAccessSpectrumIterator, SpectrumAccessError, ScanSource,
-    },
+    io::{traits::SpectrumGrouping, RandomAccessSpectrumIterator, ScanSource, SpectrumAccessError},
     SpectrumLike,
 };
 
@@ -52,7 +50,6 @@ enum SpectrumGroupIterState {
     Done,
 }
 
-
 /// Iterate over the spectra in [`SpectrumGroup`]
 pub struct SpectrumGroupIter<
     'a,
@@ -79,7 +76,11 @@ impl<
             let emission = match self.state {
                 SpectrumGroupIterState::Precursor => match self.group.precursor.as_ref() {
                     Some(prec) => {
-                        self.state = SpectrumGroupIterState::Product(0);
+                        if n > 0 {
+                            self.state = SpectrumGroupIterState::Product(0);
+                        } else {
+                            self.state = SpectrumGroupIterState::Done;
+                        }
                         Some(prec)
                     }
                     None => {
@@ -97,7 +98,7 @@ impl<
                     }
                 },
                 SpectrumGroupIterState::Product(i) => {
-                    if i < n - 1 {
+                    if i < n.saturating_sub(1) {
                         self.state = SpectrumGroupIterState::Product(i + 1);
                         Some(&self.group.products[i])
                     } else {
@@ -268,7 +269,7 @@ This type emulates the same interface that [`Iterator`] exposes, save that inste
 of yield individual [`Spectrum`](crate::spectrum::spectrum::Spectrum), it yields [`SpectrumGroup`] instead.
 */
 pub struct SpectrumGroupingIterator<
-    R: Iterator<Item=S>,
+    R: Iterator<Item = S>,
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
@@ -291,8 +292,7 @@ pub struct SpectrumGroupingIterator<
 const MISSING_SCAN_ID: &str = "___MISSING_PRECURSOR_ID___";
 
 impl<
-
-        R: Iterator<Item=S>,
+        R: Iterator<Item = S>,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D>,
@@ -301,9 +301,7 @@ impl<
 {
     /// Construct a new [`SpectrumGroupingIterator`] around a [`Iterator`] with a default
     /// buffering level of 3.
-    pub fn new(
-        source: R,
-    ) -> SpectrumGroupingIterator<R, C, D, S, G> {
+    pub fn new(source: R) -> SpectrumGroupingIterator<R, C, D, S, G> {
         SpectrumGroupingIterator::<R, C, D, S, G> {
             source,
             generation_tracker: GenerationTracker::default(),
@@ -657,7 +655,11 @@ mod mzsignal_impl {
             }
         }
 
-        pub fn reprofile_on(&self, reprofiler: &PeakSetReprofiler, fwhm: f32) -> ArrayPair<'static> {
+        pub fn reprofile_on(
+            &self,
+            reprofiler: &PeakSetReprofiler,
+            fwhm: f32,
+        ) -> ArrayPair<'static> {
             let models: Vec<_> = self
                 .mz_array
                 .iter()
@@ -688,7 +690,7 @@ mod mzsignal_impl {
         C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
     > {
-        group: SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>,
+        pub group: SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>,
         ms1_context: Vec<ArcArrays>,
     }
 
@@ -711,15 +713,17 @@ mod mzsignal_impl {
             let ms1_context: Vec<_> = self
                 .ms1_context
                 .into_iter()
-                .map(|ctx| {
-                    ctx.reprofile_with(reprofiler, fwhm)
-                })
+                .map(|ctx| ctx.reprofile_with(reprofiler, fwhm))
                 .collect();
             self.ms1_context = ms1_context;
             self
         }
 
-        pub fn reprofile_with_average_with(self, averager: &mut SignalAverager, reprofiler: &PeakSetReprofiler) -> (SpectrumGroup<C, D>, ArrayPair<'static>) {
+        pub fn reprofile_with_average_with(
+            self,
+            averager: &mut SignalAverager,
+            reprofiler: &PeakSetReprofiler,
+        ) -> (SpectrumGroup<C, D>, ArrayPair<'static>) {
             averager.array_pairs.clear();
 
             for arrays in self.ms1_context.iter() {
@@ -1257,7 +1261,7 @@ mod mzsignal_impl {
         ) -> (
             MS1BufferingIterator<C, D, R>,
             SignalAverager<'lifespan>,
-            PeakSetReprofiler
+            PeakSetReprofiler,
         ) {
             let iter = MS1BufferingIterator::new(self, averaging_width_index);
             let averager = SignalAverager::new(mz_start, mz_end, dx);
