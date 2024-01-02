@@ -883,7 +883,23 @@ impl<
     > ScanWriter<'a, C, D> for MGFWriterType<W, C, D>
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
-        self.write(spectrum)
+        if spectrum.ms_level() != 1 {
+            self.write(spectrum)
+        } else {
+            log::trace!("Skipping writing MS1 spectrum {} to MGF", spectrum.id());
+            Ok(0)
+        }
+    }
+
+    fn write_group<S: SpectrumLike<C, D> + 'static, G: super::SpectrumGrouping<C, D, S> + 'static>(
+            &mut self,
+            group: &'a G,
+        ) -> io::Result<usize> {
+        let mut c = 0;
+        for s in group.products() {
+            c += self.write(s)?;
+        }
+        Ok(c)
     }
 
     fn flush(&mut self) -> io::Result<()> {

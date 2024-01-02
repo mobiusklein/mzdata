@@ -898,6 +898,7 @@ impl<C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + 
             self.mzml_parser.check_stream("spectrum").unwrap(),
             "The next XML tag was not `spectrum`"
         );
+        self.mzml_parser.state = MzMLParserState::Resume;
         let result = self.read_next();
         self.mzml_parser
             .seek(SeekFrom::Start(start))
@@ -920,6 +921,7 @@ impl<C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + 
             self.mzml_parser.check_stream("spectrum").unwrap(),
             "The next XML tag was not `spectrum`"
         );
+        self.mzml_parser.state = MzMLParserState::Resume;
         let result = self.read_next();
         self.mzml_parser
             .seek(SeekFrom::Start(start))
@@ -929,6 +931,7 @@ impl<C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + 
 
     /// Return the data stream to the beginning
     fn reset(&mut self) {
+        self.mzml_parser.state = MzMLParserState::Resume;
         self.mzml_parser
             .seek(SeekFrom::Start(0))
             .expect("Failed to reset file stream");
