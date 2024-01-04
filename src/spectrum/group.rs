@@ -801,7 +801,7 @@ mod mzsignal_impl {
         }
     }
 
-    pub struct MS1BufferingIterator<
+    pub struct DeferredSpectrumAveragingIterator<
         C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
         R: Iterator<Item=G>,
@@ -819,7 +819,7 @@ mod mzsignal_impl {
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             R: Iterator<Item=G>,
             G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-        > Iterator for MS1BufferingIterator<C, D, R, G>
+        > Iterator for DeferredSpectrumAveragingIterator<C, D, R, G>
     {
         type Item = SpectrumAveragingContext<C, D, G>;
 
@@ -833,7 +833,7 @@ mod mzsignal_impl {
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             R: Iterator<Item=G>,
             G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>
-        > MS1BufferingIterator<C, D, R, G>
+        > DeferredSpectrumAveragingIterator<C, D, R, G>
     {
         pub fn new(
             source: R,
@@ -1254,11 +1254,11 @@ mod mzsignal_impl {
             mz_end: f64,
             dx: f64,
         ) -> (
-            MS1BufferingIterator<C, D, Self, SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>>,
+            DeferredSpectrumAveragingIterator<C, D, Self, SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>>,
             SignalAverager<'lifespan>,
             PeakSetReprofiler,
         ) {
-            let iter = MS1BufferingIterator::new(self, averaging_width_index);
+            let iter = DeferredSpectrumAveragingIterator::new(self, averaging_width_index);
             let averager = SignalAverager::new(mz_start, mz_end, dx);
             let reprofiler = PeakSetReprofiler::new(mz_start, mz_end, dx);
             (iter, averager, reprofiler)
@@ -1267,7 +1267,7 @@ mod mzsignal_impl {
 }
 
 #[cfg(feature = "mzsignal")]
-pub use mzsignal_impl::{average_spectra, SpectrumAveragingIterator, MS1BufferingIterator as DeferredSpectrumAveragingIterator};
+pub use mzsignal_impl::{average_spectra, SpectrumAveragingIterator, DeferredSpectrumAveragingIterator};
 
 #[cfg(test)]
 mod test {
