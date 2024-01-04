@@ -18,14 +18,15 @@ use crate::prelude::*;
 
 use super::super::offset_index::OffsetIndex;
 use super::super::traits::{
-    MZFileReader, RandomAccessSpectrumIterator, SpectrumAccessError, ScanSource, SeekRead,
+    MZFileReader, RandomAccessSpectrumIterator, ScanSource, SeekRead, SpectrumAccessError,
 };
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
-use crate::meta::FileDescription;
-use crate::meta::InstrumentConfiguration;
-use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
+use crate::meta::{
+    DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
+    MassSpectrometryRun, Software,
+};
 use crate::params::{Param, ParamList, Unit};
 use crate::prelude::ParamLike;
 use crate::spectrum::bindata::{
@@ -410,8 +411,12 @@ impl<
     }
 }
 
-impl<'inner, 'outer: 'inner, C: CentroidLike + Default + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>
-    MzMLSpectrumBuilder<'inner, C, D>
+impl<
+        'inner,
+        'outer: 'inner,
+        C: CentroidLike + Default + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > MzMLSpectrumBuilder<'inner, C, D>
 {
     pub fn new() -> MzMLSpectrumBuilder<'inner, C, D> {
         Self::with_detail_level(DetailLevel::Full)
@@ -885,14 +890,9 @@ pub struct MzMLReaderType<
     pub reference_param_groups: HashMap<String, Vec<Param>>,
     pub detail_level: DetailLevel,
 
-    // Run attributes
-    pub run_id: Option<String>,
-    pub default_instrument_config: Option<u32>,
-    pub default_source_file: Option<String>,
-    pub start_timestamp: Option<String>,
 
     // SpectrumList attributes
-    pub default_data_processing: Option<String>,
+    pub run: MassSpectrometryRun,
     num_spectra: Option<u64>,
 
     buffer: Bytes,
@@ -941,12 +941,8 @@ impl<
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
             instrument_id_map: IncrementingIdMap::default(),
-            run_id: None,
-            default_instrument_config: None,
-            default_source_file: None,
-            start_timestamp: None,
             num_spectra: None,
-            default_data_processing: None,
+            run: MassSpectrometryRun::default(),
         };
         match inst.parse_metadata() {
             Ok(()) => {}
@@ -1066,12 +1062,12 @@ impl<
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
 
-        self.run_id = accumulator.run_id;
-        self.default_instrument_config = accumulator.default_instrument_config;
-        self.default_source_file = accumulator.default_source_file;
-        self.start_timestamp = accumulator.start_timestamp;
+        self.run.id = accumulator.run_id;
+        self.run.default_instrument_id = accumulator.default_instrument_config;
+        self.run.default_source_file_id = accumulator.default_source_file;
+        self.run.start_time = accumulator.start_timestamp;
+        self.run.default_data_processing_id = accumulator.default_data_processing;
         self.num_spectra = accumulator.num_spectra;
-        self.default_data_processing = accumulator.default_data_processing;
 
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
@@ -1090,9 +1086,8 @@ impl<
         &'b mut self,
         mut accumulator: B,
     ) -> Result<(B, usize), MzMLParserError> {
-
         if self.state == MzMLParserState::EOF {
-            return Err(MzMLParserError::SectionOver("spectrum"))
+            return Err(MzMLParserError::SectionOver("spectrum"));
         }
 
         let mut reader = Reader::from_reader(&mut self.handle);
@@ -1103,7 +1098,10 @@ impl<
             match reader.read_event_into(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => {
                     if log::log_enabled!(log::Level::Trace) {
-                        log::trace!("Starting mzML element: {}", String::from_utf8_lossy(e.name().as_ref()));
+                        log::trace!(
+                            "Starting mzML element: {}",
+                            String::from_utf8_lossy(e.name().as_ref())
+                        );
                     }
                     match accumulator.start_element(e, self.state) {
                         Ok(state) => {
@@ -1126,7 +1124,10 @@ impl<
                 }
                 Ok(Event::End(ref e)) => {
                     if log::log_enabled!(log::Level::Trace) {
-                        log::trace!("Ending mzML element: {}", String::from_utf8_lossy(e.name().as_ref()));
+                        log::trace!(
+                            "Ending mzML element: {}",
+                            String::from_utf8_lossy(e.name().as_ref())
+                        );
                     }
                     match accumulator.end_element(e, self.state) {
                         Ok(state) => {
@@ -1229,12 +1230,15 @@ impl<
         match self.state {
             MzMLParserState::SpectrumDone => {
                 self.state = MzMLParserState::Resume;
-            },
+            }
             MzMLParserState::ParserError => {
                 eprintln!("Starting parsing from error: {:?}", self.error);
             }
             state if state > MzMLParserState::SpectrumDone => {
-                eprintln!("Attempting to start parsing a spectrum in state {}", self.state);
+                eprintln!(
+                    "Attempting to start parsing a spectrum in state {}",
+                    self.state
+                );
             }
             _ => {}
         }
@@ -1250,7 +1254,7 @@ impl<
     /// Read the next spectrum directly. Used to implement iteration.
     pub fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
         if self.state == MzMLParserState::EOF {
-            return None
+            return None;
         }
         let mut spectrum = MultiLayerSpectrum::<C, D>::default();
         match self.read_into(&mut spectrum) {
@@ -1263,10 +1267,14 @@ impl<
     }
 }
 
-
 /// When the underlying stream supports random access, this type can read the index at the end of
 /// an `indexedmzML` document and use the offset map to jump to immediately jump to a specific spectrum
-impl<R: SeekRead, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap> MzMLReaderType<R, C, D> {
+impl<
+        R: SeekRead,
+        C: CentroidPeakAdapting + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > MzMLReaderType<R, C, D>
+{
     pub fn check_stream(&mut self, next_tag: &str) -> Result<bool, MzMLParserError> {
         let position = match self.stream_position() {
             Ok(pos) => pos,
@@ -1332,8 +1340,11 @@ impl<R: SeekRead, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPe
 }
 
 /// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
-impl<R: io::Read, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap> Iterator
-    for MzMLReaderType<R, C, D>
+impl<
+        R: io::Read,
+        C: CentroidPeakAdapting + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > Iterator for MzMLReaderType<R, C, D>
 {
     type Item = MultiLayerSpectrum<C, D>;
 
@@ -1344,8 +1355,11 @@ impl<R: io::Read, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPe
 
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
-impl<R: SeekRead, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>
-    ScanSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+impl<
+        R: SeekRead,
+        C: CentroidPeakAdapting + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > ScanSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
@@ -1409,8 +1423,11 @@ impl<R: SeekRead, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPe
 
 /// The iterator can also be updated to move to a different location in the
 /// stream efficiently.
-impl<R: SeekRead, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>
-    RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+impl<
+        R: SeekRead,
+        C: CentroidPeakAdapting + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_id(id) {
@@ -1443,7 +1460,12 @@ impl<R: SeekRead, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPe
     }
 }
 
-impl<R: SeekRead, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap> MzMLReaderType<R, C, D> {
+impl<
+        R: SeekRead,
+        C: CentroidPeakAdapting + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > MzMLReaderType<R, C, D>
+{
     /// Construct a new MzMLReaderType and build an offset index
     /// using [`Self::build_index`]
     pub fn new_indexed(file: R) -> MzMLReaderType<R, C, D> {
@@ -1637,8 +1659,10 @@ impl<R: SeekRead, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPe
     }
 }
 
-impl<C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>
-    MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<fs::File, C, D>
+impl<
+        C: CentroidPeakAdapting + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<fs::File, C, D>
 {
     fn open_file(source: fs::File) -> Self {
         Self::new(source)

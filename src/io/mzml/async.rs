@@ -22,9 +22,7 @@ use quick_xml::Reader;
 use crate::SpectrumLike;
 
 use crate::io::utils::DetailLevel;
-use crate::meta::FileDescription;
-use crate::meta::InstrumentConfiguration;
-use crate::meta::{DataProcessing, MSDataFileMetadata, Software};
+use crate::meta::{FileDescription, InstrumentConfiguration, DataProcessing, MSDataFileMetadata, Software, MassSpectrometryRun};
 use crate::params::Param;
 use crate::spectrum::bindata::BuildFromArrayMap;
 use crate::spectrum::spectrum::{
@@ -79,14 +77,9 @@ pub struct MzMLReaderType<
 
     pub(crate) instrument_id_map: IncrementingIdMap,
 
-    // Run attributes
-    pub run_id: Option<String>,
-    pub default_instrument_config: Option<u32>,
-    pub default_source_file: Option<String>,
-    pub start_timestamp: Option<String>,
+    pub run: MassSpectrometryRun,
 
     // SpectrumList attributes
-    pub default_data_processing: Option<String>,
     num_spectra: Option<u64>,
 
     buffer: Bytes,
@@ -130,11 +123,7 @@ impl<
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
             instrument_id_map: IncrementingIdMap::default(),
-            run_id: None,
-            default_instrument_config: None,
-            default_source_file: None,
-            start_timestamp: None,
-            default_data_processing: None,
+            run: MassSpectrometryRun::default(),
             num_spectra: None,
         };
         match inst.parse_metadata().await {
@@ -249,12 +238,12 @@ impl<
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
 
-        self.run_id = accumulator.run_id;
-        self.default_instrument_config = accumulator.default_instrument_config;
-        self.default_source_file = accumulator.default_source_file;
-        self.start_timestamp = accumulator.start_timestamp;
+        self.run.id = accumulator.run_id;
+        self.run.default_instrument_id = accumulator.default_instrument_config;
+        self.run.default_source_file_id = accumulator.default_source_file;
+        self.run.start_time = accumulator.start_timestamp;
+        self.run.default_data_processing_id = accumulator.default_data_processing;
         self.num_spectra = accumulator.num_spectra;
-        self.default_data_processing = accumulator.default_data_processing;
 
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),

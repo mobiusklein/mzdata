@@ -21,7 +21,7 @@ use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 use crate::meta::{
     ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
-    Software,
+    Software, MassSpectrometryRun,
 };
 use crate::params::{ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, Unit};
 use crate::spectrum::bindata::{
@@ -433,6 +433,8 @@ pub struct MzMLWriterType<
     pub bic_collector: ChromatogramCollector,
     pub wrote_summaries: bool,
 
+    pub run: MassSpectrometryRun,
+
     handle: InnerXMLWriter<W>,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
@@ -527,6 +529,7 @@ where
             ms_cv: ControlledVocabulary::MS,
             data_array_compression,
             wrote_summaries: false,
+            run: MassSpectrometryRun::default(),
         }
     }
 
@@ -546,6 +549,7 @@ where
         })
     }
 
+    /// Imitate the [`io::Seek`] method using an internal byte counter
     pub fn stream_position(&mut self) -> io::Result<u64> {
         Ok(self.handle.handle.get_mut().bytes_written())
     }

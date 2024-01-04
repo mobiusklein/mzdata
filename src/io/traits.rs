@@ -79,8 +79,11 @@ pub trait ScanSource<
         self.len() == 0
     }
 
+    /// Access the spectrum offset index to enumerate all spectra by ID
     fn get_index(&self) -> &OffsetIndex;
 
+    /// Set the spectrum offset index. This method shouldn't be needed if not writing
+    /// a new adapter
     fn set_index(&mut self, index: OffsetIndex);
 
     /// Helper method to support seeking to an ID
@@ -120,8 +123,8 @@ pub trait ScanSource<
         SpectrumGroupingIterator::new(self.iter())
     }
 
-    /// Consume `self` to create a `SpectrumGroupIterator`. This is ideal for non-rewindable sources
-    /// like `STDIN`
+    /// Consume `self` to create a `SpectrumGroupIterator`. This is ideal for non-rewindable streams
+    /// like [`io::stdin`] which don't implement [`io::Seek`]
     fn into_groups<'lifespan>(self) -> SpectrumGroupingIterator<Self, C, D, S>
     where
         Self: Sized,
