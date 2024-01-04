@@ -71,4 +71,4 @@ pub use crate::spectrum::chromatogram::{Chromatogram, ChromatogramLike};
 pub use group::{SpectrumGroup, SpectrumGroupIter, SpectrumGroupingIterator};
 
 #[cfg(feature = "mzsignal")]
-pub use group::{average_spectra, SpectrumAveragingIterator};
+pub use group::{average_spectra, SpectrumAveragingIterator, DeferredSpectrumAveragingIterator};

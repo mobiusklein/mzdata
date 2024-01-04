@@ -689,21 +689,25 @@ mod mzsignal_impl {
     pub struct SpectrumAveragingContext<
         C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>
     > {
-        pub group: SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>,
+        pub group: G,
         ms1_context: Vec<ArcArrays>,
+        _c: PhantomData<C>,
+        _d: PhantomData<D>
     }
 
     impl<
             C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
-        > SpectrumAveragingContext<C, D>
+            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>
+        > SpectrumAveragingContext<C, D, G>
     {
         pub fn new(
-            group: SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>,
+            group: G,
             ms1_context: Vec<ArcArrays>,
         ) -> Self {
-            Self { group, ms1_context }
+            Self { group, ms1_context, _c: PhantomData, _d: PhantomData}
         }
 
         pub fn reprofile_with(mut self, reprofiler: &PeakSetReprofiler, fwhm: f32) -> Self {
@@ -723,7 +727,7 @@ mod mzsignal_impl {
             self,
             averager: &mut SignalAverager,
             reprofiler: &PeakSetReprofiler,
-        ) -> (SpectrumGroup<C, D>, ArrayPair<'static>) {
+        ) -> (G, ArrayPair<'static>) {
             averager.array_pairs.clear();
 
             for arrays in self.ms1_context.iter() {
@@ -755,7 +759,7 @@ mod mzsignal_impl {
             self,
             averager: &mut SignalAverager,
         ) -> (
-            SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>,
+            G,
             ArrayPair<'static>,
         ) {
             averager.array_pairs.clear();
@@ -800,28 +804,24 @@ mod mzsignal_impl {
     pub struct MS1BufferingIterator<
         C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
-        R: ScanSource<C, D, MultiLayerSpectrum<C, D>>,
+        R: Iterator<Item=G>,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
     > {
-        source: SpectrumGroupingIterator<
-            R,
-            C,
-            D,
-            MultiLayerSpectrum<C, D>,
-            SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>,
-        >,
+        source: R,
         averaging_width_index: usize,
-        buffer: VecDeque<SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>>,
+        buffer: VecDeque<G>,
         context_buffer: VecDeque<ArcArrays>,
-        output_buffer: VecDeque<SpectrumAveragingContext<C, D>>,
+        output_buffer: VecDeque<SpectrumAveragingContext<C, D, G>>,
     }
 
     impl<
             C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
-            R: ScanSource<C, D, MultiLayerSpectrum<C, D>>,
-        > Iterator for MS1BufferingIterator<C, D, R>
+            R: Iterator<Item=G>,
+            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+        > Iterator for MS1BufferingIterator<C, D, R, G>
     {
-        type Item = SpectrumAveragingContext<C, D>;
+        type Item = SpectrumAveragingContext<C, D, G>;
 
         fn next(&mut self) -> Option<Self::Item> {
             self.next_group()
@@ -831,17 +831,12 @@ mod mzsignal_impl {
     impl<
             C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
-            R: ScanSource<C, D, MultiLayerSpectrum<C, D>>,
-        > MS1BufferingIterator<C, D, R>
+            R: Iterator<Item=G>,
+            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>
+        > MS1BufferingIterator<C, D, R, G>
     {
         pub fn new(
-            source: SpectrumGroupingIterator<
-                R,
-                C,
-                D,
-                MultiLayerSpectrum<C, D>,
-                SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>,
-            >,
+            source: R,
             averaging_width_index: usize,
         ) -> Self {
             let mut inst = Self {
@@ -855,11 +850,11 @@ mod mzsignal_impl {
             inst
         }
 
-        pub fn into_inner(self) -> SpectrumGroupingIterator<R, C, D> {
+        pub fn into_inner(self) -> R {
             self.source
         }
 
-        pub fn get_ref(&self) -> &SpectrumGroupingIterator<R, C, D> {
+        pub fn get_ref(&self) -> &R {
             &self.source
         }
 
@@ -873,7 +868,7 @@ mod mzsignal_impl {
 
         fn copy_out_arrays(
             &self,
-            group: &SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>,
+            group: &G,
         ) -> Option<ArcArrays> {
             group.precursor().and_then(|scan| {
                 if scan.signal_continuity() == SignalContinuity::Profile {
@@ -940,7 +935,7 @@ mod mzsignal_impl {
             }
         }
 
-        fn _next_group_no_pop(&mut self) -> Option<SpectrumAveragingContext<C, D>> {
+        fn _next_group_no_pop(&mut self) -> Option<SpectrumAveragingContext<C, D, G>> {
             let ms1_context = self.process_block();
             if let Some(group) = self.buffer.pop_front() {
                 Some(SpectrumAveragingContext::new(group, ms1_context))
@@ -949,9 +944,9 @@ mod mzsignal_impl {
             }
         }
 
-        fn update_group(&mut self) -> Option<SpectrumAveragingContext<C, D>> {
+        fn update_group(&mut self) -> Option<SpectrumAveragingContext<C, D, G>> {
             let result = self._next_group_no_pop();
-            if let Some(group) = self.source.next_group() {
+            if let Some(group) = self.source.next() {
                 self.context_buffer.pop_front();
                 if let Some(pair) = self.copy_out_arrays(&group) {
                     self.context_buffer.push_back(pair);
@@ -965,7 +960,7 @@ mod mzsignal_impl {
             self.context_buffer.iter().cloned().collect()
         }
 
-        fn next_group(&mut self) -> Option<SpectrumAveragingContext<C, D>> {
+        fn next_group(&mut self) -> Option<SpectrumAveragingContext<C, D, G>> {
             if let Some(group) = self.output_buffer.pop_front() {
                 Some(group)
             } else {
@@ -1259,7 +1254,7 @@ mod mzsignal_impl {
             mz_end: f64,
             dx: f64,
         ) -> (
-            MS1BufferingIterator<C, D, R>,
+            MS1BufferingIterator<C, D, Self, SpectrumGroup<C, D, MultiLayerSpectrum<C, D>>>,
             SignalAverager<'lifespan>,
             PeakSetReprofiler,
         ) {
@@ -1272,7 +1267,7 @@ mod mzsignal_impl {
 }
 
 #[cfg(feature = "mzsignal")]
-pub use mzsignal_impl::{average_spectra, SpectrumAveragingIterator};
+pub use mzsignal_impl::{average_spectra, SpectrumAveragingIterator, MS1BufferingIterator as DeferredSpectrumAveragingIterator};
 
 #[cfg(test)]
 mod test {
