@@ -11,6 +11,7 @@ use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, Deconvoluted
 
 use crate::spectrum::group::SpectrumGroupingIterator;
 use crate::spectrum::spectrum::{MultiLayerSpectrum, SpectrumLike};
+use crate::spectrum::SpectrumGroup;
 
 use super::utils::FileSource;
 use super::OffsetIndex;
@@ -665,6 +666,41 @@ pub trait SpectrumGrouping<
         }
     }
 }
+
+pub trait RandomAccessSpectrumGroupingIterator<
+    C: CentroidLike + Default = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
+    G: SpectrumGrouping<C, D, S> = SpectrumGroup<C, D, S>,
+>: Iterator<Item = G>
+{
+    fn start_from_id(&mut self, id: &str) -> Result<&Self, SpectrumAccessError>;
+    fn start_from_index(&mut self, index: usize) -> Result<&Self, SpectrumAccessError>;
+    fn start_from_time(&mut self, time: f64) -> Result<&Self, SpectrumAccessError>;
+}
+
+impl<
+        R: RandomAccessSpectrumIterator<C, D, S>,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumLike<C, D>,
+        G: SpectrumGrouping<C, D, S>,
+    > RandomAccessSpectrumGroupingIterator<C, D, S, G> for SpectrumGroupingIterator<R, C, D, S, G>
+{
+    fn start_from_id(&mut self, id: &str) -> Result<&Self, SpectrumAccessError> {
+        self.start_from_id(id)
+    }
+
+    fn start_from_index(&mut self, index: usize) -> Result<&Self, SpectrumAccessError> {
+        self.start_from_index(index)
+    }
+
+    fn start_from_time(&mut self, time: f64) -> Result<&Self, SpectrumAccessError> {
+        self.start_from_time(time)
+    }
+}
+
+
 
 /// A collection of spectra held in memory but providing an interface
 /// identical to a data file. This structure owns its data, so in order

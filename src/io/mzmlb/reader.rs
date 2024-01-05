@@ -4,6 +4,7 @@ use std::io::{self, prelude::*, SeekFrom};
 use std::path::Path;
 use std::{fs, mem};
 
+#[cfg(feature = "filename")]
 use filename;
 use hdf5::types::{FixedAscii, FixedUnicode, VarLenAscii, VarLenUnicode};
 use hdf5::{self, filters, Dataset, Selection};
@@ -988,13 +989,31 @@ impl<C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + 
 impl<C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>
     MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
 {
+    #[allow(unused)]
+    /// The underlying HDF5 library for Rust, [`hdf5`](https://docs.rs/hdf5/latest/hdf5/) doesn't
+    /// support reading directly from Rust [`io::Read`]-implementing objects yet. Without a means
+    /// of retrieving a [`path::Path`]-like value from a file handle, with the [`filename`](https://docs.rs/filename/latest/filename/)
+    /// library, this method **panics**. Enable this extra feature if you would like this method to
+    /// work, but it is reported to have obscure compilation errors.
     fn open_file(source: fs::File) -> Self {
-        let name = filename::file_name(&source).unwrap();
-        Self::new(&name).unwrap()
+        #[cfg(feature = "filename")]
+        {
+            let name = filename::file_name(&source).unwrap();
+            Self::new(&name).unwrap()
+        }
+        #[cfg(not(feature = "filename"))]
+        panic!("Cannot read an mzMLb file from an open file handle without the `filename` crate")
     }
 
     fn construct_index_from_stream(&mut self) -> u64 {
         self.index.len() as u64
+    }
+
+    fn open_path<P>(path: P) -> io::Result<Self>
+    where
+        P: Into<std::path::PathBuf> + Clone,
+    {
+        Self::new(&path.into())
     }
 }
 

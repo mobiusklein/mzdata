@@ -18,10 +18,6 @@ use crate::io::mzml::is_mzml;
 use crate::io::mgf::is_mgf;
 use crate::io::compression::{is_gzipped, is_gzipped_extension};
 
-#[cfg(feature = "mzmlb")]
-use super::traits::MZFileReader;
-
-
 /// Mass spectrometry file formats that [`mzdata`](crate)
 /// supports
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -127,11 +123,8 @@ pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<Box<dyn ScanSour
             },
             #[cfg(feature = "mzmlb")]
             MassSpectrometryFormat::MzMLb => {
-                let reader = MzMLbReader::open_path(path);
-                match reader {
-                    Ok(reader) => Ok(Box::new(reader)),
-                    Err(e) => Err(e),
-                }
+                let reader = MzMLbReader::new(&path)?;
+                Ok(Box::new(reader))
             }
             _ => {
                 Err(io::Error::new(io::ErrorKind::Unsupported, "File format not supported"))
