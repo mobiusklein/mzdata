@@ -41,6 +41,9 @@ required-features = ["parallelism"]
 name = "averaging_writer"
 required-features = ["parallelism", "mzsignal", "nalgebra"]
 
+[[example]]
+name = "random_access_iter"
+required-features = ["nalgebra"]
 
 [lib]
 name = "mzdata"

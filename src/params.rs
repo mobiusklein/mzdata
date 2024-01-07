@@ -4,7 +4,10 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::num;
 use std::str::{self, FromStr};
+
+use thiserror::Error;
 
 #[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -13,6 +16,61 @@ pub enum ValueType {
     Integer(i64),
     Float(f64),
     Other(Box<Vec<u8>>)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CURIE {
+    controlled_vocabulary: ControlledVocabulary,
+    accession: u32
+}
+
+impl CURIE {
+    pub const fn new(cv_id: ControlledVocabulary, accession: u32) -> Self { Self { controlled_vocabulary: cv_id, accession } }
+}
+
+impl<T: ParamLike> PartialEq<T> for CURIE {
+    fn eq(&self, other: &T) -> bool {
+        if other.is_controlled() {
+            false
+        } else {
+            if other.controlled_vocabulary().unwrap() != self.controlled_vocabulary {
+                false
+            } else if other.accession().unwrap() != self.accession {
+                false
+            } else {
+                true
+            }
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum CURIEParsingError {
+    #[error("{0} is not a recognized controlled vocabulary")]
+    UnknownControlledVocabulary(#[from] #[source] ControlledVocabularyResolutionError),
+    #[error("Failed to parse accession number {0}")]
+    AccessionParsingError(#[from] #[source] num::ParseIntError),
+    #[error("Did not detect a namespace separator ':' token")]
+    MissingNamespaceSeparator
+}
+
+impl FromStr for CURIE {
+    type Err = CURIEParsingError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut tokens = s.split(":");
+        let cv = tokens.next().unwrap();
+        let accession = tokens.next();
+        if accession.is_none() {
+            Err(CURIEParsingError::MissingNamespaceSeparator)
+        } else{
+
+            let cv: ControlledVocabulary = cv.parse::<ControlledVocabulary>()?;
+
+            let accession = accession.unwrap().parse()?;
+            Ok(CURIE::new(cv, accession))
+        }
+    }
 }
 
 pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<u32>) {
@@ -45,10 +103,6 @@ pub trait ParamLike {
             false
         }
     }
-
-    // fn parse<T: str::FromStr>(&self) -> Result<T, T::Err> {
-    //     self.value().parse::<T>()
-    // }
 
     fn parse<T: str::FromStr>(&self) -> Result<T, T::Err> {
         self.value().parse::<T>()
@@ -353,14 +407,12 @@ impl ControlledVocabulary {
 }
 
 #[doc(hidden)]
-#[derive(Debug, Clone)]
-pub enum ControlledVocabularyResolutionError {}
-
-impl Display for ControlledVocabularyResolutionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(format!("{:?}", self).as_str())
-    }
+#[derive(Debug, Clone, Error)]
+pub enum ControlledVocabularyResolutionError {
+    #[error("Unrecognized controlled vocabulary {0}")]
+    UnknownControlledVocabulary(String)
 }
+
 
 impl FromStr for ControlledVocabulary {
     type Err = ControlledVocabularyResolutionError;
@@ -392,6 +444,10 @@ pub trait ParamDescribed {
 
     fn get_param_by_name(&self, name: &str) -> Option<&Param> {
         self.params().iter().find(|&param| param.name == name)
+    }
+
+    fn get_param_by_curie(&self, curie: &CURIE) -> Option<&Param> {
+        self.params().iter().find(|&param| curie == param)
     }
 
     fn get_param_by_accession(&self, accession: &str) -> Option<&Param> {

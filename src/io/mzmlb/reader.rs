@@ -687,9 +687,9 @@ pub struct MzMLbReaderType<
 }
 
 impl<'a, 'b: 'a, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap> MzMLbReaderType<C, D> {
-    /// Create a new `[MzMLbReader]` with an internal cache size of `chunk_size` elements
+    /// Create a new [`MzMLbReader`] with an internal cache size of `chunk_size` elements
     /// per data array to reduce the number of disk reads needed to populate spectra, and
-    /// sets the `[DetailLevel]`.
+    /// sets the [`DetailLevel`].
     pub fn with_chunk_size_and_detail_level<P: AsRef<Path>>(
         path: &P,
         chunk_size: usize,
@@ -733,7 +733,7 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPea
         Ok(inst)
     }
 
-    /// Create a new `[MzMLbReader]` with an internal cache size of `chunk_size` elements
+    /// Create a new [`MzMLbReader`] with an internal cache size of `chunk_size` elements
     /// per data array to reduce the number of disk reads needed to populate spectra.
     ///
     /// The default chunk size is 2**20 elements, which can use as much as 8.4 MB for 64-bit
@@ -772,7 +772,7 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPea
         Ok(buf)
     }
 
-    /// Create a new `[MzMLbReader]` with the default caching behavior.
+    /// Create a new [`MzMLbReader`] with the default caching behavior.
     pub fn new<P: AsRef<Path>>(path: &P) -> io::Result<Self> {
         Self::with_chunk_size(path, ExternalDataRegistry::default_chunk_size())
     }
@@ -870,7 +870,9 @@ impl<'a, 'b: 'a, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPea
     }
 }
 
-/// [`MzMLReaderType`] instances are [`Iterator`]s over [`MultiLayerSpectrum`]
+/// [`MzMLbReaderType`] instances are [`Iterator`]s over [`MultiLayerSpectrum`], like all
+/// file format readers. This involves advancing the position of the internal mzML file
+/// reader in-place without seeking.
 impl<C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap> Iterator for MzMLbReaderType<C, D> {
     type Item = MultiLayerSpectrum<C, D>;
 
@@ -992,7 +994,7 @@ impl<C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + 
     #[allow(unused)]
     /// The underlying HDF5 library for Rust, [`hdf5`](https://docs.rs/hdf5/latest/hdf5/) doesn't
     /// support reading directly from Rust [`io::Read`]-implementing objects yet. Without a means
-    /// of retrieving a [`path::Path`]-like value from a file handle, with the [`filename`](https://docs.rs/filename/latest/filename/)
+    /// of retrieving a [`path::Path`](std::path::Path)-like value from a file handle, with the [`filename`](https://docs.rs/filename/latest/filename/)
     /// library, this method **panics**. Enable this extra feature if you would like this method to
     /// work, but it is reported to have obscure compilation errors.
     fn open_file(source: fs::File) -> Self {

@@ -419,4 +419,15 @@ mod test {
         assert_eq!(view.len(), 19800);
         Ok(())
     }
+
+    #[test]
+    fn test_decode_empty() {
+        let mut da = DataArray::wrap(&ArrayType::MZArray, BinaryDataArrayType::Float64, Vec::new());
+        da.compression = BinaryCompressionType::Zlib;
+
+        assert_eq!(da.data.len(), 0);
+        assert_eq!(da.data_len().unwrap(), 0);
+        assert_eq!(da.decode().unwrap().len(), 0);
+        assert_eq!(da.to_f64().unwrap().len(), 0);
+    }
 }

@@ -368,6 +368,27 @@ pub enum SpectrumAccessError {
     IOError(#[source] Option<io::Error>),
 }
 
+impl From<SpectrumAccessError> for io::Error {
+    fn from(value: SpectrumAccessError) -> Self {
+        let s = value.to_string();
+        match value {
+            SpectrumAccessError::SpectrumNotFound => io::Error::new(io::ErrorKind::NotFound, s),
+            SpectrumAccessError::SpectrumIdNotFound(_) => io::Error::new(io::ErrorKind::NotFound, s),
+            SpectrumAccessError::SpectrumIndexNotFound(_) => io::Error::new(io::ErrorKind::NotFound, s),
+            SpectrumAccessError::IOError(e) => {
+                match e {
+                    Some(e) => {
+                        e
+                    },
+                    None => {
+                        io::Error::new(io::ErrorKind::Other, s)
+                    },
+                }
+            },
+        }
+    }
+}
+
 /// An extension of [`ScanSource`] that supports relocatable iteration relative to a
 /// specific spectrum coordinate or identifier.
 pub trait RandomAccessSpectrumIterator<
@@ -667,6 +688,7 @@ pub trait SpectrumGrouping<
     }
 }
 
+/// Analogous to to [`RandomAccessSpectrumIterator`], but for [`SpectrumGrouping`] implementations.
 pub trait RandomAccessSpectrumGroupingIterator<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
@@ -677,29 +699,8 @@ pub trait RandomAccessSpectrumGroupingIterator<
     fn start_from_id(&mut self, id: &str) -> Result<&Self, SpectrumAccessError>;
     fn start_from_index(&mut self, index: usize) -> Result<&Self, SpectrumAccessError>;
     fn start_from_time(&mut self, time: f64) -> Result<&Self, SpectrumAccessError>;
+    fn reset_state(&mut self);
 }
-
-impl<
-        R: RandomAccessSpectrumIterator<C, D, S>,
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
-        S: SpectrumLike<C, D>,
-        G: SpectrumGrouping<C, D, S>,
-    > RandomAccessSpectrumGroupingIterator<C, D, S, G> for SpectrumGroupingIterator<R, C, D, S, G>
-{
-    fn start_from_id(&mut self, id: &str) -> Result<&Self, SpectrumAccessError> {
-        self.start_from_id(id)
-    }
-
-    fn start_from_index(&mut self, index: usize) -> Result<&Self, SpectrumAccessError> {
-        self.start_from_index(index)
-    }
-
-    fn start_from_time(&mut self, time: f64) -> Result<&Self, SpectrumAccessError> {
-        self.start_from_time(time)
-    }
-}
-
 
 
 /// A collection of spectra held in memory but providing an interface
@@ -711,7 +712,7 @@ pub struct MemoryScanSource<
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 > {
-    spectra: Vec<S>,
+    spectra: VecDeque<S>,
     position: usize,
     offsets: OffsetIndex,
     _c: PhantomData<C>,
@@ -724,7 +725,7 @@ impl<
         S: SpectrumLike<C, D> + Clone,
     > MemoryScanSource<C, D, S>
 {
-    pub fn new(spectra: Vec<S>) -> Self {
+    pub fn new(spectra: VecDeque<S>) -> Self {
         let mut offsets = OffsetIndex::new("spectrum".to_string());
         spectra.iter().enumerate().for_each(|(i, s)| {
             offsets.insert(s.id().to_string(), i as u64);
@@ -834,9 +835,9 @@ impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D> + Clone,
-    > From<Vec<S>> for MemoryScanSource<C, D, S>
+    > From<VecDeque<S>> for MemoryScanSource<C, D, S>
 {
-    fn from(value: Vec<S>) -> Self {
+    fn from(value: VecDeque<S>) -> Self {
         Self::new(value)
     }
 }

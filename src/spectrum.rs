@@ -52,23 +52,26 @@ for spectrum in reader {
 
 */
 
-pub(crate) mod scan_properties;
 pub mod bindata;
-pub(crate) mod group;
-pub(crate) mod spectrum;
 pub(crate) mod chromatogram;
+pub(crate) mod group;
+pub(crate) mod scan_properties;
+pub(crate) mod spectrum;
 pub mod utils;
 
-pub use crate::spectrum::scan_properties::*;
 pub use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray};
-pub use crate::spectrum::spectrum::{
-    SpectrumLike, PeakDataLevel,
-    SpectrumConversionError, SpectrumProcessingError,
-    CentroidSpectrum, RawSpectrum, Spectrum, DeconvolutedSpectrum,
-    MultiLayerSpectrum, CentroidSpectrumType, DeconvolutedSpectrumType};
 pub use crate::spectrum::chromatogram::{Chromatogram, ChromatogramLike};
+pub use crate::spectrum::scan_properties::*;
+pub use crate::spectrum::spectrum::{
+    CentroidSpectrum, CentroidSpectrumType, DeconvolutedSpectrum, DeconvolutedSpectrumType,
+    MultiLayerSpectrum, PeakDataLevel, RawSpectrum, Spectrum, SpectrumConversionError,
+    SpectrumLike, SpectrumProcessingError,
+};
 
-pub use group::{SpectrumGroup, SpectrumGroupIter, SpectrumGroupingIterator};
+pub use group::{SpectrumGroup, SpectrumGroupIter, SpectrumGroupingIterator, SpectrumGroupIntoIter};
 
 #[cfg(feature = "mzsignal")]
-pub use group::{average_spectra, SpectrumAveragingIterator, DeferredSpectrumAveragingIterator};
+pub use group::{
+    average_spectra, DeferredSpectrumAveragingIterator, SpectrumAveragingIterator,
+    SpectrumGroupAveraging
+};
