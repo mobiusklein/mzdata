@@ -42,6 +42,8 @@ impl core::fmt::Debug for DataArray {
     }
 }
 
+const EMPTY_BUFFER: [u8; 0] = [];
+
 /// A type to represent a base64-encoded, possibly compressed data
 /// array of a fixed size, usually numeric, type. It can be decoded,
 /// and it can
@@ -206,6 +208,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     }
 
     pub fn decode(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError> {
+        if self.data.len() == 0 {
+            return Ok(Cow::Borrowed(&EMPTY_BUFFER))
+        }
         match self.compression {
             BinaryCompressionType::Decoded => Ok(Cow::Borrowed(self.data.as_slice())),
             BinaryCompressionType::NoCompression => {
