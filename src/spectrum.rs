@@ -68,10 +68,12 @@ pub use crate::spectrum::spectrum::{
     SpectrumLike, SpectrumProcessingError,
 };
 
-pub use group::{SpectrumGroup, SpectrumGroupIter, SpectrumGroupingIterator, SpectrumGroupIntoIter};
+pub use group::{
+    SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter, SpectrumGroupingIterator,
+};
 
 #[cfg(feature = "mzsignal")]
 pub use group::{
     average_spectra, DeferredSpectrumAveragingIterator, SpectrumAveragingIterator,
-    SpectrumGroupAveraging
+    SpectrumGroupAveraging,
 };

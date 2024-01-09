@@ -1,4 +1,3 @@
-
 use std::env;
 use std::fs;
 use std::io;
@@ -11,14 +10,16 @@ use std::collections::HashMap;
 
 use std::sync::mpsc::sync_channel;
 
-use mzdata::io::MassSpectrometryFormat;
-use mzdata::io::PreBufferedStream;
 use mzdata::io::infer_from_stream;
-use mzdata::prelude::*;
-use mzdata::io::{mgf, mzml};
 #[cfg(feature = "mzmlb")]
 use mzdata::io::mzmlb;
-use mzdata::spectrum::{DeconvolutedSpectrum, MultiLayerSpectrum, PeakDataLevel, SpectrumLike, SignalContinuity};
+use mzdata::io::MassSpectrometryFormat;
+use mzdata::io::PreBufferedStream;
+use mzdata::io::{mgf, mzml};
+use mzdata::prelude::*;
+use mzdata::spectrum::{
+    DeconvolutedSpectrum, MultiLayerSpectrum, PeakDataLevel, SignalContinuity, SpectrumLike,
+};
 use mzpeaks::PeakCollection;
 
 fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::MzMLReader<fs::File>> {
@@ -91,9 +92,7 @@ impl MSDataFileSummary {
         }
     }
 
-    pub fn _scan_file<
-        R: ScanSource,
-    >(&mut self, reader: &mut R) {
+    pub fn _scan_file<R: ScanSource>(&mut self, reader: &mut R) {
         let start = time::Instant::now();
         reader.enumerate().for_each(|(i, scan)| {
             if i % 10000 == 0 && i > 0 {
@@ -112,21 +111,17 @@ impl MSDataFileSummary {
         println!("{:0.3} seconds elapsed", elapsed.as_secs_f64());
     }
 
-    pub fn scan_file<
-        R: ScanSource + Send + 'static,
-    >(&mut self, reader: R) {
+    pub fn scan_file<R: ScanSource + Send + 'static>(&mut self, reader: R) {
         self.scan_file_threaded(reader)
     }
 
-    pub fn scan_file_threaded<
-        R: ScanSource + Send + 'static,
-    >(&mut self, reader: R) {
+    pub fn scan_file_threaded<R: ScanSource + Send + 'static>(&mut self, reader: R) {
         let start = time::Instant::now();
         let (sender, receiver) = sync_channel(2usize.pow(12));
         let read_handle = spawn(move || {
-            reader.enumerate().for_each(|(i, scan)| {
-                sender.send((i, scan)).unwrap()
-            });
+            reader
+                .enumerate()
+                .for_each(|(i, scan)| sender.send((i, scan)).unwrap());
         });
         receiver.iter().for_each(|(i, scan)| {
             if i % 10000 == 0 && i > 0 {
@@ -183,25 +178,21 @@ impl MSDataFileSummary {
                 }
             }
         }
-        self.peak_mode_table.iter().for_each(|(mode, count)| {
-            match mode {
+        self.peak_mode_table
+            .iter()
+            .for_each(|(mode, count)| match mode {
                 SignalContinuity::Unknown => println!("Unknown continuity: {}", count),
                 SignalContinuity::Centroid => println!("Peaks: {}", count),
                 SignalContinuity::Profile => println!("Points: {}", count),
-            }
-        });
+            });
     }
 }
 
 fn main() -> io::Result<()> {
-    let path = path::PathBuf::from(
-        env::args()
-            .nth(1)
-            .unwrap_or_else(|| {
-                eprintln!("Please provide a path to an MS data file");
-                process::exit(1)
-            }),
-    );
+    let path = path::PathBuf::from(env::args().nth(1).unwrap_or_else(|| {
+        eprintln!("Please provide a path to an MS data file");
+        process::exit(1)
+    }));
     let mut summarizer = MSDataFileSummary::default();
 
     if path.as_os_str() == "-" {
@@ -210,23 +201,22 @@ fn main() -> io::Result<()> {
             (MassSpectrometryFormat::MGF, false) => {
                 let reader = mgf::MGFReader::new(io::BufReader::new(stream));
                 summarizer.scan_file(reader)
-            },
+            }
             (MassSpectrometryFormat::MzML, false) => {
                 let reader = mzml::MzMLReader::new(stream);
                 summarizer.scan_file(reader)
-            },
+            }
             #[cfg(feature = "mzmlb")]
             (MassSpectrometryFormat::MzMLb, _) => {
                 eprintln!("Cannot read mzMLb files from STDIN");
                 process::exit(1);
-            },
+            }
             (_, _) => {
                 eprintln!("Could not infer format from STDIN");
                 process::exit(1);
-            },
+            }
         }
-    }
-    else if let Some(ext) = path.extension() {
+    } else if let Some(ext) = path.extension() {
         if ext.to_string_lossy().to_lowercase() == "mzmlb" {
             #[cfg(feature = "mzmlb")]
             {

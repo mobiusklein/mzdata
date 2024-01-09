@@ -26,7 +26,7 @@ use thiserror::Error;
 
 use crate::prelude::MSDataFileMetadata;
 use crate::io::traits::ScanWriter;
-use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software};
+use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software, MassSpectrometryRun};
 use crate::params::ControlledVocabulary;
 use crate::spectrum::bindata::{
     ArrayRetrievalError, BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
@@ -128,6 +128,14 @@ where
 
     fn copy_metadata_from<T: MSDataFileMetadata>(&mut self, source: &T) {
         self.mzml_writer.copy_metadata_from(source)
+    }
+
+    fn run_description(&self) -> Option<&MassSpectrometryRun> {
+        Some(&self.mzml_writer.run)
+    }
+
+    fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
+        Some(&mut self.mzml_writer.run)
     }
 }
 

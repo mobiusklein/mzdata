@@ -25,7 +25,7 @@ pub use crate::io::mzml::{MzMLParserError, MzMLReader, MzMLWriter};
 pub use crate::io::mzmlb::{MzMLbError, MzMLbReader};
 pub use crate::io::offset_index::OffsetIndex;
 pub use crate::io::traits::{
-    MZFileReader, RandomAccessSpectrumIterator, SpectrumAccessError, ScanSource, ScanWriter,
+    MZFileReader, RandomAccessSpectrumIterator, ScanSource, ScanWriter, SpectrumAccessError,
     SpectrumGrouping, SpectrumIterator, StreamingSpectrumIterator,
 };
 pub use crate::io::utils::{DetailLevel, PreBufferedStream};

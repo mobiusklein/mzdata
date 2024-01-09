@@ -15,17 +15,22 @@ pub enum ValueType {
     String(Box<String>),
     Integer(i64),
     Float(f64),
-    Other(Box<Vec<u8>>)
+    Other(Box<Vec<u8>>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CURIE {
     controlled_vocabulary: ControlledVocabulary,
-    accession: u32
+    accession: u32,
 }
 
 impl CURIE {
-    pub const fn new(cv_id: ControlledVocabulary, accession: u32) -> Self { Self { controlled_vocabulary: cv_id, accession } }
+    pub const fn new(cv_id: ControlledVocabulary, accession: u32) -> Self {
+        Self {
+            controlled_vocabulary: cv_id,
+            accession,
+        }
+    }
 }
 
 impl<T: ParamLike> PartialEq<T> for CURIE {
@@ -47,11 +52,19 @@ impl<T: ParamLike> PartialEq<T> for CURIE {
 #[derive(Debug, Error)]
 pub enum CURIEParsingError {
     #[error("{0} is not a recognized controlled vocabulary")]
-    UnknownControlledVocabulary(#[from] #[source] ControlledVocabularyResolutionError),
+    UnknownControlledVocabulary(
+        #[from]
+        #[source]
+        ControlledVocabularyResolutionError,
+    ),
     #[error("Failed to parse accession number {0}")]
-    AccessionParsingError(#[from] #[source] num::ParseIntError),
+    AccessionParsingError(
+        #[from]
+        #[source]
+        num::ParseIntError,
+    ),
     #[error("Did not detect a namespace separator ':' token")]
-    MissingNamespaceSeparator
+    MissingNamespaceSeparator,
 }
 
 impl FromStr for CURIE {
@@ -63,8 +76,7 @@ impl FromStr for CURIE {
         let accession = tokens.next();
         if accession.is_none() {
             Err(CURIEParsingError::MissingNamespaceSeparator)
-        } else{
-
+        } else {
             let cv: ControlledVocabulary = cv.parse::<ControlledVocabulary>()?;
 
             let accession = accession.unwrap().parse()?;
@@ -123,7 +135,6 @@ pub trait ParamLike {
         }
     }
 }
-
 
 /// A statically allocate-able or non-owned data version of [`Param`]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -312,7 +323,6 @@ impl ParamLike for Param {
     }
 }
 
-
 /// Controlled vocabularies used in mass spectrometry data files
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ControlledVocabulary {
@@ -410,9 +420,8 @@ impl ControlledVocabulary {
 #[derive(Debug, Clone, Error)]
 pub enum ControlledVocabularyResolutionError {
     #[error("Unrecognized controlled vocabulary {0}")]
-    UnknownControlledVocabulary(String)
+    UnknownControlledVocabulary(String),
 }
-
 
 impl FromStr for ControlledVocabulary {
     type Err = ControlledVocabularyResolutionError;

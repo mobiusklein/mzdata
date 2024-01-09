@@ -45,15 +45,17 @@ pub mod io;
 pub mod meta;
 #[macro_use]
 pub mod params;
-pub mod spectrum;
 pub mod prelude;
+pub mod spectrum;
 mod utils;
 
-pub use crate::io::mgf::{MGFReader, MGFWriter, MGFError};
-pub use crate::io::mzml::{MzMLReader, MzMLWriter, MzMLParserError as MzMLError, MzMLWriterError};
+pub use crate::io::mgf::{MGFError, MGFReader, MGFWriter};
+pub use crate::io::mzml::{MzMLParserError as MzMLError, MzMLReader, MzMLWriter, MzMLWriterError};
 
 #[cfg(feature = "mzmlb")]
-pub use crate::io::mzmlb::{MzMLbReader, MzMLbError, MzMLbWriterBuilder, MzMLbWriterError, MzMLbWriter};
+pub use crate::io::mzmlb::{
+    MzMLbError, MzMLbReader, MzMLbWriter, MzMLbWriterBuilder, MzMLbWriterError,
+};
 
 pub use crate::params::{Param, ParamList};
 

@@ -6,7 +6,6 @@ use rayon::prelude::*;
 use mzdata::io::{mzml, mzmlb};
 use mzdata::prelude::*;
 use mzdata::spectrum::MultiLayerSpectrum;
-use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 
 fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::MzMLReader<fs::File>> {
@@ -34,11 +33,7 @@ fn load_mzmlb_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzmlb:
 }
 
 fn scan_file<
-    R: MZFileReader<
-        CentroidPeak,
-        DeconvolutedPeak,
-        MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>
-    > + Iterator<Item=MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>> + Send,
+    R: MZFileReader + Iterator<Item=MultiLayerSpectrum> + Send,
 >(
     reader: &mut R,
 ) {

@@ -479,6 +479,14 @@ impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
             self.spectrum_count = value;
         }
     }
+
+    fn run_description(&self) -> Option<&MassSpectrometryRun> {
+        Some(&self.run)
+    }
+
+    fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
+        Some(&mut self.run)
+    }
 }
 
 impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>

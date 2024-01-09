@@ -51,7 +51,7 @@ name = "mzdata"
 
 [profile.release]
 lto = true
-debug = true
+
 
 [features]
 # default = ["nalgebra", "parallelism", "mzsignal", "mzmlb", "zlib-ng-compat", ]

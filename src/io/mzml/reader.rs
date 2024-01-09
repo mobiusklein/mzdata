@@ -1685,6 +1685,14 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMe
     fn spectrum_count_hint(&self) -> Option<u64> {
         self.num_spectra
     }
+
+    fn run_description(&self) -> Option<&MassSpectrometryRun> {
+        Some(&self.run)
+    }
+
+    fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
+        Some(&mut self.run)
+    }
 }
 
 /// A specialization of [`MzMLReaderType`] for the default peak types, for common use.

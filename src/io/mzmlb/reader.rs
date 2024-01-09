@@ -23,7 +23,7 @@ use crate::io::utils::DetailLevel;
 use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, SpectrumAccessError, ScanSource};
 use crate::prelude::{MSDataFileMetadata, ParamLike};
 
-use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software};
+use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software, MassSpectrometryRun};
 use crate::params::{ControlledVocabulary, Param};
 use crate::spectrum::bindata::{
     as_bytes, delta_decoding, linear_prediction_decoding, ArrayRetrievalError,
@@ -142,7 +142,7 @@ impl ExternalDataRegistry {
         }
     }
 
-    fn default_chunk_size() -> usize {
+    const fn default_chunk_size() -> usize {
         2usize.pow(20)
     }
 
@@ -393,6 +393,7 @@ impl ExternalDataRegistry {
     }
 }
 
+#[derive(Debug)]
 struct ByteReader {
     handle: hdf5::Dataset,
     position: usize,
@@ -1026,6 +1027,14 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
 
     fn spectrum_count_hint(&self) -> Option<u64> {
         Some(self.index.len() as u64)
+    }
+
+    fn run_description(&self) -> Option<&MassSpectrometryRun> {
+        Some(&self.mzml_parser.run)
+    }
+
+    fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
+        Some(&mut self.mzml_parser.run)
     }
 }
 

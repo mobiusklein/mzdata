@@ -430,6 +430,14 @@ impl<
     > MSDataFileMetadata for MzMLReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
+
+    fn run_description(&self) -> Option<&MassSpectrometryRun> {
+        Some(&self.run)
+    }
+
+    fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
+        Some(&mut self.run)
+    }
 }
 
 /// A specialization of [`AsyncMzMLReaderType`](crate::io::mzml::AsyncMzMLReaderType) for the default peak types, for common use.
