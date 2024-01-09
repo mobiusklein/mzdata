@@ -135,7 +135,6 @@ impl<
 }
 
 impl<
-        'a,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D> + Default,
@@ -456,7 +455,7 @@ impl<
                         .entry(MISSING_SCAN_ID.to_owned())
                         .or_default();
                     buffer.push(scan);
-                    if buffer.len() % 1000 == 0 && buffer.len() > 0 {
+                    if buffer.len() % 1000 == 0 && !buffer.is_empty() {
                         log::warn!("Unassociated MSn scan buffer size is {}", buffer.len());
                     }
                 }
@@ -474,7 +473,7 @@ impl<
             let ent = self.product_scan_mapping.entry(MISSING_SCAN_ID.to_owned());
             let buffer = ent.or_default();
             buffer.push(scan);
-            if buffer.len() % 1000 == 0 && buffer.len() > 0 {
+            if buffer.len() % 1000 == 0 && !buffer.is_empty() {
                 log::warn!("Unassociated MSn scan buffer size is {}", buffer.len());
             }
         }

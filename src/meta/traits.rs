@@ -26,10 +26,9 @@ pub trait MSDataFileMetadata {
         match source.run_description() {
             Some(run) => {
                 let desc = self.run_description_mut();
-                desc.and_then(|r| {
+                if let Some(r) = desc {
                     *r = run.clone();
-                    Some(())
-                });
+                };
             }
             None => {
                 let mut desc = self.run_description_mut();

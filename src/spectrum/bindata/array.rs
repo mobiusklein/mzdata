@@ -208,7 +208,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     }
 
     pub fn decode(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError> {
-        if self.data.len() == 0 {
+        if self.data.is_empty() {
             return Ok(Cow::Borrowed(&EMPTY_BUFFER))
         }
         match self.compression {

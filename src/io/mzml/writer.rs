@@ -74,11 +74,11 @@ const PROFILE_SPECTRUM: ParamCow =
 const CENTROID_SPECTRUM: ParamCow =
     ControlledVocabulary::MS.const_param_ident("centroid spectrum", 1000127);
 
-const TIC_TERM: (&'static str, u32, Unit) = ("total ion current", 1000285, Unit::DetectorCounts);
-const BPI_TERM: (&'static str, u32, Unit) = ("base peak intensity", 1000505, Unit::DetectorCounts);
-const BPMZ_TERM: (&'static str, u32, Unit) = ("base peak m/z", 1000504, Unit::MZ);
-const LOWEST_MZ_TERM: (&'static str, u32, Unit) = ("lowest observed m/z", 1000528, Unit::MZ);
-const HIGHEST_MZ_TERM: (&'static str, u32, Unit) = ("highest observed m/z", 1000527, Unit::MZ);
+const TIC_TERM: (&str, u32, Unit) = ("total ion current", 1000285, Unit::DetectorCounts);
+const BPI_TERM: (&str, u32, Unit) = ("base peak intensity", 1000505, Unit::DetectorCounts);
+const BPMZ_TERM: (&str, u32, Unit) = ("base peak m/z", 1000504, Unit::MZ);
+const LOWEST_MZ_TERM: (&str, u32, Unit) = ("lowest observed m/z", 1000528, Unit::MZ);
+const HIGHEST_MZ_TERM: (&str, u32, Unit) = ("highest observed m/z", 1000527, Unit::MZ);
 
 macro_rules! param_pack {
     ($term:ident, $value:expr) => {{

@@ -1106,14 +1106,11 @@ impl<
                     match accumulator.start_element(e, self.state) {
                         Ok(state) => {
                             self.state = state;
-                            match state {
-                                MzMLParserState::ParserError => {
-                                    eprintln!(
-                                        "Encountered an error while starting {:?}",
-                                        String::from_utf8_lossy(&self.buffer)
-                                    );
-                                }
-                                _ => {}
+                            if state == MzMLParserState::ParserError {
+                                eprintln!(
+                                    "Encountered an error while starting {:?}",
+                                    String::from_utf8_lossy(&self.buffer)
+                                );
                             }
                         }
                         Err(message) => {
@@ -1554,9 +1551,8 @@ impl<
                     match indexer.start_element(e, indexer_state) {
                         Ok(state) => {
                             indexer_state = state;
-                            match &indexer_state {
-                                IndexParserState::Done => break,
-                                _ => {}
+                            if matches!(indexer_state, IndexParserState::Done) {
+                                break
                             }
                         }
                         Err(err) => return Err(err),

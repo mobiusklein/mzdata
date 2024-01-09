@@ -286,8 +286,8 @@ impl<
                 "PEPMASS" => {
                     let mut parts = value.split_ascii_whitespace();
                     let mz: f64 = parts.next().unwrap().parse().unwrap();
-                    let intensity: f32 = parts.next().and_then(|v| {
-                        Some(v.parse().unwrap())
+                    let intensity: f32 = parts.next().map(|v| {
+                        v.parse().unwrap()
                     }).unwrap_or_default();
                     let charge: Option<i32> = parts.next().map(|c| c.parse().unwrap());
                     builder.description.precursor = Some(Precursor {
@@ -689,14 +689,7 @@ pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
 pub(crate) fn is_mgf(buf: &[u8]) -> bool {
     let needle = b"BEGIN IONS";
-    if let Some(_loc) = buf
-        .windows(needle.len())
-        .position(|window| window == needle)
-    {
-        true
-    } else {
-        false
-    }
+    matches!(buf.windows(needle.len()).position(|window| window == needle), Some(_))
 }
 
 /// An MGF writer type

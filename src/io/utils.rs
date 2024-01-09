@@ -37,7 +37,7 @@ pub struct FileSource<T: io::Read> {
 // This really should be a full file-like object abstraction, but that
 // feels like it is beyond the scope of this crate. Something like
 // https://github.com/bnjjj/chicon-rs
-impl<'lifespan, T: io::Read> FileSource<T> {
+impl<T: io::Read> FileSource<T> {
     pub fn from_path<P>(path: P) -> FileSource<T>
     where
         P: Into<path::PathBuf>,
@@ -182,7 +182,7 @@ impl<R: io::Read> io::Seek for PreBufferedStream<R> {
                 r
             }
             io::SeekFrom::End(_) => {
-                return Err(io::Error::new(
+                Err(io::Error::new(
                     io::ErrorKind::Unsupported,
                     "Cannot seek relative the end of PreBufferedStream",
                 ))
@@ -195,23 +195,23 @@ impl<R: io::Read> io::Seek for PreBufferedStream<R> {
                     ));
                 }
                 if offset < 0 {
-                    if offset.abs() as usize > self.position {
-                        return Err(io::Error::new(
+                    if offset.unsigned_abs() as usize > self.position {
+                        Err(io::Error::new(
                             io::ErrorKind::InvalidInput,
                             "Cannot seek to negative position",
-                        ));
+                        ))
                     } else {
-                        self.position = self.position.saturating_sub(offset.abs() as usize);
+                        self.position = self.position.saturating_sub(offset.unsigned_abs() as usize);
                         let r = self.buffer.seek(io::SeekFrom::Start(self.position as u64));
                         log::trace!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
                         r
                     }
                 } else {
                     if offset as usize + self.position > self.buffer_size {
-                        return Err(io::Error::new(
+                        Err(io::Error::new(
                             io::ErrorKind::InvalidInput,
                             "Cannot seeking beyond buffered prefix",
-                        ));
+                        ))
                     } else {
                         let r = self.buffer.seek(io::SeekFrom::Current(offset));
                         log::trace!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
@@ -273,9 +273,9 @@ impl<R: io::Read> PreBufferedStream<R> {
     }
 
     fn prefill_buffer(&mut self) -> io::Result<usize> {
-        let mut buffer = self.buffer.get_mut();
+        let buffer = self.buffer.get_mut();
         buffer.resize(self.buffer_size, 0);
-        let bytes_read = self.stream.read(&mut buffer)?;
+        let bytes_read = self.stream.read(buffer)?;
         buffer.shrink_to(bytes_read);
         self.buffer_size = bytes_read;
         Ok(bytes_read)

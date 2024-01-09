@@ -65,8 +65,7 @@ impl<R: BufRead + Seek> Seek for RestartableGzDecoder<R> {
         match pos {
             io::SeekFrom::Start(o) => {
                 self.reset()?;
-                let mut buf = Vec::new();
-                buf.resize(o as usize, 0);
+                let mut buf = vec![0u8; o as usize];
                 self.read_exact(&mut buf)?;
                 Ok(o)
             }
@@ -76,9 +75,9 @@ impl<R: BufRead + Seek> Seek for RestartableGzDecoder<R> {
             )),
             io::SeekFrom::Current(o) => {
                 if o == 0 {
-                    return Ok(self.offset);
+                    Ok(self.offset)
                 } else if o < 0 {
-                    if o.abs() as u64 > self.offset {
+                    if o.unsigned_abs() > self.offset {
                         Err(io::Error::new(
                             io::ErrorKind::Unsupported,
                             "Cannot earlier than the start of the stream",
@@ -87,8 +86,7 @@ impl<R: BufRead + Seek> Seek for RestartableGzDecoder<R> {
                         self.seek(io::SeekFrom::Start((self.offset as i64 + o) as u64))
                     }
                 } else {
-                    let mut buf = Vec::new();
-                    buf.resize(o as usize, 0);
+                    let mut buf = vec![0; o as usize];
                     self.read_exact(&mut buf)?;
                     Ok(self.offset)
                 }

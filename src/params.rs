@@ -35,16 +35,10 @@ impl CURIE {
 
 impl<T: ParamLike> PartialEq<T> for CURIE {
     fn eq(&self, other: &T) -> bool {
-        if other.is_controlled() {
-            false
+        if !other.is_controlled() || other.controlled_vocabulary().unwrap() != self.controlled_vocabulary {
+            return false
         } else {
-            if other.controlled_vocabulary().unwrap() != self.controlled_vocabulary {
-                false
-            } else if other.accession().unwrap() != self.accession {
-                false
-            } else {
-                true
-            }
+            other.accession().unwrap() == self.accession
         }
     }
 }
@@ -71,7 +65,7 @@ impl FromStr for CURIE {
     type Err = CURIEParsingError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut tokens = s.split(":");
+        let mut tokens = s.split(':');
         let cv = tokens.next().unwrap();
         let accession = tokens.next();
         if accession.is_none() {
@@ -337,7 +331,7 @@ const MS_CV_BYTES: &[u8] = MS_CV.as_bytes();
 const UO_CV_BYTES: &[u8] = UO_CV.as_bytes();
 
 impl ControlledVocabulary {
-    pub fn prefix(&self) -> Cow<'static, str> {
+    pub const fn prefix(&self) -> Cow<'static, str> {
         match &self {
             Self::MS => Cow::Borrowed(MS_CV),
             Self::UO => Cow::Borrowed(UO_CV),
@@ -345,7 +339,7 @@ impl ControlledVocabulary {
         }
     }
 
-    pub fn as_bytes(&self) -> &'static [u8] {
+    pub const fn as_bytes(&self) -> &'static [u8] {
         match &self {
             Self::MS => MS_CV_BYTES,
             Self::UO => UO_CV_BYTES,
@@ -353,7 +347,7 @@ impl ControlledVocabulary {
         }
     }
 
-    pub fn as_option(&self) -> Option<Self> {
+    pub const fn as_option(&self) -> Option<Self> {
         match self {
             Self::Unknown => None,
             _ => Some(*self),
@@ -373,6 +367,10 @@ impl ControlledVocabulary {
             }));
         }
         param
+    }
+
+    pub const fn curie(&self, accession: u32) -> CURIE {
+        CURIE::new(*self, accession)
     }
 
     pub const fn const_param(

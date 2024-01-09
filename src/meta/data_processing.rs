@@ -74,7 +74,7 @@ impl Display for DataProcessingAction {
 }
 
 impl DataProcessingAction {
-    pub const fn to_param_const(&self) -> ParamCow<'static> {
+    pub const fn as_param_const(&self) -> ParamCow<'static> {
         const CV: ControlledVocabulary = ControlledVocabulary::MS;
 
         match self {

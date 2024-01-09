@@ -171,7 +171,7 @@ pub trait BuildFromArrayMap: Sized {
     fn has_arrays_for(arrays: &BinaryArrayMap) -> ArraysAvailable {
         if let Some(arrays_required) = Self::arrays_required() {
             let missing: Vec<_> = arrays_required.into_iter().filter(|array_type| !arrays.has_array(array_type)).collect();
-            if missing.len() > 0 {
+            if !missing.is_empty() {
                 ArraysAvailable::MissingArrays(missing)
             } else {
                 ArraysAvailable::Ok

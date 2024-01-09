@@ -42,7 +42,7 @@ impl FileDescription {
     }
 
     pub fn has_contents(&self) -> bool {
-        self.contents.len() > 0
+        !self.contents.is_empty()
     }
 }
 

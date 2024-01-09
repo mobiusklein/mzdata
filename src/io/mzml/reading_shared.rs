@@ -810,41 +810,39 @@ impl<'a> FileMetadataBuilder<'a> {
                 return Ok(MzMLParserState::ProcessingMethod);
             }
             b"run" => {
-                for attr_parsed in event.attributes() {
-                    if let Ok(attr) = attr_parsed {
-                        match attr.key.as_ref() {
-                            b"id" => {
-                                self.run_id = Some(
-                                    attr.unescape_value()
-                                        .expect("Error decoding run ID")
-                                        .to_string(),
-                                );
-                            }
-                            b"defaultInstrumentConfigurationRef" => {
-                                let value = attr
-                                    .unescape_value()
-                                    .expect("Error decoding default instrument configuration ID");
-                                self.default_instrument_config = self
-                                    .instrument_id_map
-                                    .as_mut()
-                                    .and_then(|m| Some(m.get(&value)));
-                            }
-                            b"defaultSourceFileRef" => {
-                                self.default_source_file = Some(
-                                    attr.unescape_value()
-                                        .expect("Error decoding default source file reference")
-                                        .to_string(),
-                                );
-                            }
-                            b"startTimeStamp" => {
-                                self.start_timestamp = Some(
-                                    attr.unescape_value()
-                                        .expect("Error decoding start timestamp")
-                                        .to_string(),
-                                );
-                            }
-                            _ => {}
+                for attr in event.attributes().flatten() {
+                    match attr.key.as_ref() {
+                        b"id" => {
+                            self.run_id = Some(
+                                attr.unescape_value()
+                                    .expect("Error decoding run ID")
+                                    .to_string(),
+                            );
                         }
+                        b"defaultInstrumentConfigurationRef" => {
+                            let value = attr
+                                .unescape_value()
+                                .expect("Error decoding default instrument configuration ID");
+                            self.default_instrument_config = self
+                                .instrument_id_map
+                                .as_mut()
+                                .map(|m| m.get(&value));
+                        }
+                        b"defaultSourceFileRef" => {
+                            self.default_source_file = Some(
+                                attr.unescape_value()
+                                    .expect("Error decoding default source file reference")
+                                    .to_string(),
+                            );
+                        }
+                        b"startTimeStamp" => {
+                            self.start_timestamp = Some(
+                                attr.unescape_value()
+                                    .expect("Error decoding start timestamp")
+                                    .to_string(),
+                            );
+                        }
+                        _ => {}
                     }
                 }
                 return Ok(MzMLParserState::Run);

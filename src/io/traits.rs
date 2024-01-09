@@ -126,7 +126,7 @@ pub trait ScanSource<
 
     /// Consume `self` to create a `SpectrumGroupIterator`. This is ideal for non-rewindable streams
     /// like [`io::stdin`] which don't implement [`io::Seek`]
-    fn into_groups<'lifespan>(self) -> SpectrumGroupingIterator<Self, C, D, S>
+    fn into_groups(self) -> SpectrumGroupingIterator<Self, C, D, S>
     where
         Self: Sized,
     {
@@ -538,7 +538,7 @@ impl<
     type Item = S;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.buffer.len() > 0 {
+        if !self.buffer.is_empty() {
             self.buffer.pop_front()
         } else {
             self.source.next()
@@ -634,7 +634,7 @@ pub trait SpectrumGrouping<
     /// The spectrum that occurred first chronologically
     fn earliest_spectrum(&self) -> Option<&S> {
         self.precursor().or_else(|| {
-            self.products().into_iter().min_by(|a, b| {
+            self.products().iter().min_by(|a, b| {
                 a.acquisition()
                     .start_time()
                     .total_cmp(&b.acquisition().start_time())
@@ -645,7 +645,7 @@ pub trait SpectrumGrouping<
     /// The spectrum that occurred last chronologically
     fn latest_spectrum(&self) -> Option<&S> {
         self.precursor().or_else(|| {
-            self.products().into_iter().max_by(|a, b| {
+            self.products().iter().max_by(|a, b| {
                 a.acquisition()
                     .start_time()
                     .total_cmp(&b.acquisition().start_time())
@@ -657,11 +657,11 @@ pub trait SpectrumGrouping<
     fn lowest_ms_level(&self) -> Option<u8> {
         let prec_level = self
             .precursor()
-            .and_then(|p| Some(p.ms_level()))
-            .unwrap_or_else(|| u8::MAX);
+            .map(|p| p.ms_level())
+            .unwrap_or(u8::MAX);
         let val = self
             .products()
-            .into_iter()
+            .iter()
             .fold(prec_level, |state, s| state.min(s.ms_level()));
         if val > 0 {
             Some(val)
@@ -674,11 +674,11 @@ pub trait SpectrumGrouping<
     fn highest_ms_level(&self) -> Option<u8> {
         let prec_level = self
             .precursor()
-            .and_then(|p| Some(p.ms_level()))
+            .map(|p| p.ms_level())
             .unwrap_or_else(|| u8::MIN);
         let val = self
             .products()
-            .into_iter()
+            .iter()
             .fold(prec_level, |state, s| state.max(s.ms_level()));
         if val > 0 {
             Some(val)
@@ -772,9 +772,9 @@ impl<
     }
 
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<S> {
-        self.offsets.get(id).and_then(|i| {
+        self.offsets.get(id).map(|i| {
             let value = &self.spectra[i as usize];
-            Some(value.clone())
+            value.clone()
         })
     }
 
