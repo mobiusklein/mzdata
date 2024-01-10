@@ -1295,15 +1295,15 @@ dependencies = [
 
 [[package]]
 name = "mzpeaks"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59058c9f26d536e00596c7dc01c5d9e88e88ec294b20a6cedc5b83ac6db804f1"
+checksum = "d519a4d34d369ad9869553909c659de71e682119d58f00861d11be2978a25e67"
 
 [[package]]
 name = "mzsignal"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f7ccfe87ed01ecd76b4d5ce3bddc3516a7c624a9035b33547a17e1c87ab2843"
+checksum = "2c823bb9a30eb9f1af0545991756778decbde45eb20e0906f207d67de5185d16"
 dependencies = [
  "cfg-if",
  "log",
