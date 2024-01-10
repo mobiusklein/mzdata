@@ -877,6 +877,10 @@ mod mzsignal_impl {
             }
         }
 
+        pub fn iter(&self) -> SpectrumGroupIter<'_, C, D, MultiLayerSpectrum<C, D>, SpectrumAveragingContext<C, D, G>> {
+            SpectrumGroupIter::new(self)
+        }
+
         pub fn reprofile_with(mut self, reprofiler: &PeakSetReprofiler, fwhm: f32) -> Self {
             if self.ms1_context.iter().all(|ctx| ctx.is_profile) {
                 return self;

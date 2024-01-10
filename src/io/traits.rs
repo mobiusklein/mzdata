@@ -9,6 +9,7 @@ use thiserror::Error;
 
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 
+use crate::prelude::MSDataFileMetadata;
 use crate::spectrum::group::SpectrumGroupingIterator;
 use crate::spectrum::spectrum::{MultiLayerSpectrum, SpectrumLike};
 use crate::spectrum::SpectrumGroup;
@@ -606,6 +607,58 @@ impl<
     }
 }
 
+impl<
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumLike<C, D>,
+        I: Iterator<Item = S>,
+    > MSDataFileMetadata for StreamingSpectrumIterator<C, D, S, I> where I: MSDataFileMetadata {
+
+    fn data_processings(&self) -> &Vec<crate::meta::DataProcessing> {
+        self.source.data_processings()
+    }
+
+    fn instrument_configurations(&self) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+        self.source.instrument_configurations()
+    }
+
+    fn file_description(&self) -> &crate::meta::FileDescription {
+        self.source.file_description()
+    }
+
+    fn softwares(&self) -> &Vec<crate::meta::Software> {
+        self.source.softwares()
+    }
+
+    fn data_processings_mut(&mut self) -> &mut Vec<crate::meta::DataProcessing> {
+        self.source.data_processings_mut()
+    }
+
+    fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+        self.source.instrument_configurations_mut()
+    }
+
+    fn file_description_mut(&mut self) -> &mut crate::meta::FileDescription {
+        self.source.file_description_mut()
+    }
+
+    fn softwares_mut(&mut self) -> &mut Vec<crate::meta::Software> {
+        self.source.softwares_mut()
+    }
+
+    fn spectrum_count_hint(&self) -> Option<u64> {
+        self.source.spectrum_count_hint()
+    }
+
+    fn run_description(&self) -> Option<&crate::meta::MassSpectrometryRun> {
+        self.source.run_description()
+    }
+
+    fn run_description_mut(&mut self) -> Option<&mut crate::meta::MassSpectrometryRun> {
+        self.source.run_description_mut()
+    }
+}
+
 /// An abstraction over [`SpectrumGroup`](crate::spectrum::SpectrumGroup)'s interface.
 pub trait SpectrumGrouping<
     C: CentroidLike + Default = CentroidPeak,
@@ -850,7 +903,7 @@ pub trait ScanWriter<
 >
 {
     /// Write out a single spectrum
-    fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &'a S) -> io::Result<usize>;
+    fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize>;
 
     /// As [`std::io::Write::flush`]
     fn flush(&mut self) -> io::Result<()>;
@@ -870,7 +923,7 @@ pub trait ScanWriter<
     /// Write a [`SpectrumGroup`](crate::spectrum::SpectrumGroup) out in order
     fn write_group<S: SpectrumLike<C, D> + 'static, G: SpectrumGrouping<C, D, S> + 'static>(
         &mut self,
-        group: &'a G,
+        group: &G,
     ) -> io::Result<usize> {
         let mut n = 0;
         if let Some(precursor) = group.precursor() {
@@ -897,6 +950,8 @@ pub trait ScanWriter<
         }
         Ok(n)
     }
+
+    fn close(&mut self) -> io::Result<()>;
 }
 
 #[cfg(test)]

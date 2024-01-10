@@ -304,7 +304,7 @@ where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
 {
-    fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &'a S) -> io::Result<usize> {
+    fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
         match self.write_spectrum(spectrum) {
             Ok(()) => {
                 let pos = self.mzml_writer.stream_position()?;
@@ -316,6 +316,11 @@ where
 
     fn flush(&mut self) -> io::Result<()> {
         self.mzml_writer.flush()?;
+        Ok(())
+    }
+
+    fn close(&mut self) -> io::Result<()> {
+        self.close()?;
         Ok(())
     }
 }
@@ -806,6 +811,9 @@ where
     }
 
     pub fn close(&mut self) -> WriterResult {
+        if self.mzml_writer.state == MzMLWriterState::End {
+            return Ok(())
+        }
         if self.mzml_writer.state < MzMLWriterState::ChromatogramListClosed {
             self.write_summary_chromatograms()?;
         }
@@ -818,6 +826,11 @@ where
     }
 }
 
+impl<C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom> Drop for MzMLbWriterType<C, D> {
+    fn drop(&mut self) {
+        MzMLbWriterType::close(self).unwrap();
+    }
+}
 
 pub type MzMLbWriter = MzMLbWriterType<CentroidPeak, DeconvolutedPeak>;
 

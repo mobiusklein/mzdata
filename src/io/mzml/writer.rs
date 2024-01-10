@@ -174,12 +174,6 @@ impl<W: io::Write> ByteCountingStream<W> {
     pub fn get_mut(&mut self) -> &mut W {
         self.stream.get_mut().get_mut()
     }
-
-    pub fn into_inner(
-        self,
-    ) -> Result<MD5HashingStream<W>, io::IntoInnerError<BufWriter<MD5HashingStream<W>>>> {
-        self.stream.into_inner()
-    }
 }
 
 impl<W: Write> Write for ByteCountingStream<W> {
@@ -391,8 +385,8 @@ is accumulated.
 #[derive(Debug)]
 pub struct MzMLWriterType<
     W: Write,
-    C: CentroidLike + Default + 'static = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default + 'static = DeconvolutedPeak,
+    C: CentroidLike + Default + BuildArrayMapFrom + 'static = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + 'static = DeconvolutedPeak,
 > {
     /// The current offset from the stream start
     pub offset: usize,
@@ -441,13 +435,10 @@ pub struct MzMLWriterType<
     ms_cv: ControlledVocabulary,
 }
 
-impl<'a, W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<'a, W: Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom>
     ScanWriter<'a, C, D> for MzMLWriterType<W, C, D>
-where
-    C: BuildArrayMapFrom,
-    D: BuildArrayMapFrom,
 {
-    fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &'a S) -> io::Result<usize> {
+    fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
         match self.write_spectrum(spectrum) {
             Ok(()) => {
                 let pos = self.stream_position()?;
@@ -463,9 +454,14 @@ where
     fn flush(&mut self) -> io::Result<()> {
         self.handle.flush()
     }
+
+    fn close(&mut self) -> io::Result<()> {
+        self.close()?;
+        Ok(())
+    }
 }
 
-impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> MSDataFileMetadata
+impl<W: Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom> MSDataFileMetadata
     for MzMLWriterType<W, C, D>
 {
     crate::impl_metadata_trait!();
@@ -1496,13 +1492,6 @@ where
         Ok(inner)
     }
 
-    pub fn into_inner(self) -> io::Result<W> {
-        let mut inner = self.handle.handle.into_inner();
-        inner.flush()?;
-        let stream = inner.into_inner()?;
-        Ok(stream.into_inner())
-    }
-
     pub fn write_event(&mut self, event: Event) -> WriterResult {
         self.handle.write_event(event)
     }
@@ -1520,6 +1509,12 @@ where
 
     pub fn get_ms_cv(&self) -> &ControlledVocabulary {
         &self.ms_cv
+    }
+}
+
+impl<W: io::Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom> Drop for MzMLWriterType<W, C, D> {
+    fn drop(&mut self) {
+        MzMLWriterType::close(self).unwrap();
     }
 }
 

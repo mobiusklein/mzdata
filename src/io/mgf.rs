@@ -886,7 +886,7 @@ impl<
 
     fn write_group<S: SpectrumLike<C, D> + 'static, G: super::SpectrumGrouping<C, D, S> + 'static>(
             &mut self,
-            group: &'a G,
+            group: &G,
         ) -> io::Result<usize> {
         let mut c = 0;
         for s in group.products() {
@@ -896,6 +896,10 @@ impl<
     }
 
     fn flush(&mut self) -> io::Result<()> {
+        self.handle.flush()
+    }
+
+    fn close(&mut self) -> io::Result<()> {
         self.handle.flush()
     }
 }
