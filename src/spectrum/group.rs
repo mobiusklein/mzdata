@@ -11,6 +11,7 @@ use crate::{
         traits::{RandomAccessSpectrumGroupingIterator, SpectrumGrouping},
         RandomAccessSpectrumIterator, SpectrumAccessError,
     },
+    prelude::MSDataFileMetadata,
     SpectrumLike,
 };
 
@@ -375,7 +376,6 @@ impl GenerationTracker {
     }
 }
 
-
 const MAX_GROUP_DEPTH: u32 = 512u32;
 
 /**
@@ -621,11 +621,9 @@ impl<
                     self.add_product(spectrum);
                     if self.depth > MAX_GROUP_DEPTH {
                         return Some(self.deque_group_without_precursor());
-
                     }
                 } else if self.add_precursor(spectrum) {
                     return self.deque_group(false);
-
                 }
             } else {
                 return match self.queue.len() {
@@ -633,7 +631,6 @@ impl<
                     1 => self.deque_group(true),
                     _ => None,
                 };
-
             }
         }
     }
@@ -716,6 +713,19 @@ impl<
     fn reset_state(&mut self) {
         self.clear()
     }
+}
+
+impl<
+        R: Iterator<Item = S>,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumLike<C, D>,
+        G: SpectrumGrouping<C, D, S> + Default,
+    > MSDataFileMetadata for SpectrumGroupingIterator<R, C, D, S, G>
+where
+    R: MSDataFileMetadata,
+{
+    crate::delegate_impl_metadata_trait!(source);
 }
 
 #[cfg(feature = "mzsignal")]
@@ -877,7 +887,10 @@ mod mzsignal_impl {
             }
         }
 
-        pub fn iter(&self) -> SpectrumGroupIter<'_, C, D, MultiLayerSpectrum<C, D>, SpectrumAveragingContext<C, D, G>> {
+        pub fn iter(
+            &self,
+        ) -> SpectrumGroupIter<'_, C, D, MultiLayerSpectrum<C, D>, SpectrumAveragingContext<C, D, G>>
+        {
             SpectrumGroupIter::new(self)
         }
 
@@ -1004,6 +1017,20 @@ mod mzsignal_impl {
         buffer: VecDeque<G>,
         context_buffer: VecDeque<ArcArrays>,
         output_buffer: VecDeque<SpectrumAveragingContext<C, D, G>>,
+    }
+
+    /// If the underlying iterator implements [`MSDataFileMetadata`] then [`DeferredSpectrumAveragingIterator`] will
+    /// forward that implementation, assuming it is available.
+    impl<
+            C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+            D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+            R: Iterator<Item = G>,
+            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+        > MSDataFileMetadata for DeferredSpectrumAveragingIterator<C, D, R, G>
+    where
+        R: MSDataFileMetadata,
+    {
+        crate::delegate_impl_metadata_trait!(source);
     }
 
     impl<
@@ -1180,6 +1207,22 @@ mod mzsignal_impl {
         reprofiler: PeakSetReprofiler,
         _c: PhantomData<C>,
         _d: PhantomData<D>,
+    }
+
+
+    /// If the underlying iterator implements [`MSDataFileMetadata`] then [`SpectrumAveragingIterator`] will
+    /// forward that implementation, assuming it is available.
+    impl<
+            'lifespan,
+            C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+            D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
+            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+            R: Iterator<Item = G>,
+        > MSDataFileMetadata for SpectrumAveragingIterator<'lifespan, C, D, G, R>
+    where
+        R: MSDataFileMetadata,
+    {
+        crate::delegate_impl_metadata_trait!(source);
     }
 
     impl<

@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.8.0]
+
+### Added
+- Added `close` to the `ScanWriter` trait which "closes" the formatted structure of the file. As Rust lacks a notion of a "closed"
+  `io::Write`, the underlying writer isn't actually "closed" until the whole struct is dropped.
+- Added `Drop` implementation for `MzMLWriterType` and `MzMLbWriterType` which ensures that the `close` method is called to make the
+  resulting file well-formed.
+- Added new peak picking methods `MulitLayerSpectrum::pick_peaks_in_intervals` and `RawSpectrum::pick_peaks_in_intervals_into` that
+  pick peaks only in selected m/z regions.
+- Added `MassSpectrometryRun` to record information found on or near the `<run>` element in mzML which includes several default values
+  otherwise absent from the data model. It is accessible via `MSDataFileMetadata::run_description` trait method, included in the prelude.
+- Added the `MSDataFileMetadata::spectrum_count_hint` which returns the total number of spectra in the file, if available.
+- Added `MSDataFileMetadata` implementations for `SpectrumIterator`, `StreamingSpectrumIterator`, and `SpectrumGroupingIterator` where
+  their sources do.
+- `SpectrumGroupingIterator` and other such iterator support `RandomAccessSpectrumGroupingIterator`.
+
+### Changed
+- `ScanWriter` no longer applies a lifespan requirement on individual writing operations.
+- `filename` is no longer a required dependency, it is only needed to use `MzMLbReaderType::from_file` which otherwise
+  panics. It introduces unpredictable and difficult to diagnose compilation errors.
+- `MGFWriterType` skips MS1 spectra automatically.
+
+### Fixed
+- Properly track whether the `spectrumList` has been finished by mzML parsers.
+- Iteration over `SpectrumGrouping` when there are missing components has been fixed.
+- Binary data arrays may panic if empty on certain platforms with certain compression schemes.
+
+
 ## [0.7.0] - 2023-12-25
 
 ### Added
@@ -59,7 +87,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.7.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/mobiusklein/mzdata/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/mobiusklein/mzdata/compare/v0.5.0...v0.7.0
 [0.5.0]: https://github.com/mobiusklein/mzdata/compare/v0.1.0...v0.5.0
 [0.1.0]: https://github.com/mobiusklein/mzdata/releases/tag/v0.1.0

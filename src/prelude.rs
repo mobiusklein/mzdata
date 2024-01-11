@@ -1,7 +1,7 @@
 //! A set of foundational traits used throughout the library.
 pub use crate::io::traits::{
     MZFileReader, RandomAccessSpectrumGroupingIterator, RandomAccessSpectrumIterator, ScanSource,
-    ScanWriter, SeekRead, SpectrumAccessError, SpectrumGrouping, SpectrumIterator,
+    ScanWriter, SeekRead, SpectrumAccessError, SpectrumGrouping,
 };
 
 pub use crate::meta::MSDataFileMetadata;

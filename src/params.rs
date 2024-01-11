@@ -466,6 +466,16 @@ pub trait ParamDescribed {
     }
 }
 
+impl ParamDescribed for ParamList {
+    fn params(&self) -> &[Param] {
+        self
+    }
+
+    fn params_mut(&mut self) -> &mut ParamList {
+        self
+    }
+}
+
 #[macro_export]
 macro_rules! impl_param_described {
     ($($t:ty), +) => {$(

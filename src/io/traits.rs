@@ -259,6 +259,20 @@ impl<
     }
 }
 
+
+/// If the underlying iterator implements [`MSDataFileMetadata`] then [`SpectrumIterator`] will
+/// forward that implementation, assuming it is available.
+impl<
+        'lifespan,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        R: ScanSource<C, D, S>,
+        S: SpectrumLike<C, D>,
+    > MSDataFileMetadata for SpectrumIterator<'lifespan, C, D, S, R> where R: MSDataFileMetadata {
+
+    crate::delegate_impl_metadata_trait!(source);
+}
+
 /// A trait defining some helper methods to make efficient use of indices
 /// automatic when opening a file from a path-like object.
 pub trait MZFileReader<
@@ -569,6 +583,9 @@ impl<
     }
 }
 
+/// [`StreamingSpectrumIterator`] implements [`RandomAccessSpectrumIterator`] in a limited fashion
+/// by reading through successive spectra until the target spectrum is found. This will exhaust the
+/// underlying iterator if the requested coordinate is not found.
 impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
@@ -607,6 +624,9 @@ impl<
     }
 }
 
+
+/// If the underlying iterator implements [`MSDataFileMetadata`] then [`StreamingSpectrumIterator`] will
+/// forward that implementation, assuming it is available.
 impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
@@ -614,49 +634,7 @@ impl<
         I: Iterator<Item = S>,
     > MSDataFileMetadata for StreamingSpectrumIterator<C, D, S, I> where I: MSDataFileMetadata {
 
-    fn data_processings(&self) -> &Vec<crate::meta::DataProcessing> {
-        self.source.data_processings()
-    }
-
-    fn instrument_configurations(&self) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
-        self.source.instrument_configurations()
-    }
-
-    fn file_description(&self) -> &crate::meta::FileDescription {
-        self.source.file_description()
-    }
-
-    fn softwares(&self) -> &Vec<crate::meta::Software> {
-        self.source.softwares()
-    }
-
-    fn data_processings_mut(&mut self) -> &mut Vec<crate::meta::DataProcessing> {
-        self.source.data_processings_mut()
-    }
-
-    fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
-        self.source.instrument_configurations_mut()
-    }
-
-    fn file_description_mut(&mut self) -> &mut crate::meta::FileDescription {
-        self.source.file_description_mut()
-    }
-
-    fn softwares_mut(&mut self) -> &mut Vec<crate::meta::Software> {
-        self.source.softwares_mut()
-    }
-
-    fn spectrum_count_hint(&self) -> Option<u64> {
-        self.source.spectrum_count_hint()
-    }
-
-    fn run_description(&self) -> Option<&crate::meta::MassSpectrometryRun> {
-        self.source.run_description()
-    }
-
-    fn run_description_mut(&mut self) -> Option<&mut crate::meta::MassSpectrometryRun> {
-        self.source.run_description_mut()
-    }
+    crate::delegate_impl_metadata_trait!(source);
 }
 
 /// An abstraction over [`SpectrumGroup`](crate::spectrum::SpectrumGroup)'s interface.
