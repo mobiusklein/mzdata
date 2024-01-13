@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [Unreleased]
+
+### Added
+- `RestartableGzDecoder` added to `mzdata::io` to provide an `io::Seek` compatible GZIP decompressor,
+  with the caveat that seeking backwards requires re-reading everything read thus far and that seeks
+  cannot be relative to the EOF.
+- Added documentation to more examples.
+
+### Fixed
+- `infer_from_stream` handles compressed streams correctly without triggering an unexpected EOF error.
+
 ## [0.8.0]
 
 ### Added
