@@ -1,3 +1,8 @@
+/*!
+ * Demo how to use the deferred spectrum averaging iterator with `rayon`
+ * to quickly average over an LC-MS run and write the averaged spectra
+ * out to an mzML file on disk.
+ */
 use std::env;
 use std::io;
 use std::path;

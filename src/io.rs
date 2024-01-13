@@ -29,3 +29,4 @@ pub use crate::io::traits::{
     SpectrumGrouping, SpectrumIterator, StreamingSpectrumIterator,
 };
 pub use crate::io::utils::{DetailLevel, PreBufferedStream};
+pub use compression::RestartableGzDecoder;

@@ -57,15 +57,24 @@ pub fn infer_from_path<P: Into<path::PathBuf>,>(path: P) -> (MassSpectrometryFor
 /// Given a stream of bytes, infer the file format and whether or not the
 /// stream is GZIP compressed. This assumes the stream is seekable.
 pub fn infer_from_stream<R: Read + Seek>(stream: &mut R) -> io::Result<(MassSpectrometryFormat, bool)> {
-    let mut buf = Vec::with_capacity(100);
-    buf.resize(100, b'\0');
+    // We need to read in at least enough bytes to span a complete XML head plus the
+    // end of an opening tag
+    let mut buf = Vec::with_capacity(500);
+    buf.resize(500, b'\0');
     let current_pos = stream.stream_position()?;
-    stream.read_exact(buf.as_mut_slice())?;
+    // record how many bytes were actually read so we know the upper bound
+    let bytes_read = stream.read(buf.as_mut_slice())?;
+    buf.shrink_to(bytes_read);
     let is_stream_gzipped = is_gzipped(buf.as_slice());
     if is_stream_gzipped {
-        let mut decoder = GzDecoder::new(buf.as_slice());
         let mut decompressed_buf = Vec::new();
-        decoder.read_to_end(&mut decompressed_buf)?;
+        // In the worst case, we can't have fewer bytes than those that were read in (minus the size of the gzip header)
+        // and we assume the compression ratio means we have recouped that. We read in only that many bytes
+        // decompressed because the decompressor treats an incomplete segment as an error and thus using
+        // io::Read::read_to_end is not an option.
+        decompressed_buf.resize(bytes_read, b'\0');
+        let mut decoder = GzDecoder::new(io::Cursor::new(buf));
+        decoder.read(&mut decompressed_buf)?;
         buf = decompressed_buf;
     }
     stream.seek(io::SeekFrom::Start(current_pos))?;

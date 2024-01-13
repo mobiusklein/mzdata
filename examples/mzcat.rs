@@ -3,7 +3,9 @@ use std::time;
 
 use rayon::prelude::*;
 
-use mzdata::io::{mzml, mzmlb};
+use mzdata::io::mzml;
+#[cfg(feature = "mzmlb")]
+use mzdata::io::mzmlb;
 use mzdata::prelude::*;
 use mzdata::spectrum::MultiLayerSpectrum;
 

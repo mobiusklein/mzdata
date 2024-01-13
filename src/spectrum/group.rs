@@ -629,7 +629,13 @@ impl<
                 return match self.queue.len() {
                     d if d > 1 => self.deque_group(false),
                     1 => self.deque_group(true),
-                    _ => None,
+                    _ => {
+                        if self.product_scan_mapping.len() > 0 {
+                            Some(self.deque_group_without_precursor())
+                        } else {
+                            None
+                        }
+                    },
                 };
             }
         }
