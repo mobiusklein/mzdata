@@ -726,7 +726,8 @@ impl<
 
     fn write_param<P: ParamLike>(&mut self, param: &P) -> io::Result<()> {
         self.handle
-            .write_all(param.name().to_uppercase().as_bytes())?;
+            .write_all(param.name().to_uppercase().replace(" ", "_").as_bytes())?;
+        self.handle.write_all(b"=")?;
         self.handle.write_all(param.value().as_bytes())?;
         self.handle.write_all(b"\n")?;
         Ok(())
@@ -781,9 +782,7 @@ TITLE="#,
             None => {}
         }
         for param in desc.params() {
-            self.handle
-                .write_all(param.name.to_uppercase().as_bytes())?;
-            self.handle.write_all(param.value.as_bytes())?;
+            self.write_param(param)?;
         }
 
         Ok(())
