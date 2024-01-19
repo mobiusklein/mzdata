@@ -9,9 +9,9 @@ mod run;
 #[macro_use]
 mod traits;
 
-pub use crate::meta::data_processing::{DataProcessing, ProcessingMethod};
-pub use crate::meta::file_description::{FileDescription, SourceFile};
-pub use crate::meta::instrument::{Component, ComponentType, InstrumentConfiguration};
-pub use crate::meta::software::Software;
-pub use crate::meta::traits::MSDataFileMetadata;
+pub use data_processing::{DataProcessing, ProcessingMethod};
+pub use file_description::{FileDescription, SourceFile};
+pub use instrument::{Component, ComponentType, InstrumentConfiguration};
+pub use software::Software;
+pub use traits::MSDataFileMetadata;
 pub use run::MassSpectrometryRun;

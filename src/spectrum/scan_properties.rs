@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use num_traits::Float;
+
 use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
 use crate::io::traits::ScanSource;
 use crate::params::{ControlledVocabulary, Param, ParamLike, Unit};
@@ -24,7 +26,6 @@ impl Display for IsolationWindowState {
     }
 }
 
-
 #[derive(Default, Debug, Clone)]
 /// The interval around the precursor ion that was isolated in the precursor scan.
 /// Although an isolation window may be specified either with explicit bounds or
@@ -36,6 +37,42 @@ pub struct IsolationWindow {
     /// Describes the decision making process used to establish the bounds of the
     /// window from the source file.
     pub flags: IsolationWindowState,
+}
+
+impl IsolationWindow {
+    pub fn new(
+        target: f32,
+        lower_bound: f32,
+        upper_bound: f32,
+        flags: IsolationWindowState,
+    ) -> Self {
+        Self {
+            target,
+            lower_bound,
+            upper_bound,
+            flags,
+        }
+    }
+
+    pub fn around(target: f32, width: f32) -> Self {
+        let lower_bound = target - width;
+        let upper_bound = target + width;
+        Self::new(
+            target,
+            lower_bound,
+            upper_bound,
+            IsolationWindowState::Complete,
+        )
+    }
+
+    pub fn contains<F: Float>(&self, point: F) -> bool {
+        let point = point.to_f32().unwrap();
+        self.lower_bound <= point && self.upper_bound <= point
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.lower_bound == 0.0 && self.upper_bound == 0.0
+    }
 }
 
 impl PartialEq for IsolationWindow {
@@ -53,6 +90,24 @@ pub struct ScanWindow {
     pub lower_bound: f32,
     /// The maximum m/z scanned
     pub upper_bound: f32,
+}
+
+impl ScanWindow {
+    pub fn new(lower_bound: f32, upper_bound: f32) -> Self {
+        Self {
+            lower_bound,
+            upper_bound,
+        }
+    }
+
+    pub fn contains<F: Float>(&self, point: F) -> bool {
+        let point = point.to_f32().unwrap();
+        self.lower_bound <= point && self.upper_bound <= point
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.lower_bound == 0.0 && self.upper_bound == 0.0
+    }
 }
 
 type ScanWindowList = Vec<ScanWindow>;
@@ -142,7 +197,6 @@ pub struct Acquisition {
 }
 
 impl Acquisition {
-
     pub fn start_time(&self) -> f64 {
         self.first_scan().unwrap().start_time
     }
@@ -267,12 +321,16 @@ impl ActivationMethod {
 
     pub fn is_collisional(&self) -> Option<bool> {
         match self {
-            ActivationMethod::CollisionInducedDissociation | ActivationMethod::LowEnergyCollisionInducedDissociation |
-            ActivationMethod::BeamTypeCollisionInducedDissociation | Self::TrapTypeCollisionInducedDissociation |
-            Self::InSourceCollisionInducedDissociation | Self::SupplementalBeamTypeCollisionInducedDissociation |
-            Self::SupplementalCollisionInducedDissociation | Self::HighEnergyCollisionInducedDissociation => Some(true),
+            ActivationMethod::CollisionInducedDissociation
+            | ActivationMethod::LowEnergyCollisionInducedDissociation
+            | ActivationMethod::BeamTypeCollisionInducedDissociation
+            | Self::TrapTypeCollisionInducedDissociation
+            | Self::InSourceCollisionInducedDissociation
+            | Self::SupplementalBeamTypeCollisionInducedDissociation
+            | Self::SupplementalCollisionInducedDissociation
+            | Self::HighEnergyCollisionInducedDissociation => Some(true),
             Self::Other(_) => None,
-            _ => Some(false)
+            _ => Some(false),
         }
     }
 
@@ -392,7 +450,6 @@ impl<P: ParamLike + Into<Param>> From<P> for ActivationMethod {
         }
     }
 }
-
 
 #[derive(Debug, Default, Clone, PartialEq)]
 /// Describes the activation method used to dissociate the precursor ion
@@ -583,7 +640,6 @@ impl<T> IonProperties for T
 where
     T: PrecursorSelection,
 {
-
     #[inline]
     fn mz(&self) -> f64 {
         self.ion().mz()
@@ -608,9 +664,27 @@ or `Unknown` (0). The `Unknown` state is the default.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Default)]
 pub enum ScanPolarity {
     #[default]
+    /// The polarity of the spectrum is unknown
     Unknown = 0,
+    /// The polarity is positive, where charge states represent the addition of positive charge
     Positive = 1,
+    /// The polarity is negative, where the charge states reprsent the addition of electrons or other
+    /// negatively charged adduction
     Negative = -1,
+}
+
+impl ScanPolarity {
+    /// Get a signed integer representing the polarity of the spectrum. This
+    /// assumes that unknown spectra are more likely to be positive so it
+    /// is distinct from the raw integer value of the enum where [`Unknown`](Self::Unknown)
+    /// is 0.
+    pub fn sign(&self) -> i32 {
+        match self {
+            ScanPolarity::Unknown => 1,
+            ScanPolarity::Positive => 1,
+            ScanPolarity::Negative => -1,
+        }
+    }
 }
 
 impl Display for ScanPolarity {
@@ -630,7 +704,12 @@ or an assumed level, the `Unknown` option is retained for partial initialization
 pub enum SignalContinuity {
     #[default]
     Unknown = 0,
+    /// The spectrum is centroided, indicating that its primary representation is that of a
+    /// discrete peak list. There may be multiple peak lists and a profile spectrum may still
+    /// be present on the same spectrum.
     Centroid = 3,
+    /// The spectrum is profile, indicating that its primary representation is a continuous
+    /// profile.
     Profile = 5,
 }
 
@@ -647,21 +726,32 @@ trait.
 */
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct SpectrumDescription {
+    /// The spectrum's native identifier
     pub id: String,
+    /// The ordinal sequence number for the spectrum
     pub index: usize,
+    /// The degree of exponentiation of the spectrum, e.g MS1, MS2, MS3, etc
     pub ms_level: u8,
 
+    /// The spectrum is in positive or negative mode
     pub polarity: ScanPolarity,
+
+    /// The spectrum's main representation is as a peak list or a continuous
+    /// profile
     pub signal_continuity: SignalContinuity,
 
+    /// A set of controlled or uncontrolled descriptors of the spectrum not already
+    /// covered by fields
     pub params: ParamList,
+
+    /// A description of how the spectrum was acquired including time, scan windows, and more
     pub acquisition: Acquisition,
+    /// The parent ion or ions and their isolation and activation description
     pub precursor: Option<Precursor>,
 }
 
 impl_param_described!(Activation, SpectrumDescription);
 impl_param_described_deferred!(SelectedIon, Acquisition, ScanEvent);
-
 
 /// Types of chromatograms enumerated in the PSI-MS controlled vocabulary
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -673,7 +763,6 @@ pub enum ChromatogramType {
     SelectedIonCurrentChromatogram,
     SelectedReactionMonitoringChromatogram,
 }
-
 
 /// The set of descriptive metadata that give context for how a chromatogram was
 /// recorded.

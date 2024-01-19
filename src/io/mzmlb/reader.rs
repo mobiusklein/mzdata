@@ -1051,7 +1051,7 @@ mod test {
         let mut reader = MzMLbReader::new(&"test/data/small.mzMLb")?;
         let mut ref_reader = MzMLReader::open_path("test/data/small.mzML")?;
         assert_eq!(reader.index.len(), 48);
-        assert_eq!(reader.softwares.len(), 3);
+        assert_eq!(reader.softwares.len(), 4);
         let scan = reader.next().unwrap();
         let ref_scan = ref_reader.next().unwrap();
         assert_eq!(scan.ms_level(), ref_scan.ms_level());

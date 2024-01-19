@@ -1,3 +1,5 @@
+set dotenv-load := true
+
 test-units:
     cargo test --lib --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat
 

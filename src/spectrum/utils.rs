@@ -58,6 +58,40 @@ impl<T: Send> Collator<T> {
         }
     }
 
+    pub fn receive_from_map_timeout<U, F: Fn(usize, U) -> (usize, T)>(&mut self, receiver: &Receiver<(usize, U)>, batch_size: usize, timeout: Duration, cb: F) {
+        let mut counter = 0usize;
+        while let Ok((group_idx, group)) = receiver.recv_timeout(timeout) {
+            let (group_idx, group) = cb(group_idx, group);
+            self.receive(group_idx, group);
+            counter += 1;
+            if counter > batch_size {
+                break;
+            }
+        }
+    }
+
+    pub fn receive_from_map_iter_timeout<U, I: Iterator<Item=(usize, T)>, F: Fn(usize, U) -> I>(&mut self, receiver: &Receiver<(usize, U)>, batch_size: usize, timeout: Duration, cb: F) {
+        let mut counter = 0usize;
+        while let Ok((group_idx, group)) = receiver.recv_timeout(timeout) {
+            self.receive_map_iter(group_idx, group, &cb);
+            counter += 1;
+            if counter > batch_size {
+                break;
+            }
+        }
+    }
+
+    pub fn receive_map<U, F: Fn(usize, U) -> (usize, T)>(&mut self, group_idx: usize, group: U, cb: F) {
+        let (group_idx, group) = cb(group_idx, group);
+        self.receive(group_idx, group);
+    }
+
+    pub fn receive_map_iter<U, I: Iterator<Item=(usize, T)>, F: Fn(usize, U) -> I>(&mut self, group_idx: usize, group: U, cb: F) {
+        cb(group_idx, group).for_each(|(i, x)| {
+            self.receive(i, x);
+        })
+    }
+
     /// Check if the next item is already available
     pub fn has_next(&self) -> bool {
         self.waiting.contains_key(&self.next_key)
@@ -69,6 +103,11 @@ impl<T: Send> Collator<T> {
             self.next_key += 1;
             op
         })
+    }
+
+    /// Explicitly set the next key waiting key
+    pub fn set_next_key(&mut self, key: usize) {
+        self.next_key = key
     }
 
     /// Given a channel `receiver` to read from and a `sender` to send to another channel
