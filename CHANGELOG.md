@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
-## [Unreleased]
+## [unreleased]
+
+## [0.9.0] - 2024-01-20
 
 ### Added
 - `RestartableGzDecoder` added to `mzdata::io` to provide an `io::Seek` compatible GZIP decompressor,
@@ -17,7 +19,7 @@ and this project adheres to [Semantic Versioning].
 - `infer_from_stream` handles compressed streams correctly without triggering an unexpected EOF error.
 - `MGFWriterType` properly formats additional annotations.
 
-## [0.8.0]
+## [0.8.0] - 2024-01-10
 
 ### Added
 - Added `close` to the `ScanWriter` trait which "closes" the formatted structure of the file. As Rust lacks a notion of a "closed"
@@ -99,7 +101,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.8.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.9.0...HEAD
+[0.8.0]: https://github.com/mobiusklein/mzdata/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/mobiusklein/mzdata/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/mobiusklein/mzdata/compare/v0.5.0...v0.7.0
 [0.5.0]: https://github.com/mobiusklein/mzdata/compare/v0.1.0...v0.5.0
