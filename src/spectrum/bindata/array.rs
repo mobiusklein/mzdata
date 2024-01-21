@@ -268,13 +268,16 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                 ))
             }
             mode => Err(ArrayRetrievalError::DecompressionError(format!(
-                "Cannot decode array compressed with {:?}",
+                "Cannot decode array slice compressed with {:?}",
                 mode
             ))),
         }
     }
 
     pub fn decode_mut(&'transient mut self) -> Result<&'transient mut Bytes, ArrayRetrievalError> {
+        if self.data.is_empty() {
+            return Ok(&mut self.data)
+        }
         match self.compression {
             BinaryCompressionType::Decoded => Ok(&mut self.data),
             BinaryCompressionType::NoCompression => {
@@ -290,7 +293,23 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                 self.data = bytestring;
                 self.compression = BinaryCompressionType::Decoded;
                 Ok(&mut self.data)
-            }
+            },
+            #[cfg(feature = "numpress")]
+            BinaryCompressionType::NumpressLinear => match self.dtype {
+                BinaryDataArrayType::Float64 => {
+                    let mut bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
+                        .expect("Failed to decode base64 array");
+                    let decoded = Self::decompres_numpress_linear(&mut bytestring)?;
+                    let view = vec_as_bytes(decoded);
+                    self.data = view;
+                    Ok(&mut self.data)
+                }
+                _ => Err(ArrayRetrievalError::DecompressionError(
+                    self.compression.unsupported_msg(Some(
+                        format!("Not compatible with {:?}", self.dtype).as_str(),
+                    )),
+                )),
+            },
             mode => Err(ArrayRetrievalError::DecompressionError(format!(
                 "Cannot decode array compressed with {:?}",
                 mode

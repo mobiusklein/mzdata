@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning].
 
 ### Fixed
 - `infer_from_stream` handles compressed streams correctly without triggering an unexpected EOF error.
+- `MGFWriterType` properly formats additional annotations.
 
 ## [0.8.0]
 
