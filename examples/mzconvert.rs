@@ -3,7 +3,6 @@ use std::fs;
 use std::io;
 use std::process::exit;
 use std::thread;
-
 use std::time;
 
 use std::sync::mpsc::sync_channel;
@@ -17,6 +16,8 @@ use mzdata::io::{
 };
 use mzdata::prelude::*;
 use mzdata::{MGFReader, MGFWriter, MzMLReader, MzMLWriter};
+
+use env_logger;
 
 #[derive(Debug, Clone)]
 pub struct MZConvert {
@@ -106,10 +107,15 @@ impl MZConvert {
         reader: R,
         mut writer: W,
     ) -> io::Result<()> {
-        let (send, recv) = sync_channel(2usize.pow(16));
+        let (send, recv) = sync_channel(2usize.pow(14));
 
         let reader_handle = thread::spawn(move || {
-            reader.for_each(|s| send.send(s).unwrap());
+            reader.enumerate().for_each(|(i, s)| {
+                if i % 10000 == 0 && i > 0 {
+                    log::info!("Reading {} {}", i, s.id());
+                }
+                send.send(s).unwrap()
+            });
         });
 
         let writer_handle = thread::spawn(move || {
@@ -126,6 +132,7 @@ impl MZConvert {
 }
 
 fn main() -> io::Result<()> {
+    env_logger::init();
     let inpath = env::args().nth(1).unwrap_or_else(|| {
         eprintln!("Please provide a path to read an MS data file from, or '-'");
         exit(1)

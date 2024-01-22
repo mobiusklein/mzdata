@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::io::{self, prelude::*, Cursor};
 use std::marker::PhantomData;
-use std::mem;
 use std::path::{Path, PathBuf};
 
 use bytemuck;
@@ -20,20 +19,20 @@ use hdf5_sys::h5t::{H5T_cset_t, H5T_str_t, H5Tcopy, H5Tset_cset, H5Tset_size, H5
 
 use ndarray::Array1;
 
-use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, CentroidPeak, DeconvolutedPeak};
+use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 use quick_xml::events::{BytesStart, Event};
 use thiserror::Error;
 
-use crate::prelude::MSDataFileMetadata;
 use crate::io::traits::ScanWriter;
-use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, Software, MassSpectrometryRun};
+use crate::meta::{
+    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software,
+};
 use crate::params::ControlledVocabulary;
+use crate::prelude::MSDataFileMetadata;
 use crate::spectrum::bindata::{
     ArrayRetrievalError, BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
 };
-use crate::spectrum::{
-    ArrayType, BinaryArrayMap, Chromatogram, ChromatogramLike, PeakDataLevel,
-};
+use crate::spectrum::{ArrayType, BinaryArrayMap, Chromatogram, ChromatogramLike, PeakDataLevel};
 use crate::SpectrumLike;
 
 use crate::io::mzml::{MzMLWriterError, MzMLWriterState, MzMLWriterType};
@@ -68,7 +67,7 @@ macro_rules! end_event {
     };
 }
 
-const DEFAULT_CHUNK_SIZE: usize = 4000000;
+const DEFAULT_CHUNK_SIZE: usize = 1000000;
 
 #[derive(Debug, Error)]
 pub enum MzMLbWriterError {
@@ -180,9 +179,7 @@ impl ToString for BufferName {
             ArrayType::MeanIonMobilityArray => Cow::Borrowed("mean_ion_mobility"),
             ArrayType::RawIonMobilityArray => Cow::Borrowed("raw_ion_mobility"),
             ArrayType::DeconvolutedIonMobilityArray => Cow::Borrowed("deconvoluted_ion_mobility"),
-            ArrayType::NonStandardDataArray { name } => {
-                Cow::Owned(name.replace(['/', ' '], "_"))
-            }
+            ArrayType::NonStandardDataArray { name } => Cow::Owned(name.replace(['/', ' '], "_")),
         };
         let dtype = match self.dtype {
             BinaryDataArrayType::Unknown => "unknown",
@@ -221,7 +218,7 @@ impl BinaryDataArrayBuffer {
             .shape((1..,));
         let dataset: hdf5::Dataset = builder.create(name.to_string().as_str())?;
         let inst = Self {
-            buffer: Cursor::new(Vec::with_capacity(chunk_size * dtype.size_of())),
+            buffer: Cursor::new(Vec::with_capacity((chunk_size as f64 * 1.25) as usize)),
             dataset,
             dtype,
             chunk_size,
@@ -284,6 +281,18 @@ impl BinaryDataArrayBuffer {
                 }
             };
             self.buffer.set_position(0);
+            if log::log_enabled!(log::Level::Debug) {
+                log::debug!(
+                    "Flush {}:{}:{} {}/{} {:0.3}",
+                    self.dataset.name(),
+                    self.dtype,
+                    self.offset,
+                    self.buffer.position(),
+                    self.buffer.get_ref().capacity(),
+                    (self.buffer.position() as f64 / self.buffer.get_ref().capacity() as f64)
+                        * 100.0
+                );
+            }
         };
         Ok(())
     }
@@ -295,6 +304,82 @@ impl BinaryDataArrayBuffer {
         Ok(offset)
     }
 }
+
+#[derive(Debug)]
+struct ByteWriter {
+    dataset: hdf5::Dataset,
+    buffer: io::Cursor<Vec<u8>>,
+    chunk_size: usize,
+    offset: usize,
+}
+
+impl ByteWriter {
+    fn new(
+        dataset: hdf5::Dataset,
+        chunk_size: usize,
+    ) -> Self {
+        let offset = 0;
+        let buffer = io::Cursor::new(Vec::with_capacity((chunk_size as f64 * 1.25) as usize));
+        Self {
+            dataset,
+            buffer,
+            chunk_size,
+            offset,
+        }
+    }
+
+    fn write_to_dataset(&mut self) -> Result<(), hdf5::Error> {
+        let size = self.buffer.position();
+        if size == 0 {
+            return Ok(())
+        }
+        let start = self.offset;
+        let chunk = &self.buffer.get_ref()[..size as usize];
+        let end = start + chunk.len();
+        self.dataset.resize((end,))?;
+        self.dataset.as_writer().write_slice(chunk, start..end)?;
+        self.offset = end;
+        if log::log_enabled!(log::Level::Debug) {
+            log::debug!(
+                "Flush {}:{} {}/{} {:0.3}",
+                self.dataset.name(),
+                self.offset,
+                self.buffer.position(),
+                self.buffer.get_ref().capacity(),
+                (self.buffer.position() as f64 / self.buffer.get_ref().capacity() as f64)
+                    * 100.0
+            );
+        }
+        self.buffer.set_position(0);
+        Ok(())
+    }
+
+    fn resize_to_fit(&mut self) -> Result<(), hdf5::Error> {
+        self.write_to_dataset()?;
+        self.dataset.resize((self.offset, ))
+    }
+}
+
+
+impl io::Write for ByteWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let z = self.buffer.write(buf)?;
+        if self.buffer.position() > self.chunk_size as u64 {
+            if let Err(e) = self.write_to_dataset() {
+                return Err(io::Error::new(io::ErrorKind::Other, e))
+            };
+        }
+        Ok(z)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if let Err(e) = self.write_to_dataset() {
+            return Err(io::Error::new(io::ErrorKind::Other, e))
+        };
+        Ok(())
+    }
+}
+
 
 pub type WriterResult = Result<(), MzMLbWriterError>;
 
@@ -373,7 +458,9 @@ where
             &self.path,
             self.chunk_size.unwrap_or(DEFAULT_CHUNK_SIZE),
         )?;
-        inst.filters = self.filters.unwrap_or(MzMLbWriterType::<C, D>::zlib_compression(9));
+        inst.filters = self
+            .filters
+            .unwrap_or(MzMLbWriterType::<C, D>::zlib_compression(9));
         Ok(inst)
     }
 }
@@ -389,7 +476,6 @@ where
     }
 }
 
-
 #[derive(Debug)]
 pub struct MzMLbWriterType<
     C: CentroidLike + Default + 'static,
@@ -399,7 +485,7 @@ pub struct MzMLbWriterType<
     D: BuildArrayMapFrom,
 {
     handle: hdf5::File,
-    mzml_writer: MzMLWriterType<io::Cursor<Vec<u8>>, C, D>,
+    mzml_writer: MzMLWriterType<ByteWriter, C, D>,
     buffers: HashMap<BufferName, BinaryDataArrayBuffer>,
     chunk_size: usize,
     filters: Vec<filters::Filter>,
@@ -415,14 +501,22 @@ where
         Self::new_with_chunk_size(path, DEFAULT_CHUNK_SIZE)
     }
 
-    pub fn new_with_chunk_size<P: AsRef<Path>>(path: &P, chunk_size: usize) -> io::Result<Self> {
-        let handle = match hdf5::File::create(path) {
+    pub fn new_with_chunk_size_and_filters<P: AsRef<Path>>(path: &P, chunk_size: usize, filters: Vec<hdf5::filters::Filter>) -> io::Result<Self> {
+        let mut handle = match hdf5::File::create(path) {
             Ok(handle) => handle,
             Err(e) => return Err(MzMLbWriterError::HDF5Error(e).into()),
         };
 
-        let buffer = io::Cursor::new(Vec::new());
-        let mzml_writer: MzMLWriterType<io::Cursor<Vec<u8>>, C, D> =
+        let buffer = match Self::make_mzml_buffer(&mut handle, chunk_size, &filters) {
+            Ok(buffer) => {
+                ByteWriter::new(buffer, chunk_size)
+            },
+            Err(e) => {
+                return Err(e.into())
+            },
+        };
+
+        let mzml_writer: MzMLWriterType<ByteWriter, C, D> =
             MzMLWriterType::new_with_index(buffer, false);
 
         Ok(Self {
@@ -434,6 +528,11 @@ where
         })
     }
 
+    pub fn new_with_chunk_size<P: AsRef<Path>>(path: &P, chunk_size: usize) -> io::Result<Self> {
+        let filters = Self::zlib_compression(9);
+        Self::new_with_chunk_size_and_filters(path, chunk_size, filters)
+    }
+
     fn get_ms_cv(&self) -> &ControlledVocabulary {
         self.mzml_writer.get_ms_cv()
     }
@@ -442,7 +541,7 @@ where
         &mut self,
         array: &DataArray,
         context: BufferContext,
-        default_array_size: usize
+        default_array_size: usize,
     ) -> WriterResult {
         let mut outer = bstart!("binaryDataArray");
 
@@ -526,13 +625,10 @@ where
                 size_str,
             ))?;
         let offset = match self.buffers.entry(key) {
-            Entry::Occupied(mut buf) => {
-                buf.get_mut().add(array)?
-            }
+            Entry::Occupied(mut buf) => buf.get_mut().add(array)?,
             Entry::Vacant(opening) => {
                 let builder = self.handle.new_dataset_builder();
-                let key2 =
-                    BufferName::new(context, array.name.clone(), array.dtype);
+                let key2 = BufferName::new(context, array.name.clone(), array.dtype);
                 let mut buf = BinaryDataArrayBuffer::create_dataset(
                     key2,
                     builder,
@@ -562,7 +658,7 @@ where
         &mut self,
         arrays: &BinaryArrayMap,
         context: BufferContext,
-        default_array_size: usize
+        default_array_size: usize,
     ) -> WriterResult {
         let count = arrays.len().to_string();
         let mut outer = bstart!("binaryDataArrayList");
@@ -577,7 +673,10 @@ where
         Ok(())
     }
 
-    pub fn write_spectrum<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
+    pub fn write_spectrum<S: SpectrumLike<C, D> + 'static>(
+        &mut self,
+        spectrum: &S,
+    ) -> WriterResult {
         match self.mzml_writer.state {
             MzMLWriterState::SpectrumList => {}
             state if state < MzMLWriterState::SpectrumList => {
@@ -611,18 +710,21 @@ where
         match spectrum.peaks() {
             PeakDataLevel::RawData(arrays) => {
                 self.write_binary_data_arrays(arrays, BufferContext::Spectrum, default_array_size)?
-            },
-            PeakDataLevel::Centroid(arrays) => {
-                self.write_binary_data_arrays(&C::as_arrays(&arrays[0..]), BufferContext::Spectrum, default_array_size)?
-            },
-            PeakDataLevel::Deconvoluted(arrays) => {
-                self.write_binary_data_arrays(&D::as_arrays(&arrays[0..]), BufferContext::Spectrum, default_array_size)?
-            },
+            }
+            PeakDataLevel::Centroid(arrays) => self.write_binary_data_arrays(
+                &C::as_arrays(&arrays[0..]),
+                BufferContext::Spectrum,
+                default_array_size,
+            )?,
+            PeakDataLevel::Deconvoluted(arrays) => self.write_binary_data_arrays(
+                &D::as_arrays(&arrays[0..]),
+                BufferContext::Spectrum,
+                default_array_size,
+            )?,
             PeakDataLevel::Missing => todo!(),
         }
 
         end_event!(self, outer);
-
         Ok(())
     }
 
@@ -645,7 +747,8 @@ where
             .insert(chromatogram.id().to_string(), pos);
 
         let mut outer = bstart!("chromatogram");
-        let default_array_size = self.mzml_writer
+        let default_array_size = self
+            .mzml_writer
             .start_chromatogram(chromatogram, &mut outer)?;
         self.mzml_writer
             .write_param_list(chromatogram.params().iter())?;
@@ -653,7 +756,11 @@ where
         if let Some(precursor) = chromatogram.precursor() {
             self.mzml_writer.write_precursor(precursor)?;
         }
-        self.write_binary_data_arrays(&chromatogram.arrays, BufferContext::Chromatogram, default_array_size)?;
+        self.write_binary_data_arrays(
+            &chromatogram.arrays,
+            BufferContext::Chromatogram,
+            default_array_size,
+        )?;
 
         end_event!(self, outer);
         Ok(())
@@ -698,16 +805,21 @@ where
         &mut self.mzml_writer.chromatogram_count
     }
 
-    fn store_mzml_buffer(&mut self) -> WriterResult {
-        let buffer = self.mzml_writer.get_mut()?;
-        let raw_bytes = mem::take(buffer.get_mut());
-        let mut mzml_buffer = self
-            .handle
+    fn make_mzml_buffer(handle: &mut hdf5::File, chunk_size: usize, filters: &[hdf5::filters::Filter]) -> Result<hdf5::Dataset, MzMLbWriterError> {
+        let mzml_buffer = handle
             .new_dataset_builder()
-            .chunk((self.chunk_size.min(raw_bytes.len()),))
-            .with_data_as(&raw_bytes, &TypeDescriptor::Unsigned(IntSize::U1))
-            .set_filters(&self.filters)
+            .chunk(chunk_size)
+            .empty_as(&TypeDescriptor::Unsigned(IntSize::U1))
+            .shape((1..,))
+            .set_filters(filters)
             .create("/mzML")?;
+        Ok(mzml_buffer)
+    }
+
+    fn store_mzml_buffer(&mut self) -> WriterResult {
+        self.mzml_writer.flush()?;
+        let mzml_buffer = self.mzml_writer.get_mut()?;
+        mzml_buffer.resize_to_fit()?;
 
         let version_str: FixedAscii<10> = match FixedAscii::from_ascii(b"mzMLb 1.0") {
             Ok(val) => val,
@@ -719,7 +831,7 @@ where
             }
         };
 
-        let version_attr = create_fixed_length_str_attribute(&mut mzml_buffer, "version", 10)?;
+        let version_attr = create_fixed_length_str_attribute(&mut mzml_buffer.dataset, "version", 10)?;
         version_attr.write_scalar(&version_str)?;
         Ok(())
     }
@@ -727,7 +839,8 @@ where
     fn finalize_data_buffers(&mut self) -> WriterResult {
         let result: WriterResult = self
             .buffers
-            .iter_mut().try_for_each(|(_, v)| -> WriterResult { v.flush(true) });
+            .iter_mut()
+            .try_for_each(|(_, v)| -> WriterResult { v.flush(true) });
         result?;
         Ok(())
     }
@@ -812,7 +925,7 @@ where
 
     pub fn close(&mut self) -> WriterResult {
         if self.mzml_writer.state == MzMLWriterState::End {
-            return Ok(())
+            return Ok(());
         }
         if self.mzml_writer.state < MzMLWriterState::ChromatogramListClosed {
             self.write_summary_chromatograms()?;
@@ -826,14 +939,17 @@ where
     }
 }
 
-impl<C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom> Drop for MzMLbWriterType<C, D> {
+impl<
+        C: CentroidLike + Default + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+    > Drop for MzMLbWriterType<C, D>
+{
     fn drop(&mut self) {
         MzMLbWriterType::close(self).unwrap();
     }
 }
 
 pub type MzMLbWriter = MzMLbWriterType<CentroidPeak, DeconvolutedPeak>;
-
 
 fn build_nullterm_fixed_ascii_type_id(size: usize) -> Result<hid_t, hdf5::Error> {
     let string_id = hdf5::h5try!(H5Tcopy(*H5T_C_S1));
