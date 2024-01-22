@@ -8,3 +8,6 @@ test-units-more:
 
 docs:
     cargo doc --no-deps --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,async -p mzdata
+
+install-mzdata:
+    cargo install --path . --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,hdf5_static
