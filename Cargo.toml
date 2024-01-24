@@ -75,7 +75,7 @@ plotting = ["mzsignal", "mzsignal/plotting"]
 
 # Enables reading mzMLb
 mzmlb = ["hdf5", "ndarray", "hdf5-sys"]
-hdf5_static = ["mzmlb", "hdf5-sys/static"]
+hdf5_static = ["mzmlb", "hdf5-sys/static", "hdf5-sys/zlib", "libz-sys"]
 
 async = ["tokio", "quick-xml/async-tokio"]
 
@@ -97,6 +97,7 @@ tokio = {version = "1.32.0", optional = true, features = ["macros", "rt", "fs", 
 
 hdf5 = {version = "0.8.1", optional = true, features = ["blosc", "lzf",]}
 hdf5-sys = { version = "0.8.1", optional = true }
+libz-sys = { version = "1.1", default-features = false, features = ["static", ], optional = true }
 ndarray = { version = "0.15.6", optional = true }
 filename = { version = "0.1.1", optional = true }
 
@@ -104,7 +105,6 @@ numpress = { version = "1.1.0", optional = true }
 bytemuck = { version = "1.14.0", features = ["extern_crate_alloc"]}
 base64-simd = "0.8.0"
 thiserror = "1.0.50"
-
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = [ "html_reports" ] }

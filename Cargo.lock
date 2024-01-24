@@ -958,6 +958,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e01493db39ddc0519cf2a83d620d2c037fee60f4fed724cb72dc23763f1727a8"
 dependencies = [
  "cmake",
+ "libz-sys",
 ]
 
 [[package]]
@@ -969,6 +970,7 @@ dependencies = [
  "hdf5-src",
  "libc",
  "libloading 0.7.4",
+ "libz-sys",
  "pkg-config",
  "regex",
  "serde",
@@ -1313,6 +1315,7 @@ dependencies = [
  "hdf5-sys",
  "indexmap",
  "lazy_static",
+ "libz-sys",
  "log",
  "md5",
  "mzpeaks",
