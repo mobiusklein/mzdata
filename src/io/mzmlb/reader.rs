@@ -1042,7 +1042,7 @@ pub type MzMLbReader = MzMLbReaderType<CentroidPeak, DeconvolutedPeak>;
 
 #[cfg(test)]
 mod test {
-    use crate::{MzMLReader, SpectrumLike};
+    use crate::{MzMLReader, prelude::*};
 
     use super::*;
 

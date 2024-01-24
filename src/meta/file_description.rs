@@ -11,9 +11,12 @@ pub struct SourceFile {
     pub params: ParamList,
 }
 
+/// A description of the file data file and its contents
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FileDescription {
+    /// Descriptors of the content spectra
     pub contents: ParamList,
+    /// Any source files involved in producing the current file, such as vendor raw files.
     pub source_files: Vec<SourceFile>,
 }
 

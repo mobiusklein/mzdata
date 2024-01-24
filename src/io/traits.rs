@@ -929,6 +929,8 @@ pub trait ScanWriter<
         Ok(n)
     }
 
+    /// Completes the data file format, preventing new data from being able incorporate additional
+    /// data. Does not formally close the underlying writing stream.
     fn close(&mut self) -> io::Result<()>;
 }
 

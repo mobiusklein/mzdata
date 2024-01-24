@@ -1,3 +1,5 @@
+/// Metadata describing the experiment that does not belong in any other section
+/// that covers some default options.
 #[derive(Debug, Default, PartialEq, Hash, Eq, Clone)]
 pub struct MassSpectrometryRun {
     pub id: Option<String>,

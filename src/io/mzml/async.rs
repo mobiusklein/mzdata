@@ -19,7 +19,7 @@ use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
 use quick_xml::Reader;
 
-use crate::SpectrumLike;
+use crate::prelude::*;
 
 use crate::io::utils::DetailLevel;
 use crate::meta::{FileDescription, InstrumentConfiguration, DataProcessing, MSDataFileMetadata, Software, MassSpectrometryRun};

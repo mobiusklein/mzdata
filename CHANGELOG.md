@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+### Added
+- Added an `hdf5_static` flag to build the HDF5 library from source at build time.
+
+### Removed
+- Removed `SpectrumLike` from the crate root, it is more appropriately imported with
+  the rest of the prelude.
+
+
 ## [0.9.0] - 2024-01-20
 
 ### Added

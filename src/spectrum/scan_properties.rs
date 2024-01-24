@@ -29,10 +29,18 @@ impl Display for IsolationWindowState {
 #[derive(Default, Debug, Clone)]
 /// The interval around the precursor ion that was isolated in the precursor scan.
 /// Although an isolation window may be specified either with explicit bounds or
-/// offsets from the target, this data structure always uses explicit bounds.
+/// offsets from the target, this data structure always uses explicit bounds once
+/// it is in a [`IsolationWindowState::Complete`] .
 pub struct IsolationWindow {
+    /// The recorded isolation window target m/z, which may actually be outside the window
     pub target: f32,
+    /// The lower m/z boundary of the isolation window if `flags` is
+    /// [`IsolationWindowState::Explicit`], or the offset from `target`
+    /// if `flags` is [`IsolationWindowState::Offset`]
     pub lower_bound: f32,
+    /// The upper m/z boundary of the isolation window if `flags` is
+    /// [`IsolationWindowState::Explicit`], or the offset from `target`
+    /// if `flags` is [`IsolationWindowState::Offset`]
     pub upper_bound: f32,
     /// Describes the decision making process used to establish the bounds of the
     /// window from the source file.

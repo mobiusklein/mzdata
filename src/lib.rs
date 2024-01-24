@@ -26,7 +26,11 @@
 //!
 //!     if spectrum.signal_continuity() < SignalContinuity::Profile {
 //!         let peak_picked = spectrum.into_centroid().unwrap();
-//!         println!("Matches for 579.155: {:?}", peak_picked.peaks.all_peaks_for(579.155, Tolerance::Da(0.02)));
+//!         println!("Matches for 579.155: {:?}",
+//!                  peak_picked.peaks.all_peaks_for(
+//!                     579.155, Tolerance::Da(0.02)
+//!                 )
+//!         );
 //!     }
 //! }
 //! ```
@@ -59,4 +63,4 @@ pub use crate::io::mzmlb::{
 
 pub use crate::params::{Param, ParamList};
 
-pub use crate::spectrum::{CentroidSpectrum, RawSpectrum, Spectrum, SpectrumLike};
+pub use crate::spectrum::{CentroidSpectrum, RawSpectrum, Spectrum};

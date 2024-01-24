@@ -26,7 +26,8 @@ use regex::Regex;
 
 use super::offset_index::OffsetIndex;
 use super::traits::{
-    MZFileReader, RandomAccessSpectrumIterator, SpectrumAccessError, ScanSource, ScanWriter, SeekRead,
+    MZFileReader, RandomAccessSpectrumIterator, ScanSource, ScanWriter, SeekRead,
+    SpectrumAccessError,
 };
 use super::utils::DetailLevel;
 use crate::meta::{
@@ -286,9 +287,8 @@ impl<
                 "PEPMASS" => {
                     let mut parts = value.split_ascii_whitespace();
                     let mz: f64 = parts.next().unwrap().parse().unwrap();
-                    let intensity: f32 = parts.next().map(|v| {
-                        v.parse().unwrap()
-                    }).unwrap_or_default();
+                    let intensity: f32 =
+                        parts.next().map(|v| v.parse().unwrap()).unwrap_or_default();
                     let charge: Option<i32> = parts.next().map(|c| c.parse().unwrap());
                     builder.description.precursor = Some(Precursor {
                         ion: SelectedIon {
@@ -689,7 +689,11 @@ pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
 pub(crate) fn is_mgf(buf: &[u8]) -> bool {
     let needle = b"BEGIN IONS";
-    matches!(buf.windows(needle.len()).position(|window| window == needle), Some(_))
+    matches!(
+        buf.windows(needle.len())
+            .position(|window| window == needle),
+        Some(_)
+    )
 }
 
 /// An MGF writer type
@@ -789,7 +793,10 @@ TITLE="#,
     }
 
     fn write_deconvoluted_centroids(&mut self, centroids: &[D]) -> io::Result<()> {
-        for peak in centroids.iter().map(|p| p.as_centroid()) {
+        let mut centroids: Vec<DeconvolutedPeak> =
+            centroids.iter().map(|p| p.as_centroid()).collect();
+        centroids.sort_by(|a, b| a.mz().total_cmp(&b.mz()));
+        for peak in centroids.into_iter() {
             self.handle.write_all(peak.mz().to_string().as_bytes())?;
             self.handle.write_all(b" ")?;
             self.handle
@@ -883,10 +890,13 @@ impl<
         }
     }
 
-    fn write_group<S: SpectrumLike<C, D> + 'static, G: super::SpectrumGrouping<C, D, S> + 'static>(
-            &mut self,
-            group: &G,
-        ) -> io::Result<usize> {
+    fn write_group<
+        S: SpectrumLike<C, D> + 'static,
+        G: super::SpectrumGrouping<C, D, S> + 'static,
+    >(
+        &mut self,
+        group: &G,
+    ) -> io::Result<usize> {
         let mut c = 0;
         for s in group.products() {
             c += self.write(s)?;

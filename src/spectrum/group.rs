@@ -11,8 +11,7 @@ use crate::{
         traits::{RandomAccessSpectrumGroupingIterator, SpectrumGrouping},
         RandomAccessSpectrumIterator, SpectrumAccessError,
     },
-    prelude::MSDataFileMetadata,
-    SpectrumLike,
+    prelude::{MSDataFileMetadata, SpectrumLike},
 };
 
 use super::MultiLayerSpectrum;

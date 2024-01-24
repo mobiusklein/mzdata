@@ -145,7 +145,7 @@ pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<Box<dyn ScanSour
 
 #[cfg(test)]
 mod test {
-    use crate::{SpectrumLike, spectrum::{Spectrum, ArrayType}};
+    use crate::{prelude::*, spectrum::{Spectrum, ArrayType}};
 
     use super::*;
 

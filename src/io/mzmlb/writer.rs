@@ -28,12 +28,11 @@ use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software,
 };
 use crate::params::ControlledVocabulary;
-use crate::prelude::MSDataFileMetadata;
+use crate::prelude::{MSDataFileMetadata, SpectrumLike};
 use crate::spectrum::bindata::{
     ArrayRetrievalError, BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
 };
 use crate::spectrum::{ArrayType, BinaryArrayMap, Chromatogram, ChromatogramLike, PeakDataLevel};
-use crate::SpectrumLike;
 
 use crate::io::mzml::{MzMLWriterError, MzMLWriterState, MzMLWriterType};
 
