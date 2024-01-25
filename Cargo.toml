@@ -75,6 +75,10 @@ plotting = ["mzsignal", "mzsignal/plotting"]
 
 # Enables reading mzMLb
 mzmlb = ["hdf5", "ndarray", "hdf5-sys"]
+
+# Enable compiling and statically linking HDF5, which requires building
+# libz-sys in static mode, which conflicts with flate2/zlib-ng-compat
+# but not flate2/zlib
 hdf5_static = ["mzmlb", "hdf5-sys/static", "hdf5-sys/zlib", "libz-sys"]
 
 async = ["tokio", "quick-xml/async-tokio"]

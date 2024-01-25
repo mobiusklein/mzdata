@@ -5,7 +5,7 @@ env:
   RUST_LOG: debug
   CARGO_PROFILE_TEST_BUILD_OVERRIDE_DEBUG: true
 
-name: Test
+name: Test (HDF5 Static Compilation)
 jobs:
 
   test:
