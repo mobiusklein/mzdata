@@ -62,7 +62,7 @@ impl MSDataFileSummary {
         let level = scan.ms_level();
         *self.level_table.entry(level).or_default() += 1;
         if level > 1 {
-            if let Some(charge) = scan.precursor().unwrap().ion.charge {
+            if let Some(charge) = scan.precursor().unwrap().ion().charge {
                 *self.charge_table.entry(charge).or_default() += 1;
             } else {
                 *self.charge_table.entry(0).or_default() += 1;

@@ -6,17 +6,16 @@ use std::path;
 use std::io::prelude::*;
 
 use flate2::bufread::GzDecoder;
-
 use crate::MGFReader;
 use crate::MzMLReader;
 
 #[cfg(feature = "mzmlb")]
 pub use crate::MzMLbReader;
 
-use crate::io::traits::ScanSource;
-use crate::io::mzml::is_mzml;
-use crate::io::mgf::is_mgf;
 use crate::io::compression::{is_gzipped, is_gzipped_extension};
+use crate::io::mgf::is_mgf;
+use crate::io::mzml::is_mzml;
+use crate::io::traits::ScanSource;
 
 /// Mass spectrometry file formats that [`mzdata`](crate)
 /// supports
@@ -26,13 +25,12 @@ pub enum MassSpectrometryFormat {
     MzML,
     #[cfg(feature = "mzmlb")]
     MzMLb,
-    Unknown
+    Unknown,
 }
-
 
 /// Given a path, infer the file format and whether or not the file at that path is
 /// GZIP compressed
-pub fn infer_from_path<P: Into<path::PathBuf>,>(path: P) -> (MassSpectrometryFormat, bool) {
+pub fn infer_from_path<P: Into<path::PathBuf>>(path: P) -> (MassSpectrometryFormat, bool) {
     let path: path::PathBuf = path.into();
     let (is_gzipped, path) = is_gzipped_extension(path);
     if let Some(ext) = path.extension() {
@@ -42,7 +40,7 @@ pub fn infer_from_path<P: Into<path::PathBuf>,>(path: P) -> (MassSpectrometryFor
                 "mgf" => MassSpectrometryFormat::MGF,
                 #[cfg(feature = "mzmlb")]
                 "mzmlb" => MassSpectrometryFormat::MzMLb,
-                _ => MassSpectrometryFormat::Unknown
+                _ => MassSpectrometryFormat::Unknown,
             };
             (form, is_gzipped)
         } else {
@@ -53,10 +51,11 @@ pub fn infer_from_path<P: Into<path::PathBuf>,>(path: P) -> (MassSpectrometryFor
     }
 }
 
-
 /// Given a stream of bytes, infer the file format and whether or not the
 /// stream is GZIP compressed. This assumes the stream is seekable.
-pub fn infer_from_stream<R: Read + Seek>(stream: &mut R) -> io::Result<(MassSpectrometryFormat, bool)> {
+pub fn infer_from_stream<R: Read + Seek>(
+    stream: &mut R,
+) -> io::Result<(MassSpectrometryFormat, bool)> {
     // We need to read in at least enough bytes to span a complete XML head plus the
     // end of an opening tag
     let mut buf = Vec::with_capacity(500);
@@ -80,14 +79,12 @@ pub fn infer_from_stream<R: Read + Seek>(stream: &mut R) -> io::Result<(MassSpec
     stream.seek(io::SeekFrom::Start(current_pos))?;
     if is_mzml(&buf) {
         Ok((MassSpectrometryFormat::MzML, is_stream_gzipped))
-    }
-    else if is_mgf(&buf) {
+    } else if is_mgf(&buf) {
         Ok((MassSpectrometryFormat::MGF, is_stream_gzipped))
     } else {
         Ok((MassSpectrometryFormat::Unknown, is_stream_gzipped))
     }
 }
-
 
 /// Given a path, infer the file format and whether or not the file at that path is
 /// GZIP compressed, using both the file name and by trying to open and read the file
@@ -102,42 +99,43 @@ pub fn infer_format<P: Into<path::PathBuf>>(path: P) -> io::Result<(MassSpectrom
             let mut stream = BufReader::new(handle);
             let (format, is_gzipped) = infer_from_stream(&mut stream)?;
             Ok((format, is_gzipped))
-        },
-        _ => {
-            Ok((format, is_gzipped))
         }
+        _ => Ok((format, is_gzipped)),
     }
 }
 
-
 /// Given a local file system path, infer the file format, and attempt to open it
 /// for reading.
-pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<Box<dyn ScanSource>>{
+pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<Box<dyn ScanSource>> {
     let path = path.into();
     let (format, is_gzipped) = infer_format(path.clone())?;
 
     if is_gzipped {
-        Err(io::Error::new(io::ErrorKind::Unsupported, "Gzipped files are not supported"))
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Gzipped files are not supported",
+        ))
     } else {
         match format {
             MassSpectrometryFormat::MGF => {
                 let handle = fs::File::open(path)?;
                 let reader = MGFReader::new_indexed(handle);
                 Ok(Box::new(reader))
-            },
+            }
             MassSpectrometryFormat::MzML => {
                 let handle = fs::File::open(path)?;
                 let reader = MzMLReader::new_indexed(handle);
                 Ok(Box::new(reader))
-            },
+            }
             #[cfg(feature = "mzmlb")]
             MassSpectrometryFormat::MzMLb => {
                 let reader = MzMLbReader::new(&path)?;
                 Ok(Box::new(reader))
             }
-            _ => {
-                Err(io::Error::new(io::ErrorKind::Unsupported, "File format not supported"))
-            }
+            _ => Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "File format not supported",
+            )),
         }
     }
 }
@@ -145,7 +143,10 @@ pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<Box<dyn ScanSour
 
 #[cfg(test)]
 mod test {
-    use crate::{prelude::*, spectrum::{Spectrum, ArrayType}};
+    use crate::{
+        prelude::*,
+        spectrum::{ArrayType, Spectrum},
+    };
 
     use super::*;
 

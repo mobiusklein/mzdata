@@ -5,7 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
-## [unreleased]
+## [0.12.0] - 2024-01-29
+
+### Changed
+- Require a newer version of `mzsignal`, fixing the rather embarassing error of swapping FWHM
+  and SNR during peak picking.
+- Thicken the use of internal abstraction around `PrecursorSelection` for the future of allowing
+  more than one `SelectedIon` per `Precursor`.
+
+## [0.11.0] - 2024-01-24
 
 ### Added
 - Added an `hdf5_static` flag to build the HDF5 library from source at build time.
@@ -109,7 +117,7 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.9.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.11.0...HEAD
 [0.8.0]: https://github.com/mobiusklein/mzdata/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/mobiusklein/mzdata/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/mobiusklein/mzdata/compare/v0.5.0...v0.7.0

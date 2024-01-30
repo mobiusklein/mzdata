@@ -352,7 +352,7 @@ impl<
     }
 
     fn selected_ion_mut(&mut self) -> &mut SelectedIon {
-        &mut self.precursor.ion
+        self.precursor.ion_mut()
     }
 
     fn current_array_mut(&mut self) -> &mut DataArray {
