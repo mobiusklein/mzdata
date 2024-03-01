@@ -20,6 +20,7 @@ use super::super::offset_index::OffsetIndex;
 use super::super::traits::{
     MZFileReader, RandomAccessSpectrumIterator, ScanSource, SeekRead, SpectrumAccessError,
 };
+use super::reading_shared::EntryType;
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
@@ -33,6 +34,7 @@ use crate::spectrum::bindata::{
     ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, BuildArrayMapFrom,
     BuildFromArrayMap, DataArray,
 };
+use crate::spectrum::chromatogram::{Chromatogram, ChromatogramLike};
 use crate::spectrum::scan_properties::*;
 use crate::spectrum::spectrum::{
     CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
@@ -62,9 +64,12 @@ pub trait SpectrumBuilding<
     /// Get the last scan window being constructed.
     fn scan_window_mut(&mut self) -> &mut ScanWindow;
     fn selected_ion_mut(&mut self) -> &mut SelectedIon;
+    fn new_selected_ion(&mut self) -> &mut SelectedIon;
     fn current_array_mut(&mut self) -> &mut DataArray;
     /// Move all the data into the provided `spectrum` reference
     fn into_spectrum(self, spectrum: &mut S);
+
+    fn into_chromatogram(self, chromatogram: &mut Chromatogram);
 
     fn fill_spectrum<P: ParamLike + Into<Param>>(&mut self, param: P);
 
@@ -128,6 +133,16 @@ pub trait SpectrumBuilding<
                     self.current_array_mut().name = ArrayType::NonStandardDataArray {
                         name: Box::new(param.value().to_string()),
                     };
+                },
+                1000595 => {
+                    self.current_array_mut().name = ArrayType::TimeArray;
+                    let unit = param.unit();
+                    match unit {
+                        Unit::Minute | Unit::Second | Unit::Millisecond => self.current_array_mut().unit = unit,
+                        _ => {
+                            warn!("Invalid unit {} found for time array", unit)
+                        }
+                    }
                 }
                 1002477 => {
                     self.current_array_mut().name = ArrayType::MeanIonMobilityArray;
@@ -296,13 +311,14 @@ pub struct MzMLSpectrumBuilder<
     pub current_array: DataArray,
 
     pub index: usize,
-    pub scan_id: String,
+    pub entry_id: String,
     pub ms_level: u8,
     pub polarity: ScanPolarity,
     pub signal_continuity: SignalContinuity,
     pub has_precursor: bool,
     pub detail_level: DetailLevel,
     pub instrument_id_map: Option<&'a mut IncrementingIdMap>,
+    entry_type: EntryType,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
 }
@@ -362,7 +378,7 @@ impl<
     fn into_spectrum(self, spectrum: &mut MultiLayerSpectrum<C, D>) {
         let description = &mut spectrum.description;
 
-        description.id = self.scan_id;
+        description.id = self.entry_id;
         description.index = self.index;
         description.signal_continuity = self.signal_continuity;
         description.ms_level = self.ms_level;
@@ -409,6 +425,47 @@ impl<
         self.instrument_id_map = Some(instrument_configurations);
         self
     }
+
+    fn new_selected_ion(&mut self) -> &mut SelectedIon {
+        self.precursor.add_ion(SelectedIon::default());
+        self.precursor.last_ion_mut()
+    }
+
+    fn into_chromatogram(self, chromatogram: &mut Chromatogram) {
+        let description = chromatogram.description_mut();
+        description.id = self.entry_id;
+        description.index = self.index;
+        description.polarity = self.polarity;
+        description.ms_level = Some(self.ms_level);
+
+        let mut params = Vec::with_capacity(self.params.len());
+        for param in self.params.into_iter() {
+            if param.is_controlled() {
+                if param.is_ms() {
+                    if let Some(chrom_type) =
+                        ChromatogramType::from_accession(param.accession.unwrap())
+                    {
+                        description.chromatogram_type = chrom_type;
+                    } else {
+                        params.push(param)
+                    }
+                } else {
+                    params.push(param)
+                }
+            } else {
+                params.push(param)
+            }
+        }
+
+        description.params = params;
+        if self.has_precursor {
+            description.precursor = Some(self.precursor);
+        } else {
+            description.precursor = None;
+        }
+
+        chromatogram.arrays = self.arrays;
+    }
 }
 
 impl<
@@ -434,7 +491,7 @@ impl<
         self.acquisition = Acquisition::default();
         self.arrays.clear();
         self.current_array.clear();
-        self.scan_id.clear();
+        self.entry_id.clear();
 
         self.precursor = Precursor::default();
         self.index = 0;
@@ -443,24 +500,20 @@ impl<
         self.polarity = ScanPolarity::Unknown;
     }
 
-    pub fn _to_spectrum(&self, spectrum: &mut MultiLayerSpectrum<C, D>) {
-        let description = &mut spectrum.description;
+    pub fn set_entry_type(&mut self, entry_type: EntryType) {
+        self.entry_type = entry_type;
+    }
 
-        description.id = self.scan_id.clone();
-        description.index = self.index;
-        description.signal_continuity = self.signal_continuity;
-        description.ms_level = self.ms_level;
-        description.polarity = self.polarity;
+    pub fn entry_type(&self) -> EntryType {
+        self.entry_type
+    }
 
-        description.params = self.params.clone();
-        description.acquisition = self.acquisition.clone();
-        if self.has_precursor {
-            description.precursor = Some(self.precursor.clone());
-        } else {
-            description.precursor = None;
-        }
+    pub fn is_spectrum_entry(&self) -> bool {
+        matches!(self.entry_type, EntryType::Spectrum)
+    }
 
-        spectrum.arrays = Some(self.arrays.clone());
+    pub fn is_chromatogram_entry(&self) -> bool {
+        matches!(self.entry_type, EntryType::Chromatogram)
     }
 
     pub fn fill_param_into(&mut self, param: Param, state: MzMLParserState) {
@@ -549,18 +602,23 @@ impl<
     }
 }
 
-impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> MzMLSAX
-    for MzMLSpectrumBuilder<'inner, C, D>
+impl<
+        'inner,
+        'outer: 'inner,
+        C: CentroidLike + Default + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > MzMLSAX for MzMLSpectrumBuilder<'inner, C, D>
 {
     fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
             b"spectrum" => {
+                self.set_entry_type(EntryType::Spectrum);
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => match attr.key.as_ref() {
                             b"id" => {
-                                self.scan_id = attr
+                                self.entry_id = attr
                                     .unescape_value()
                                     .expect("Error decoding id")
                                     .to_string();
@@ -663,6 +721,32 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
             b"binary" => {
                 return Ok(MzMLParserState::Binary);
             }
+            b"chromatogramList" => return Ok(MzMLParserState::ChromatogramList),
+            b"chromatogram" => {
+                self.set_entry_type(EntryType::Chromatogram);
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => match attr.key.as_ref() {
+                            b"id" => {
+                                self.entry_id = attr
+                                    .unescape_value()
+                                    .expect("Error decoding id")
+                                    .to_string();
+                            }
+                            b"index" => {
+                                self.index = String::from_utf8_lossy(&attr.value)
+                                    .parse::<usize>()
+                                    .expect("Failed to parse index");
+                            }
+                            _ => {}
+                        },
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg.into(), state));
+                        }
+                    }
+                }
+                return Ok(MzMLParserState::Chromatogram);
+            }
             _ => {}
         };
         Ok(state)
@@ -686,7 +770,9 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
             b"cvParam" | b"userParam" => {
                 match Self::handle_param_borrowed(event, reader_position, state) {
                     Ok(param) => match state {
-                        MzMLParserState::Spectrum => self.fill_spectrum(param),
+                        MzMLParserState::Spectrum | MzMLParserState::Chromatogram => {
+                            self.fill_spectrum(param)
+                        }
                         MzMLParserState::ScanList => {
                             if param.is_controlled() {
                                 if let Some(comb) = ScanCombination::from_accession(
@@ -781,6 +867,7 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
         let elt_name = event.name();
         match elt_name.as_ref() {
             b"spectrum" => return Ok(MzMLParserState::SpectrumDone),
+            b"chromatogram" => return Ok(MzMLParserState::ChromatogramDone),
             b"scanList" => return Ok(MzMLParserState::Spectrum),
             b"scan" => return Ok(MzMLParserState::ScanList),
             b"scanWindow" => return Ok(MzMLParserState::ScanWindowList),
@@ -801,11 +888,13 @@ impl<'inner, 'outer: 'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapt
                         .decode_and_store()
                         .expect("Error during decoding and storing of array data");
                 }
+                debug!("Adding {}", array.name);
                 self.arrays.add(array);
                 return Ok(MzMLParserState::BinaryDataArrayList);
             }
             b"binary" => return Ok(MzMLParserState::BinaryDataArray),
             b"spectrumList" => return Ok(MzMLParserState::SpectrumListDone),
+            b"chromatogramList" => return Ok(MzMLParserState::ChromatogramListDone),
             _ => {}
         };
         Ok(state)
@@ -873,7 +962,8 @@ pub struct MzMLReaderType<
     /// A place to store the last error the parser encountered
     error: Option<MzMLParserError>,
     /// A spectrum ID to byte offset for fast random access
-    pub index: OffsetIndex,
+    pub spectrum_index: OffsetIndex,
+    pub chromatogram_index: Box<OffsetIndex>,
     /// The description of the file's contents and the previous data files that were
     /// consumed to produce it.
     pub(crate) file_description: FileDescription,
@@ -889,7 +979,6 @@ pub struct MzMLReaderType<
     /// A cache of repeated paramters
     pub reference_param_groups: HashMap<String, Vec<Param>>,
     pub detail_level: DetailLevel,
-
 
     // SpectrumList attributes
     pub run: MassSpectrometryRun,
@@ -929,7 +1018,8 @@ impl<
             state: MzMLParserState::Start,
             error: None,
             buffer: Bytes::new(),
-            index: OffsetIndex::new("spectrum".to_owned()),
+            spectrum_index: OffsetIndex::new("spectrum".to_owned()),
+            chromatogram_index: Box::new(OffsetIndex::new("chromatogram".to_owned())),
 
             file_description: FileDescription::default(),
             instrument_configurations: HashMap::new(),
@@ -1070,7 +1160,7 @@ impl<
         self.num_spectra = accumulator.num_spectra;
 
         match self.state {
-            MzMLParserState::SpectrumDone => Ok(()),
+            MzMLParserState::SpectrumDone | MzMLParserState::ChromatogramDone => Ok(()),
             MzMLParserState::ParserError => {
                 let mut error = None;
                 mem::swap(&mut error, &mut self.error);
@@ -1192,14 +1282,18 @@ impl<
             offset += self.buffer.len();
             self.buffer.clear();
             match self.state {
-                MzMLParserState::SpectrumDone | MzMLParserState::ParserError => {
+                MzMLParserState::SpectrumDone
+                | MzMLParserState::ChromatogramDone
+                | MzMLParserState::ParserError => {
                     break;
                 }
                 _ => {}
             };
         }
         match self.state {
-            MzMLParserState::SpectrumDone => Ok((accumulator, offset)),
+            MzMLParserState::SpectrumDone | MzMLParserState::ChromatogramDone => {
+                Ok((accumulator, offset))
+            }
             MzMLParserState::ParserError if self.error.is_some() => {
                 let mut error = None;
                 mem::swap(&mut error, &mut self.error);
@@ -1260,6 +1354,41 @@ impl<
                 debug!("Failed to read next spectrum: {err}");
                 None
             }
+        }
+    }
+
+    fn _read_next_chromatogram(&mut self) -> Result<Chromatogram, MzMLParserError> {
+        let accumulator = MzMLSpectrumBuilder::<C, D>::with_detail_level(self.detail_level);
+
+        match self.state {
+            MzMLParserState::ChromatogramDone => {
+                self.state = MzMLParserState::Resume;
+            }
+            MzMLParserState::ParserError => {
+                eprintln!("Starting parsing from error: {:?}", self.error);
+            }
+            state
+                if state > MzMLParserState::ChromatogramDone
+                    && state < MzMLParserState::Chromatogram =>
+            {
+                eprintln!(
+                    "Attempting to start parsing a spectrum in state {}",
+                    self.state
+                );
+            }
+            _ => {}
+        }
+        match self._parse_into(accumulator) {
+            Ok((accumulator, _sz)) => {
+                if accumulator.is_chromatogram_entry() {
+                    let mut chrom = Chromatogram::default();
+                    accumulator.into_chromatogram(&mut chrom);
+                    return Ok(chrom);
+                } else {
+                    return Err(MzMLParserError::UnknownError(self.state));
+                }
+            }
+            Err(err) => Err(err),
         }
     }
 }
@@ -1334,6 +1463,58 @@ impl<
         }
         Ok(matched_tag)
     }
+
+    pub fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
+        let offset_ref = self.chromatogram_index.get(id);
+        let offset = offset_ref.expect("Failed to retrieve offset");
+        let start = self
+            .handle
+            .stream_position()
+            .expect("Failed to save checkpoint");
+        self.seek(SeekFrom::Start(offset))
+            .expect("Failed to move seek to offset");
+        debug_assert!(
+            self.check_stream("chromatogram").unwrap(),
+            "The next XML tag was not `chromatogram`"
+        );
+        self.state = MzMLParserState::Resume;
+        let result = self._read_next_chromatogram();
+        self.seek(SeekFrom::Start(start))
+            .expect("Failed to restore offset");
+        if let Ok(chrom) = result {
+            Some(chrom)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
+        let offset_ref = self.chromatogram_index.get_index(index);
+        let (_key, offset) = offset_ref.expect("Failed to retrieve offset");
+        let start = self
+            .handle
+            .stream_position()
+            .expect("Failed to save checkpoint");
+        self.seek(SeekFrom::Start(offset))
+            .expect("Failed to move seek to offset");
+        debug_assert!(
+            self.check_stream("chromatogram").unwrap(),
+            "The next XML tag was not `chromatogram`"
+        );
+        self.state = MzMLParserState::Resume;
+        let result = self._read_next_chromatogram();
+        self.seek(SeekFrom::Start(start))
+            .expect("Failed to restore offset");
+        if let Ok(chrom) = result {
+            Some(chrom)
+        } else {
+            None
+        }
+    }
+
+    pub fn iter_chromatograms(&mut self) -> ChromatogramIter<R, C, D> {
+        ChromatogramIter::new(self)
+    }
 }
 
 /// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
@@ -1360,7 +1541,7 @@ impl<
 {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
-        let offset_ref = self.index.get(id);
+        let offset_ref = self.spectrum_index.get(id);
         let offset = offset_ref.expect("Failed to retrieve offset");
         let start = self
             .handle
@@ -1381,7 +1562,7 @@ impl<
 
     /// Retrieve a spectrum by it's integer index
     fn get_spectrum_by_index(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
-        let (_id, offset) = self.index.get_index(index)?;
+        let (_id, offset) = self.spectrum_index.get_index(index)?;
         let byte_offset = offset;
         let start = self
             .handle
@@ -1407,14 +1588,14 @@ impl<
     }
 
     fn get_index(&self) -> &OffsetIndex {
-        if !self.index.init {
+        if !self.spectrum_index.init {
             warn!("Attempting to use an uninitialized offset index on MzMLReaderType")
         }
-        &self.index
+        &self.spectrum_index
     }
 
     fn set_index(&mut self, index: OffsetIndex) {
-        self.index = index
+        self.spectrum_index = index
     }
 }
 
@@ -1552,7 +1733,7 @@ impl<
                         Ok(state) => {
                             indexer_state = state;
                             if matches!(indexer_state, IndexParserState::Done) {
-                                break
+                                break;
                             }
                         }
                         Err(err) => return Err(err),
@@ -1582,10 +1763,12 @@ impl<
             }
         }
         self.buffer.clear();
-        self.index = indexer.spectrum_index;
-        self.index.init = true;
+        self.spectrum_index = indexer.spectrum_index;
+        self.spectrum_index.init = true;
+        *self.chromatogram_index = indexer.chromatogram_index;
+        self.chromatogram_index.init = true;
         self.handle.seek(SeekFrom::Start(current_position)).unwrap();
-        Ok(self.index.len() as u64)
+        Ok(self.spectrum_index.len() as u64)
     }
 
     /// Builds an offset index to each `<spectrum>` XML element
@@ -1616,7 +1799,7 @@ impl<
                                                 .expect("Error decoding id")
                                                 .to_string();
                                             // This count is off by 2 because somehow the < and > bytes are removed?
-                                            self.index.insert(
+                                            self.spectrum_index.insert(
                                                 scan_id,
                                                 (reader.buffer_position() - e.len() - 2) as u64,
                                             );
@@ -1647,8 +1830,8 @@ impl<
         self.handle
             .seek(SeekFrom::Start(start))
             .expect("Failed to restore location");
-        self.index.init = true;
-        if self.index.is_empty() {
+        self.spectrum_index.init = true;
+        if self.spectrum_index.is_empty() {
             warn!("An index was built but no entries were found")
         }
         offset
@@ -1711,6 +1894,48 @@ pub(crate) fn is_mzml(buf: &[u8]) -> bool {
             Ok(Event::Eof) => return false,
             Ok(_) => {}
             Err(_) => return false,
+        }
+    }
+}
+
+pub struct ChromatogramIter<
+    'a,
+    R: SeekRead,
+    C: CentroidPeakAdapting + BuildFromArrayMap,
+    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+> {
+    reader: &'a mut MzMLReaderType<R, C, D>,
+    index: usize,
+}
+
+impl<
+        'a,
+        R: SeekRead,
+        C: CentroidPeakAdapting + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > ChromatogramIter<'a, R, C, D>
+{
+    pub fn new(reader: &'a mut MzMLReaderType<R, C, D>) -> Self {
+        Self { reader, index: 0 }
+    }
+}
+
+impl<
+        'a,
+        R: SeekRead,
+        C: CentroidPeakAdapting + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > Iterator for ChromatogramIter<'a, R, C, D>
+{
+    type Item = Chromatogram;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.reader.chromatogram_index.len() <= self.index {
+            let result = self.reader.get_chromatogram_by_index(self.index);
+            self.index += 1;
+            result
+        } else {
+            None
         }
     }
 }
@@ -1887,7 +2112,7 @@ mod test {
                 panic!("Failed to parse out index {:?}", err);
             }
         };
-        assert!(!reader.index.is_empty());
+        assert!(!reader.spectrum_index.is_empty());
         Ok(())
     }
 
@@ -2064,6 +2289,26 @@ mod test {
             .unwrap();
         assert_eq!(min_msn_idx, 142);
         assert_eq!(groups.len(), 188);
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn test_get_chromatogram() -> io::Result<()> {
+        let path = path::Path::new("./test/data/batching_test.mzML");
+        let mut reader = MzMLReader::open_path(path)?;
+        let chrom = reader.get_chromatogram_by_id("TIC").unwrap();
+        assert_eq!(chrom.id(), "TIC");
+        assert_eq!(chrom.index(), 0);
+        assert_eq!(chrom.arrays.len(), 3);
+
+        let key = ArrayType::NonStandardDataArray {
+            name: Box::new("ms level".to_string()),
+        };
+        let arr = chrom.arrays.get(&key).unwrap();
+        let view = arr.to_i64().unwrap();
+        assert_eq!(view.len(), 73368);
+        assert_eq!(chrom.time().unwrap().len(), 73368);
+
         Ok(())
     }
 

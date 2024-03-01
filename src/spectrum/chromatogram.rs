@@ -1,11 +1,12 @@
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 
-use crate::params::Param;
+use crate::params::{Param, ParamDescribed};
 use crate::spectrum::scan_properties::{
     Precursor, ScanPolarity, ChromatogramType, ChromatogramDescription,
 };
 use super::bindata::{ArrayType, BinaryArrayMap, ArrayRetrievalError, ByteArrayView};
-
+use mzpeaks::coordinate::{Time, MZ};
+use mzpeaks::feature::{FeatureView, SimpleFeature, TimeInterval};
 
 
 #[derive(Debug, Default, Clone)]
@@ -14,10 +15,77 @@ pub struct Chromatogram {
     pub arrays: BinaryArrayMap
 }
 
+const EMPTY: &[f64] = &[0.0];
+
+macro_rules! as_feature_view {
+    ($chromatogram:ident, $then:expr) => {
+        if let Ok(t) = $chromatogram.time() {
+            if let Ok(i) = $chromatogram.intensity() {
+                let view = FeatureView::<Time, Time>::new(t.borrow(), t.borrow(), i.borrow());
+                Some($then(view))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
+}
+
+
+#[allow(unused)]
+pub(crate) fn as_simple_feature(chromatogram: &Chromatogram) -> Option<SimpleFeature<MZ, Time>> {
+    if let Ok(t) = chromatogram.time() {
+        if let Ok(i) = chromatogram.intensity() {
+            let mut f = SimpleFeature::<MZ, Time>::empty(0.0);
+            f.extend(t.iter().zip(i.iter()).map(|(y, z)| (0.0f64, *y, *z)));
+            return Some(f)
+        }
+    }
+    None
+}
+
+impl TimeInterval<Time> for Chromatogram {
+    fn start_time(&self) -> Option<f64> {
+        if let Ok(t) = self.time() {
+            t.first().copied()
+        } else {
+            None
+        }
+    }
+
+    fn end_time(&self) -> Option<f64> {
+        if let Ok(t) = self.time() {
+            t.last().copied()
+        } else {
+            None
+        }
+    }
+
+    fn apex_time(&self) -> Option<f64> {
+        as_feature_view!(self, |view: FeatureView<'_, Time, Time>| view.apex_time())?
+    }
+
+    fn area(&self) -> f32 {
+        as_feature_view!(self, |view: FeatureView<'_, Time, Time>| view.area()).unwrap()
+    }
+
+    fn iter_time(&self) -> impl Iterator<Item = f64> {
+        if let Ok(t) = self.time() {
+            // Not ideal, but we cannot know if the time array is materialized at this point.
+            Vec::from(t).into_iter()
+        } else {
+            Vec::from(EMPTY).into_iter()
+        }
+    }
+}
+
 pub trait ChromatogramLike {
     /// The method to access the spectrum description itself, which supplies
     /// the data for most other methods on this trait.
     fn description(&self) -> &ChromatogramDescription;
+
+    fn description_mut(&mut self) -> &mut ChromatogramDescription;
 
     /// Access the precursor information, if it exists.
     #[inline]
@@ -30,11 +98,22 @@ pub trait ChromatogramLike {
         }
     }
 
-    /// A shortcut method to retrieve the scan start time
-    /// of a spectrum.
     #[inline]
-    fn start_time(&self) -> f64 {
-        todo!()
+    fn start_time(&self) -> Option<f64> {
+        if let Ok(t) = self.time() {
+            t.first().copied()
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn end_time(&self) -> Option<f64> {
+        if let Ok(t) = self.time() {
+            t.last().copied()
+        } else {
+            None
+        }
     }
 
     /// Access the MS exponentiation level
@@ -65,9 +144,16 @@ pub trait ChromatogramLike {
         self.description().polarity
     }
 
-    #[inline]
-    fn params(&self) -> &[Param] {
-        &self.description().params
+    fn is_aggregate(&self) -> bool {
+        self.description().is_aggregate()
+    }
+
+    fn is_electromagnetic_radiation(&self) -> bool {
+        self.description().is_electromagnetic_radiation()
+    }
+
+    fn is_ion_current(&self) -> bool {
+        self.description().is_ion_current()
     }
 
     fn time(&self) -> Result<Cow<'_, [f64]>, ArrayRetrievalError>;
@@ -92,6 +178,14 @@ impl Chromatogram {
             Err(ArrayRetrievalError::NotFound(ArrayType::IntensityArray))
         }
     }
+
+    pub fn apex_time(&self) -> Option<f64> {
+        TimeInterval::apex_time(&self)
+    }
+
+    pub fn area(&self) -> f32 {
+        TimeInterval::area(&self)
+    }
 }
 
 
@@ -107,6 +201,19 @@ impl ChromatogramLike for Chromatogram {
     fn intensity(&self) -> Result<Cow<'_, [f32]>, ArrayRetrievalError> {
         self.intensity()
     }
+
+    fn description_mut(&mut self) -> &mut ChromatogramDescription {
+        &mut self.description
+    }
 }
 
 
+impl ParamDescribed for Chromatogram {
+    fn params(&self) -> &[Param] {
+        self.description.params()
+    }
+
+    fn params_mut(&mut self) -> &mut crate::ParamList {
+        self.description.params_mut()
+    }
+}

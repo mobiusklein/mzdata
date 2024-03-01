@@ -78,6 +78,10 @@ impl ArrayType {
         }
     }
 
+    pub const fn is_ion_mobility(&self) -> bool {
+        matches!(self, Self::IonMobilityArray | Self::MeanIonMobilityArray | Self::RawIonMobilityArray | Self::DeconvolutedIonMobilityArray)
+    }
+
     pub const fn as_param_with_unit_const(&self, unit: Unit) -> ParamCow<'static> {
         const CV: ControlledVocabulary = ControlledVocabulary::MS;
         match self {

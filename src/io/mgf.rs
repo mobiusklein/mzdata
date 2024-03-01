@@ -32,19 +32,19 @@ use super::traits::{
 use super::utils::DetailLevel;
 use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, Software,
+    MassSpectrometryRun
 };
-use crate::params::{ControlledVocabulary, Param, ParamDescribed, ParamLike};
-use crate::spectrum::bindata::{
-    vec_as_bytes, ArrayType, BinaryArrayMap, BinaryDataArrayType, BuildArrayMapFrom,
-    BuildFromArrayMap, DataArray,
-};
-use crate::spectrum::spectrum::{
-    CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
-};
-use crate::spectrum::PeakDataLevel;
-use crate::spectrum::SignalContinuity;
+use crate::params::{ControlledVocabulary, Param, ParamDescribed, ParamLike, CURIE};
 use crate::spectrum::{
-    Precursor, PrecursorSelection, SelectedIon, SpectrumDescription, SpectrumLike,
+    IonProperties, PeakDataLevel, Precursor, PrecursorSelection, SelectedIon, SignalContinuity,
+    SpectrumDescription, SpectrumLike,
+    spectrum::{
+        CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
+    },
+    bindata::{
+        vec_as_bytes, ArrayType, BinaryArrayMap, BinaryDataArrayType, BuildArrayMapFrom,
+        BuildFromArrayMap, DataArray,
+    }
 };
 use crate::utils::neutral_mass;
 
@@ -205,6 +205,7 @@ pub struct MGFReaderType<
     instrument_configurations: HashMap<u32, InstrumentConfiguration>,
     softwares: Vec<Software>,
     data_processings: Vec<DataProcessing>,
+    pub run: MassSpectrometryRun,
     pub detail_level: DetailLevel,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
@@ -291,12 +292,14 @@ impl<
                         parts.next().map(|v| v.parse().unwrap()).unwrap_or_default();
                     let charge: Option<i32> = parts.next().map(|c| c.parse().unwrap());
                     builder.description.precursor = Some(Precursor {
-                        ion: SelectedIon {
-                            mz,
-                            intensity,
-                            charge,
-                            ..Default::default()
-                        },
+                        ions: vec![
+                                SelectedIon {
+                                mz,
+                                intensity,
+                                charge,
+                                ..Default::default()
+                            },
+                        ],
                         ..Default::default()
                     });
                 }
@@ -460,6 +463,7 @@ impl<
             softwares: Vec::new(),
             file_description: Self::default_file_description(),
             detail_level: DetailLevel::Full,
+            run: MassSpectrometryRun::default()
         }
     }
 }
@@ -683,6 +687,14 @@ impl<
             None
         }
     }
+
+    fn run_description(&self) -> Option<&MassSpectrometryRun> {
+        Some(&self.run)
+    }
+
+    fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
+        Some(&mut self.run)
+    }
 }
 
 pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
@@ -696,6 +708,10 @@ pub(crate) fn is_mgf(buf: &[u8]) -> bool {
     )
 }
 
+const TITLE_CV: CURIE = ControlledVocabulary::MS.curie(1000796);
+const MS_LEVEL_CV: CURIE = ControlledVocabulary::MS.curie(1000511);
+const MSN_SPECTRUM_CV: CURIE = ControlledVocabulary::MS.curie(1000580);
+
 /// An MGF writer type
 pub struct MGFWriterType<
     W: io::Write,
@@ -706,6 +722,11 @@ pub struct MGFWriterType<
     pub offset: usize,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
+    file_description: FileDescription,
+    instrument_configurations: HashMap<u32, InstrumentConfiguration>,
+    softwares: Vec<Software>,
+    data_processings: Vec<DataProcessing>,
+    run: MassSpectrometryRun,
 }
 
 impl<
@@ -721,7 +742,33 @@ impl<
             offset: 0,
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
+            file_description: Default::default(),
+            instrument_configurations: Default::default(),
+            softwares: Default::default(),
+            data_processings: Default::default(),
+            run: Default::default()
         }
+    }
+
+    pub fn make_title<S: SpectrumLike<C, D>>(
+        &self,
+        spectrum: &S,
+    ) -> String {
+        let idx = spectrum.index();
+        let charge = spectrum
+            .precursor()
+            .and_then(|prec| prec.ion().charge())
+            .unwrap_or_default();
+        let id = spectrum.id();
+        let run_id = self.run_description().and_then(|d| d.id.as_ref());
+        let source_file = self.source_file_name();
+        let title = match (run_id, source_file) {
+            (None, None) => format!("run.{idx}.{idx}.{charge} NativeID:\"{id}\""),
+            (None, Some(source_name)) => format!("run.{idx}.{idx}.{charge} SourceFile:\"{source_name}\""),
+            (Some(run_id), None) => format!("{run_id}.{idx}.{idx}.{charge} NativeID:\"{id}\""),
+            (Some(run_id), Some(source_name)) => format!("{run_id}.{idx}.{idx}.{charge} SourceFile:\"{source_name}\", NativeID:\"{id}\""),
+        };
+        title
     }
 
     pub fn into_inner(self) -> BufWriter<W> {
@@ -737,6 +784,14 @@ impl<
         Ok(())
     }
 
+    fn write_kv(&mut self, key: &str, value: &str) -> io::Result<()> {
+        self.handle.write_all(key.as_bytes())?;
+        self.handle.write_all(b"=")?;
+        self.handle.write_all(value.as_bytes())?;
+        self.handle.write_all(b"\n")?;
+        Ok(())
+    }
+
     fn write_header<T: SpectrumLike<C, D>>(&mut self, spectrum: &T) -> io::Result<()> {
         let desc = spectrum.description();
         if desc.ms_level == 1 {
@@ -746,14 +801,20 @@ impl<
             );
             return Ok(());
         }
+        // spectrum
         self.handle.write_all(
             br#"BEGIN IONS
 TITLE="#,
         )?;
-        self.handle.write_all(desc.id.as_bytes())?;
+        let (title, _had_title) = desc
+            .get_param_by_curie(&TITLE_CV)
+            .and_then(|p| Some((p.value.clone(), true)))
+            .unwrap_or_else(|| (self.make_title(spectrum), false));
+        self.handle.write_all(title.as_bytes())?;
+        self.write_kv("NATIVEID", spectrum.id())?;
         self.handle.write_all(b"\nRTINSECONDS=")?;
         self.handle
-            .write_all(spectrum.start_time().to_string().as_bytes())?;
+            .write_all((spectrum.start_time() * 60.0).to_string().as_bytes())?;
         self.handle.write_all(b"\n")?;
         match &desc.precursor {
             Some(precursor) => {
@@ -785,7 +846,11 @@ TITLE="#,
             }
             None => {}
         }
-        for param in desc.params() {
+        for param in desc
+            .params()
+            .iter()
+            .filter(|p| TITLE_CV != **p && MSN_SPECTRUM_CV != **p && MS_LEVEL_CV != **p)
+        {
             self.write_param(param)?;
         }
 
@@ -871,6 +936,23 @@ TITLE="#,
         }
         self.handle.write_all(b"END IONS\n")?;
         Ok(0)
+    }
+}
+
+impl<
+        W: io::Write,
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+    > MSDataFileMetadata for MGFWriterType<W, C, D>
+{
+    crate::impl_metadata_trait!();
+
+    fn run_description(&self) -> Option<&MassSpectrometryRun> {
+        Some(&self.run)
+    }
+
+    fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
+        Some(&mut self.run)
     }
 }
 

@@ -4,7 +4,7 @@ use num_traits::Float;
 
 use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
 use crate::io::traits::ScanSource;
-use crate::params::{ControlledVocabulary, Param, ParamLike, Unit};
+use crate::params::{ControlledVocabulary, Param, ParamLike, Unit, CURIE};
 use crate::{impl_param_described, ParamList};
 
 /**
@@ -544,7 +544,7 @@ impl Activation {
 /// Describes the precursor ion of the owning spectrum.
 pub struct Precursor {
     /// Describes the selected ion's properties
-    pub ion: SelectedIon,
+    pub ions: Vec<SelectedIon>,
     /// Describes the isolation window around the selected ion
     pub isolation_window: IsolationWindow,
     /// The precursor scan ID, if given
@@ -605,14 +605,25 @@ pub trait PrecursorSelection {
     /// The activation process applied to the precursor ion
     fn activation(&self) -> &Activation;
 
+    fn iter(&self) -> impl Iterator<Item=&SelectedIon>;
+
+    fn last_ion(&self) -> &SelectedIon {
+        self.iter().last().unwrap()
+    }
+
+    fn iter_mut(&mut self) -> impl Iterator<Item=&mut SelectedIon>;
     fn ion_mut(&mut self) -> &mut SelectedIon;
     fn activation_mut(&mut self) -> &mut Activation;
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow;
+    fn add_ion(&mut self, ion: SelectedIon);
+    fn last_ion_mut(&mut self) -> &mut SelectedIon {
+        self.iter_mut().last().unwrap()
+    }
 }
 
 impl PrecursorSelection for Precursor {
     fn ion(&self) -> &SelectedIon {
-        &self.ion
+        self.ions.first().as_ref().unwrap()
     }
 
     fn isolation_window(&self) -> &IsolationWindow {
@@ -632,7 +643,10 @@ impl PrecursorSelection for Precursor {
     }
 
     fn ion_mut(&mut self) -> &mut SelectedIon {
-        &mut self.ion
+        if self.ions.is_empty() {
+            self.ions.push(SelectedIon::default())
+        }
+        self.ions.first_mut().unwrap()
     }
 
     fn activation_mut(&mut self) -> &mut Activation {
@@ -641,6 +655,25 @@ impl PrecursorSelection for Precursor {
 
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
         &mut self.isolation_window
+    }
+
+    fn iter(&self) -> impl Iterator<Item=&SelectedIon> {
+        self.ions.iter()
+    }
+
+    fn iter_mut(&mut self) -> impl Iterator<Item=&mut SelectedIon> {
+        self.ions.iter_mut()
+    }
+
+    fn add_ion(&mut self, ion: SelectedIon) {
+        self.ions.push(ion);
+    }
+
+    fn last_ion_mut(&mut self) -> &mut SelectedIon {
+        if self.ions.is_empty() {
+            self.ions.push(SelectedIon::default())
+        }
+        self.iter_mut().last().unwrap()
     }
 }
 
@@ -769,7 +802,78 @@ pub enum ChromatogramType {
     TotalIonCurrentChromatogram,
     BasePeakChromatogram,
     SelectedIonCurrentChromatogram,
+    SelectedIonMonitoringChromatogram,
     SelectedReactionMonitoringChromatogram,
+    AbsorptionChromatogram,
+    EmissionChromatogram,
+    FlowRateChromatogram,
+    PressureChromatogram,
+}
+
+impl ChromatogramType {
+    pub fn from_accession(accession: u32) -> Option<Self> {
+        let tp = match accession {
+            1000235 => Self::TotalIonCurrentChromatogram,
+            1000628 => Self::BasePeakChromatogram,
+            1000627 => Self::SelectedIonCurrentChromatogram,
+            1000472 => Self::SelectedIonMonitoringChromatogram,
+            1000473 => Self::SelectedReactionMonitoringChromatogram,
+            1000812 => Self::AbsorptionChromatogram,
+            1000813 => Self::EmissionChromatogram,
+            1003020 => Self::FlowRateChromatogram,
+            1003019 => Self::PressureChromatogram,
+            1000626 => Self::Unknown,
+            _ => return None,
+        };
+        Some(tp)
+    }
+
+    pub fn is_electromagnetic_radiation(&self) -> bool {
+        matches!(
+            self,
+            Self::AbsorptionChromatogram | Self::EmissionChromatogram
+        )
+    }
+
+    pub fn is_aggregate(&self) -> bool {
+        matches!(
+            self,
+            Self::TotalIonCurrentChromatogram |
+                Self::BasePeakChromatogram |
+                Self::PressureChromatogram |
+                Self::FlowRateChromatogram
+        )
+    }
+
+    pub fn is_ion_current(&self) -> bool {
+        matches!(
+            self,
+            Self::SelectedIonCurrentChromatogram
+                | Self::SelectedIonMonitoringChromatogram
+                | Self::SelectedReactionMonitoringChromatogram
+                | Self::TotalIonCurrentChromatogram
+                | Self::BasePeakChromatogram
+        )
+    }
+
+    pub fn to_curie(&self) -> CURIE {
+        match self {
+            Self::TotalIonCurrentChromatogram => CURIE::new(ControlledVocabulary::MS, 1000235),
+            Self::BasePeakChromatogram => CURIE::new(ControlledVocabulary::MS, 1000628),
+            Self::SelectedIonCurrentChromatogram => CURIE::new(ControlledVocabulary::MS, 1000627),
+            Self::SelectedIonMonitoringChromatogram => {
+                CURIE::new(ControlledVocabulary::MS, 1000472)
+            }
+            Self::SelectedReactionMonitoringChromatogram => {
+                CURIE::new(ControlledVocabulary::MS, 1000473)
+            }
+            Self::AbsorptionChromatogram => CURIE::new(ControlledVocabulary::MS, 1000812),
+            Self::EmissionChromatogram => CURIE::new(ControlledVocabulary::MS, 1000813),
+            Self::FlowRateChromatogram => CURIE::new(ControlledVocabulary::MS, 1003020),
+            Self::PressureChromatogram => CURIE::new(ControlledVocabulary::MS, 1003019),
+            Self::Unknown => CURIE::new(ControlledVocabulary::MS, 100626),
+        }
+    }
 }
 
 /// The set of descriptive metadata that give context for how a chromatogram was
@@ -784,6 +888,20 @@ pub struct ChromatogramDescription {
 
     pub params: ParamList,
     pub precursor: Option<Precursor>,
+}
+
+impl ChromatogramDescription {
+    pub fn is_aggregate(&self) -> bool {
+        self.chromatogram_type.is_aggregate()
+    }
+
+    pub fn is_electromagnetic_radiation(&self) -> bool {
+        self.chromatogram_type.is_electromagnetic_radiation()
+    }
+
+    pub fn is_ion_current(&self) -> bool {
+        self.chromatogram_type.is_ion_current()
+    }
 }
 
 impl_param_described!(ChromatogramDescription);

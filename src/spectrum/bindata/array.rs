@@ -138,6 +138,32 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    pub fn push<T: Pod>(&mut self, value: T) -> Result<(), ArrayRetrievalError> {
+        if !matches!(self.compression, BinaryCompressionType::Decoded) {
+            self.decode_and_store()?;
+        };
+        if self.dtype.size_of() != mem::size_of::<T>() {
+            Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        } else {
+            let data = bytemuck::bytes_of(&value);
+            self.data.extend(data.iter());
+            Ok(())
+        }
+    }
+
+    pub fn extend<T: Pod>(&mut self, values: &[T]) -> Result<(), ArrayRetrievalError> {
+        if !matches!(self.compression, BinaryCompressionType::Decoded) {
+            self.decode_and_store()?;
+        };
+        if self.dtype.size_of() != mem::size_of::<T>() {
+            Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        } else {
+            let data = bytemuck::cast_slice(values);
+            self.data.extend(data.iter());
+            Ok(())
+        }
+    }
+
     pub fn encode_bytestring(&self, compression: BinaryCompressionType) -> Bytes {
         let bytestring = match self.compression {
             BinaryCompressionType::Decoded => Cow::Borrowed(self.data.as_slice()),
@@ -364,6 +390,10 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         self.dtype = dtype;
         result
     }
+
+    pub const fn is_ion_mobility(&self) -> bool {
+        self.name.is_ion_mobility()
+    }
 }
 
 impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan> for DataArray {
@@ -401,6 +431,10 @@ impl<'a> DataArraySlice<'a> {
 
     pub fn decode(&'a self) -> Result<Cow<'a, [u8]>, ArrayRetrievalError> {
         self.source.decoded_slice(self.start, self.end)
+    }
+
+    pub const fn is_ion_mobility(&self) -> bool {
+        self.source.is_ion_mobility()
     }
 }
 

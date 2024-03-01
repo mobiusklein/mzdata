@@ -2,7 +2,7 @@
 use std::fmt::Display;
 
 use crate::impl_param_described;
-use crate::params::{ParamList, Param, ParamCow, ControlledVocabulary};
+use crate::params::{ControlledVocabulary, Param, ParamCow, ParamList};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProcessingMethod {
@@ -37,12 +37,11 @@ impl DataProcessing {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum DataTransformationAction {
     FormatConversion(FormatConversion),
     DataProcessingAction(DataProcessingAction),
-    Other(Param)
+    Other(Param),
 }
 
 impl Display for DataTransformationAction {
@@ -79,21 +78,35 @@ impl DataProcessingAction {
 
         match self {
             DataProcessingAction::Deisotoping => CV.const_param_ident("deisotoping", 1000033),
-            DataProcessingAction::ChargeDeconvolution => CV.const_param_ident("charge deconvolution", 1000034),
+            DataProcessingAction::ChargeDeconvolution => {
+                CV.const_param_ident("charge deconvolution", 1000034)
+            }
             DataProcessingAction::PeakPicking => CV.const_param_ident("peak picking", 1000035),
             DataProcessingAction::Smoothing => CV.const_param_ident("smoothing", 1000592),
-            DataProcessingAction::BaselineReduction => CV.const_param_ident("baseline reduction", 1000593),
-            DataProcessingAction::ChargeStateCalculation => CV.const_param_ident("charge state calculation", 1000778),
-            DataProcessingAction::PrecursorRecalculation => CV.const_param_ident("precursor recalculation", 1000780),
-            DataProcessingAction::IntensityNormalization => CV.const_param_ident("intensity normalization", 1001484),
+            DataProcessingAction::BaselineReduction => {
+                CV.const_param_ident("baseline reduction", 1000593)
+            }
+            DataProcessingAction::ChargeStateCalculation => {
+                CV.const_param_ident("charge state calculation", 1000778)
+            }
+            DataProcessingAction::PrecursorRecalculation => {
+                CV.const_param_ident("precursor recalculation", 1000780)
+            }
+            DataProcessingAction::IntensityNormalization => {
+                CV.const_param_ident("intensity normalization", 1001484)
+            }
             DataProcessingAction::MZCalibration => CV.const_param_ident("m/z calibration", 1001485),
             DataProcessingAction::DataFiltering => CV.const_param_ident("data filtering", 1001486),
-            DataProcessingAction::AdductDeconvolution => CV.const_param_ident("adduct deconvolution", 1003220),
-            DataProcessingAction::IonMobilityDeconvolution => CV.const_param_ident("ion mobility deconvolution", 1003222),
+            DataProcessingAction::AdductDeconvolution => {
+                CV.const_param_ident("adduct deconvolution", 1003220)
+            }
+            DataProcessingAction::IonMobilityDeconvolution => {
+                CV.const_param_ident("ion mobility deconvolution", 1003222)
+            }
         }
     }
 
-    pub const  fn from_accession(accession: u32) -> Option<DataProcessingAction> {
+    pub const fn from_accession(accession: u32) -> Option<DataProcessingAction> {
         match accession {
             1000033 => Some(DataProcessingAction::Deisotoping),
             1000034 => Some(DataProcessingAction::ChargeDeconvolution),
@@ -107,7 +120,7 @@ impl DataProcessingAction {
             1001486 => Some(DataProcessingAction::DataFiltering),
             1003220 => Some(DataProcessingAction::AdductDeconvolution),
             1003222 => Some(DataProcessingAction::IonMobilityDeconvolution),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -129,8 +142,12 @@ impl FormatConversion {
         const CV: ControlledVocabulary = ControlledVocabulary::MS;
 
         match self {
-            FormatConversion::ConversionToMzML => CV.const_param_ident("Conversion to mzML", 1000544),
-            FormatConversion::ConversionToMzMLb => CV.const_param_ident("Conversion to mzMLb", 1002839),
+            FormatConversion::ConversionToMzML => {
+                CV.const_param_ident("Conversion to mzML", 1000544)
+            }
+            FormatConversion::ConversionToMzMLb => {
+                CV.const_param_ident("Conversion to mzMLb", 1002839)
+            }
         }
     }
 
@@ -138,8 +155,7 @@ impl FormatConversion {
         match accession {
             1000544 => Some(Self::ConversionToMzML),
             1002839 => Some(Self::ConversionToMzMLb),
-            _ => None
+            _ => None,
         }
     }
 }
-

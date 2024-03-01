@@ -9,15 +9,6 @@ use std::str::{self, FromStr};
 
 use thiserror::Error;
 
-#[doc(hidden)]
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum ValueType {
-    String(Box<String>),
-    Integer(i64),
-    Float(f64),
-    Other(Box<Vec<u8>>),
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CURIE {
     controlled_vocabulary: ControlledVocabulary,
@@ -31,12 +22,32 @@ impl CURIE {
             accession,
         }
     }
+
+    pub fn as_param(&self) -> Param {
+        let mut param = Param::new();
+        param.controlled_vocabulary = Some(self.controlled_vocabulary);
+        param.accession = Some(self.accession);
+        param
+    }
+}
+
+impl Display for CURIE {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}:{}",
+            self.controlled_vocabulary.prefix(),
+            self.accession
+        )
+    }
 }
 
 impl<T: ParamLike> PartialEq<T> for CURIE {
     fn eq(&self, other: &T) -> bool {
-        if !other.is_controlled() || other.controlled_vocabulary().unwrap() != self.controlled_vocabulary {
-            return false
+        if !other.is_controlled()
+            || other.controlled_vocabulary().unwrap() != self.controlled_vocabulary
+        {
+            return false;
         } else {
             other.accession().unwrap() == self.accession
         }
@@ -218,6 +229,12 @@ impl<'a> From<ParamCow<'a>> for Param {
     }
 }
 
+impl<'a> PartialEq<CURIE> for ParamCow<'a> {
+    fn eq(&self, other: &CURIE) -> bool {
+        other.eq(self)
+    }
+}
+
 /// A controlled vocabulary or user parameter
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Param {
@@ -255,10 +272,10 @@ impl Param {
         }
     }
 
-    pub fn new_key_value(name: String, value: String) -> Param {
+    pub fn new_key_value<K: Into<String>, V: Into<String>>(name: K, value: V) -> Param {
         let mut inst = Self::new();
-        inst.name = name;
-        inst.value = value;
+        inst.name = name.into();
+        inst.value = value.into();
         inst
     }
 
@@ -314,6 +331,12 @@ impl ParamLike for Param {
 
     fn unit(&self) -> Unit {
         self.unit
+    }
+}
+
+impl PartialEq<CURIE> for Param {
+    fn eq(&self, other: &CURIE) -> bool {
+        other.eq(self)
     }
 }
 
@@ -524,6 +547,8 @@ macro_rules! impl_param_described_deferred {
 /// Units that a term's value might have
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Unit {
+    Unknown,
+
     // Mass
     MZ,
     Mass,
@@ -547,8 +572,6 @@ pub enum Unit {
     Electronvolt,
     PercentElectronVolt,
     Volt,
-
-    Unknown,
 }
 
 impl Unit {
@@ -613,6 +636,48 @@ impl Unit {
             "UO:0000266" => Self::Electronvolt,
             "UO:0000187" => Self::PercentElectronVolt,
             _ => Unit::Unknown,
+        }
+    }
+
+    pub const fn from_curie(acc: &CURIE) -> Unit {
+        match acc {
+            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 28 } => Self::Millisecond,
+            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 10 } => Self::Second,
+            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 31 } => Self::Minute,
+
+            CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000040 } => Self::MZ,
+            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 221 } => Self::Mass,
+
+            CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000131 } => Self::DetectorCounts,
+            CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000132 } => Self::PercentBasePeak,
+            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 269 } => Self::AbsorbanceUnit,
+            CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000814 } => Self::CountsPerSecond,
+
+            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 266 } => Self::Electronvolt,
+            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 187 } => Self::PercentElectronVolt,
+
+            _ => Unit::Unknown
+        }
+    }
+
+    pub const fn to_curie(&self) -> Option<CURIE> {
+        match self {
+            Self::Millisecond => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 28 }),
+            Self::Second => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 10 }),
+            Self::Minute => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 31 }),
+
+            Self::MZ => Some(CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000040 }),
+            Self::Mass => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 221 }),
+
+            Self::DetectorCounts => Some(CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000131 }),
+            Self::PercentBasePeak => Some(CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000132 }),
+            Self::AbsorbanceUnit => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 269 }),
+            Self::CountsPerSecond => Some(CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000814 }),
+
+            Self::Electronvolt => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 266 }),
+            Self::PercentElectronVolt => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 187 }),
+
+            _ => None
         }
     }
 

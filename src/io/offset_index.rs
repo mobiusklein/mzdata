@@ -19,7 +19,6 @@ pub struct OffsetIndex {
 
     /// The mapping from ID to byte offset, ordered by occurrence
     // If using serde_json to save this, use
-    // https://docs.rs/indexmap/2.0.0/indexmap/serde_seq/index.html
     #[serde(with = "indexmap::map::serde_seq")]
     pub offsets: IndexMap<String, u64>,
 

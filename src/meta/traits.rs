@@ -65,6 +65,11 @@ pub trait MSDataFileMetadata {
     fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
         None
     }
+
+    /// Get the name of the primary source file, if available
+    fn source_file_name(&self) -> Option<&str> {
+        self.file_description().source_files.first().map(|s| s.name.as_str())
+    }
 }
 
 

@@ -27,7 +27,7 @@ use crate::io::traits::ScanWriter;
 use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software,
 };
-use crate::params::ControlledVocabulary;
+use crate::params::{ControlledVocabulary, ParamDescribed};
 use crate::prelude::{MSDataFileMetadata, SpectrumLike};
 use crate::spectrum::bindata::{
     ArrayRetrievalError, BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,

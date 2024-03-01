@@ -81,8 +81,10 @@ pub enum MzMLParserState {
     SpectrumDone,
     SpectrumListDone,
 
+    ChromatogramList,
     Chromatogram,
     ChromatogramDone,
+    ChromatogramListDone,
 
     ParserError,
     EOF
@@ -92,6 +94,13 @@ impl Display for MzMLParserState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{:?}", self))
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EntryType {
+    #[default]
+    Spectrum,
+    Chromatogram
 }
 
 /**

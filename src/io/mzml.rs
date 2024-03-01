@@ -25,7 +25,7 @@ mod r#async;
 
 pub use reading_shared::{
     CVParamParse, MzMLParserError, MzMLParserState, MzMLSAX, XMLParseBase,
-    FileMetadataBuilder
+    FileMetadataBuilder, EntryType
 };
 
 #[allow(unused)]

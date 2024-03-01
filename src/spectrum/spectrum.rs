@@ -13,9 +13,12 @@ use mzsignal::denoise::{denoise, DenoisingError};
 #[cfg(feature = "mzsignal")]
 use mzsignal::peak_picker::{PeakFitType, PeakPicker, PeakPickerError};
 #[cfg(feature = "mzsignal")]
-use mzsignal::FittedPeak;
+use mzsignal::{
+    reprofile::{self, PeakShape, PeakShapeModel},
+    FittedPeak,
+};
 
-use crate::params::ParamList;
+use crate::params::{ParamDescribed, ParamList};
 #[allow(unused)]
 use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType};
 use crate::spectrum::scan_properties::{
@@ -24,6 +27,7 @@ use crate::spectrum::scan_properties::{
 use crate::utils::mass_charge_ratio;
 
 use super::bindata::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
+use super::DataArray;
 
 pub trait CentroidPeakAdapting: CentroidLike + Default {}
 impl<C: CentroidLike + Default> CentroidPeakAdapting for C {}
@@ -196,6 +200,11 @@ pub trait SpectrumLike<
         }
     }
 
+    fn precursor_iter(&self) -> impl Iterator<Item=&Precursor> {
+        let desc = self.description();
+        desc.precursor.iter()
+    }
+
     fn precursor_mut(&mut self) -> Option<&mut Precursor> {
         let desc = self.description_mut();
         if let Some(precursor) = desc.precursor.as_mut() {
@@ -203,6 +212,11 @@ pub trait SpectrumLike<
         } else {
             None
         }
+    }
+
+    fn precursor_iter_mut(&mut self) -> impl Iterator<Item=&mut Precursor> {
+        let desc = self.description_mut();
+        desc.precursor.iter_mut()
     }
 
     /// A shortcut method to retrieve the scan start time
@@ -269,6 +283,16 @@ pub struct RawSpectrum {
     pub arrays: BinaryArrayMap,
 }
 
+impl ParamDescribed for RawSpectrum {
+    fn params(&self) -> &[crate::params::Param] {
+        <SpectrumDescription as ParamDescribed>::params(&self.description)
+    }
+
+    fn params_mut(&mut self) -> &mut crate::params::ParamList {
+        <SpectrumDescription as ParamDescribed>::params_mut(&mut self.description)
+    }
+}
+
 /// Errors that may arise when converting between different SpectrumBehavior-like types
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum SpectrumConversionError {
@@ -314,6 +338,13 @@ pub enum SpectrumProcessingError {
 }
 
 impl<'transient, 'lifespan: 'transient> RawSpectrum {
+    pub fn new(description: SpectrumDescription, arrays: BinaryArrayMap) -> Self {
+        Self {
+            description,
+            arrays,
+        }
+    }
+
     /// Convert a spectrum into a [`CentroidSpectrumType`]
     pub fn into_centroid<C: CentroidLike + Default>(
         self,
@@ -461,6 +492,30 @@ pub struct CentroidSpectrumType<C: CentroidLike + Default> {
     pub peaks: MZPeakSetType<C>,
 }
 
+#[cfg(feature = "mzsignal")]
+impl<C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap> CentroidSpectrumType<C> {
+
+    pub fn reprofile_with_shape_into(
+        self,
+        dx: f64,
+        fwhm: f32,
+    ) -> Result<MultiLayerSpectrum<C, DeconvolutedPeak>, SpectrumProcessingError> {
+        let mut spectrum = self.into_spectrum()?;
+        spectrum.reprofile_with_shape(dx, fwhm)?;
+        Ok(spectrum)
+    }
+}
+
+impl<C: CentroidLike + Default> ParamDescribed for CentroidSpectrumType<C> {
+    fn params(&self) -> &[crate::params::Param] {
+        <SpectrumDescription as ParamDescribed>::params(&self.description)
+    }
+
+    fn params_mut(&mut self) -> &mut crate::params::ParamList {
+        <SpectrumDescription as ParamDescribed>::params_mut(&mut self.description)
+    }
+}
+
 impl<C: CentroidLike + Default> SpectrumLike<C> for CentroidSpectrumType<C> {
     #[inline]
     fn description(&self) -> &SpectrumDescription {
@@ -481,6 +536,10 @@ impl<C: CentroidLike + Default> SpectrumLike<C> for CentroidSpectrumType<C> {
 }
 
 impl<C: CentroidLike + Default> CentroidSpectrumType<C> {
+    pub fn new(description: SpectrumDescription, peaks: MZPeakSetType<C>) -> Self {
+        Self { description, peaks }
+    }
+
     /// Convert a spectrum into a [`Spectrum`]
     pub fn into_spectrum<D>(self) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
     where
@@ -504,6 +563,25 @@ pub struct DeconvolutedSpectrumType<D: DeconvolutedCentroidLike + Default> {
     pub description: SpectrumDescription,
     /// The deisotoped and charge state deconvolved peaks
     pub deconvoluted_peaks: MassPeakSetType<D>,
+}
+
+impl<D: DeconvolutedCentroidLike + Default> DeconvolutedSpectrumType<D> {
+    pub fn new(description: SpectrumDescription, deconvoluted_peaks: MassPeakSetType<D>) -> Self {
+        Self {
+            description,
+            deconvoluted_peaks,
+        }
+    }
+}
+
+impl<D: DeconvolutedCentroidLike + Default> ParamDescribed for DeconvolutedSpectrumType<D> {
+    fn params(&self) -> &[crate::params::Param] {
+        <SpectrumDescription as ParamDescribed>::params(&self.description)
+    }
+
+    fn params_mut(&mut self) -> &mut crate::params::ParamList {
+        <SpectrumDescription as ParamDescribed>::params_mut(&mut self.description)
+    }
 }
 
 impl<D: DeconvolutedCentroidLike + Default> SpectrumLike<CentroidPeak, D>
@@ -550,6 +628,18 @@ pub struct MultiLayerSpectrum<
     pub deconvoluted_peaks: Option<MassPeakSetType<D>>,
 }
 
+impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> ParamDescribed
+    for MultiLayerSpectrum<C, D>
+{
+    fn params(&self) -> &[crate::params::Param] {
+        <SpectrumDescription as ParamDescribed>::params(&self.description)
+    }
+
+    fn params_mut(&mut self) -> &mut crate::params::ParamList {
+        <SpectrumDescription as ParamDescribed>::params_mut(&mut self.description)
+    }
+}
+
 impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> SpectrumLike<C, D>
     for MultiLayerSpectrum<C, D>
 {
@@ -584,6 +674,20 @@ where
     C: BuildFromArrayMap + BuildArrayMapFrom,
     D: BuildFromArrayMap + BuildArrayMapFrom,
 {
+    pub fn new(
+        description: SpectrumDescription,
+        arrays: Option<BinaryArrayMap>,
+        peaks: Option<MZPeakSetType<C>>,
+        deconvoluted_peaks: Option<MassPeakSetType<D>>,
+    ) -> Self {
+        Self {
+            description,
+            arrays,
+            peaks,
+            deconvoluted_peaks,
+        }
+    }
+
     pub fn try_build_centroids(&mut self) -> Result<&MZPeakSetType<C>, SpectrumConversionError> {
         if self.peaks.is_some() {
             Ok(self.peaks.as_ref().unwrap())
@@ -722,6 +826,60 @@ where
             )),
         }
     }
+
+    #[cfg(feature = "mzsignal")]
+    pub fn reprofile_with_shape(
+        &mut self,
+        dx: f64,
+        fwhm: f32,
+    ) -> Result<(), SpectrumProcessingError> {
+        if let Some(peaks) = self.peaks.as_ref() {
+            let reprofiler = reprofile::PeakSetReprofiler::new(
+                peaks.first().map(|p| p.mz() - 1.0).unwrap_or_default(),
+                peaks.last().map(|p| p.mz() + 1.0).unwrap_or_default(),
+                dx,
+            );
+
+            let models: Vec<_> = peaks
+                .iter()
+                .map(|p| {
+                    PeakShapeModel::from_centroid(p.mz(), p.intensity(), fwhm, PeakShape::Gaussian)
+                })
+                .collect();
+
+            let pair = reprofiler.reprofile_from_models(&models);
+
+            let arrays = match self.arrays.as_mut() {
+                Some(arrays) => arrays,
+                None => {
+                    self.arrays = Some(BinaryArrayMap::new());
+                    self.arrays.as_mut().unwrap()
+                },
+            };
+            arrays.add(DataArray::wrap(
+                        &ArrayType::MZArray,
+                        BinaryDataArrayType::Float64,
+                        pair.mz_array
+                            .iter()
+                            .map(|i| i.to_le_bytes())
+                            .flatten()
+                            .collect(),
+                    ));
+
+            arrays.add(DataArray::wrap(
+                &ArrayType::IntensityArray,
+                BinaryDataArrayType::Float32,
+                pair.intensity_array
+                    .iter()
+                    .map(|i| i.to_le_bytes())
+                    .flatten()
+                    .collect(),
+            ));
+            Ok(())
+        } else {
+            Err(SpectrumConversionError::NoPeakData.into())
+        }
+    }
 }
 
 #[cfg(feature = "mzsignal")]
@@ -801,6 +959,7 @@ impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike +
         }
     }
 }
+
 
 impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     TryFrom<MultiLayerSpectrum<C, D>> for CentroidSpectrumType<C>

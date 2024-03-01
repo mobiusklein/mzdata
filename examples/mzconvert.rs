@@ -77,7 +77,8 @@ impl MZConvert {
     ) -> io::Result<()> {
         match infer_from_path(&self.outpath).0 {
             MassSpectrometryFormat::MGF => {
-                let writer = MGFWriter::new(io::BufWriter::new(fs::File::create(&self.outpath)?));
+                let mut writer = MGFWriter::new(io::BufWriter::new(fs::File::create(&self.outpath)?));
+                writer.copy_metadata_from(&reader);
                 self.task(reader, writer)?;
             }
             MassSpectrometryFormat::MzML => {

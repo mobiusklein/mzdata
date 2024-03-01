@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.13.0] - Unreleased
+
+### Added
+- `MGFReaderType` and `MGFWriterType` implement `MSDataFileMetadata`
+
+### Changed
+- `MGFWriterType` now generates a spectrum title when one is absent, rather than defaulting to
+  the spectrum's native ID.
+- `CURIE` can now be compared to `Param`
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+
 ## [0.12.0] - 2024-01-29
 
 ### Changed
