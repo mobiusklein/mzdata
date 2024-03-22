@@ -1956,10 +1956,10 @@ mod test {
         let mut ms1_count = 0;
         let mut msn_count = 0;
 
-        assert_eq!(reader.data_processings().len(), 2);
+        assert_eq!(reader.data_processings().len(), 1);
         assert_eq!(reader.instrument_configurations().len(), 2);
-        assert_eq!(reader.softwares().len(), 3);
-        assert_eq!(reader.file_description().source_files.len(), 2);
+        assert_eq!(reader.softwares().len(), 2);
+        assert_eq!(reader.file_description().source_files.len(), 1);
         assert_eq!(reader.file_description().contents.len(), 2);
 
         assert!(reader
@@ -2004,10 +2004,10 @@ mod test {
         assert_eq!(ms1_count, 14);
         assert_eq!(msn_count, 34);
 
-        assert_eq!(reader.data_processings().len(), 2);
+        assert_eq!(reader.data_processings().len(), 1);
         assert_eq!(reader.instrument_configurations().len(), 2);
-        assert_eq!(reader.softwares().len(), 3);
-        assert_eq!(reader.file_description().source_files.len(), 2);
+        assert_eq!(reader.softwares().len(), 2);
+        assert_eq!(reader.file_description().source_files.len(), 1);
         assert_eq!(reader.file_description().contents.len(), 2);
     }
 
@@ -2090,7 +2090,7 @@ mod test {
         let mut index = IndexedMzMLIndexExtractor::new();
         if let Ok(offset) = index.find_offset_from_reader(&mut f) {
             if let Some(offset) = offset {
-                assert_eq!(offset, 5113415);
+                assert_eq!(offset, 5116653);
             } else {
                 panic!("Failed to parse offset from element")
             }

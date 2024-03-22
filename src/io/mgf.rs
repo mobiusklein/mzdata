@@ -36,7 +36,7 @@ use crate::meta::{
 };
 use crate::params::{ControlledVocabulary, Param, ParamDescribed, ParamLike, CURIE};
 use crate::spectrum::{
-    IonProperties, PeakDataLevel, Precursor, PrecursorSelection, SelectedIon, SignalContinuity,
+    IonProperties, RefPeakDataLevel, Precursor, PrecursorSelection, SelectedIon, SignalContinuity,
     SpectrumDescription, SpectrumLike,
     spectrum::{
         CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
@@ -920,17 +920,17 @@ TITLE="#,
         }
         self.write_header(spectrum)?;
         match spectrum.peaks() {
-            PeakDataLevel::Missing => {
+            RefPeakDataLevel::Missing => {
                 log::warn!(
                     "Attempting to write a spectrum without any peak data, {}",
                     description.id
                 )
             }
-            PeakDataLevel::RawData(arrays) => self.write_arrays(description, arrays)?,
-            PeakDataLevel::Centroid(centroids) => {
+            RefPeakDataLevel::RawData(arrays) => self.write_arrays(description, arrays)?,
+            RefPeakDataLevel::Centroid(centroids) => {
                 self.write_centroids(&centroids[0..centroids.len()])?
             }
-            PeakDataLevel::Deconvoluted(deconvoluted) => {
+            RefPeakDataLevel::Deconvoluted(deconvoluted) => {
                 self.write_deconvoluted_centroids(&deconvoluted[0..deconvoluted.len()])?
             }
         }
@@ -961,7 +961,7 @@ impl<
         W: io::Write,
         C: CentroidPeakAdapting + From<CentroidPeak> + 'static,
         D: DeconvolutedPeakAdapting + From<DeconvolutedPeak> + 'static,
-    > ScanWriter<'a, C, D> for MGFWriterType<W, C, D>
+    > ScanWriter<C, D> for MGFWriterType<W, C, D>
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
         if spectrum.ms_level() != 1 {

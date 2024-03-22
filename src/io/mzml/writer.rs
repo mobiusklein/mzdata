@@ -29,7 +29,7 @@ use crate::spectrum::bindata::{
     BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
 };
 use crate::spectrum::spectrum::SpectrumLike;
-use crate::spectrum::{scan_properties::*, Chromatogram, ChromatogramLike, PeakDataLevel};
+use crate::spectrum::{scan_properties::*, Chromatogram, ChromatogramLike, RefPeakDataLevel};
 
 const BUFFER_SIZE: usize = 10000;
 
@@ -227,7 +227,7 @@ impl<W: io::Write> InnerXMLWriter<W> {
             bstart!("userParam")
         } else {
             let mut elt = bstart!("cvParam");
-            let accession_str = param.curie().unwrap();
+            let accession_str = param.curie().unwrap().to_string();
             attrib!("accession", accession_str, elt);
             if let Some(cv_ref) = &param.controlled_vocabulary() {
                 attrib!("cvRef", cv_ref, elt);
@@ -436,7 +436,7 @@ pub struct MzMLWriterType<
 }
 
 impl<'a, W: Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom>
-    ScanWriter<'a, C, D> for MzMLWriterType<W, C, D>
+    ScanWriter<C, D> for MzMLWriterType<W, C, D>
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
         match self.write_spectrum(spectrum) {
@@ -1209,10 +1209,10 @@ where
         let count = self.spectrum_counter.to_string();
         attrib!("index", count, outer);
         let default_array_len_u = match spectrum.peaks() {
-            PeakDataLevel::RawData(a) => a.mzs().unwrap().len(),
-            PeakDataLevel::Centroid(a) => a.len(),
-            PeakDataLevel::Deconvoluted(a) => a.len(),
-            PeakDataLevel::Missing => todo!(),
+            RefPeakDataLevel::RawData(a) => a.mzs().unwrap().len(),
+            RefPeakDataLevel::Centroid(a) => a.len(),
+            RefPeakDataLevel::Deconvoluted(a) => a.len(),
+            RefPeakDataLevel::Missing => todo!(),
         };
         let default_array_len = default_array_len_u.to_string();
 
@@ -1348,16 +1348,16 @@ where
         );
 
         match spectrum.peaks() {
-            PeakDataLevel::RawData(arrays) => {
+            RefPeakDataLevel::RawData(arrays) => {
                 self.write_binary_data_arrays(arrays, default_array_len)?;
             }
-            PeakDataLevel::Centroid(arrays) => {
+            RefPeakDataLevel::Centroid(arrays) => {
                 self.write_binary_data_arrays(&C::as_arrays(&arrays[0..]), default_array_len)?
             }
-            PeakDataLevel::Deconvoluted(arrays) => {
+            RefPeakDataLevel::Deconvoluted(arrays) => {
                 self.write_binary_data_arrays(&D::as_arrays(&arrays[0..]), default_array_len)?
             }
-            PeakDataLevel::Missing => todo!(),
+            RefPeakDataLevel::Missing => todo!(),
         }
 
         end_event!(self, outer);

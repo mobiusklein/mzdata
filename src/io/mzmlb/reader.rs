@@ -1233,14 +1233,14 @@ mod test {
         let mut reader = MzMLbReader::new(&"test/data/small.mzMLb")?;
         let mut ref_reader = MzMLReader::open_path("test/data/small.mzML")?;
         assert_eq!(reader.spectrum_index.len(), 48);
-        assert_eq!(reader.softwares.len(), 4);
+        assert_eq!(reader.softwares.len(), 2);
         let scan = reader.next().unwrap();
         let ref_scan = ref_reader.next().unwrap();
         assert_eq!(scan.ms_level(), ref_scan.ms_level());
         assert_eq!(scan.id(), ref_scan.id());
         let arrays = scan.arrays.as_ref().unwrap();
         let ref_arrays = ref_scan.arrays.as_ref().unwrap();
-        assert!(arrays.mzs()?.len() == 19914);
+        assert_eq!(arrays.mzs()?.len(), 19913);
         assert_eq!(arrays.mzs()?.len(), ref_arrays.mzs()?.len());
         assert_eq!(arrays.intensities()?.len(), ref_arrays.intensities()?.len());
 

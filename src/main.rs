@@ -18,7 +18,7 @@ use mzdata::io::PreBufferedStream;
 use mzdata::io::{mgf, mzml};
 use mzdata::prelude::*;
 use mzdata::spectrum::{
-    DeconvolutedSpectrum, MultiLayerSpectrum, PeakDataLevel, SignalContinuity, SpectrumLike,
+    DeconvolutedSpectrum, MultiLayerSpectrum, RefPeakDataLevel, SignalContinuity, SpectrumLike,
 };
 use mzpeaks::PeakCollection;
 
@@ -73,10 +73,10 @@ impl MSDataFileSummary {
             .entry(scan.signal_continuity())
             .or_default() += scan.peaks().len();
         let has_charge = match scan.peaks() {
-            PeakDataLevel::Missing => false,
-            PeakDataLevel::RawData(arrays) => arrays.charges().is_ok(),
-            PeakDataLevel::Centroid(_) => false,
-            PeakDataLevel::Deconvoluted(_) => true,
+            RefPeakDataLevel::Missing => false,
+            RefPeakDataLevel::RawData(arrays) => arrays.charges().is_ok(),
+            RefPeakDataLevel::Centroid(_) => false,
+            RefPeakDataLevel::Deconvoluted(_) => true,
         };
         if has_charge {
             let deconv_scan: DeconvolutedSpectrum = scan.try_into().unwrap();

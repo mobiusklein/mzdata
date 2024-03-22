@@ -3,6 +3,8 @@ set dotenv-load := true
 test-units:
     cargo test --lib --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat
 
+alias t := test-units
+
 test-units-more:
     cargo test --lib --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,async
 

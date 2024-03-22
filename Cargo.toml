@@ -81,6 +81,10 @@ mzmlb = ["hdf5", "ndarray", "hdf5-sys"]
 # but not flate2/zlib
 hdf5_static = ["mzmlb", "hdf5-sys/static", "hdf5-sys/zlib", "libz-sys"]
 
+thermo = ["thermorawfilereader", "thermorawfilereader/net8_0", "thermorawfilereader/nethost-download"]
+
+doc-only = ["thermorawfilereader/doc-only"]
+
 async = ["tokio", "quick-xml/async-tokio"]
 
 [dependencies]
@@ -110,6 +114,10 @@ bytemuck = { version = "1.14.0", features = ["extern_crate_alloc"]}
 base64-simd = "0.8.0"
 thiserror = "1.0.50"
 
+thermorawfilereader = { version = "0.2.1", default-features = false, optional = true }
+sha1 = "0.10.6"
+base16ct = { version = "0.2.0", features = ["alloc"] }
+
 [dev-dependencies]
 criterion = { version = "0.5.1", features = [ "html_reports" ] }
 test-log = "0.2.12 "
@@ -123,5 +131,5 @@ harness = false
 
 
 [package.metadata.docs.rs]
-features = ["parallelism", "mzsignal", "nalgebra", "mzmlb", "async"]
+features = ["parallelism", "mzsignal", "nalgebra", "mzmlb", "async", "thermorawfilereader", "doc-only"]
 no-default-features = true

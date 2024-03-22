@@ -1,19 +1,17 @@
 use std::borrow::Cow;
 use std::convert::TryFrom;
 
-use mzpeaks::peak_set::PeakSetVec;
 use thiserror::Error;
 
-use mzpeaks::{prelude::*, IndexType};
-use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, MZPeakSetType, MassPeakSetType, PeakSet};
-use mzpeaks::{CentroidPeak, DeconvolutedPeak, Tolerance};
+use mzpeaks::{
+    peak_set::PeakSetVec, prelude::*, CentroidLike, CentroidPeak, DeconvolutedCentroidLike,
+    DeconvolutedPeak, IndexType, MZPeakSetType, MassPeakSetType, PeakSet, Tolerance,
+};
 
 #[cfg(feature = "mzsignal")]
-use mzsignal::denoise::{denoise, DenoisingError};
-#[cfg(feature = "mzsignal")]
-use mzsignal::peak_picker::{PeakFitType, PeakPicker, PeakPickerError};
-#[cfg(feature = "mzsignal")]
 use mzsignal::{
+    denoise::{denoise, DenoisingError},
+    peak_picker::{PeakFitType, PeakPicker, PeakPickerError},
     reprofile::{self, PeakShape, PeakShapeModel},
     FittedPeak,
 };
@@ -27,6 +25,7 @@ use crate::spectrum::scan_properties::{
 use crate::utils::mass_charge_ratio;
 
 use super::bindata::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
+#[allow(unused)]
 use super::DataArray;
 
 pub trait CentroidPeakAdapting: CentroidLike + Default {}
@@ -41,21 +40,20 @@ impl<D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak>> Deconvolute
 }
 
 #[derive(Debug)]
-/// An variant for dispatching to different strategies of computing
-/// common statistics of different levels of peak data.
-pub enum PeakDataLevel<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> {
+pub enum PeakDataLevel<C: CentroidLike, D: DeconvolutedCentroidLike> {
     Missing,
-    RawData(&'lifespan BinaryArrayMap),
-    Centroid(&'lifespan MZPeakSetType<C>),
-    Deconvoluted(&'lifespan MassPeakSetType<D>),
+    RawData(BinaryArrayMap),
+    Centroid(MZPeakSetType<C>),
+    Deconvoluted(MassPeakSetType<D>),
 }
 
-impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lifespan, C, D> {
+
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
     /// Compute the base peak of a spectrum
     pub fn base_peak(&self) -> CentroidPeak {
         match self {
-            PeakDataLevel::Missing => CentroidPeak::new(0.0, 0.0, 0),
-            PeakDataLevel::RawData(arrays) => {
+            Self::Missing => CentroidPeak::new(0.0, 0.0, 0),
+            Self::RawData(arrays) => {
                 let intensities = arrays.intensities().unwrap();
                 let result = intensities
                     .iter()
@@ -67,7 +65,7 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
                     CentroidPeak::new(0.0, 0.0, 0)
                 }
             }
-            PeakDataLevel::Centroid(peaks) => {
+            Self::Centroid(peaks) => {
                 let result = peaks
                     .iter()
                     .enumerate()
@@ -78,7 +76,7 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
                     CentroidPeak::new(0.0, 0.0, 0)
                 }
             }
-            PeakDataLevel::Deconvoluted(peaks) => {
+            Self::Deconvoluted(peaks) => {
                 let result = peaks
                     .iter()
                     .enumerate()
@@ -96,25 +94,29 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
         }
     }
 
+    /// Find the minimum and maximum m/z values of a spectrum
     pub fn mz_range(&self) -> (f64, f64) {
         match self {
-            PeakDataLevel::Missing => (0.0, 0.0),
-            PeakDataLevel::RawData(arrays) => {
-                let mzs = arrays.mzs().unwrap();
-                if mzs.len() == 0 {
-                    (0.0, 0.0)
+            Self::Missing => (0.0, 0.0),
+            Self::RawData(arrays) => {
+                if let Ok(mzs) = arrays.mzs() {
+                    if mzs.len() == 0 {
+                        (0.0, 0.0)
+                    } else {
+                        (*mzs.first().unwrap(), *mzs.last().unwrap())
+                    }
                 } else {
-                    (*mzs.first().unwrap(), *mzs.last().unwrap())
+                    (0.0, 0.0)
                 }
             }
-            PeakDataLevel::Centroid(peaks) => {
+            Self::Centroid(peaks) => {
                 if peaks.len() == 0 {
                     (0.0, 0.0)
                 } else {
                     (peaks[0].mz(), peaks[peaks.len() - 1].mz())
                 }
             }
-            PeakDataLevel::Deconvoluted(peaks) => {
+            Self::Deconvoluted(peaks) => {
                 if peaks.len() == 0 {
                     (0.0, 0.0)
                 } else {
@@ -133,41 +135,203 @@ impl<'lifespan, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<'lif
         }
     }
 
+    /// Compute the total ion current for a spectrum
     pub fn tic(&self) -> f32 {
         match self {
-            PeakDataLevel::Missing => 0.0,
-            PeakDataLevel::RawData(arrays) => {
-                let intensities = arrays.intensities();
-                intensities.unwrap().iter().sum()
+            Self::Missing => 0.0,
+            Self::RawData(arrays) => {
+                if let Ok(intensities) = arrays.intensities() {
+                    intensities.iter().sum()
+                } else {
+                    0.0
+                }
             }
-            PeakDataLevel::Centroid(peaks) => peaks.iter().map(|p| p.intensity()).sum(),
-            PeakDataLevel::Deconvoluted(peaks) => peaks.iter().map(|p| p.intensity()).sum(),
+            Self::Centroid(peaks) => peaks.iter().map(|p| p.intensity()).sum(),
+            Self::Deconvoluted(peaks) => peaks.iter().map(|p| p.intensity()).sum(),
         }
     }
 
     pub fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize> {
         match self {
-            PeakDataLevel::Missing => None,
-            PeakDataLevel::RawData(arrays) => arrays.search(query, error_tolerance),
-            PeakDataLevel::Centroid(peaks) => peaks.search(query, error_tolerance),
-            PeakDataLevel::Deconvoluted(peaks) => peaks.search(query, error_tolerance),
+            Self::Missing => None,
+            Self::RawData(arrays) => arrays.search(query, error_tolerance),
+            Self::Centroid(peaks) => peaks.search(query, error_tolerance),
+            Self::Deconvoluted(peaks) => peaks.search(query, error_tolerance),
         }
     }
 
+    /// Find the number of points in a profile spectrum, or the number of peaks
+    /// for a centroid spectrum
     pub fn len(&self) -> usize {
         match self {
-            PeakDataLevel::Missing => 0,
-            PeakDataLevel::RawData(arrays) => arrays
+            Self::Missing => 0,
+            Self::RawData(arrays) => arrays
                 .mzs()
-                .expect("Failed to locate m/z array while computing size")
-                .len(),
-            PeakDataLevel::Centroid(peaks) => peaks.len(),
-            PeakDataLevel::Deconvoluted(peaks) => peaks.len(),
+                .map(|arr| arr.len())
+                .unwrap_or_default(),
+            Self::Centroid(peaks) => peaks.len(),
+            Self::Deconvoluted(peaks) => peaks.len(),
         }
     }
 
+    /// Check if the collection is empty
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+
+#[derive(Debug)]
+/// An variant for dispatching to different strategies of computing
+/// common statistics of different levels of peak data.
+pub enum RefPeakDataLevel<'a, C: CentroidLike, D: DeconvolutedCentroidLike> {
+    Missing,
+    RawData(&'a BinaryArrayMap),
+    Centroid(&'a MZPeakSetType<C>),
+    Deconvoluted(&'a MassPeakSetType<D>),
+}
+
+impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D> {
+    /// Compute the base peak of a spectrum
+    pub fn base_peak(&self) -> CentroidPeak {
+        match self {
+            RefPeakDataLevel::Missing => CentroidPeak::new(0.0, 0.0, 0),
+            RefPeakDataLevel::RawData(arrays) => {
+                let intensities = arrays.intensities().unwrap();
+                let result = intensities
+                    .iter()
+                    .enumerate()
+                    .max_by(|ia, ib| ia.1.partial_cmp(ib.1).unwrap());
+                if let Some((i, inten)) = result {
+                    CentroidPeak::new(arrays.mzs().unwrap()[i], *inten, i as IndexType)
+                } else {
+                    CentroidPeak::new(0.0, 0.0, 0)
+                }
+            }
+            RefPeakDataLevel::Centroid(peaks) => {
+                let result = peaks
+                    .iter()
+                    .enumerate()
+                    .max_by(|ia, ib| ia.1.intensity().partial_cmp(&ib.1.intensity()).unwrap());
+                if let Some((i, peak)) = result {
+                    CentroidPeak::new(peak.coordinate(), peak.intensity(), i as IndexType)
+                } else {
+                    CentroidPeak::new(0.0, 0.0, 0)
+                }
+            }
+            RefPeakDataLevel::Deconvoluted(peaks) => {
+                let result = peaks
+                    .iter()
+                    .enumerate()
+                    .max_by(|ia, ib| ia.1.intensity().partial_cmp(&ib.1.intensity()).unwrap());
+                if let Some((i, peak)) = result {
+                    CentroidPeak::new(
+                        crate::utils::mass_charge_ratio(peak.coordinate(), peak.charge()),
+                        peak.intensity(),
+                        i as IndexType,
+                    )
+                } else {
+                    CentroidPeak::new(0.0, 0.0, 0)
+                }
+            }
+        }
+    }
+
+    /// Find the minimum and maximum m/z values of a spectrum
+    pub fn mz_range(&self) -> (f64, f64) {
+        match self {
+            RefPeakDataLevel::Missing => (0.0, 0.0),
+            RefPeakDataLevel::RawData(arrays) => {
+                if let Ok(mzs) = arrays.mzs() {
+                    if mzs.len() == 0 {
+                        (0.0, 0.0)
+                    } else {
+                        (*mzs.first().unwrap(), *mzs.last().unwrap())
+                    }
+                } else {
+                    (0.0, 0.0)
+                }
+            }
+            RefPeakDataLevel::Centroid(peaks) => {
+                if peaks.len() == 0 {
+                    (0.0, 0.0)
+                } else {
+                    (peaks[0].mz(), peaks[peaks.len() - 1].mz())
+                }
+            }
+            RefPeakDataLevel::Deconvoluted(peaks) => {
+                if peaks.len() == 0 {
+                    (0.0, 0.0)
+                } else {
+                    peaks
+                        .iter()
+                        .map(|p| {
+                            let m = p.neutral_mass();
+                            let z = p.charge();
+                            mass_charge_ratio(m, z)
+                        })
+                        .fold((f64::MAX, f64::MIN), |state, mz| {
+                            (state.0.min(mz), state.1.max(mz))
+                        })
+                }
+            }
+        }
+    }
+
+    /// Compute the total ion current for a spectrum
+    pub fn tic(&self) -> f32 {
+        match self {
+            RefPeakDataLevel::Missing => 0.0,
+            RefPeakDataLevel::RawData(arrays) => {
+                if let Ok(intensities) = arrays.intensities() {
+                    intensities.iter().sum()
+                } else {
+                    0.0
+                }
+            }
+            RefPeakDataLevel::Centroid(peaks) => peaks.iter().map(|p| p.intensity()).sum(),
+            RefPeakDataLevel::Deconvoluted(peaks) => peaks.iter().map(|p| p.intensity()).sum(),
+        }
+    }
+
+    pub fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize> {
+        match self {
+            RefPeakDataLevel::Missing => None,
+            RefPeakDataLevel::RawData(arrays) => arrays.search(query, error_tolerance),
+            RefPeakDataLevel::Centroid(peaks) => peaks.search(query, error_tolerance),
+            RefPeakDataLevel::Deconvoluted(peaks) => peaks.search(query, error_tolerance),
+        }
+    }
+
+    /// Find the number of points in a profile spectrum, or the number of peaks
+    /// for a centroid spectrum
+    pub fn len(&self) -> usize {
+        match self {
+            RefPeakDataLevel::Missing => 0,
+            RefPeakDataLevel::RawData(arrays) => arrays
+                .mzs()
+                .map(|arr| arr.len())
+                .unwrap_or_default(),
+            RefPeakDataLevel::Centroid(peaks) => peaks.len(),
+            RefPeakDataLevel::Deconvoluted(peaks) => peaks.len(),
+        }
+    }
+
+    /// Check if the collection is empty
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+
+impl<'a, C: CentroidLike + Clone, D: DeconvolutedCentroidLike + Clone> RefPeakDataLevel<'a, C, D> {
+    pub fn cloned(&self) -> PeakDataLevel<C, D> {
+        match self {
+            RefPeakDataLevel::Missing => PeakDataLevel::Missing,
+            RefPeakDataLevel::RawData(a) => PeakDataLevel::RawData(BinaryArrayMap::clone(a)),
+            RefPeakDataLevel::Centroid(a) => PeakDataLevel::Centroid(PeakSetVec::clone(a)),
+            RefPeakDataLevel::Deconvoluted(a) => PeakDataLevel::Deconvoluted(PeakSetVec::clone(a)),
+        }
     }
 }
 
@@ -181,6 +345,7 @@ pub trait SpectrumLike<
     /// the data for most other methods on this trait.
     fn description(&self) -> &SpectrumDescription;
 
+    /// The method to access the spectrum descript itself, mutably.
     fn description_mut(&mut self) -> &mut SpectrumDescription;
 
     /// Access the acquisition information for this spectrum.
@@ -200,11 +365,13 @@ pub trait SpectrumLike<
         }
     }
 
-    fn precursor_iter(&self) -> impl Iterator<Item=&Precursor> {
+    /// Iterate over all precursors of the spectrum
+    fn precursor_iter(&self) -> impl Iterator<Item = &Precursor> {
         let desc = self.description();
         desc.precursor.iter()
     }
 
+    /// Mutably access the precursor information, if it exists
     fn precursor_mut(&mut self) -> Option<&mut Precursor> {
         let desc = self.description_mut();
         if let Some(precursor) = desc.precursor.as_mut() {
@@ -214,13 +381,13 @@ pub trait SpectrumLike<
         }
     }
 
-    fn precursor_iter_mut(&mut self) -> impl Iterator<Item=&mut Precursor> {
+    /// Iterate over all precursors of the spectrum mutably
+    fn precursor_iter_mut(&mut self) -> impl Iterator<Item = &mut Precursor> {
         let desc = self.description_mut();
         desc.precursor.iter_mut()
     }
 
-    /// A shortcut method to retrieve the scan start time
-    /// of a spectrum.
+    /// A shortcut method to retrieve the scan start time of a spectrum
     #[inline]
     fn start_time(&self) -> f64 {
         let acq = self.acquisition();
@@ -267,7 +434,9 @@ pub trait SpectrumLike<
 
     /// Retrieve the most processed representation of the mass spectrum's
     /// signal
-    fn peaks(&'_ self) -> PeakDataLevel<'_, C, D>;
+    fn peaks(&'_ self) -> RefPeakDataLevel<'_, C, D>;
+
+    fn into_peaks_and_description(self) -> (PeakDataLevel<C, D>, SpectrumDescription);
 
     fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap>;
 }
@@ -312,6 +481,7 @@ pub enum SpectrumConversionError {
     ),
 }
 
+/// Errors that may arise when performing signal processing or other data transformation
 #[derive(Debug, Clone, Error)]
 pub enum SpectrumProcessingError {
     #[cfg(feature = "mzsignal")]
@@ -439,10 +609,9 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
     pub fn pick_peaks_into(
         self,
         signal_to_noise_threshold: f32,
-        fit_type: PeakFitType,
     ) -> Result<MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>, SpectrumProcessingError> {
         let peak_picker = PeakPicker {
-            fit_type,
+            fit_type: PeakFitType::Quadratic,
             signal_to_noise_threshold,
             ..Default::default()
         };
@@ -453,11 +622,10 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
     pub fn pick_peaks_in_intervals_into(
         self,
         signal_to_noise_threshold: f32,
-        fit_type: PeakFitType,
         intervals: &[(f64, f64)],
     ) -> Result<MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>, SpectrumProcessingError> {
         let mut result = self.into_spectrum()?;
-        match result.pick_peaks_in_intervals(signal_to_noise_threshold, fit_type, intervals) {
+        match result.pick_peaks_in_intervals(signal_to_noise_threshold, intervals) {
             Ok(_) => Ok(result),
             Err(err) => Err(err),
         }
@@ -474,12 +642,16 @@ impl SpectrumLike for RawSpectrum {
         &mut self.description
     }
 
-    fn peaks(&'_ self) -> PeakDataLevel<'_, CentroidPeak, DeconvolutedPeak> {
-        PeakDataLevel::RawData(&self.arrays)
+    fn peaks(&'_ self) -> RefPeakDataLevel<'_, CentroidPeak, DeconvolutedPeak> {
+        RefPeakDataLevel::RawData(&self.arrays)
     }
 
     fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap> {
         Some(&self.arrays)
+    }
+
+    fn into_peaks_and_description(self) -> (PeakDataLevel<CentroidPeak, DeconvolutedPeak>, SpectrumDescription) {
+        (PeakDataLevel::RawData(self.arrays), self.description)
     }
 }
 
@@ -494,7 +666,6 @@ pub struct CentroidSpectrumType<C: CentroidLike + Default> {
 
 #[cfg(feature = "mzsignal")]
 impl<C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap> CentroidSpectrumType<C> {
-
     pub fn reprofile_with_shape_into(
         self,
         dx: f64,
@@ -526,12 +697,16 @@ impl<C: CentroidLike + Default> SpectrumLike<C> for CentroidSpectrumType<C> {
         &mut self.description
     }
 
-    fn peaks(&'_ self) -> PeakDataLevel<'_, C, DeconvolutedPeak> {
-        PeakDataLevel::Centroid(&self.peaks)
+    fn peaks(&'_ self) -> RefPeakDataLevel<'_, C, DeconvolutedPeak> {
+        RefPeakDataLevel::Centroid(&self.peaks)
     }
 
     fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap> {
         None
+    }
+
+    fn into_peaks_and_description(self) -> (PeakDataLevel<C, DeconvolutedPeak>, SpectrumDescription) {
+        (PeakDataLevel::Centroid(self.peaks), self.description)
     }
 }
 
@@ -540,7 +715,7 @@ impl<C: CentroidLike + Default> CentroidSpectrumType<C> {
         Self { description, peaks }
     }
 
-    /// Convert a spectrum into a [`Spectrum`]
+    /// Convert a spectrum into a [`MultiLayerSpectrum`]
     pub fn into_spectrum<D>(self) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
     where
         D: DeconvolutedCentroidLike + Default,
@@ -572,6 +747,19 @@ impl<D: DeconvolutedCentroidLike + Default> DeconvolutedSpectrumType<D> {
             deconvoluted_peaks,
         }
     }
+
+    /// Convert a spectrum into a [`Spectrum`]
+    pub fn into_spectrum<C>(self) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
+    where
+        C: CentroidLike + Default,
+    {
+        let val = MultiLayerSpectrum::<C, D> {
+            deconvoluted_peaks: Some(self.deconvoluted_peaks),
+            description: self.description,
+            ..Default::default()
+        };
+        Ok(val)
+    }
 }
 
 impl<D: DeconvolutedCentroidLike + Default> ParamDescribed for DeconvolutedSpectrumType<D> {
@@ -596,12 +784,16 @@ impl<D: DeconvolutedCentroidLike + Default> SpectrumLike<CentroidPeak, D>
         &mut self.description
     }
 
-    fn peaks(&'_ self) -> PeakDataLevel<'_, CentroidPeak, D> {
-        PeakDataLevel::Deconvoluted(&self.deconvoluted_peaks)
+    fn peaks(&'_ self) -> RefPeakDataLevel<'_, CentroidPeak, D> {
+        RefPeakDataLevel::Deconvoluted(&self.deconvoluted_peaks)
     }
 
     fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap> {
         None
+    }
+
+    fn into_peaks_and_description(self) -> (PeakDataLevel<CentroidPeak, D>, SpectrumDescription) {
+        (PeakDataLevel::Deconvoluted(self.deconvoluted_peaks), self.description)
     }
 }
 
@@ -652,20 +844,32 @@ impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> SpectrumL
         &mut self.description
     }
 
-    fn peaks(&'_ self) -> PeakDataLevel<'_, C, D> {
+    fn peaks(&'_ self) -> RefPeakDataLevel<'_, C, D> {
         if let Some(peaks) = &self.deconvoluted_peaks {
-            PeakDataLevel::Deconvoluted(peaks)
+            RefPeakDataLevel::Deconvoluted(peaks)
         } else if let Some(peaks) = &self.peaks {
-            PeakDataLevel::Centroid(peaks)
+            RefPeakDataLevel::Centroid(peaks)
         } else if let Some(arrays) = &self.arrays {
-            PeakDataLevel::RawData(arrays)
+            RefPeakDataLevel::RawData(arrays)
         } else {
-            PeakDataLevel::Missing
+            RefPeakDataLevel::Missing
         }
     }
 
     fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap> {
         self.arrays.as_ref()
+    }
+
+    fn into_peaks_and_description(self) -> (PeakDataLevel<C, D>, SpectrumDescription) {
+        if let Some(peaks) = self.deconvoluted_peaks {
+            (PeakDataLevel::Deconvoluted(peaks), self.description)
+        } else if let Some(peaks) = self.peaks {
+            (PeakDataLevel::Centroid(peaks), self.description)
+        } else if let Some(arrays) = self.arrays {
+            (PeakDataLevel::RawData(arrays), self.description)
+        } else {
+            (PeakDataLevel::Missing, self.description)
+        }
     }
 }
 
@@ -805,6 +1009,20 @@ where
         }
     }
 
+    pub fn from_peaks_data_levels_and_description(peaks: PeakDataLevel<C, D>, description: SpectrumDescription) -> Self {
+        match peaks {
+            PeakDataLevel::Missing => Self::new(description, None, None, None),
+            PeakDataLevel::RawData(arrays) => Self::new(description, Some(arrays), None, None),
+            PeakDataLevel::Centroid(peaks) => Self::new(description, None, Some(peaks), None),
+            PeakDataLevel::Deconvoluted(peaks) => Self::new(description, None, None, Some(peaks)),
+        }
+    }
+
+    pub fn from_spectrum_like<S: SpectrumLike<C, D>>(spectrum: S) -> Self {
+        let (peaks, description) = spectrum.into_peaks_and_description();
+        Self::from_peaks_data_levels_and_description(peaks, description)
+    }
+
     #[cfg(feature = "mzsignal")]
     pub fn denoise(&mut self, scale: f32) -> Result<(), SpectrumProcessingError> {
         match &mut self.arrays {
@@ -854,17 +1072,17 @@ where
                 None => {
                     self.arrays = Some(BinaryArrayMap::new());
                     self.arrays.as_mut().unwrap()
-                },
+                }
             };
             arrays.add(DataArray::wrap(
-                        &ArrayType::MZArray,
-                        BinaryDataArrayType::Float64,
-                        pair.mz_array
-                            .iter()
-                            .map(|i| i.to_le_bytes())
-                            .flatten()
-                            .collect(),
-                    ));
+                &ArrayType::MZArray,
+                BinaryDataArrayType::Float64,
+                pair.mz_array
+                    .iter()
+                    .map(|i| i.to_le_bytes())
+                    .flatten()
+                    .collect(),
+            ));
 
             arrays.add(DataArray::wrap(
                 &ArrayType::IntensityArray,
@@ -912,10 +1130,9 @@ impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike +
     pub fn pick_peaks(
         &mut self,
         signal_to_noise_threshold: f32,
-        fit_type: PeakFitType,
     ) -> Result<(), SpectrumProcessingError> {
         let peak_picker = PeakPicker {
-            fit_type,
+            fit_type: PeakFitType::Quadratic,
             signal_to_noise_threshold,
             ..Default::default()
         };
@@ -925,11 +1142,10 @@ impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike +
     pub fn pick_peaks_in_intervals(
         &mut self,
         signal_to_noise_threshold: f32,
-        fit_type: PeakFitType,
         intervals: &[(f64, f64)],
     ) -> Result<(), SpectrumProcessingError> {
         let peak_picker = PeakPicker {
-            fit_type,
+            fit_type: PeakFitType::Quadratic,
             signal_to_noise_threshold,
             ..Default::default()
         };
@@ -959,7 +1175,6 @@ impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike +
         }
     }
 }
-
 
 impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     TryFrom<MultiLayerSpectrum<C, D>> for CentroidSpectrumType<C>
@@ -1029,14 +1244,14 @@ where
 
     fn try_from(value: MultiLayerSpectrum<C, D>) -> Result<Self, Self::Error> {
         match value.peaks() {
-            PeakDataLevel::Deconvoluted(_) => {
+            RefPeakDataLevel::Deconvoluted(_) => {
                 let peaks = value.deconvoluted_peaks.unwrap();
                 Ok(DeconvolutedSpectrumType {
                     description: value.description,
                     deconvoluted_peaks: peaks,
                 })
             }
-            PeakDataLevel::RawData(arrays) => {
+            RefPeakDataLevel::RawData(arrays) => {
                 let peaks = match D::try_from_arrays(arrays) {
                     Ok(peaks) => peaks,
                     Err(e) => return Err(SpectrumConversionError::ArrayRetrievalError(e)),
@@ -1051,26 +1266,6 @@ where
     }
 }
 
-// impl TryFrom<Spectrum> for DeconvolutedSpectrum {
-//     type Error = SpectrumConversionError;
-
-//     fn try_from(spectrum: Spectrum) -> Result<Self, Self::Error> {
-//         if spectrum.signal_continuity() == SignalContinuity::Profile {
-//             Err(SpectrumConversionError::NotCentroided)
-//         } else if let Some(arrays) = &spectrum.arrays {
-//             if arrays.has_array(&ArrayType::ChargeArray) {
-//                 let peaks: DeconvolutedPeakSet = DeconvolutedPeakSet::from(arrays);
-//                 return Ok(DeconvolutedSpectrum {
-//                     description: spectrum.description,
-//                     deconvoluted_peaks: peaks,
-//                 });
-//             }
-//             Err(Self::Error::NotDeconvoluted)
-//         } else {
-//             Err(Self::Error::NoPeakData)
-//         }
-//     }
-// }
 
 #[cfg(test)]
 mod test {
@@ -1090,7 +1285,7 @@ mod test {
         assert_eq!(scan.polarity(), ScanPolarity::Positive);
         assert!(scan.precursor().is_none());
 
-        if let Err(err) = scan.pick_peaks(1.0, PeakFitType::Quadratic) {
+        if let Err(err) = scan.pick_peaks(1.0) {
             panic!("Should not have an error! {}", err);
         }
 

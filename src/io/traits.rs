@@ -717,6 +717,9 @@ pub trait SpectrumGrouping<
             None
         }
     }
+
+    /// Decompose the group into its components, discarding any additional metrics
+    fn into_parts(self) -> (Option<S>, Vec<S>);
 }
 
 /// Analogous to to [`RandomAccessSpectrumIterator`], but for [`SpectrumGrouping`] implementations.
@@ -875,7 +878,6 @@ impl<
 
 /// Common interface for spectrum writing
 pub trait ScanWriter<
-    'a,
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
 >
@@ -883,11 +885,15 @@ pub trait ScanWriter<
     /// Write out a single spectrum
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize>;
 
+    fn write_owned<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: S) -> io::Result<usize> {
+        self.write(&spectrum)
+    }
+
     /// As [`std::io::Write::flush`]
     fn flush(&mut self) -> io::Result<()>;
 
     /// Consume an [`Iterator`] over [`Spectrum`](crate::spectrum::MultiLayerSpectrum) references
-    fn write_all<S: SpectrumLike<C, D> + 'static, T: Iterator<Item = &'a S>>(
+    fn write_all<'b, S: SpectrumLike<C, D> + 'static, T: Iterator<Item = &'b S>>(
         &mut self,
         iterator: T,
     ) -> io::Result<usize> {
@@ -913,11 +919,27 @@ pub trait ScanWriter<
         Ok(n)
     }
 
+    fn write_group_owned<S: SpectrumLike<C, D> + 'static, G: SpectrumGrouping<C, D, S> + 'static>(
+        &mut self,
+        group: G,
+    ) -> io::Result<usize> {
+        let (precursor, products) = group.into_parts();
+        let mut n = 0;
+        if let Some(precursor) = precursor {
+            n += self.write_owned(precursor)?;
+        }
+        for product in products {
+            n += self.write_owned(product)?;
+        }
+        Ok(n)
+    }
+
     /// Consume an [`Iterator`] over [`SpectrumGroup`](crate::spectrum::SpectrumGroup) references
     fn write_all_groups<
+        'b,
         S: SpectrumLike<C, D> + 'static,
         G: SpectrumGrouping<C, D, S> + 'static,
-        T: Iterator<Item = &'a G>,
+        T: Iterator<Item = &'b G>,
     >(
         &mut self,
         iterator: T,

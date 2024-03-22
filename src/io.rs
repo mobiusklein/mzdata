@@ -16,6 +16,7 @@ pub(crate) mod compression;
 
 pub use crate::io::infer_format::{
     infer_format, infer_from_path, infer_from_stream, open_file, MassSpectrometryFormat,
+    MassSpectrometryReadWriteProcess
 };
 pub use crate::io::mgf::{MGFError, MGFReader, MGFWriter};
 #[cfg(feature = "async")]
@@ -30,3 +31,8 @@ pub use crate::io::traits::{
 };
 pub use crate::io::utils::{DetailLevel, PreBufferedStream};
 pub use compression::RestartableGzDecoder;
+
+#[cfg(feature = "thermorawfilereader")]
+pub mod thermo;
+#[cfg(feature = "thermorawfilereader")]
+pub use thermo::ThermoRawReader;

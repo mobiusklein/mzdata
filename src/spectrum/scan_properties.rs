@@ -168,7 +168,7 @@ impl ScanCombination {
         }
     }
 
-    pub fn name(&self) -> &str {
+    pub const fn name(&self) -> &str {
         match self {
             ScanCombination::NoCombination => "no combination",
             ScanCombination::Sum => "sum of spectra",
@@ -176,7 +176,7 @@ impl ScanCombination {
         }
     }
 
-    pub fn accession(&self) -> u32 {
+    pub const fn accession(&self) -> u32 {
         match self {
             ScanCombination::NoCombination => 1000795,
             ScanCombination::Sum => 1000571,

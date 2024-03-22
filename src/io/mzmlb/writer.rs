@@ -32,7 +32,7 @@ use crate::prelude::{MSDataFileMetadata, SpectrumLike};
 use crate::spectrum::bindata::{
     ArrayRetrievalError, BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
 };
-use crate::spectrum::{ArrayType, BinaryArrayMap, Chromatogram, ChromatogramLike, PeakDataLevel};
+use crate::spectrum::{ArrayType, BinaryArrayMap, Chromatogram, ChromatogramLike, RefPeakDataLevel};
 
 use crate::io::mzml::{MzMLWriterError, MzMLWriterState, MzMLWriterType};
 
@@ -382,7 +382,7 @@ impl io::Write for ByteWriter {
 
 pub type WriterResult = Result<(), MzMLbWriterError>;
 
-impl<'a, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> ScanWriter<'a, C, D>
+impl<'a, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> ScanWriter<C, D>
     for MzMLbWriterType<C, D>
 where
     C: BuildArrayMapFrom,
@@ -707,20 +707,20 @@ where
         );
 
         match spectrum.peaks() {
-            PeakDataLevel::RawData(arrays) => {
+            RefPeakDataLevel::RawData(arrays) => {
                 self.write_binary_data_arrays(arrays, BufferContext::Spectrum, default_array_size)?
             }
-            PeakDataLevel::Centroid(arrays) => self.write_binary_data_arrays(
+            RefPeakDataLevel::Centroid(arrays) => self.write_binary_data_arrays(
                 &C::as_arrays(&arrays[0..]),
                 BufferContext::Spectrum,
                 default_array_size,
             )?,
-            PeakDataLevel::Deconvoluted(arrays) => self.write_binary_data_arrays(
+            RefPeakDataLevel::Deconvoluted(arrays) => self.write_binary_data_arrays(
                 &D::as_arrays(&arrays[0..]),
                 BufferContext::Spectrum,
                 default_array_size,
             )?,
-            PeakDataLevel::Missing => todo!(),
+            RefPeakDataLevel::Missing => todo!(),
         }
 
         end_event!(self, outer);

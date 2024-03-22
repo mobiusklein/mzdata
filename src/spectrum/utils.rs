@@ -1,9 +1,14 @@
 use std::{
     collections::HashMap,
-    sync::mpsc::{Receiver, Sender, TryRecvError, SyncSender},
+    sync::mpsc::{Receiver, Sender, SyncSender, TryRecvError},
     time::Duration,
 };
 
+use mzpeaks::{CentroidLike, DeconvolutedCentroidLike};
+
+use crate::prelude::*;
+
+use super::MultiLayerSpectrum;
 
 /// A helper for consuming parallel iteration in the original ordering sequentially later.
 /// Useful for things like splitting work up with `rayon` and then merging it back together
@@ -32,7 +37,6 @@ impl<T: Send> Default for Collator<T> {
 }
 
 impl<T: Send> Collator<T> {
-
     /// Take the next item `group` with ordering key `group_idx` and add it to the waiting
     /// item queue
     pub fn receive(&mut self, group_idx: usize, group: T) {
@@ -47,7 +51,12 @@ impl<T: Send> Collator<T> {
 
     /// Block on reading from `receiver` until it takes more than `timeout` time
     /// to retrieve the next item from it, or until `batch_size` items have been read
-    pub fn receive_from_timeout(&mut self, receiver: &Receiver<(usize, T)>, batch_size: usize, timeout: Duration) {
+    pub fn receive_from_timeout(
+        &mut self,
+        receiver: &Receiver<(usize, T)>,
+        batch_size: usize,
+        timeout: Duration,
+    ) {
         let mut counter = 0usize;
         while let Ok((group_idx, group)) = receiver.recv_timeout(timeout) {
             self.receive(group_idx, group);
@@ -58,7 +67,13 @@ impl<T: Send> Collator<T> {
         }
     }
 
-    pub fn receive_from_map_timeout<U, F: Fn(usize, U) -> (usize, T)>(&mut self, receiver: &Receiver<(usize, U)>, batch_size: usize, timeout: Duration, cb: F) {
+    pub fn receive_from_map_timeout<U, F: Fn(usize, U) -> (usize, T)>(
+        &mut self,
+        receiver: &Receiver<(usize, U)>,
+        batch_size: usize,
+        timeout: Duration,
+        cb: F,
+    ) {
         let mut counter = 0usize;
         while let Ok((group_idx, group)) = receiver.recv_timeout(timeout) {
             let (group_idx, group) = cb(group_idx, group);
@@ -70,7 +85,17 @@ impl<T: Send> Collator<T> {
         }
     }
 
-    pub fn receive_from_map_iter_timeout<U, I: Iterator<Item=(usize, T)>, F: Fn(usize, U) -> I>(&mut self, receiver: &Receiver<(usize, U)>, batch_size: usize, timeout: Duration, cb: F) {
+    pub fn receive_from_map_iter_timeout<
+        U,
+        I: Iterator<Item = (usize, T)>,
+        F: Fn(usize, U) -> I,
+    >(
+        &mut self,
+        receiver: &Receiver<(usize, U)>,
+        batch_size: usize,
+        timeout: Duration,
+        cb: F,
+    ) {
         let mut counter = 0usize;
         while let Ok((group_idx, group)) = receiver.recv_timeout(timeout) {
             self.receive_map_iter(group_idx, group, &cb);
@@ -81,12 +106,22 @@ impl<T: Send> Collator<T> {
         }
     }
 
-    pub fn receive_map<U, F: Fn(usize, U) -> (usize, T)>(&mut self, group_idx: usize, group: U, cb: F) {
+    pub fn receive_map<U, F: Fn(usize, U) -> (usize, T)>(
+        &mut self,
+        group_idx: usize,
+        group: U,
+        cb: F,
+    ) {
         let (group_idx, group) = cb(group_idx, group);
         self.receive(group_idx, group);
     }
 
-    pub fn receive_map_iter<U, I: Iterator<Item=(usize, T)>, F: Fn(usize, U) -> I>(&mut self, group_idx: usize, group: U, cb: F) {
+    pub fn receive_map_iter<U, I: Iterator<Item = (usize, T)>, F: Fn(usize, U) -> I>(
+        &mut self,
+        group_idx: usize,
+        group: U,
+        cb: F,
+    ) {
         cb(group_idx, group).for_each(|(i, x)| {
             self.receive(i, x);
         })
@@ -143,7 +178,6 @@ impl<T: Send> Collator<T> {
         }
     }
 
-
     /// As [`collate_sync`](Collator::collate_sync), but with an unbounded channel
     pub fn collate(receiver: Receiver<(usize, T)>, sender: Sender<(usize, T)>) {
         let mut collator = Self::default();
@@ -171,5 +205,36 @@ impl<T: Send> Collator<T> {
                 }
             }
         }
+    }
+}
+
+impl<
+        C: CentroidLike + Default + Send + BuildArrayMapFrom + BuildFromArrayMap + Clone,
+        D: DeconvolutedCentroidLike + Default + Send + BuildArrayMapFrom + BuildFromArrayMap + Clone,
+    > ScanWriter<C, D> for Collator<MultiLayerSpectrum<C, D>>
+{
+    fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> std::io::Result<usize> {
+        let k = spectrum.index();
+        let peaks = spectrum.peaks().cloned();
+        let descr = spectrum.description().clone();
+        let t = MultiLayerSpectrum::from_peaks_data_levels_and_description(peaks, descr);
+        self.receive(k, t);
+        Ok(k)
+    }
+
+    fn write_owned<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: S) -> std::io::Result<usize> {
+        let k = spectrum.index();
+        let (peaks, description) = spectrum.into_peaks_and_description();
+        let t = MultiLayerSpectrum::from_peaks_data_levels_and_description(peaks, description);
+        self.receive(k, t);
+        Ok(k)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+
+    fn close(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }

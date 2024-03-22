@@ -64,7 +64,7 @@ pub use crate::spectrum::chromatogram::{Chromatogram, ChromatogramLike};
 pub use crate::spectrum::scan_properties::*;
 pub use crate::spectrum::spectrum::{
     CentroidSpectrum, CentroidSpectrumType, DeconvolutedSpectrum, DeconvolutedSpectrumType,
-    MultiLayerSpectrum, PeakDataLevel, RawSpectrum, Spectrum, SpectrumConversionError,
+    MultiLayerSpectrum, RefPeakDataLevel, RawSpectrum, Spectrum, SpectrumConversionError,
     SpectrumLike, SpectrumProcessingError,
 };
 

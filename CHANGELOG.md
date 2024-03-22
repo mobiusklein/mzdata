@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning].
 
 ### Added
 - `MGFReaderType` and `MGFWriterType` implement `MSDataFileMetadata`
+- `ThermoRawFileReader` has been added to read Thermo RAW files when the .NET 8 runtime is available, using [`thermorawfilereader`](https://crates.io/crates/thermorawfilereader/0.2.1)
 
 ### Changed
 - `MGFWriterType` now generates a spectrum title when one is absent, rather than defaulting to

@@ -291,6 +291,10 @@ where
     fn products_mut(&mut self) -> &mut Vec<S> {
         &mut self.products
     }
+
+    fn into_parts(self) -> (Option<S>, Vec<S>) {
+        (self.precursor, self.products)
+    }
 }
 
 #[derive(Default, Debug)]
@@ -1008,6 +1012,10 @@ mod mzsignal_impl {
 
         fn products_mut(&mut self) -> &mut Vec<MultiLayerSpectrum<C, D>> {
             self.group.products_mut()
+        }
+
+        fn into_parts(self) -> (Option<MultiLayerSpectrum<C, D>>, Vec<MultiLayerSpectrum<C, D>>) {
+            self.group.into_parts()
         }
     }
 

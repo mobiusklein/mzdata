@@ -4,11 +4,144 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::num;
+use std::{io, num};
 use std::str::{self, FromStr};
 
 use thiserror::Error;
 
+#[doc(hidden)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
+pub enum Value {
+    String(String),
+    Float(f64),
+    Int(i64),
+    Buffer(Box<[u8]>),
+    #[default]
+    Empty
+}
+
+impl Value {}
+
+#[doc(hidden)]
+#[derive(Debug, Clone, Error, PartialEq)]
+pub enum ParamValueParseError {
+    #[error("Failed to extract a float from {0:?}")]
+    FailedToExtractFloat(Option<String>),
+    #[error("Failed to extract a int from {0:?}")]
+    FailedToExtractInt(Option<String>),
+    #[error("Failed to extract a string")]
+    FailedToExtractString,
+    #[error("Failed to extract a buffer")]
+    FailedToExtractBuffer
+}
+
+impl FromStr for Value {
+    type Err = ParamValueParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            return Ok(Self::Empty)
+        }
+        if let Ok(value) = s.parse::<i64>() {
+            Ok(Self::Int(value))
+        } else if let Ok(value) = s.parse::<f64>() {
+            Ok(Self::Float(value))
+        } else {
+            Ok(Self::String(s.to_string()))
+        }
+    }
+}
+
+impl ToString for Value {
+    fn to_string(&self) -> String {
+        match self {
+            Value::String(v) => v.to_string(),
+            Value::Float(v) => v.to_string(),
+            Value::Int(v) => v.to_string(),
+            Value::Buffer(v) => String::from_utf8_lossy(v).to_string(),
+            Value::Empty => "".to_string(),
+        }
+    }
+}
+
+impl From<ParamValueParseError> for io::Error {
+    fn from(value: ParamValueParseError) -> Self {
+        Self::new(io::ErrorKind::InvalidData, value)
+    }
+}
+
+impl Value {
+
+    pub fn wrap(s: &str) -> Self {
+        if s.is_empty() {
+            Self::Empty
+        }
+        else if let Ok(value) = s.parse::<i64>() {
+            Self::Int(value)
+        } else if let Ok(value) = s.parse::<f64>() {
+            Self::Float(value)
+        } else {
+            Self::String(s.to_string())
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty)
+    }
+
+    pub fn is_int(&self) -> bool {
+        matches!(self, Self::Int(_))
+    }
+
+    pub fn is_float(&self) -> bool {
+        matches!(self, Self::Float(_))
+    }
+
+    pub fn is_buffer(&self) -> bool {
+        matches!(self, Self::Buffer(_))
+    }
+
+    pub fn is_string(&self) -> bool {
+        matches!(self, Self::String(_))
+    }
+
+    pub fn to_f64(&self) -> Result<f64, ParamValueParseError> {
+        if let Self::Float(val) = self {
+            Ok(*val)
+        } else {
+            Err(ParamValueParseError::FailedToExtractFloat(Some(self.to_string())))
+        }
+    }
+
+    pub fn to_i64(&self) -> Result<i64, ParamValueParseError> {
+        if let Self::Int(val) = self {
+            Ok(*val)
+        } else {
+            Err(ParamValueParseError::FailedToExtractInt(Some(self.to_string())))
+        }
+    }
+
+    pub fn to_str(&self) -> Result<Cow<'_, str>, ParamValueParseError> {
+        if let Self::String(val) = self {
+            Ok(Cow::Borrowed(val))
+        } else {
+            Ok(Cow::Owned(self.to_string()))
+        }
+    }
+
+    pub fn to_buffer(&self) -> Result<Cow<'_, [u8]>, ParamValueParseError> {
+        if let  Self::Buffer(val) = self {
+            Ok(Cow::Borrowed(val))
+        } else if let Self::String(val) = self {
+            Ok(Cow::Borrowed(val.as_bytes()))
+        } else {
+            Err(ParamValueParseError::FailedToExtractBuffer)
+        }
+    }
+}
+
+
+/// A CURIE is a namespace + accession identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CURIE {
     controlled_vocabulary: ControlledVocabulary,
@@ -129,14 +262,14 @@ pub trait ParamLike {
         self.accession().is_some()
     }
 
-    fn curie(&self) -> Option<String> {
+    fn curie(&self) -> Option<CURIE> {
         if !self.is_controlled() {
             None
         } else {
-            let cv = &self.controlled_vocabulary().unwrap();
+            let cv = self.controlled_vocabulary().unwrap();
             let acc = self.accession().unwrap();
-            let accession_str = format!("{}:{:07}", cv.prefix(), acc);
-            Some(accession_str)
+            // let accession_str = format!("{}:{:07}", cv.prefix(), acc);
+            Some(CURIE::new(cv, acc))
         }
     }
 }
