@@ -4,12 +4,13 @@
 //! The library currently supports reading:
 //!   1. MGF files using [`MGFReader`] in [`mzdata::io::mgf`](crate::io::mgf)
 //!   2. mzML & indexedmzML files using [`MzMLReader`] in [`mzdata::io::mzml`](crate::io::mzml)
-//!   3. mzMLb files using [`MzMLbReader`] in [`mzdata::io::mzmlb`](crate::io::mzmlb)
+//!   3. mzMLb files using [`MzMLbReader`] in [`mzdata::io::mzmlb`](crate::io::mzmlb), if the `mzmlb` feature is enabled
+//!   4. Thermo RAW files using [`ThermoRawReader`] in [`mzdata::io::thermo`](crate::io::thermo), if the `thermo` feature is enabled
 //!
 //! and writing:
 //!   1. MGF files using [`MGFWriter`] in [`mzdata::io::mgf`](crate::io::mgf)
 //!   2. mzML & indexedmzML files using [`MzMLWriter`] in [`mzdata::io::mzml`](crate::io::mzml)
-//!   3. mzMLb files using [`MzMLbWriter`] in [`mzdata::io::mzmlb`](crate::io::mzmlb)
+//!   3. mzMLb files using [`MzMLbWriter`] in [`mzdata::io::mzmlb`](crate::io::mzmlb), if the `mzmlb` feature is enabled
 //!
 //! It also includes a set of representation layers for spectra in [`mzdata::spectrum`](crate::spectrum)
 //!
