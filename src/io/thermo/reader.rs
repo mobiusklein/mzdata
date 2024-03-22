@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs, io, marker::PhantomData, mem, path::PathBuf};
 
 use crate::{
-    io::OffsetIndex,
+    io::{OffsetIndex, DetailLevel},
     meta::{
         Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration,
         Software, SourceFile,
@@ -69,6 +69,7 @@ pub struct ThermoRawReaderType<
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
 > {
     pub path: PathBuf,
+    pub detail_level: DetailLevel,
     handle: RawFileReader,
     index: usize,
     spectrum_index: OffsetIndex,
@@ -315,9 +316,15 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 
     /// Create a new [`ThermoRawReaderType`] from a path.
     /// This may trigger an expensive I/O operation to checksum the file
-    pub fn new<P: Into<PathBuf>>(path: P) -> io::Result<Self> {
+    pub fn new_with_detail_level_and_centroiding<P: Into<PathBuf>>(path: P, mut detail_level: DetailLevel, centroiding: bool) -> io::Result<Self> {
         let path: PathBuf = path.into();
-        let handle = RawFileReader::open(&path)?;
+        let mut handle = RawFileReader::open(&path)?;
+        handle.set_centroid_spectra(centroiding);
+
+        if matches!(detail_level, DetailLevel::Lazy) {
+            log::warn!("ThermoRawReader does not support lazy loading. Using {:?}", DetailLevel::Full);
+            detail_level = DetailLevel::Full
+        }
 
         let spectrum_index = Self::build_index(&handle);
 
@@ -328,6 +335,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 
         Ok(Self {
             path: path,
+            detail_level,
             handle,
             index: 0,
             spectrum_index,
@@ -339,6 +347,12 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             _c: PhantomData,
             _d: PhantomData,
         })
+    }
+
+    /// Create a new [`ThermoRawReaderType`] from a path.
+    /// This may trigger an expensive I/O operation to checksum the file
+    pub fn new<P: Into<PathBuf>>(path: P) -> io::Result<Self> {
+        Self::new_with_detail_level_and_centroiding(path, DetailLevel::Full, false)
     }
 
     fn populate_precursor(&self, vprec: &PrecursorT, precursor: &mut Precursor) {
@@ -472,6 +486,11 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
     }
 
     fn get_spectrum(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
+        if matches!(self.detail_level, DetailLevel::MetadataOnly) {
+            self.handle.set_signal_loading(false);
+        } else {
+            self.handle.set_signal_loading(true);
+        }
         let raw = self.handle.get(index)?;
         let view = raw.view();
 
@@ -522,6 +541,10 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
         self.handle.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.handle.is_empty()
+    }
+
     fn read_next_spectrum(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
         let i = self.index;
         if i < self.len() {
@@ -531,6 +554,16 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
         } else {
             None
         }
+    }
+
+    /// Get whether or not to centroid spectra on read using the vendor algorithm
+    pub fn get_centroiding(&self) -> bool {
+        self.handle.get_centroid_spectra()
+    }
+
+    /// Set whether or not to centroid spectra on read using the vendor algorithm
+    pub fn set_centroiding(&mut self, value: bool) {
+        self.handle.set_centroid_spectra(value)
     }
 }
 

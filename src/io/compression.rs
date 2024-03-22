@@ -20,13 +20,11 @@ pub fn is_gzipped_extension(path: path::PathBuf) -> (bool, path::PathBuf) {
     }
 }
 
-#[allow(unused)]
 pub struct RestartableGzDecoder<R: BufRead + Seek> {
     handle: Option<MultiGzDecoder<R>>,
     offset: u64,
 }
 
-#[allow(unused)]
 impl<R: BufRead + Seek> RestartableGzDecoder<R> {
     pub fn new(handle: R) -> Self {
         Self {
