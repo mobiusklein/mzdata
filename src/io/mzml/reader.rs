@@ -1843,8 +1843,8 @@ impl<
         D: DeconvolutedPeakAdapting + BuildFromArrayMap,
     > MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<fs::File, C, D>
 {
-    fn open_file(source: fs::File) -> Self {
-        Self::new(source)
+    fn open_file(source: fs::File) -> io::Result<Self> {
+        Ok(Self::new(source))
     }
 
     fn construct_index_from_stream(&mut self) -> u64 {

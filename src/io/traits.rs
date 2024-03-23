@@ -1,18 +1,23 @@
 use log::warn;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::io;
 use std::marker::PhantomData;
 use std::ops::Index;
 use std::path::{self, PathBuf};
+
+use std::sync::mpsc::Receiver;
+
 use thiserror::Error;
 
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 
+use crate::meta::{
+    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software,
+};
 use crate::prelude::MSDataFileMetadata;
-use crate::spectrum::group::SpectrumGroupingIterator;
+use crate::spectrum::group::{SpectrumGroup, SpectrumGroupingIterator};
 use crate::spectrum::spectrum::{MultiLayerSpectrum, SpectrumLike};
-use crate::spectrum::SpectrumGroup;
 
 use super::utils::FileSource;
 use super::OffsetIndex;
@@ -259,7 +264,6 @@ impl<
     }
 }
 
-
 /// If the underlying iterator implements [`MSDataFileMetadata`] then [`SpectrumIterator`] will
 /// forward that implementation, assuming it is available.
 impl<
@@ -268,8 +272,10 @@ impl<
         D: DeconvolutedCentroidLike + Default,
         R: ScanSource<C, D, S>,
         S: SpectrumLike<C, D>,
-    > MSDataFileMetadata for SpectrumIterator<'lifespan, C, D, S, R> where R: MSDataFileMetadata {
-
+    > MSDataFileMetadata for SpectrumIterator<'lifespan, C, D, S, R>
+where
+    R: MSDataFileMetadata,
+{
     crate::delegate_impl_metadata_trait!(source);
 }
 
@@ -320,7 +326,7 @@ pub trait MZFileReader<
 
         match fs::File::open(path.into()) {
             Ok(file) => {
-                let mut reader = Self::open_file(file);
+                let mut reader = Self::open_file(file)?;
                 if let Some(index_path) = &index_file_name {
                     if index_path.exists() {
                         let index_stream = fs::File::open(index_path)?;
@@ -341,7 +347,7 @@ pub trait MZFileReader<
     }
 
     /// Given a regular file, construct a new instance without indexing.
-    fn open_file(source: fs::File) -> Self;
+    fn open_file(source: fs::File) -> io::Result<Self>;
 }
 
 fn _save_index<
@@ -388,17 +394,15 @@ impl From<SpectrumAccessError> for io::Error {
         let s = value.to_string();
         match value {
             SpectrumAccessError::SpectrumNotFound => io::Error::new(io::ErrorKind::NotFound, s),
-            SpectrumAccessError::SpectrumIdNotFound(_) => io::Error::new(io::ErrorKind::NotFound, s),
-            SpectrumAccessError::SpectrumIndexNotFound(_) => io::Error::new(io::ErrorKind::NotFound, s),
-            SpectrumAccessError::IOError(e) => {
-                match e {
-                    Some(e) => {
-                        e
-                    },
-                    None => {
-                        io::Error::new(io::ErrorKind::Other, s)
-                    },
-                }
+            SpectrumAccessError::SpectrumIdNotFound(_) => {
+                io::Error::new(io::ErrorKind::NotFound, s)
+            }
+            SpectrumAccessError::SpectrumIndexNotFound(_) => {
+                io::Error::new(io::ErrorKind::NotFound, s)
+            }
+            SpectrumAccessError::IOError(e) => match e {
+                Some(e) => e,
+                None => io::Error::new(io::ErrorKind::Other, s),
             },
         }
     }
@@ -483,6 +487,29 @@ pub struct StreamingSpectrumIterator<
     _index: OffsetIndex,
     _c: PhantomData<C>,
     _d: PhantomData<D>,
+}
+
+impl<
+        C: CentroidLike + Default + Send,
+        D: DeconvolutedCentroidLike + Default + Send,
+        S: SpectrumLike<C, D> + Send,
+    > From<SpectrumReceiver<C, D, S>>
+    for StreamingSpectrumIterator<C, D, S, SpectrumReceiver<C, D, S>>
+{
+    fn from(value: SpectrumReceiver<C, D, S>) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<
+        C: CentroidLike + Default + Send,
+        D: DeconvolutedCentroidLike + Default + Send,
+        S: SpectrumLike<C, D> + Send,
+    > From<Receiver<S>> for StreamingSpectrumIterator<C, D, S, SpectrumReceiver<C, D, S>>
+{
+    fn from(value: Receiver<S>) -> Self {
+        Self::new(value.into())
+    }
 }
 
 impl<
@@ -624,7 +651,6 @@ impl<
     }
 }
 
-
 /// If the underlying iterator implements [`MSDataFileMetadata`] then [`StreamingSpectrumIterator`] will
 /// forward that implementation, assuming it is available.
 impl<
@@ -632,9 +658,131 @@ impl<
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D>,
         I: Iterator<Item = S>,
-    > MSDataFileMetadata for StreamingSpectrumIterator<C, D, S, I> where I: MSDataFileMetadata {
-
+    > MSDataFileMetadata for StreamingSpectrumIterator<C, D, S, I>
+where
+    I: MSDataFileMetadata,
+{
     crate::delegate_impl_metadata_trait!(source);
+}
+
+/// An in-memory communication, non-rewindable channel carrying spectra
+/// with associated metadata.
+///
+/// This type is meant to be wrapped in a [`StreamingSpectrumIterator`] for
+/// compatibility with other interfaces.
+pub struct SpectrumReceiver<
+    C: CentroidLike + Default + Send,
+    D: DeconvolutedCentroidLike + Default + Send,
+    S: SpectrumLike<C, D> + Send,
+> {
+    receiver: Receiver<S>,
+
+    pub(crate) file_description: FileDescription,
+    /// A mapping of different instrument configurations (source, analyzer, detector) components
+    /// by ID string.
+    pub(crate) instrument_configurations: HashMap<u32, InstrumentConfiguration>,
+    /// The different software components that were involved in the processing and creation of this
+    /// file.
+    pub(crate) softwares: Vec<Software>,
+    /// The data processing and signal transformation operations performed on the raw data in previous
+    /// source files to produce this file's contents.
+    pub(crate) data_processings: Vec<DataProcessing>,
+    // SpectrumList attributes
+    pub(crate) run: MassSpectrometryRun,
+    num_spectra: Option<u64>,
+    _c: PhantomData<C>,
+    _d: PhantomData<D>,
+}
+
+impl<
+        C: CentroidLike + Default + Send,
+        D: DeconvolutedCentroidLike + Default + Send,
+        S: SpectrumLike<C, D> + Send,
+    > Iterator for SpectrumReceiver<C, D, S>
+{
+    type Item = S;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.receiver.recv() {
+            Ok(s) => Some(s),
+            Err(e) => {
+                log::warn!("Failed to receive spectrum: {}", e);
+                None
+            }
+        }
+    }
+}
+
+impl<
+        C: CentroidLike + Default + Send,
+        D: DeconvolutedCentroidLike + Default + Send,
+        S: SpectrumLike<C, D> + Send,
+    > From<Receiver<S>> for SpectrumReceiver<C, D, S>
+{
+    fn from(value: Receiver<S>) -> Self {
+        Self {
+            receiver: value,
+            file_description: Default::default(),
+            instrument_configurations: Default::default(),
+            softwares: Default::default(),
+            data_processings: Default::default(),
+            run: Default::default(),
+            num_spectra: Default::default(),
+            _c: PhantomData,
+            _d: PhantomData,
+        }
+    }
+}
+
+impl<
+        C: CentroidLike + Default + Send,
+        D: DeconvolutedCentroidLike + Default + Send,
+        S: SpectrumLike<C, D> + Send,
+    > MSDataFileMetadata for SpectrumReceiver<C, D, S>
+{
+    crate::impl_metadata_trait!();
+
+    fn spectrum_count_hint(&self) -> Option<u64> {
+        self.num_spectra
+    }
+
+    fn run_description(&self) -> Option<&MassSpectrometryRun> {
+        Some(&self.run)
+    }
+
+    fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
+        Some(&mut self.run)
+    }
+}
+
+impl<
+        C: CentroidLike + Default + Send,
+        D: DeconvolutedCentroidLike + Default + Send,
+        S: SpectrumLike<C, D> + Send,
+    > SpectrumReceiver<C, D, S>
+{
+    #[allow(unused)]
+    pub fn new(
+        receiver: Receiver<S>,
+        file_description: FileDescription,
+        instrument_configurations: HashMap<u32, InstrumentConfiguration>,
+        softwares: Vec<Software>,
+        data_processings: Vec<DataProcessing>,
+        run: MassSpectrometryRun,
+        num_spectra: Option<u64>,
+    ) -> Self {
+        Self {
+            receiver,
+            file_description,
+            instrument_configurations,
+            softwares,
+            data_processings,
+            run,
+            num_spectra,
+            _c: PhantomData,
+            _d: PhantomData,
+        }
+    }
 }
 
 /// An abstraction over [`SpectrumGroup`](crate::spectrum::SpectrumGroup)'s interface.
@@ -686,10 +834,7 @@ pub trait SpectrumGrouping<
 
     /// The lowest MS level in the group
     fn lowest_ms_level(&self) -> Option<u8> {
-        let prec_level = self
-            .precursor()
-            .map(|p| p.ms_level())
-            .unwrap_or(u8::MAX);
+        let prec_level = self.precursor().map(|p| p.ms_level()).unwrap_or(u8::MAX);
         let val = self
             .products()
             .iter()
@@ -735,7 +880,6 @@ pub trait RandomAccessSpectrumGroupingIterator<
     fn start_from_time(&mut self, time: f64) -> Result<&Self, SpectrumAccessError>;
     fn reset_state(&mut self);
 }
-
 
 /// A collection of spectra held in memory but providing an interface
 /// identical to a data file. This structure owns its data, so in order
@@ -885,6 +1029,9 @@ pub trait ScanWriter<
     /// Write out a single spectrum
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize>;
 
+    /// Write out a single owned spectrum.
+    ///
+    /// This may produce fewer copies for some implementations.
     fn write_owned<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: S) -> io::Result<usize> {
         self.write(&spectrum)
     }
@@ -919,7 +1066,13 @@ pub trait ScanWriter<
         Ok(n)
     }
 
-    fn write_group_owned<S: SpectrumLike<C, D> + 'static, G: SpectrumGrouping<C, D, S> + 'static>(
+    /// Write an owned [`SpectrumGroup`](crate::spectrum::SpectrumGroup) out in order
+    ///
+    /// This may produce fewer copies for some implementations.
+    fn write_group_owned<
+        S: SpectrumLike<C, D> + 'static,
+        G: SpectrumGrouping<C, D, S> + 'static,
+    >(
         &mut self,
         group: G,
     ) -> io::Result<usize> {

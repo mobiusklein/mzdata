@@ -1,40 +1,36 @@
 use std::fs;
-use std::io;
-use std::io::BufReader;
-use std::path;
+use std::io::{self, prelude::*, BufReader};
+use std::path::{self, Path, PathBuf};
+use std::sync::mpsc::{Sender, SyncSender};
 
-use std::io::prelude::*;
-use std::path::PathBuf;
 
-use crate::spectrum::bindata::{BuildArrayMapFrom, BuildFromArrayMap};
-use crate::MGFReader;
-use crate::MzMLReader;
 use flate2::{bufread::GzDecoder, write::GzEncoder};
-use mzpeaks::CentroidLike;
-use mzpeaks::CentroidPeak;
-use mzpeaks::DeconvolutedCentroidLike;
-use mzpeaks::DeconvolutedPeak;
+use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 
+use crate::io::PreBufferedStream;
 #[cfg(feature = "mzmlb")]
 pub use crate::{
     io::mzmlb::{MzMLbReaderType, MzMLbWriterBuilder},
     MzMLbReader,
 };
 
-use crate::io::compression::{is_gzipped, is_gzipped_extension};
+use crate::io::compression::{is_gzipped, is_gzipped_extension, RestartableGzDecoder};
 use crate::io::mgf::{is_mgf, MGFReaderType, MGFWriterType};
 use crate::io::mzml::{is_mzml, MzMLReaderType, MzMLWriterType};
 use crate::io::traits::{RandomAccessSpectrumIterator, ScanSource, ScanWriter};
 use crate::meta::MSDataFileMetadata;
+use crate::spectrum::bindata::{BuildArrayMapFrom, BuildFromArrayMap};
+use crate::spectrum::MultiLayerSpectrum;
+use crate::{MGFReader, MzMLReader};
 
 #[cfg(feature = "thermorawfilereader")]
 use super::thermo::{ThermoRawReader, ThermoRawReaderType, is_thermo_raw_prefix};
 
-use super::RestartableGzDecoder;
-use super::StreamingSpectrumIterator;
+use super::traits::{SeekRead, SpectrumReceiver, StreamingSpectrumIterator};
 
 /// Mass spectrometry file formats that [`mzdata`](crate)
 /// supports
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MassSpectrometryFormat {
     MGF,
@@ -166,91 +162,251 @@ pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<Box<dyn ScanSour
     }
 }
 
+
+/// An abstraction over different ways to get a [`ScanSource`] from a file path,
+/// buffer, or pipe.
+pub enum Source<C: CentroidLike
+        + Default
+        + From<CentroidPeak>
+        + BuildArrayMapFrom
+        + BuildFromArrayMap
+        + Clone
+        + 'static
+        + Sync
+        + Send=CentroidPeak,
+        D: DeconvolutedCentroidLike
+        + Default
+        + From<DeconvolutedPeak>
+        + BuildArrayMapFrom
+        + BuildFromArrayMap
+        + Clone
+        + Sync
+        + 'static
+        + Send=DeconvolutedPeak> {
+    /// A concrete path on the file system
+    PathLike(PathBuf),
+    /// An in-memory channel of existing spectra
+    Receiver(SpectrumReceiver<C, D, MultiLayerSpectrum<C, D>>),
+    /// Read from Stdin
+    Stdin,
+    /// A thing implementing [`std::io::Read `] and [`std::io::Seek`], along with an expected format
+    Reader(Box<dyn SeekRead + Send>, MassSpectrometryFormat)
+}
+
+impl<P: AsRef<Path>,
+     C: CentroidLike + Default + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
+     D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<P> for Source<C, D> {
+    fn from(value: P) -> Self {
+        Self::PathLike(value.as_ref().into())
+    }
+}
+
+
+/// An abstraction over places to write spectra
+pub enum Sink<C: CentroidLike
+        + Default
+        + From<CentroidPeak>
+        + BuildArrayMapFrom
+        + BuildFromArrayMap
+        + Clone
+        + 'static
+        + Sync
+        + Send=CentroidPeak,
+        D: DeconvolutedCentroidLike
+        + Default
+        + From<DeconvolutedPeak>
+        + BuildArrayMapFrom
+        + BuildFromArrayMap
+        + Clone
+        + Sync
+        + 'static
+        + Send=DeconvolutedPeak> {
+    /// A concrete path on the file system
+    PathLike(PathBuf),
+    /// An in-memory channel for spectra
+    Sender(Sender<MultiLayerSpectrum<C, D>>),
+    /// An in-memory channel for spectra
+    SyncSender(SyncSender<MultiLayerSpectrum<C, D>>),
+    /// A thing implementing [`std::io::Write `], along with an expected format
+    Writer(Box<dyn io::Write + Send>, MassSpectrometryFormat)
+}
+
+impl<P: AsRef<Path>,
+     C: CentroidLike + Default + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
+     D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<P> for Sink<C, D> {
+    fn from(value: P) -> Self {
+        Self::PathLike(value.as_ref().into())
+    }
+}
+
+
 pub trait MassSpectrometryReadWriteProcess<
     C: CentroidLike
         + Default
         + From<CentroidPeak>
         + BuildArrayMapFrom
         + BuildFromArrayMap
+        + Clone
         + 'static
+        + Sync
         + Send=CentroidPeak,
     D: DeconvolutedCentroidLike
         + Default
         + From<DeconvolutedPeak>
         + BuildArrayMapFrom
         + BuildFromArrayMap
+        + Clone
+        + Sync
         + 'static
         + Send=DeconvolutedPeak,
 >
 {
     type ErrorType: From<io::Error>;
 
-    fn open_reader<P: Into<path::PathBuf>, Q: Into<path::PathBuf>>(
+    fn open_reader<P: Into<Source<C, D>>, Q: Into<Sink<C, D>>>(
         &self,
         read_path: P,
         write_path: Q,
     ) -> Result<(), Self::ErrorType> {
         let read_path = read_path.into();
-        let (format, is_gzipped) = infer_format(read_path.clone())?;
-        {
-            match format {
-                MassSpectrometryFormat::MGF => {
-                    let handle = fs::File::open(read_path)?;
-                    if is_gzipped {
-                        let fh = RestartableGzDecoder::new(io::BufReader::new(handle));
-                        let reader = StreamingSpectrumIterator::new(MGFReaderType::new(fh));
+        match read_path {
+            Source::PathLike(read_path) => {
+                let (format, is_gzipped) = infer_format(&read_path)?;
+                match format {
+                    MassSpectrometryFormat::MGF => {
+                        let handle = fs::File::open(read_path)?;
+                        if is_gzipped {
+                            let fh = RestartableGzDecoder::new(io::BufReader::new(handle));
+                            let reader = StreamingSpectrumIterator::new(MGFReaderType::new(fh));
+                            let reader = self.transform_reader(reader, format)?;
+                            self.open_writer(reader, format, write_path)?;
+                        } else {
+                            let reader = MGFReaderType::new_indexed(handle);
+                            let reader = self.transform_reader(reader, format)?;
+                            self.open_writer(reader, format, write_path)?;
+                        };
+                        Ok(())
+                    }
+                    MassSpectrometryFormat::MzML => {
+                        let handle = fs::File::open(read_path)?;
+
+                        if is_gzipped {
+                            let fh = RestartableGzDecoder::new(io::BufReader::new(handle));
+                            let reader = StreamingSpectrumIterator::new(MzMLReaderType::new(fh));
+                            let reader = self.transform_reader(reader, format)?;
+                            self.open_writer(reader, format, write_path)?;
+                        } else {
+                            let reader = MzMLReaderType::new_indexed(handle);
+                            let reader = self.transform_reader(reader, format)?;
+                            self.open_writer(reader, format, write_path)?;
+                        };
+                        Ok(())
+                    }
+                    #[cfg(feature = "mzmlb")]
+                    MassSpectrometryFormat::MzMLb => {
+                        let reader = MzMLbReaderType::new(&read_path)?;
                         let reader = self.transform_reader(reader, format)?;
                         self.open_writer(reader, format, write_path)?;
-                    } else {
+                        Ok(())
+                    },
+                    #[cfg(feature = "thermorawfilereader")]
+                    MassSpectrometryFormat::ThermoRaw => {
+                        let reader = ThermoRawReaderType::new(&read_path)?;
+                        let reader = self.transform_reader(reader, format)?;
+                        self.open_writer(reader, format, write_path)?;
+                        Ok(())
+                    },
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        format!(
+                            "Input file format for {} not supported",
+                            read_path.display()
+                        ),
+                    )
+                    .into()),
+                }
+            },
+            Source::Reader(handle, format) => {
+                match format {
+                    MassSpectrometryFormat::MGF => {
+                        let handle = io::BufReader::new(handle);
                         let reader = MGFReaderType::new_indexed(handle);
                         let reader = self.transform_reader(reader, format)?;
                         self.open_writer(reader, format, write_path)?;
-                    };
-                    Ok(())
-                }
-                MassSpectrometryFormat::MzML => {
-                    let handle = fs::File::open(read_path)?;
+                        Ok(())
+                    },
+                    MassSpectrometryFormat::MzML => {
+                        let handle = io::BufReader::new(handle);
 
-                    if is_gzipped {
-                        let fh = RestartableGzDecoder::new(io::BufReader::new(handle));
-                        let reader = StreamingSpectrumIterator::new(MzMLReaderType::new(fh));
-                        let reader = self.transform_reader(reader, format)?;
-                        self.open_writer(reader, format, write_path)?;
-                    } else {
                         let reader = MzMLReaderType::new_indexed(handle);
                         let reader = self.transform_reader(reader, format)?;
                         self.open_writer(reader, format, write_path)?;
-                    };
-                    Ok(())
+
+                        Ok(())
+                    },
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        format!(
+                            "Input file format for {:?} not supported",
+                            format
+                        ),
+                    )
+                    .into()),
                 }
-                #[cfg(feature = "mzmlb")]
-                MassSpectrometryFormat::MzMLb => {
-                    let reader = MzMLbReaderType::new(&read_path)?;
-                    let reader = self.transform_reader(reader, format)?;
-                    self.open_writer(reader, format, write_path)?;
-                    Ok(())
-                },
-                #[cfg(feature = "thermorawfilereader")]
-                MassSpectrometryFormat::ThermoRaw => {
-                    let reader = ThermoRawReaderType::new(&read_path)?;
-                    let reader = self.transform_reader(reader, format)?;
-                    self.open_writer(reader, format, write_path)?;
-                    Ok(())
-                },
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    format!(
-                        "Input file format for {} not supported",
-                        read_path.display()
-                    ),
-                )
-                .into()),
-            }
+            },
+            Source::Receiver(receiver) => {
+                let reader = StreamingSpectrumIterator::new(receiver);
+                let reader = self.transform_reader(reader, MassSpectrometryFormat::Unknown)?;
+                self.open_writer(reader, MassSpectrometryFormat::Unknown, write_path)?;
+                Ok(())
+            },
+            Source::Stdin => {
+                let mut buffered =
+                    PreBufferedStream::new_with_buffer_size(io::stdin(), 2usize.pow(20))?;
+                let (ms_format, compressed) = infer_from_stream(&mut buffered)?;
+                log::debug!("Detected {ms_format:?} from STDIN (compressed? {compressed})");
+                match ms_format {
+                    MassSpectrometryFormat::MGF => {
+                        if compressed {
+                            let reader = StreamingSpectrumIterator::new(MGFReaderType::new(
+                                RestartableGzDecoder::new(io::BufReader::new(buffered)),
+                            ));
+                            let reader = self.transform_reader(reader, ms_format)?;
+                            self.open_writer(reader, ms_format, write_path)?;
+                        } else {
+                            let reader = StreamingSpectrumIterator::new(MGFReaderType::new(buffered));
+                            let reader = self.transform_reader(reader, ms_format)?;
+                            self.open_writer(reader, ms_format, write_path)?;
+                        }
+                        Ok(())
+                    }
+                    MassSpectrometryFormat::MzML => {
+                        if compressed {
+                            let reader = StreamingSpectrumIterator::new(MzMLReaderType::new(
+                                RestartableGzDecoder::new(io::BufReader::new(buffered)),
+                            ));
+                            let reader = self.transform_reader(reader, ms_format)?;
+                            self.open_writer(reader, ms_format, write_path)?;
+                        } else {
+                            let reader = StreamingSpectrumIterator::new(MzMLReaderType::new(buffered));
+                            let reader = self.transform_reader(reader, ms_format)?;
+                            self.open_writer(reader, ms_format, write_path)?;
+                        }
+                        Ok(())
+                    }
+                    _ => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Unsupported,
+                            "{ms_format:?} format is not supported over Stdin",
+                        ).into())
+                    }
+                }
+            },
         }
     }
 
     fn open_writer<
-        Q: Into<path::PathBuf>,
+        Q: Into<Sink<C, D>>,
         R: RandomAccessSpectrumIterator<C, D> + MSDataFileMetadata + ScanSource<C, D> + Send + 'static,
     >(
         &self,
@@ -258,72 +414,120 @@ pub trait MassSpectrometryReadWriteProcess<
         reader_format: MassSpectrometryFormat,
         write_path: Q,
     ) -> Result<(), Self::ErrorType> {
-        let write_path: PathBuf = write_path.into();
-        let (writer_format, is_gzip) = infer_from_path(&write_path);
-        match writer_format {
-            MassSpectrometryFormat::MGF => {
-                let handle = io::BufWriter::new(fs::File::create(&write_path)?);
-                if is_gzip {
-                    let handle = GzEncoder::new(handle, flate2::Compression::best());
-                    let mut writer = MGFWriterType::new(
-                        handle,
-                    );
-                    writer.copy_metadata_from(&reader);
-                    let (reader, writer) =
-                        self.transform_writer(reader, reader_format, writer, writer_format)?;
-                    self.task(reader, writer)?;
-                } else {
-                    let mut writer = MGFWriterType::new(
-                        handle,
-                    );
-                    writer.copy_metadata_from(&reader);
-                    let (reader, writer) =
-                        self.transform_writer(reader, reader_format, writer, writer_format)?;
-                    self.task(reader, writer)?;
+        let write_path = write_path.into();
+
+        match write_path {
+            Sink::Sender(writer) =>  {
+                return self.task(reader, writer)
+            },
+            Sink::SyncSender(writer) => {
+                return self.task(reader, writer)
+            },
+            Sink::PathLike(write_path) => {
+                let (writer_format, is_gzip) = infer_from_path(&write_path);
+                match writer_format {
+                    MassSpectrometryFormat::MGF => {
+                        let handle = io::BufWriter::new(fs::File::create(&write_path)?);
+                        if is_gzip {
+                            let handle = GzEncoder::new(handle, flate2::Compression::best());
+                            let mut writer = MGFWriterType::new(
+                                handle,
+                            );
+                            writer.copy_metadata_from(&reader);
+                            let (reader, writer) =
+                                self.transform_writer(reader, reader_format, writer, writer_format)?;
+                            self.task(reader, writer)?;
+                        } else {
+                            let mut writer = MGFWriterType::new(
+                                handle,
+                            );
+                            writer.copy_metadata_from(&reader);
+                            let (reader, writer) =
+                                self.transform_writer(reader, reader_format, writer, writer_format)?;
+                            self.task(reader, writer)?;
+                        }
+                        Ok(())
+                    }
+                    MassSpectrometryFormat::MzML => {
+                        let handle = io::BufWriter::new(fs::File::create(&write_path)?);
+                        if is_gzip {
+                            let handle = GzEncoder::new(handle, flate2::Compression::best());
+                            let mut writer = MzMLWriterType::new(
+                                handle,
+                            );
+                            writer.copy_metadata_from(&reader);
+                            let (reader, writer) =
+                                self.transform_writer(reader, reader_format, writer, writer_format)?;
+                            self.task(reader, writer)?;
+                        } else {
+                            let mut writer = MzMLWriterType::new(
+                                handle,
+                            );
+                            writer.copy_metadata_from(&reader);
+                            let (reader, writer) =
+                                self.transform_writer(reader, reader_format, writer, writer_format)?;
+                            self.task(reader, writer)?;
+                        }
+                        Ok(())
+                    }
+                    #[cfg(feature = "mzmlb")]
+                    MassSpectrometryFormat::MzMLb => {
+                        let mut writer = MzMLbWriterBuilder::<C, D>::new(&write_path)
+                            .with_zlib_compression(9)
+                            .create()?;
+                        writer.copy_metadata_from(&reader);
+                        let (reader, writer) =
+                            self.transform_writer(reader, reader_format, writer, writer_format)?;
+                        self.task(reader, writer)?;
+                        Ok(())
+                    }
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        format!(
+                            "Output file format for {} not supported",
+                            write_path.display()
+                        ),
+                    )
+                    .into()),
                 }
-                Ok(())
-            }
-            MassSpectrometryFormat::MzML => {
-                let handle = io::BufWriter::new(fs::File::create(&write_path)?);
-                if is_gzip {
-                    let handle = GzEncoder::new(handle, flate2::Compression::best());
-                    let mut writer = MzMLWriterType::new(
-                        handle,
-                    );
-                    writer.copy_metadata_from(&reader);
-                    let (reader, writer) =
-                        self.transform_writer(reader, reader_format, writer, writer_format)?;
-                    self.task(reader, writer)?;
-                } else {
-                    let mut writer = MzMLWriterType::new(
-                        handle,
-                    );
-                    writer.copy_metadata_from(&reader);
-                    let (reader, writer) =
-                        self.transform_writer(reader, reader_format, writer, writer_format)?;
-                    self.task(reader, writer)?;
+            },
+            Sink::Writer(handle, writer_format) => {
+                match writer_format {
+                    MassSpectrometryFormat::MGF => {
+                        let handle = io::BufWriter::new(handle);
+                        let mut writer = MGFWriterType::new(
+                            handle,
+                        );
+                        writer.copy_metadata_from(&reader);
+                        let (reader, writer) =
+                            self.transform_writer(reader, reader_format, writer, writer_format)?;
+                        self.task(reader, writer)?;
+
+                        Ok(())
+                    }
+                    MassSpectrometryFormat::MzML => {
+                        let handle = io::BufWriter::new(handle);
+                        let mut writer = MzMLWriterType::new(
+                            handle,
+                        );
+                        writer.copy_metadata_from(&reader);
+                        let (reader, writer) =
+                            self.transform_writer(reader, reader_format, writer, writer_format)?;
+                        self.task(reader, writer)?;
+                        Ok(())
+                    }
+                    _ => {
+                        Err(io::Error::new(
+                                io::ErrorKind::Unsupported,
+                                format!(
+                                    "Output file format for {:?} not supported",
+                                    writer_format
+                                ),
+                            )
+                            .into())
+                    }
                 }
-                Ok(())
             }
-            #[cfg(feature = "mzmlb")]
-            MassSpectrometryFormat::MzMLb => {
-                let mut writer = MzMLbWriterBuilder::<C, D>::new(&write_path)
-                    .with_zlib_compression(9)
-                    .create()?;
-                writer.copy_metadata_from(&reader);
-                let (reader, writer) =
-                    self.transform_writer(reader, reader_format, writer, writer_format)?;
-                self.task(reader, writer)?;
-                Ok(())
-            }
-            _ => Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                format!(
-                    "Output file format for {} not supported",
-                    write_path.display()
-                ),
-            )
-            .into()),
         }
     }
 

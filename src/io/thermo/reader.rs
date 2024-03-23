@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs, io, marker::PhantomData, mem, path::PathBuf};
 
 use crate::{
-    io::{OffsetIndex, DetailLevel},
+    io::{DetailLevel, OffsetIndex},
     meta::{
         Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration,
         Software, SourceFile,
@@ -28,7 +28,9 @@ use thermorawfilereader::{
 };
 
 #[allow(unused)]
-use super::instruments::{parse_instrument_model, InstrumentModelType, Detector, instrument_model_to_detector};
+use super::instruments::{
+    instrument_model_to_detector, parse_instrument_model, Detector, InstrumentModelType,
+};
 
 macro_rules! param {
     ($name:expr, $acc:expr) => {
@@ -90,8 +92,11 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
     }
 
     #[allow(unused)]
-    fn open_file(source: std::fs::File) -> Self {
-        panic!("Cannot read a Thermo RAW file from an open file handle, only directly from a path")
+    fn open_file(source: std::fs::File) -> io::Result<Self> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Cannot read a Thermo RAW file from an open file handle, only directly from a path",
+        ))
     }
 
     fn open_path<P>(path: P) -> io::Result<Self>
@@ -316,13 +321,20 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 
     /// Create a new [`ThermoRawReaderType`] from a path.
     /// This may trigger an expensive I/O operation to checksum the file
-    pub fn new_with_detail_level_and_centroiding<P: Into<PathBuf>>(path: P, mut detail_level: DetailLevel, centroiding: bool) -> io::Result<Self> {
+    pub fn new_with_detail_level_and_centroiding<P: Into<PathBuf>>(
+        path: P,
+        mut detail_level: DetailLevel,
+        centroiding: bool,
+    ) -> io::Result<Self> {
         let path: PathBuf = path.into();
         let mut handle = RawFileReader::open(&path)?;
         handle.set_centroid_spectra(centroiding);
 
         if matches!(detail_level, DetailLevel::Lazy) {
-            log::warn!("ThermoRawReader does not support lazy loading. Using {:?}", DetailLevel::Full);
+            log::warn!(
+                "ThermoRawReader does not support lazy loading. Using {:?}",
+                DetailLevel::Full
+            );
             detail_level = DetailLevel::Full
         }
 
@@ -717,8 +729,14 @@ mod test {
             "b43e9286b40e8b5dbc0dfa2e428495769ca96a96"
         );
 
-        assert!(reader.file_description().get_param_by_accession("MS:1000579").is_some());
-        assert!(reader.file_description().get_param_by_accession("MS:1000580").is_some());
+        assert!(reader
+            .file_description()
+            .get_param_by_accession("MS:1000579")
+            .is_some());
+        assert!(reader
+            .file_description()
+            .get_param_by_accession("MS:1000580")
+            .is_some());
 
         let confs = reader.instrument_configurations();
         assert_eq!(confs.len(), 2);
@@ -727,7 +745,10 @@ mod test {
         assert_eq!(conf.id, 0);
         assert_eq!(conf.components.len(), 3);
         assert_eq!(conf.software_reference, "thermo_xcalibur");
-        assert_eq!(conf.get_param_by_accession("MS:1000448").unwrap().name(), "LTQ FT");
+        assert_eq!(
+            conf.get_param_by_accession("MS:1000448").unwrap().name(),
+            "LTQ FT"
+        );
         Ok(())
     }
 
@@ -762,10 +783,7 @@ mod test {
                     pr.ion().mz(),
                     ps.ion().mz() - pr.ion().mz()
                 );
-                assert_eq!(
-                    ps.ion().charge,
-                    pr.ion().charge
-                );
+                assert_eq!(ps.ion().charge, pr.ion().charge);
             }
         });
 
@@ -776,13 +794,23 @@ mod test {
         let ar1 = r1.raw_arrays().unwrap();
 
         assert_eq!(as1.mzs().unwrap().len(), ar1.mzs().unwrap().len());
-        as1.mzs().unwrap().iter().enumerate().zip(ar1.mzs().unwrap().iter()).for_each(|((i, s), r)|{
-            assert!((s - r).abs() < 1e-3, "[{i}]{s} - {r} = {}", s - r);
-        });
+        as1.mzs()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .zip(ar1.mzs().unwrap().iter())
+            .for_each(|((i, s), r)| {
+                assert!((s - r).abs() < 1e-3, "[{i}]{s} - {r} = {}", s - r);
+            });
         assert_eq!(as1.intensities().unwrap().len(), as1.mzs().unwrap().len());
-        as1.intensities().unwrap().iter().enumerate().zip(ar1.intensities().unwrap().iter()).for_each(|((i, s), r)|{
-            assert!((s - r).abs() < 1e-3, "[{i}]{s} - {r} = {}", s - r);
-        });
+        as1.intensities()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .zip(ar1.intensities().unwrap().iter())
+            .for_each(|((i, s), r)| {
+                assert!((s - r).abs() < 1e-3, "[{i}]{s} - {r} = {}", s - r);
+            });
         Ok(())
     }
 

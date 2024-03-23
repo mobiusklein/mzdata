@@ -134,7 +134,7 @@ impl MZConvert {
 
         let writer_handle = thread::spawn(move || {
             for s in recv.iter() {
-                writer.write(&s).unwrap();
+                writer.write_owned(s).unwrap();
             }
             writer.close().unwrap();
         });
