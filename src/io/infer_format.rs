@@ -1098,8 +1098,10 @@ mod test {
 
     #[test]
     fn test_mz_write() -> io::Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+        let path = tmpdir.path().join("test.mzML");
         mz_read!("./test/data/small.mzML".as_ref(), reader => {
-            mz_write!("./tmp/test.mzML".as_ref(), writer => {
+            mz_write!(path.as_ref(), writer => {
                 writer.copy_metadata_from(&reader);
                 for s in reader {
                     writer.write_owned(s)?;
