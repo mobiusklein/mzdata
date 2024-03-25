@@ -18,7 +18,7 @@ use crate::prelude::*;
 
 use super::super::offset_index::OffsetIndex;
 use super::super::traits::{
-    MZFileReader, RandomAccessSpectrumIterator, ScanSource, SeekRead, SpectrumAccessError,
+    MZFileReader, RandomAccessSpectrumIterator, SpectrumSource, SeekRead, SpectrumAccessError,
 };
 use super::reading_shared::EntryType;
 
@@ -1537,7 +1537,7 @@ impl<
         R: SeekRead,
         C: CentroidPeakAdapting + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > ScanSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+    > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {

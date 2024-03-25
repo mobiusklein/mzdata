@@ -3,7 +3,7 @@
 Implements a parser for the mzMLb file format
 for representing raw and processed mass spectra, providing a
 [`RandomAccessSpectrumIterator`](crate::io::traits::RandomAccessSpectrumIterator)
-interface for reading, and [`ScanWriter`](crate::io::traits::ScanWriter)
+interface for reading, and [`SpectrumWriter`](crate::io::traits::SpectrumWriter)
 interface for writing.
 
 The mzMLb format embeds a variant of the mzML format within an HDF5 file, storing

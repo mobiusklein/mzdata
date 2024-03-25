@@ -23,7 +23,7 @@ use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, Deconvoluted
 use quick_xml::events::{BytesStart, Event};
 use thiserror::Error;
 
-use crate::io::traits::ScanWriter;
+use crate::io::traits::SpectrumWriter;
 use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software,
 };
@@ -124,7 +124,7 @@ where
         self.mzml_writer.softwares_mut()
     }
 
-    fn copy_metadata_from<T: MSDataFileMetadata>(&mut self, source: &T) {
+    fn copy_metadata_from(&mut self, source: &impl MSDataFileMetadata) {
         self.mzml_writer.copy_metadata_from(source)
     }
 
@@ -382,7 +382,7 @@ impl io::Write for ByteWriter {
 
 pub type WriterResult = Result<(), MzMLbWriterError>;
 
-impl<'a, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> ScanWriter<C, D>
+impl<'a, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> SpectrumWriter<C, D>
     for MzMLbWriterType<C, D>
 where
     C: BuildArrayMapFrom,

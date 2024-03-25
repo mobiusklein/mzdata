@@ -14,7 +14,7 @@ use quick_xml::Error as XMLError;
 use quick_xml::Writer;
 
 use super::super::offset_index::OffsetIndex;
-use super::super::traits::ScanWriter;
+use super::super::traits::SpectrumWriter;
 use super::super::utils::MD5HashingStream;
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
@@ -436,7 +436,7 @@ pub struct MzMLWriterType<
 }
 
 impl<'a, W: Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom>
-    ScanWriter<C, D> for MzMLWriterType<W, C, D>
+    SpectrumWriter<C, D> for MzMLWriterType<W, C, D>
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
         match self.write_spectrum(spectrum) {
@@ -466,7 +466,7 @@ impl<W: Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCen
 {
     crate::impl_metadata_trait!();
 
-    fn copy_metadata_from<T: MSDataFileMetadata>(&mut self, source: &T) {
+    fn copy_metadata_from(&mut self, source: &impl MSDataFileMetadata) {
         *self.data_processings_mut() = source.data_processings().clone();
         *self.instrument_configurations_mut() = source.instrument_configurations().clone();
         *self.file_description_mut() = source.file_description().clone();
@@ -658,6 +658,12 @@ where
             attrib!("name", sf.name, tag);
             attrib!("location", sf.location, tag);
             self.handle.write_event(Event::Start(tag.borrow()))?;
+            if let Some(param) = sf.file_format.as_ref() {
+                self.handle.write_param(param)?
+            }
+            if let Some(param) = sf.id_format.as_ref() {
+                self.handle.write_param(param)?
+            }
             for param in sf.params() {
                 self.handle.write_param(param)?
             }

@@ -1,6 +1,6 @@
 use std::fs;
 use mzdata::prelude::*;
-use mzpeaks::{Tolerance, prelude::*};
+use mzpeaks::Tolerance;
 use mzdata::io::MzMLReader;
 use mzdata::spectrum::SignalContinuity;
 

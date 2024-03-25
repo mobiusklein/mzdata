@@ -10,11 +10,24 @@ and this project adheres to [Semantic Versioning].
 ### Added
 - `MGFReaderType` and `MGFWriterType` implement `MSDataFileMetadata`
 - `ThermoRawFileReader` has been added to read Thermo RAW files when the .NET 8 runtime is available, using [`thermorawfilereader`](https://crates.io/crates/thermorawfilereader/0.2.1)
+- `Source` and `Sink` algebraic types to represent things that spectra can be read from or written to.
+- `mz_read` and `mz_write` are macros to open files for reading and writing in unboxed context, but which
+  only live within a scoped closure.
+- `MassSpectrometryReadWriteProcess` trait for orchestrating reading from a `Source`, writing to a `Sink`, and transforming the
+  data through an arbitrary function specified as part of the trait implementation. Like `mz_read`/`mz_write`, the scope enclosed
+  by the trait method.
 
 ### Changed
 - `MGFWriterType` now generates a spectrum title when one is absent, rather than defaulting to
   the spectrum's native ID.
 - `CURIE` can now be compared to `Param`
+- Renamed `ScanWriter` to `SpectrumWriter` and `ScanSource` to `SpectrumSource` for consistency with other trait naming conventions.
+- `MZFileReader::open_file` now returns an `io::Result` in keeping with the idea that reading a `File` might fail as well,
+  even if it is already open, because it is the wrong type of file. This also allows file formats that cannot be read from
+  arbitrary `io::Read` objects to signal failure without crashing the whole system.
+- `Collator`, `std::sync::mpsc::{Sender, SyncSender}` now implement `SpectrumWriter` when properly parameterized.
+- `PeakDataLevel` has been refactored into two types, `PeakDataLevel` is an owning type and `RefPeakDataLevel`
+  is a borrowing type.
 
 ### Deprecated
 
@@ -28,7 +41,7 @@ and this project adheres to [Semantic Versioning].
 ## [0.12.0] - 2024-01-29
 
 ### Changed
-- Require a newer version of `mzsignal`, fixing the rather embarassing error of swapping FWHM
+- Require a newer version of `mzsignal`, fixing the rather embarrassing error of swapping FWHM
   and SNR during peak picking.
 - Thicken the use of internal abstraction around `PrecursorSelection` for the future of allowing
   more than one `SelectedIon` per `Precursor`.
@@ -58,7 +71,7 @@ and this project adheres to [Semantic Versioning].
 ## [0.8.0] - 2024-01-10
 
 ### Added
-- Added `close` to the `ScanWriter` trait which "closes" the formatted structure of the file. As Rust lacks a notion of a "closed"
+- Added `close` to the `SpectrumWriter` trait which "closes" the formatted structure of the file. As Rust lacks a notion of a "closed"
   `io::Write`, the underlying writer isn't actually "closed" until the whole struct is dropped.
 - Added `Drop` implementation for `MzMLWriterType` and `MzMLbWriterType` which ensures that the `close` method is called to make the
   resulting file well-formed.
@@ -72,7 +85,7 @@ and this project adheres to [Semantic Versioning].
 - `SpectrumGroupingIterator` and other such iterator support `RandomAccessSpectrumGroupingIterator`.
 
 ### Changed
-- `ScanWriter` no longer applies a lifespan requirement on individual writing operations.
+- `SpectrumWriter` no longer applies a lifespan requirement on individual writing operations.
 - `filename` is no longer a required dependency, it is only needed to use `MzMLbReaderType::from_file` which otherwise
   panics. It introduces unpredictable and difficult to diagnose compilation errors.
 - `MGFWriterType` skips MS1 spectra automatically.
@@ -103,7 +116,7 @@ and this project adheres to [Semantic Versioning].
 - Make some window size attributes smaller as they do not require double precision.
 - Clean up the internal implementation of the various internal `SpectrumBuilder` types.
 - Factor up `mzdata::spectrum::signal` to be less monolithic and a complete redesign of the traits used to convert `mzpeaks` to and from binary arrays.
-- Massive refactoring of `mzdata::io::traits` to make more traits depend upon `ScanSource` instead of `SpectrumIterator` and to make things slightly less verbose.
+- Massive refactoring of `mzdata::io::traits` to make more traits depend upon `SpectrumSource` instead of `SpectrumIterator` and to make things slightly less verbose.
 - Switched the default `mzsignal` backend to `nalgebra` instead of `intel-mkl` for simplicity.
 
 ## [0.5.0] - 2021-09-22
@@ -112,13 +125,13 @@ and this project adheres to [Semantic Versioning].
 
 - MzML writing via `mzdata::io::mzml::MzMLWriter`
 - Added feature flags to allow the user to choose amongst more `flate2` backends (zlib _default_, zlib-ng-compat, miniz_oxide)
-- Grouped iteration mode for connecting precursor and product spectra over an iterator stream using the `groups` method of `ScanSource`.
+- Grouped iteration mode for connecting precursor and product spectra over an iterator stream using the `groups` method of `SpectrumSource`.
 
 ### Changed
 
 - Re-structuring and renaming of the various iterator mechanisms for more
   consistency. `ScanIterator` -> `SpectrumIterator`, et cetera. Minor refactoring
-  of this sort expected to come for `ScanSource` as responsibilities are worked out.
+  of this sort expected to come for `SpectrumSource` as responsibilities are worked out.
 
 ### Deprecated
 

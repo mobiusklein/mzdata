@@ -1,7 +1,7 @@
-use std::{collections::HashMap, fs, io, marker::PhantomData, mem, path::PathBuf};
+use std::{collections::HashMap, io, marker::PhantomData, mem, path::PathBuf};
 
 use crate::{
-    io::{DetailLevel, OffsetIndex},
+    io::{DetailLevel, OffsetIndex, utils::checksum_file},
     meta::{
         Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration,
         Software, SourceFile,
@@ -17,7 +17,6 @@ use crate::{
 };
 
 use mzpeaks::{peak_set::PeakSetVec, prelude::*, CentroidPeak, DeconvolutedPeak, MZ};
-use sha1::{self, Digest};
 
 use thermorawfilereader::schema::{
     IonizationMode, MassAnalyzer, Polarity, SpectrumData, SpectrumMode,
@@ -46,21 +45,6 @@ pub fn is_thermo_raw_prefix(buffer: &[u8]) -> bool {
     let view: &[u16] = unsafe { mem::transmute(&buffer[2..18]) };
     let prefix = String::from_utf16_lossy(view);
     prefix == "Finnigan"
-}
-
-fn checksum_file(path: &PathBuf) -> io::Result<String> {
-    let mut checksum = sha1::Sha1::new();
-    let mut reader = io::BufReader::new(fs::File::open(path)?);
-    let mut buf = Vec::new();
-    buf.resize(2usize.pow(20), 0);
-    while let Ok(i) = reader.read(&mut buf) {
-        if i == 0 {
-            break;
-        }
-        checksum.update(&buf[..i]);
-    }
-    let x = base16ct::lower::encode_string(&checksum.finalize());
-    Ok(x)
 }
 
 /**
@@ -301,11 +285,6 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             components_to_instrument_id
                 .insert((vconf.ionization_mode(), vconf.mass_analyzer()), i as u32);
             config.add_param(model_type.to_param());
-            config.add_param(Param::new_key_value(
-                "instrument model".to_string(),
-                descr.model().unwrap_or_default().to_string(),
-            ));
-
             configs.insert(i as u32, config);
         }
         (sw, configs, components_to_instrument_id)
@@ -590,7 +569,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 }
 
 impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
-    ScanSource<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
+    SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
 {
     fn reset(&mut self) {
         self.index = 0;

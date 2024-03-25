@@ -3,9 +3,12 @@
 use std::fs;
 use std::io;
 use std::path;
+use std::path::PathBuf;
+use std::io::prelude::*;
 
 use md5::Context as MD5Context;
 use md5::Digest;
+use sha1::{self, Digest as _};
 
 type ByteBuffer = io::Cursor<Vec<u8>>;
 
@@ -30,7 +33,7 @@ pub enum DetailLevel {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct FileSource<T: io::Read> {
+pub(crate) struct FileSource<T: io::Read> {
     pub source: FileWrapper<T>,
 }
 
@@ -282,10 +285,25 @@ impl<R: io::Read> PreBufferedStream<R> {
     }
 }
 
+/// Compute a SHA-1 digest of a file path
+pub fn checksum_file(path: &PathBuf) -> io::Result<String> {
+    let mut checksum = sha1::Sha1::new();
+    let mut reader = io::BufReader::new(fs::File::open(path)?);
+    let mut buf = Vec::new();
+    buf.resize(2usize.pow(20), 0);
+    while let Ok(i) = reader.read(&mut buf) {
+        if i == 0 {
+            break;
+        }
+        checksum.update(&buf[..i]);
+    }
+    let x = base16ct::lower::encode_string(&checksum.finalize());
+    Ok(x)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::io::prelude::*;
 
     #[test]
     fn test_from_buffer() {

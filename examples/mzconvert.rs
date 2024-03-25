@@ -1,28 +1,21 @@
 use std::env;
-use std::fs;
 use std::io;
+use std::path::PathBuf;
 use std::process::exit;
 use std::thread;
 use std::time;
-
 use std::sync::mpsc::sync_channel;
 
-#[cfg(feature = "mzmlb")]
-use mzdata::io::mzmlb;
-
-#[cfg(feature = "thermorawfilereader")]
-use mzdata::io::ThermoRawReader;
-
-use mzdata::io::MassSpectrometryReadWriteProcess;
 use mzdata::io::{
-    infer_format, infer_from_path, infer_from_stream, MassSpectrometryFormat, PreBufferedStream,
+    Sink, Source, MassSpectrometryReadWriteProcess,
+    checksum_file
 };
+use mzdata::meta::SourceFile;
+use mzdata::params::ControlledVocabulary;
 use mzdata::prelude::*;
-use mzdata::{MGFReader, MGFWriter, MzMLReader, MzMLWriter};
 
 use env_logger;
-use mzpeaks::CentroidPeak;
-use mzpeaks::DeconvolutedPeak;
+use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 #[derive(Debug, Clone)]
 pub struct MZConvert {
@@ -36,87 +29,14 @@ impl MZConvert {
     }
 
     pub fn main(&self) -> io::Result<()> {
-        self.reader_then()
+        let source = if self.inpath == "-" {
+            Source::Stdin
+        } else {Source::<_, _>::from(self.inpath.as_ref())};
+        let sink = Sink::<CentroidPeak, DeconvolutedPeak>::from(self.outpath.as_ref());
+        self.open_reader(source, sink)
     }
 
-    fn reader_then(&self) -> io::Result<()> {
-        if self.inpath == "-" {
-            let mut stream = PreBufferedStream::new(io::stdin())?;
-            let (ms_format, _compressed) = infer_from_stream(&mut stream)?;
-            match ms_format {
-                MassSpectrometryFormat::MGF => self.writer_then(MGFReader::new(stream))?,
-                MassSpectrometryFormat::MzML => {
-                    self.writer_then(MzMLReader::new(io::BufReader::new(stream)))?
-                }
-                _ => {
-                    eprintln!("Could not infer input format from STDIN");
-                    exit(1)
-                }
-            }
-        } else {
-            let (ms_format, _compressed) = infer_format(&self.inpath)?;
-            match ms_format {
-                MassSpectrometryFormat::MGF => {
-                    let reader = MGFReader::open_path(&self.inpath)?;
-                    self.writer_then(reader)?;
-                }
-                MassSpectrometryFormat::MzML => {
-                    let reader = MzMLReader::open_path(&self.inpath)?;
-                    self.writer_then(reader)?;
-                }
-                #[cfg(feature = "mzmlb")]
-                MassSpectrometryFormat::MzMLb => {
-                    let reader = mzmlb::MzMLbReader::open_path(&self.inpath)?;
-                    self.writer_then(reader)?;
-                }
-                #[cfg(feature = "thermorawfilereader")]
-                MassSpectrometryFormat::ThermoRaw => {
-                    let reader = ThermoRawReader::open_path(&self.inpath)?;
-                    self.writer_then(reader)?;
-                }
-                _ => {
-                    eprintln!("Could not infer input format from {}", self.inpath);
-                    exit(1)
-                }
-            }
-        };
-        Ok(())
-    }
-
-    fn writer_then<R: ScanSource + MSDataFileMetadata + Send + 'static>(
-        &self,
-        reader: R,
-    ) -> io::Result<()> {
-        match infer_from_path(&self.outpath).0 {
-            MassSpectrometryFormat::MGF => {
-                let mut writer =
-                    MGFWriter::new(io::BufWriter::new(fs::File::create(&self.outpath)?));
-                writer.copy_metadata_from(&reader);
-                self.task(reader, writer)?;
-            }
-            MassSpectrometryFormat::MzML => {
-                let mut writer =
-                    MzMLWriter::new(io::BufWriter::new(fs::File::create(&self.outpath)?));
-                writer.copy_metadata_from(&reader);
-                self.task(reader, writer)?;
-            }
-            #[cfg(feature = "mzmlb")]
-            MassSpectrometryFormat::MzMLb => {
-                let mut writer = mzmlb::MzMLbWriterBuilder::new(&self.outpath)
-                    .with_zlib_compression(9)
-                    .create()?;
-                writer.copy_metadata_from(&reader);
-                self.task(reader, writer)?;
-            }
-            _ => {
-                eprintln!("Could not infer output format from {}", self.outpath);
-                exit(1)
-            }
-        }
-        Ok(())
-    }
-
-    fn task<R: ScanSource + Send + 'static, W: ScanWriter + Send + 'static>(
+    fn task<R: SpectrumSource + Send + 'static, W: SpectrumWriter + Send + 'static>(
         &self,
         reader: R,
         mut writer: W,
@@ -150,16 +70,48 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
 
     fn task<
         R: RandomAccessSpectrumIterator<CentroidPeak, DeconvolutedPeak>
-            + ScanSource<CentroidPeak, DeconvolutedPeak>
+            + SpectrumSource<CentroidPeak, DeconvolutedPeak>
             + Send
             + 'static,
-        W: ScanWriter<CentroidPeak, DeconvolutedPeak> + Send + 'static,
+        W: SpectrumWriter<CentroidPeak, DeconvolutedPeak> + Send + 'static,
     >(
         &self,
         reader: R,
         writer: W,
     ) -> Result<(), Self::ErrorType> {
         self.task(reader, writer)
+    }
+
+    #[allow(unused)]
+    fn transform_writer<
+            R: RandomAccessSpectrumIterator<CentroidPeak, DeconvolutedPeak> + MSDataFileMetadata + SpectrumSource<CentroidPeak, DeconvolutedPeak> + Send + 'static,
+            W: SpectrumWriter<CentroidPeak, DeconvolutedPeak> + MSDataFileMetadata + Send + 'static,
+        >(
+            &self,
+            reader: R,
+            reader_format: mzdata::io::MassSpectrometryFormat,
+            mut writer: W,
+            writer_format: mzdata::io::MassSpectrometryFormat,
+        ) -> Result<(R, W), Self::ErrorType> {
+        if self.inpath != "-" {
+            let pb: PathBuf = self.inpath.clone().into();
+            let checksum = checksum_file(&pb)?;
+            let has_already = reader.file_description().source_files.iter().flat_map(|f| f.get_param_by_name("SHA-1").map(|c| c.value == checksum)).all(|a| a);
+            if !has_already {
+                let mut sf = SourceFile::default();
+                sf.location = pb.parent().map(|p| format!("file://{}", p.to_string_lossy())).unwrap_or("file://".to_string());
+                sf.name = pb.file_name().map(|p| p.to_string_lossy().to_string()).unwrap_or("".to_string());
+                let par = ControlledVocabulary::MS.param_val(1000569u32, "SHA-1", checksum);
+                sf.add_param(par);
+                sf.file_format = reader_format.as_param();
+
+                if let Some(ref_sf) = reader.file_description().source_files.last() {
+                    sf.id_format = ref_sf.id_format.clone()
+                }
+                writer.file_description_mut().source_files.push(sf);
+            }
+        };
+        Ok((reader, writer))
     }
 }
 
@@ -174,7 +126,6 @@ fn main() -> io::Result<()> {
         eprintln!("Please provide a path to write an MS file to, or '-'");
         exit(1)
     });
-
     let start = time::Instant::now();
     let job = MZConvert::new(inpath, outpath);
     job.main()?;

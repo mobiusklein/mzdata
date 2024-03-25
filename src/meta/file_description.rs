@@ -1,3 +1,7 @@
+use std::path::Path;
+use std::io;
+
+use crate::io::infer_format;
 use crate::impl_param_described;
 use crate::params::{Param, ParamDescribed, ParamList, CURIE, ControlledVocabulary};
 
@@ -9,6 +13,18 @@ pub struct SourceFile {
     pub file_format: Option<Param>,
     pub id_format: Option<Param>,
     pub params: ParamList,
+}
+
+impl SourceFile {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let path = path.as_ref();
+        let (format, _gz) = infer_format(path)?;
+        let mut inst = Self::default();
+        inst.name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        inst.location = path.canonicalize()?.parent().map(|s| format!("file://{}", s.to_string_lossy())).unwrap_or_else(|| "file://".to_string());
+        inst.file_format = format.as_param();
+        Ok(inst)
+    }
 }
 
 /// A description of the file data file and its contents

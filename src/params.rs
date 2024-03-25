@@ -486,7 +486,33 @@ const UO_CV: &str = "UO";
 const MS_CV_BYTES: &[u8] = MS_CV.as_bytes();
 const UO_CV_BYTES: &[u8] = UO_CV.as_bytes();
 
-impl ControlledVocabulary {
+
+/// Anything that can be converted into an accession code portion of a [`CURIE`]
+#[derive(Debug, Clone)]
+pub enum AccessionLike<'a> {
+    Text(Cow<'a, str>),
+    Number(u32)
+}
+
+impl<'a> From<u32> for AccessionLike<'a> {
+    fn from(value: u32) -> Self {
+        Self::Number(value)
+    }
+}
+
+impl<'a> From<&'a str> for AccessionLike<'a> {
+    fn from(value: &'a str) -> Self {
+        Self::Text(Cow::Borrowed(value))
+    }
+}
+
+impl<'a> From<String> for AccessionLike<'a> {
+    fn from(value: String) -> Self {
+        Self::Text(Cow::Owned(value))
+    }
+}
+
+impl<'a> ControlledVocabulary {
     pub const fn prefix(&self) -> Cow<'static, str> {
         match &self {
             Self::MS => Cow::Borrowed(MS_CV),
@@ -510,17 +536,27 @@ impl ControlledVocabulary {
         }
     }
 
-    pub fn param<A: AsRef<str>, S: Into<String>>(&self, accession: A, name: S) -> Param {
+    pub fn param<A: Into<AccessionLike<'a>>, S: Into<String>>(&self, accession: A, name: S) -> Param {
         let mut param = Param::new();
         param.controlled_vocabulary = Some(*self);
         param.name = name.into();
-        if let Some(nb) = accession.as_ref().split(':').nth(1) {
-            param.accession = Some(nb.parse().unwrap_or_else(|_| {
-                panic!(
-                    "Expected accession to be numeric, got {}",
-                    accession.as_ref()
-                )
-            }));
+
+        let accession: AccessionLike = accession.into();
+
+        match accession {
+            AccessionLike::Text(s) => {
+                if let Some(nb) = s.split(":").last() {
+                    param.accession = Some(nb.parse().unwrap_or_else(|_| {
+                        panic!(
+                            "Expected accession to be numeric, got {}",
+                            s
+                        )
+                    }))
+                }
+            },
+            AccessionLike::Number(n) => {
+                param.accession = Some(n)
+            },
         }
         param
     }
@@ -558,7 +594,7 @@ impl ControlledVocabulary {
         self.const_param(name, "", accession, unit)
     }
 
-    pub fn param_val<S: Into<String>, A: AsRef<str>, V: ToString>(
+    pub fn param_val<S: Into<String>, A: Into<AccessionLike<'a>>, V: ToString>(
         &self,
         accession: A,
         name: S,

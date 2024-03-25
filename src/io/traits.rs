@@ -27,8 +27,8 @@ impl<T: io::Read + io::Seek> SeekRead for T {}
 
 /// A base trait defining the behaviors of a source of spectra.
 ///
-/// A [`ScanSource`]
-pub trait ScanSource<
+/// A [`SpectrumSource`]
+pub trait SpectrumSource<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
@@ -140,7 +140,7 @@ pub trait ScanSource<
     }
 }
 
-/// A generic iterator over a [`ScanSource`] implementer that assumes the
+/// A generic iterator over a [`SpectrumSource`] implementer that assumes the
 /// source has already been indexed. Otherwise, the source's own iterator
 /// behavior should be used.
 pub struct SpectrumIterator<
@@ -148,10 +148,10 @@ pub struct SpectrumIterator<
     C: CentroidLike + Default,
     D: DeconvolutedCentroidLike + Default,
     S: SpectrumLike<C, D>,
-    R: ScanSource<C, D, S>,
+    R: SpectrumSource<C, D, S>,
 > {
     source: &'lifespan mut R,
-    phantom: PhantomData<S>,
+    spectrum_type: PhantomData<S>,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
     index: usize,
@@ -162,7 +162,7 @@ impl<
         'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
-        R: ScanSource<C, D, S>,
+        R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
     > SpectrumIterator<'lifespan, C, D, S, R>
 {
@@ -171,7 +171,7 @@ impl<
             source,
             index: 0,
             back_index: 0,
-            phantom: PhantomData,
+            spectrum_type: PhantomData,
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
         }
@@ -182,7 +182,7 @@ impl<
         'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
-        R: ScanSource<C, D, S>,
+        R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
     > Iterator for SpectrumIterator<'lifespan, C, D, S, R>
 {
@@ -202,7 +202,7 @@ impl<
         'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
-        R: ScanSource<C, D, S>,
+        R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
     > ExactSizeIterator for SpectrumIterator<'lifespan, C, D, S, R>
 {
@@ -215,7 +215,7 @@ impl<
         'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
-        R: ScanSource<C, D, S>,
+        R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
     > DoubleEndedIterator for SpectrumIterator<'lifespan, C, D, S, R>
 {
@@ -235,8 +235,8 @@ impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D>,
-        R: ScanSource<C, D, S>,
-    > ScanSource<C, D, S> for SpectrumIterator<'lifespan, C, D, S, R>
+        R: SpectrumSource<C, D, S>,
+    > SpectrumSource<C, D, S> for SpectrumIterator<'lifespan, C, D, S, R>
 {
     fn reset(&mut self) {
         self.index = 0;
@@ -270,7 +270,7 @@ impl<
         'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
-        R: ScanSource<C, D, S>,
+        R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
     > MSDataFileMetadata for SpectrumIterator<'lifespan, C, D, S, R>
 where
@@ -285,7 +285,7 @@ pub trait MZFileReader<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
->: ScanSource<C, D, S> + Sized
+>: SpectrumSource<C, D, S> + Sized
 {
     /// An on-trait method of constructing an index. Assumed
     /// to be a trivial wrapper.
@@ -408,13 +408,13 @@ impl From<SpectrumAccessError> for io::Error {
     }
 }
 
-/// An extension of [`ScanSource`] that supports relocatable iteration relative to a
+/// An extension of [`SpectrumSource`] that supports relocatable iteration relative to a
 /// specific spectrum coordinate or identifier.
 pub trait RandomAccessSpectrumIterator<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
->: ScanSource<C, D, S>
+>: SpectrumSource<C, D, S>
 {
     /// Start iterating from the spectrum whose native ID matches `id`
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError>;
@@ -431,7 +431,7 @@ impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D>,
-        R: ScanSource<C, D, S>,
+        R: SpectrumSource<C, D, S>,
     > RandomAccessSpectrumIterator<C, D, S> for SpectrumIterator<'lifespan, C, D, S, R>
 {
     /// Start iterating from the spectrum whose native ID matches `id`
@@ -475,7 +475,39 @@ impl<
     }
 }
 
-/// An alternative implementation of [`ScanSource`] for non-rewindable underlying streams
+/// A union trait for [`SpectrumSource`] and [`RandomAccessSpectrumIterator`]
+pub trait RandomAccessSpectrumSource<
+    C: CentroidLike + Default = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
+>: SpectrumSource<C, D, S> + RandomAccessSpectrumIterator<C, D, S>
+{
+}
+
+impl<
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumLike<C, D>,
+        T: SpectrumSource<C, D, S> + RandomAccessSpectrumIterator<C, D, S>,
+    > RandomAccessSpectrumSource<C, D, S> for T
+{
+}
+
+pub trait SpectrumSourceWithMetadata<
+    C: CentroidLike + Default = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
+>: SpectrumSource<C, D, S> + MSDataFileMetadata {}
+
+impl<
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumLike<C, D>,
+        T: SpectrumSource<C, D, S> + MSDataFileMetadata,
+    > SpectrumSourceWithMetadata<C, D, S> for T {}
+
+
+/// An alternative implementation of [`SpectrumSource`] for non-rewindable underlying streams
 pub struct StreamingSpectrumIterator<
     C: CentroidLike + Default,
     D: DeconvolutedCentroidLike + Default,
@@ -517,7 +549,7 @@ impl<
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D>,
         I: Iterator<Item = S>,
-    > ScanSource<C, D, S> for StreamingSpectrumIterator<C, D, S, I>
+    > SpectrumSource<C, D, S> for StreamingSpectrumIterator<C, D, S, I>
 {
     fn reset(&mut self) {
         panic!("Cannot reset StreamingSpectrumIterator")
@@ -883,9 +915,9 @@ pub trait RandomAccessSpectrumGroupingIterator<
 
 /// A collection of spectra held in memory but providing an interface
 /// identical to a data file. This structure owns its data, so in order
-/// to yield ownership for [`ScanSource`], they are cloned
+/// to yield ownership for [`SpectrumSource`], they are cloned
 #[derive(Debug, Default)]
-pub struct MemoryScanSource<
+pub struct MemorySpectrumSource<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
@@ -901,7 +933,7 @@ impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D> + Clone,
-    > MemoryScanSource<C, D, S>
+    > MemorySpectrumSource<C, D, S>
 {
     pub fn new(spectra: VecDeque<S>) -> Self {
         let mut offsets = OffsetIndex::new("spectrum".to_string());
@@ -923,7 +955,7 @@ impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D> + Clone,
-    > Iterator for MemoryScanSource<C, D, S>
+    > Iterator for MemorySpectrumSource<C, D, S>
 {
     type Item = S;
 
@@ -943,7 +975,7 @@ impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D> + Clone,
-    > ScanSource<C, D, S> for MemoryScanSource<C, D, S>
+    > SpectrumSource<C, D, S> for MemorySpectrumSource<C, D, S>
 {
     fn reset(&mut self) {
         self.position = 0;
@@ -977,7 +1009,7 @@ impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D> + Clone,
-    > RandomAccessSpectrumIterator<C, D, S> for MemoryScanSource<C, D, S>
+    > RandomAccessSpectrumIterator<C, D, S> for MemorySpectrumSource<C, D, S>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self.offsets.get(id) {
@@ -1013,7 +1045,7 @@ impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D> + Clone,
-    > From<VecDeque<S>> for MemoryScanSource<C, D, S>
+    > From<VecDeque<S>> for MemorySpectrumSource<C, D, S>
 {
     fn from(value: VecDeque<S>) -> Self {
         Self::new(value)
@@ -1021,7 +1053,7 @@ impl<
 }
 
 /// Common interface for spectrum writing
-pub trait ScanWriter<
+pub trait SpectrumWriter<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
 >
@@ -1115,8 +1147,8 @@ mod test {
 
     #[test]
     fn test_object_safe() {
-        // If `ScanSource` were not object safe, this code
+        // If `SpectrumSource` were not object safe, this code
         // couldn't compile.
-        let _f = |_x: &dyn ScanSource| {};
+        let _f = |_x: &dyn SpectrumSource| {};
     }
 }

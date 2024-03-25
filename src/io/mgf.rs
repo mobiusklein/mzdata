@@ -26,7 +26,7 @@ use regex::Regex;
 
 use super::offset_index::OffsetIndex;
 use super::traits::{
-    MZFileReader, RandomAccessSpectrumIterator, ScanSource, ScanWriter, SeekRead,
+    MZFileReader, RandomAccessSpectrumIterator, SpectrumSource, SpectrumWriter, SeekRead,
     SpectrumAccessError,
 };
 use super::utils::DetailLevel;
@@ -557,7 +557,7 @@ impl<
         R: SeekRead,
         C: CentroidPeakAdapting + From<CentroidPeak>,
         D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
-    > ScanSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+    > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
@@ -811,8 +811,8 @@ TITLE="#,
             .and_then(|p| Some((p.value.clone(), true)))
             .unwrap_or_else(|| (self.make_title(spectrum), false));
         self.handle.write_all(title.as_bytes())?;
-        self.write_kv("NATIVEID", spectrum.id())?;
-        self.handle.write_all(b"\nRTINSECONDS=")?;
+        self.write_kv("\nNATIVEID", spectrum.id())?;
+        self.handle.write_all(b"RTINSECONDS=")?;
         self.handle
             .write_all((spectrum.start_time() * 60.0).to_string().as_bytes())?;
         self.handle.write_all(b"\n")?;
@@ -961,7 +961,7 @@ impl<
         W: io::Write,
         C: CentroidPeakAdapting + From<CentroidPeak> + 'static,
         D: DeconvolutedPeakAdapting + From<DeconvolutedPeak> + 'static,
-    > ScanWriter<C, D> for MGFWriterType<W, C, D>
+    > SpectrumWriter<C, D> for MGFWriterType<W, C, D>
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
         if spectrum.ms_level() != 1 {

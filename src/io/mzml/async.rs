@@ -32,7 +32,7 @@ use crate::spectrum::spectrum::{
 use super::super::offset_index::OffsetIndex;
 // Need to learn more about async traits
 // use super::super::traits::{
-//     MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, ScanSource,
+//     MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, SpectrumSource,
 // };
 
 pub trait AsyncReadType: AsyncRead + AsyncReadExt {}
@@ -591,7 +591,7 @@ impl IndexedMzMLIndexExtractor {
 /// an `indexedmzML` document and use the offset map to jump to immediately jump to a specific spectrum.
 ///
 /// **Note**: Because async traits are not yet stable, and this is currently the only asynchronous reader
-/// in the library, this also re-creates the [`ScanSource`](crate::io::traits::ScanSource) API with
+/// in the library, this also re-creates the [`SpectrumSource`](crate::io::traits::SpectrumSource) API with
 /// asynchronous execution.
 impl<
         R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Sync,

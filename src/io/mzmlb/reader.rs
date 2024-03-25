@@ -20,7 +20,7 @@ use crate::io::mzml::{
 };
 use crate::io::traits::MZFileReader;
 use crate::io::utils::DetailLevel;
-use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, ScanSource, SpectrumAccessError};
+use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, SpectrumSource, SpectrumAccessError};
 use crate::prelude::{MSDataFileMetadata, ParamLike};
 
 use crate::meta::{
@@ -1068,7 +1068,7 @@ impl<
 impl<
         C: CentroidPeakAdapting + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > ScanSource<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
+    > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
 {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {

@@ -79,7 +79,7 @@ impl SelectedTarget {
 }
 
 
-pub struct MSnTargetTrackingIterator<R: ScanSource> {
+pub struct MSnTargetTrackingIterator<R: SpectrumSource> {
     source: SpectrumGroupingIterator<R, CentroidPeak, DeconvolutedPeak, MultiLayerSpectrum>,
     time_width: f64,
     error_tolerance: Tolerance,
@@ -88,7 +88,7 @@ pub struct MSnTargetTrackingIterator<R: ScanSource> {
     targets: VecDeque<SelectionTargetSpecification>,
 }
 
-impl<R: ScanSource> MSnTargetTrackingIterator<R> {
+impl<R: SpectrumSource> MSnTargetTrackingIterator<R> {
     pub fn new(
         source: SpectrumGroupingIterator<R, CentroidPeak, DeconvolutedPeak, MultiLayerSpectrum>,
         time_width: f64,
@@ -232,7 +232,7 @@ impl<R: ScanSource> MSnTargetTrackingIterator<R> {
     }
 }
 
-impl<R: ScanSource> Iterator for MSnTargetTrackingIterator<R> {
+impl<R: SpectrumSource> Iterator for MSnTargetTrackingIterator<R> {
     type Item = (SpectrumGroup, Vec<SelectedTarget>);
 
     fn next(&mut self) -> Option<Self::Item> {

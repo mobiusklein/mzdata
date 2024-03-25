@@ -1,53 +1,18 @@
 use std::env;
-use std::fs;
 use std::io;
 use std::path;
 use std::process;
 use std::thread::spawn;
 use std::time;
-
 use std::collections::HashMap;
 
 use std::sync::mpsc::sync_channel;
 
-use mzdata::io::infer_from_stream;
-#[cfg(feature = "mzmlb")]
-use mzdata::io::mzmlb;
-use mzdata::io::MassSpectrometryFormat;
-use mzdata::io::PreBufferedStream;
-use mzdata::io::{mgf, mzml};
+use mzdata::io::Source;
 use mzdata::prelude::*;
 use mzdata::spectrum::{
     DeconvolutedSpectrum, MultiLayerSpectrum, RefPeakDataLevel, SignalContinuity, SpectrumLike,
 };
-use mzpeaks::PeakCollection;
-
-fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::MzMLReader<fs::File>> {
-    let reader = mzml::MzMLReader::open_path(path)?;
-    Ok(reader)
-}
-
-fn load_mgf_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mgf::MGFReader<fs::File>> {
-    let reader = mgf::MGFReader::open_path(path)?;
-    Ok(reader)
-}
-
-#[cfg(feature = "mzmlb")]
-fn load_mzmlb_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzmlb::MzMLbReader> {
-    let reader = mzmlb::MzMLbReader::open_path(&path.into())?;
-    let blosc_threads = match std::env::var("BLOSC_NUM_THREADS") {
-        Ok(val) => match val.parse() {
-            Ok(nt) => nt,
-            Err(e) => {
-                eprintln!("Failed to parse BLOSC_NUM_THREADS env var: {}", e);
-                4
-            }
-        },
-        Err(_) => 4,
-    };
-    mzmlb::MzMLbReader::set_blosc_nthreads(blosc_threads);
-    Ok(reader)
-}
 
 #[derive(Default)]
 struct MSDataFileSummary {
@@ -92,7 +57,7 @@ impl MSDataFileSummary {
         }
     }
 
-    pub fn _scan_file<R: ScanSource>(&mut self, reader: &mut R) {
+    pub fn _scan_file<R: SpectrumSource>(&mut self, reader: &mut R) {
         let start = time::Instant::now();
         reader.enumerate().for_each(|(i, scan)| {
             if i % 10000 == 0 && i > 0 {
@@ -111,11 +76,11 @@ impl MSDataFileSummary {
         println!("{:0.3} seconds elapsed", elapsed.as_secs_f64());
     }
 
-    pub fn scan_file<R: ScanSource + Send + 'static>(&mut self, reader: R) {
+    pub fn scan_file<R: SpectrumSource + Send + 'static>(&mut self, reader: R) {
         self.scan_file_threaded(reader)
     }
 
-    pub fn scan_file_threaded<R: ScanSource + Send + 'static>(&mut self, reader: R) {
+    pub fn scan_file_threaded<R: SpectrumSource + Send + 'static>(&mut self, reader: R) {
         let start = time::Instant::now();
         let (sender, receiver) = sync_channel(2usize.pow(12));
         let read_handle = spawn(move || {
@@ -196,47 +161,13 @@ fn main() -> io::Result<()> {
     let mut summarizer = MSDataFileSummary::default();
 
     if path.as_os_str() == "-" {
-        let mut stream = PreBufferedStream::new(io::stdin())?;
-        match infer_from_stream(&mut stream)? {
-            (MassSpectrometryFormat::MGF, false) => {
-                let reader = mgf::MGFReader::new(io::BufReader::new(stream));
-                summarizer.scan_file(reader)
-            }
-            (MassSpectrometryFormat::MzML, false) => {
-                let reader = mzml::MzMLReader::new(stream);
-                summarizer.scan_file(reader)
-            }
-            #[cfg(feature = "mzmlb")]
-            (MassSpectrometryFormat::MzMLb, _) => {
-                eprintln!("Cannot read mzMLb files from STDIN");
-                process::exit(1);
-            }
-            (_, _) => {
-                eprintln!("Could not infer format from STDIN");
-                process::exit(1);
-            }
-        }
-    } else if let Some(ext) = path.extension() {
-        if ext.to_string_lossy().to_lowercase() == "mzmlb" {
-            #[cfg(feature = "mzmlb")]
-            {
-                let reader = load_mzmlb_file(path)?;
-                summarizer.scan_file(reader)
-            }
-            #[cfg(not(feature = "mzmlb"))]
-            {
-                panic!("Cannot read mzMLb file. Recompile enabling the `mzmlb` feature")
-            }
-        } else if ext.to_string_lossy().to_lowercase() == "mgf" {
-            let reader = load_mgf_file(path)?;
+        mzdata::mz_read!(Source::Stdin, reader => {
             summarizer.scan_file(reader)
-        } else {
-            let reader = load_file(path)?;
-            summarizer.scan_file(reader)
-        }
+        })?;
     } else {
-        let reader = load_file(path)?;
-        summarizer.scan_file(reader)
+        mzdata::mz_read!(path.as_ref(), reader => {
+            summarizer.scan_file(reader)
+        })?;
     };
 
     summarizer.write_out();

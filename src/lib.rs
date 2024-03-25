@@ -12,6 +12,11 @@
 //!   2. mzML & indexedmzML files using [`MzMLWriter`] in [`mzdata::io::mzml`](crate::io::mzml)
 //!   3. mzMLb files using [`MzMLbWriter`] in [`mzdata::io::mzmlb`](crate::io::mzmlb), if the `mzmlb` feature is enabled
 //!
+//! This menagerie of different formats and gzip compression or not can be inferred from a path or [`io::Read`](std::io::Read) using [`io::infer_format`] and [`io::infer_from_stream`].
+//! Conventional dispatch requires boxing behind a trait, which is complicated but possible through [`io::open_file`]. The [`mz_read`] macro provides a convenient
+//! means of working with an unboxed value, but with a limited scope. The [`mz_write`] macro is the equivalent for opening a writer.
+//! There are additional tools for dealing with file format dispatch under development.
+//!
 //! It also includes a set of representation layers for spectra in [`mzdata::spectrum`](crate::spectrum)
 //!
 //! # Example
@@ -44,7 +49,8 @@
 //!
 //! ## Traits
 //! The library makes heavy use of traits to abstract over the implementation details of different file formats.
-//! These traits are included in [`mzdata::prelude`](crate::prelude).
+//! These traits are included in [`mzdata::prelude`](crate::prelude). It also imports [`mzpeaks::prelude`].
+//!
 //!
 pub mod io;
 pub mod meta;
@@ -61,6 +67,9 @@ pub use crate::io::mzml::{MzMLParserError as MzMLError, MzMLReader, MzMLWriter, 
 pub use crate::io::mzmlb::{
     MzMLbError, MzMLbReader, MzMLbWriter, MzMLbWriterBuilder, MzMLbWriterError,
 };
+
+#[cfg(feature = "thermo")]
+pub use crate::io::thermo::ThermoRawReader;
 
 pub use crate::params::{Param, ParamList};
 

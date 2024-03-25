@@ -3,7 +3,7 @@ use std::fmt::Display;
 use num_traits::Float;
 
 use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
-use crate::io::traits::ScanSource;
+use crate::io::traits::SpectrumSource;
 use crate::params::{ControlledVocabulary, Param, ParamLike, Unit, CURIE};
 use crate::{impl_param_described, ParamList};
 
@@ -556,7 +556,7 @@ pub struct Precursor {
 }
 
 impl Precursor {
-    /// Given a ScanSource object, look up the precursor scan in it.
+    /// Given a SpectrumSource object, look up the precursor scan in it.
     /// This is useful when examining the area *around* where the precursor
     /// ion was or to obtain a snapshot of the retention time when the spectrum
     /// was scheduled.
@@ -565,7 +565,7 @@ impl Precursor {
         C: CentroidPeakAdapting,
         D: DeconvolutedPeakAdapting,
         S: SpectrumLike<C, D>,
-        R: ScanSource<C, D, S>,
+        R: SpectrumSource<C, D, S>,
     {
         match self.precursor_id.as_ref() {
             Some(id) => source.get_spectrum_by_id(id),
@@ -573,7 +573,7 @@ impl Precursor {
         }
     }
 
-    /// Given a ScanSource object, look up the product scan in it.
+    /// Given a SpectrumSource object, look up the product scan in it.
     /// This is rarely needed unless you have manually separated [`Precursor`]
     /// objects from their spectra.
     pub fn product_spectrum<C, D, S, R>(&self, source: &mut R) -> Option<S>
@@ -581,7 +581,7 @@ impl Precursor {
         C: CentroidPeakAdapting,
         D: DeconvolutedPeakAdapting,
         S: SpectrumLike<C, D>,
-        R: ScanSource<C, D, S>,
+        R: SpectrumSource<C, D, S>,
     {
         match self.product_id.as_ref() {
             Some(id) => source.get_spectrum_by_id(id),

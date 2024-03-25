@@ -2,7 +2,7 @@
 Implements a parser for the PSI-MS mzML and indexedmzML XML file formats
 for representing raw and processed mass spectra, providing a
 [`RandomAccessSpectrumIterator`](crate::io::traits::RandomAccessSpectrumIterator)
-interface for reading, and [`ScanWriter`](crate::io::traits::ScanWriter)
+interface for reading, and [`SpectrumWriter`](crate::io::traits::SpectrumWriter)
 interface for writing.
 
 The mzML format is standardized by the Proteomics Standards Initiative (PSI), with
