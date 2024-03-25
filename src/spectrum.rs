@@ -32,15 +32,15 @@ The [`SpectrumDescription`] trait is included in the crate prelude, and gives th
 read-only access to components that describe a spectrum's metadata.
 
 ```rust
-use std::fs::File;
+use mzpeaks::Tolerance;
+use mzdata::MzMLReader;
 use mzdata::prelude::*;
-use mzpeaks::{Tolerance, prelude::*};
-use mzdata::io::MzMLReader;
-use mzdata::spectrum::{SignalContinuity};
+use mzdata::spectrum::SignalContinuity;
 
-let reader = MzMLReader::new(File::open("./test/data/small.mzML").unwrap());
+let reader = MzMLReader::open_path("./test/data/small.mzML").unwrap();
 for spectrum in reader {
     println!("Scan {} => BP {}", spectrum.id(), spectrum.peaks().base_peak().mz);
+
     if spectrum.signal_continuity() < SignalContinuity::Profile {
         let peak_picked = spectrum.into_centroid().unwrap();
         println!("Matches for 579.155: {:?}",

@@ -23,10 +23,11 @@
 //! ```rust
 //! use std::fs;
 //! use mzdata::prelude::*;
-//! use mzpeaks::{Tolerance, prelude::*};
+//! use mzpeaks::Tolerance;
 //! use mzdata::io::MzMLReader;
-//! use mzdata::spectrum::{SignalContinuity};
-//! let reader = MzMLReader::new(fs::File::open("./test/data/small.mzML").unwrap());
+//! use mzdata::spectrum::SignalContinuity;
+//!
+//! let reader = MzMLReader::open_path("./test/data/small.mzML").unwrap();
 //! for spectrum in reader {
 //!     println!("Scan {} => BP {}", spectrum.id(), spectrum.peaks().base_peak().mz);
 //!

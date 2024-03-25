@@ -10,8 +10,11 @@ mod run;
 mod traits;
 
 pub use data_processing::{DataProcessing, ProcessingMethod};
-pub use file_description::{FileDescription, SourceFile};
-pub use instrument::{Component, ComponentType, InstrumentConfiguration};
 pub use software::Software;
+
+pub use file_description::{FileDescription, SourceFile};
+
+pub use instrument::{Component, ComponentType, InstrumentConfiguration};
+
 pub use traits::MSDataFileMetadata;
 pub use run::MassSpectrometryRun;

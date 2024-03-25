@@ -75,36 +75,52 @@ pub trait MSDataFileMetadata {
 
 #[macro_export]
 /// Assumes a field for the non-`Option` facets of the [`MSDataFileMetadata`]
-/// implementation are present.
+/// implementation are present. Passing an extra level `extended` token implements
+/// the optional methods.
 macro_rules! impl_metadata_trait {
+    (extended) => {
+        $crate::impl_metadata_trait();
+
+        fn spectrum_count_hint(&self) -> Option<u64> {
+            self.num_spectra
+        }
+
+        fn run_description(&self) -> Option<&$crate::meta::MassSpectrometryRun> {
+            Some(&self.run)
+        }
+
+        fn run_description_mut(&mut self) -> Option<&mut $crate::meta::MassSpectrometryRun> {
+            Some(&mut self.run)
+        }
+    };
     () => {
-        fn data_processings(&self) -> &Vec<DataProcessing> {
+        fn data_processings(&self) -> &Vec<$crate::meta::DataProcessing> {
             &self.data_processings
         }
 
-        fn instrument_configurations(&self) -> &HashMap<u32, InstrumentConfiguration> {
+        fn instrument_configurations(&self) -> &std::collections::HashMap<u32, $crate::meta::InstrumentConfiguration> {
             &self.instrument_configurations
         }
-        fn file_description(&self) -> &FileDescription {
+        fn file_description(&self) -> &$crate::meta::FileDescription {
             &self.file_description
         }
-        fn softwares(&self) -> &Vec<Software> {
+        fn softwares(&self) -> &Vec<$crate::meta::Software> {
             &self.softwares
         }
 
-        fn data_processings_mut(&mut self) -> &mut Vec<DataProcessing> {
+        fn data_processings_mut(&mut self) -> &mut Vec<$crate::meta::DataProcessing> {
             &mut self.data_processings
         }
 
-        fn instrument_configurations_mut(&mut self) -> &mut HashMap<u32, InstrumentConfiguration> {
+        fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, $crate::meta::InstrumentConfiguration> {
             &mut self.instrument_configurations
         }
 
-        fn file_description_mut(&mut self) -> &mut FileDescription {
+        fn file_description_mut(&mut self) -> &mut $crate::meta::FileDescription {
             &mut self.file_description
         }
 
-        fn softwares_mut(&mut self) -> &mut Vec<Software> {
+        fn softwares_mut(&mut self) -> &mut Vec<$crate::meta::Software> {
             &mut self.softwares
         }
     };
@@ -112,39 +128,55 @@ macro_rules! impl_metadata_trait {
 
 
 #[macro_export]
-/// Delegates the implementation of [`MSDataFileMetadata`] to an field
+/// Delegates the implementation of [`MSDataFileMetadata`] to a member. Passing an extra
+/// level `extended` token implements the optional methods.
 macro_rules! delegate_impl_metadata_trait {
+    ($src:tt, extended) => {
+        $crate::delegate_impl_metadata_trait($src);
+
+        fn spectrum_count_hint(&self) -> Option<u64> {
+            self.$src.spectrum_count_hint()
+        }
+
+        fn run_description(&self) -> Option<&$crate::meta::MassSpectrometryRun> {
+            self.$src.run_description()
+        }
+
+        fn run_description_mut(&mut self) -> Option<&mut $crate::meta::MassSpectrometryRun> {
+            self.$src.run_description_mut()
+        }
+    };
     ($src:tt) => {
 
-        fn data_processings(&self) -> &Vec<crate::meta::DataProcessing> {
+        fn data_processings(&self) -> &Vec<$crate::meta::DataProcessing> {
             self.$src.data_processings()
         }
 
-        fn instrument_configurations(&self) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+        fn instrument_configurations(&self) -> &std::collections::HashMap<u32, $crate::meta::InstrumentConfiguration> {
             self.$src.instrument_configurations()
         }
 
-        fn file_description(&self) -> &crate::meta::FileDescription {
+        fn file_description(&self) -> &$crate::meta::FileDescription {
             self.$src.file_description()
         }
 
-        fn softwares(&self) -> &Vec<crate::meta::Software> {
+        fn softwares(&self) -> &Vec<$crate::meta::Software> {
             self.$src.softwares()
         }
 
-        fn data_processings_mut(&mut self) -> &mut Vec<crate::meta::DataProcessing> {
+        fn data_processings_mut(&mut self) -> &mut Vec<$crate::meta::DataProcessing> {
             self.$src.data_processings_mut()
         }
 
-        fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+        fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, $crate::meta::InstrumentConfiguration> {
             self.$src.instrument_configurations_mut()
         }
 
-        fn file_description_mut(&mut self) -> &mut crate::meta::FileDescription {
+        fn file_description_mut(&mut self) -> &mut $crate::meta::FileDescription {
             self.$src.file_description_mut()
         }
 
-        fn softwares_mut(&mut self) -> &mut Vec<crate::meta::Software> {
+        fn softwares_mut(&mut self) -> &mut Vec<$crate::meta::Software> {
             self.$src.softwares_mut()
         }
 
@@ -152,11 +184,11 @@ macro_rules! delegate_impl_metadata_trait {
             self.$src.spectrum_count_hint()
         }
 
-        fn run_description(&self) -> Option<&crate::meta::MassSpectrometryRun> {
+        fn run_description(&self) -> Option<&$crate::meta::MassSpectrometryRun> {
             self.$src.run_description()
         }
 
-        fn run_description_mut(&mut self) -> Option<&mut crate::meta::MassSpectrometryRun> {
+        fn run_description_mut(&mut self) -> Option<&mut $crate::meta::MassSpectrometryRun> {
             self.$src.run_description_mut()
         }
 

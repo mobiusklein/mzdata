@@ -668,6 +668,8 @@ impl ParamDescribed for ParamList {
     }
 }
 
+/// Implement the [`ParamDescribed`] trait for type `$t`, referencing a `params` member
+/// of type `Vec<`[`Param`]`>`.
 #[macro_export]
 macro_rules! impl_param_described {
     ($($t:ty), +) => {$(
@@ -687,6 +689,9 @@ macro_rules! impl_param_described {
 #[doc(hidden)]
 pub const _EMPTY_PARAM: &[Param] = &[];
 
+/// Implement the [`ParamDescribed`] trait for type `$t`, referencing a `params` member
+/// that is an `Option<Vec<`[`Param`]`>>` that will lazily be initialized automatically
+/// when it is accessed mutably.
 #[macro_export]
 macro_rules! impl_param_described_deferred {
     ($($t:ty), +) => {$(
@@ -722,6 +727,7 @@ pub enum Unit {
     MZ,
     Mass,
     PartsPerMillion,
+
     Nanometer,
 
     // Time

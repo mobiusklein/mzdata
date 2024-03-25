@@ -4,6 +4,11 @@ use std::fmt::Display;
 use crate::impl_param_described;
 use crate::params::{ControlledVocabulary, Param, ParamCow, ParamList};
 
+use super::Software;
+
+/// Describe a data processing method stage tied to a specific piece of [`Software`]
+///
+/// See <https://peptideatlas.org/tmp/mzML1.1.0.html#processingMethod>
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProcessingMethod {
     pub order: i8,
@@ -11,6 +16,10 @@ pub struct ProcessingMethod {
     pub params: ParamList,
 }
 
+/// Describe a complete data processing method, a series of [`ProcessingMethod`] transformations
+/// through a pipeline of [`Software`].
+///
+/// See <https://peptideatlas.org/tmp/mzML1.1.0.html#dataProcessing>
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DataProcessing {
     pub id: String,

@@ -27,7 +27,8 @@ pub use crate::io::mzmlb::{MzMLbError, MzMLbReader};
 pub use crate::io::offset_index::OffsetIndex;
 pub use crate::io::traits::{
     MZFileReader, RandomAccessSpectrumIterator, SpectrumSource, SpectrumWriter, SpectrumAccessError,
-    SpectrumGrouping, SpectrumIterator, StreamingSpectrumIterator,
+    SpectrumGrouping, SpectrumIterator, StreamingSpectrumIterator, SpectrumReceiver, RandomAccessSpectrumSource,
+    SpectrumSourceWithMetadata, MemorySpectrumSource, RandomAccessSpectrumGroupingIterator,
 };
 pub use crate::io::utils::{DetailLevel, PreBufferedStream, checksum_file};
 pub use compression::RestartableGzDecoder;

@@ -200,12 +200,12 @@ pub struct MGFReaderType<
     pub state: MGFParserState,
     pub offset: usize,
     pub error: Option<MGFError>,
-    pub index: OffsetIndex,
+    index: OffsetIndex,
     file_description: FileDescription,
     instrument_configurations: HashMap<u32, InstrumentConfiguration>,
     softwares: Vec<Software>,
     data_processings: Vec<DataProcessing>,
-    pub run: MassSpectrometryRun,
+    run: MassSpectrometryRun,
     pub detail_level: DetailLevel,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
@@ -672,6 +672,9 @@ impl<
     }
 }
 
+
+/// The MGF format does not contain any consistent metadata, but additional
+/// information can be included after creation.
 impl<
         R: io::Read,
         C: CentroidPeakAdapting + From<CentroidPeak>,
@@ -712,7 +715,7 @@ const TITLE_CV: CURIE = ControlledVocabulary::MS.curie(1000796);
 const MS_LEVEL_CV: CURIE = ControlledVocabulary::MS.curie(1000511);
 const MSN_SPECTRUM_CV: CURIE = ControlledVocabulary::MS.curie(1000580);
 
-/// An MGF writer type
+/// An MGF writer type that only writes centroided MSn spectra
 pub struct MGFWriterType<
     W: io::Write,
     C: CentroidPeakAdapting + From<CentroidPeak> = CentroidPeak,
@@ -957,7 +960,6 @@ impl<
 }
 
 impl<
-        'a,
         W: io::Write,
         C: CentroidPeakAdapting + From<CentroidPeak> + 'static,
         D: DeconvolutedPeakAdapting + From<DeconvolutedPeak> + 'static,
