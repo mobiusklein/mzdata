@@ -732,11 +732,14 @@ pub trait MassSpectrometryReadWriteProcess<
 /// return the reading type behind an opaque `Box<dyn SpectrumSource>`, but lets you interact
 /// with the concrete type intersection without concern with object safety in an anonymous closure:
 ///
-/// ```no_run
-/// let spectra: Vec<Spectrum> = mz_read!(
-///     "./test/data/small.mzML".as_ref(),
-///     reader => { reader.collect() }
-/// )?;
+/// ```
+/// # use std::io;
+/// # use mzdata::prelude::*;
+/// # use mzdata::Spectrum;
+/// # fn main() -> io::Result<()> {
+/// let spectra: Vec<Spectrum> = mzdata::mz_read!("./test/data/small.mzML".as_ref(), reader => { reader.collect() })?;
+/// # Ok(())
+/// # }
 /// ```
 /// The closure will return a `std::io::Result` whose success value is inferred from context. The
 /// reader's lifetime is bound to the closure, and cannot be extracted without substantial type system
@@ -821,7 +824,7 @@ macro_rules! mz_read {
                         }
                     },
                     $crate::io::MassSpectrometryFormat::MzML => {
-                        let handle = io::BufReader::new(handle);
+                        let handle = std::io::BufReader::new(handle);
                         #[allow(unused_mut)]
                         if is_gzipped {
                             let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
@@ -901,15 +904,21 @@ macro_rules! mz_read {
 /// to create the appropriate writer type. Unlike other uses of [`Sink`], `Sender` and `SyncSender`
 /// are not supported.  It lets you interact with the concrete type intersection in an anonymous closure:
 ///
-/// ```no_run
-///     mz_read!("./test/data/small.mzML".as_ref(), reader => {
-///         mz_write!("./tmp/test.mzML".as_ref(), writer => {
+/// ```
+/// # use std::io;
+/// # use mzdata::prelude::*;
+/// # fn main() -> io::Result<()> {
+///     use mzdata::{mz_read, mz_write};
+///     mzdata::mz_read!("./test/data/small.mzML".as_ref(), reader => {
+///         mzdata::mz_write!("./tmp/test.mzML".as_ref(), writer => {
 ///             writer.copy_metadata_from(&reader);
 ///             for s in reader {
 ///                 writer.write_owned(s)?;
 ///             }
 ///         })?;
 ///     })?;
+/// #   Ok(())
+/// # }
 /// ```
 ///
 /// The closure will return a `std::io::Result` whose success value is inferred from context. The
@@ -991,7 +1000,7 @@ macro_rules! mz_write {
                     }
                     $crate::io::MassSpectrometryFormat::MzML => {
                         let handle = std::io::BufWriter::new(handle);
-                        let mut $writer: MzMLWriterType<_, $C, $D> = MzMLWriterType::new(
+                        let mut $writer: $crate::io::mzml::MzMLWriterType<_, $C, $D> = $crate::io::mzml::MzMLWriterType::new(
                             handle,
                         );
                         Ok($impl)
