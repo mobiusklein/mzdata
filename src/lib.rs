@@ -61,6 +61,7 @@ pub mod prelude;
 pub mod spectrum;
 mod utils;
 
+pub use crate::io::{MZReader, open_file};
 pub use crate::io::mgf::{MGFError, MGFReader, MGFWriter};
 pub use crate::io::mzml::{MzMLParserError as MzMLError, MzMLReader, MzMLWriter, MzMLWriterError};
 

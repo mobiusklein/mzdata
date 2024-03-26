@@ -19,7 +19,7 @@ pub use crate::{
 use crate::io::compression::{is_gzipped, is_gzipped_extension, RestartableGzDecoder};
 use crate::io::mgf::{is_mgf, MGFReaderType, MGFWriterType};
 use crate::io::mzml::{is_mzml, MzMLReaderType, MzMLWriterType};
-use crate::io::traits::{RandomAccessSpectrumIterator, SpectrumSource, SpectrumWriter};
+use crate::io::traits::{RandomAccessSpectrumIterator, SpectrumSource, SpectrumWriter, MZFileReader};
 use crate::meta::MSDataFileMetadata;
 use crate::spectrum::bindata::{BuildArrayMapFrom, BuildFromArrayMap};
 use crate::spectrum::MultiLayerSpectrum;
@@ -59,6 +59,226 @@ impl MassSpectrometryFormat {
 impl Display for MassSpectrometryFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+
+/// An explicit file format dispatching ADT that provides the complete [`SpectrumSource`],
+/// [`RandomAccessSpectrumIterator`], [`MZFileReader`] and [`MSDataFileMetadata`] APIs.
+///
+/// This type internally wraps a concrete type and each operation has to perform a very
+/// fast test to decide which implementation to invoke. This overhead should be trivial
+/// for the vast majority of operations, as compared to the I/O being performed otherwise.
+///
+/// Please refer to each concrete implementation type for details about those types. Keep
+/// in mind that formats that require specific features to be enabled to be available won't
+/// even be visible if their required features aren't set since their variants would have an
+/// unknown size at compile time.
+#[non_exhaustive]
+pub enum MZReaderType<
+        R: io::Read + io::Seek,
+        C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap=CentroidPeak,
+        D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap=DeconvolutedPeak> {
+    MzML(MzMLReaderType<R, C, D>),
+    MGF(MGFReaderType<R, C, D>),
+    #[cfg(feature = "thermorawfilereader")]
+    ThermoRaw(ThermoRawReaderType<C, D>),
+    #[cfg(feature = "mzmlb")]
+    MzMLb(MzMLbReaderType<C, D>)
+}
+
+pub type MZReader<R> = MZReaderType<R, CentroidPeak, DeconvolutedPeak>;
+
+macro_rules! msfmt_dispatch {
+    ($d:ident, $r:ident, $e:expr) => {
+        match $d {
+            MZReaderType::MzML($r) => $e,
+            MZReaderType::MGF($r) => $e,
+            #[cfg(feature = "thermorawfilereader")]
+            MZReaderType::ThermoRaw($r) => $e,
+            #[cfg(feature = "mzmlb")]
+            MZReaderType::MzMLb($r) => $e,
+        }
+    };
+}
+
+impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MZReaderType<fs::File, C, D> {
+
+    fn construct_index_from_stream(&mut self) -> u64 {
+        msfmt_dispatch!(self, reader, reader.construct_index_from_stream())
+    }
+
+    fn open_path<P>(path: P) -> io::Result<Self>
+        where
+            P: Into<path::PathBuf> + Clone, {
+        let (format, _is_gzipped) = infer_format(path.clone())?;
+        match format {
+            MassSpectrometryFormat::MGF => {
+                let reader = MGFReaderType::open_path(path)?;
+                Ok(Self::MGF(reader))
+            }
+            MassSpectrometryFormat::MzML => {
+                let reader = MzMLReaderType::open_path(path)?;
+                Ok(Self::MzML(reader))
+            }
+            #[cfg(feature = "thermorawfilereader")]
+            MassSpectrometryFormat::ThermoRaw => {
+                let reader = ThermoRawReaderType::open_path(path)?;
+                Ok(Self::ThermoRaw(reader))
+            }
+            #[cfg(feature = "mzmlb")]
+            MassSpectrometryFormat::MzMLb => {
+                let reader = MzMLbReaderType::open_path(path)?;
+                Ok(Self::MzMLb(reader))
+            }
+            _ => Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "File format not supported",
+            )),
+        }
+
+    }
+
+    fn open_file(mut source: fs::File) -> io::Result<Self> {
+        let (format, _is_gzipped) = infer_from_stream(&mut source)?;
+        match format {
+            MassSpectrometryFormat::MGF => {
+                let reader = MGFReaderType::open_file(source)?;
+                Ok(Self::MGF(reader))
+            }
+            MassSpectrometryFormat::MzML => {
+                let reader = MzMLReaderType::open_file(source)?;
+                Ok(Self::MzML(reader))
+            }
+            #[cfg(feature = "thermorawfilereader")]
+            MassSpectrometryFormat::ThermoRaw => {
+                let reader = ThermoRawReaderType::open_file(source)?;
+                Ok(Self::ThermoRaw(reader))
+            }
+            #[cfg(feature = "mzmlb")]
+            MassSpectrometryFormat::MzMLb => {
+                let reader = MzMLbReaderType::open_file(source)?;
+                Ok(Self::MzMLb(reader))
+            }
+            _ => Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "File format not supported",
+            )),
+        }
+    }
+}
+
+impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap,
+     R: io::Read + io::Seek> Iterator for MZReaderType<R, C, D> {
+
+    type Item = MultiLayerSpectrum<C, D>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        msfmt_dispatch!(self, reader, reader.next())
+    }
+}
+
+impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap,
+     R: io::Read + io::Seek> SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MZReaderType<R, C, D> {
+
+    fn reset(&mut self) {
+        msfmt_dispatch!(self, reader, reader.reset())
+    }
+
+    fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
+        msfmt_dispatch!(self, reader, reader.get_spectrum_by_id(id))
+    }
+
+    fn get_spectrum_by_index(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
+        msfmt_dispatch!(self, reader, reader.get_spectrum_by_index(index))
+    }
+
+    fn get_index(&self) -> &super::OffsetIndex {
+        msfmt_dispatch!(self, reader, reader.get_index())
+    }
+
+    fn set_index(&mut self, index: super::OffsetIndex) {
+        msfmt_dispatch!(self, reader, reader.set_index(index))
+    }
+}
+
+impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap,
+     R: io::Read + io::Seek> MSDataFileMetadata for MZReaderType<R, C, D> {
+
+    fn data_processings(&self) -> &Vec<crate::meta::DataProcessing> {
+        msfmt_dispatch!(self, reader, reader.data_processings())
+    }
+
+    fn instrument_configurations(&self) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+        msfmt_dispatch!(self, reader, reader.instrument_configurations())
+    }
+
+    fn file_description(&self) -> &crate::meta::FileDescription {
+        msfmt_dispatch!(self, reader, reader.file_description())
+    }
+
+    fn softwares(&self) -> &Vec<crate::meta::Software> {
+        msfmt_dispatch!(self, reader, reader.softwares())
+    }
+
+    fn data_processings_mut(&mut self) -> &mut Vec<crate::meta::DataProcessing> {
+        msfmt_dispatch!(self, reader, reader.data_processings_mut())
+    }
+
+    fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+        msfmt_dispatch!(self, reader, reader.instrument_configurations_mut())
+    }
+
+    fn file_description_mut(&mut self) -> &mut crate::meta::FileDescription {
+        msfmt_dispatch!(self, reader, reader.file_description_mut())
+    }
+
+    fn softwares_mut(&mut self) -> &mut Vec<crate::meta::Software> {
+        msfmt_dispatch!(self, reader, reader.softwares_mut())
+    }
+}
+
+macro_rules! msfmt_dispatch_cap {
+    ($d:ident, $r:ident, $e:expr) => {
+        match $d {
+            MZReaderType::MzML($r) => {
+                $e?;
+            },
+            MZReaderType::MGF($r) => {
+                $e?;
+            },
+            #[cfg(feature = "thermorawfilereader")]
+            MZReaderType::ThermoRaw($r) => {
+                $e?;
+            },
+            #[cfg(feature = "mzmlb")]
+            MZReaderType::MzMLb($r) => {
+                $e?;
+            },
+        };
+    };
+}
+
+impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap,
+     R: io::Read + io::Seek> RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MZReaderType<R, C, D> {
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, super::SpectrumAccessError> {
+        msfmt_dispatch_cap!(self, reader, reader.start_from_id(id));
+        Ok(self)
+    }
+
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, super::SpectrumAccessError> {
+        msfmt_dispatch_cap!(self, reader, reader.start_from_index(index));
+        Ok(self)
+    }
+
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, super::SpectrumAccessError> {
+        msfmt_dispatch_cap!(self, reader, reader.start_from_time(time));
+        Ok(self)
     }
 }
 
@@ -143,7 +363,7 @@ pub fn infer_format<P: Into<path::PathBuf>>(path: P) -> io::Result<(MassSpectrom
 
 /// Given a local file system path, infer the file format, and attempt to open it
 /// for reading.
-pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<Box<dyn SpectrumSource>> {
+pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<MZReader<fs::File>> {
     let path = path.into();
     let (format, is_gzipped) = infer_format(path.clone())?;
 
@@ -157,22 +377,22 @@ pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<Box<dyn Spectrum
             MassSpectrometryFormat::MGF => {
                 let handle = fs::File::open(path)?;
                 let reader = MGFReader::new_indexed(handle);
-                Ok(Box::new(reader))
+                Ok(MZReader::MGF(reader))
             }
             MassSpectrometryFormat::MzML => {
                 let handle = fs::File::open(path)?;
                 let reader = MzMLReader::new_indexed(handle);
-                Ok(Box::new(reader))
+                Ok(MZReader::MzML(reader))
             }
             #[cfg(feature = "thermorawfilereader")]
             MassSpectrometryFormat::ThermoRaw => {
                 let reader = ThermoRawReader::new(&path)?;
-                Ok(Box::new(reader))
+                Ok(MZReader::ThermoRaw(reader))
             }
             #[cfg(feature = "mzmlb")]
             MassSpectrometryFormat::MzMLb => {
                 let reader = MzMLbReader::new(&path)?;
-                Ok(Box::new(reader))
+                Ok(MZReader::MzMLb(reader))
             }
             _ => Err(io::Error::new(
                 io::ErrorKind::Unsupported,
@@ -722,305 +942,6 @@ pub trait MassSpectrometryReadWriteProcess<
 }
 
 
-/// A macro that dynamically works out how to get a [`SpectrumSource`]-derived object
-/// from a path or [`io::Read`](std::io::Read) + [`io::Seek`](std::io::Seek) boxed object.
-/// This is meant to be a convenience for working with a scoped file reader
-/// without penalty.
-///
-/// `$source` is coerced into a [`Source`] which the macro in turn probes to determine
-/// the appropriate file reading type. Unlike [`open_file`], this macro does not actually
-/// return the reading type behind an opaque `Box<dyn SpectrumSource>`, but lets you interact
-/// with the concrete type intersection without concern with object safety in an anonymous closure:
-///
-/// ```
-/// # use std::io;
-/// # use mzdata::prelude::*;
-/// # use mzdata::Spectrum;
-/// # fn main() -> io::Result<()> {
-/// let spectra: Vec<Spectrum> = mzdata::mz_read!("./test/data/small.mzML".as_ref(), reader => { reader.collect() })?;
-/// # Ok(())
-/// # }
-/// ```
-/// The closure will return a `std::io::Result` whose success value is inferred from context. The
-/// reader's lifetime is bound to the closure, and cannot be extracted without substantial type system
-/// torture.
-///
-/// If you want to use peak types *other than* the simple defaults, pass them as additional parameters after
-/// the closure.
-#[macro_export]
-macro_rules! mz_read {
-    ($source:expr, $reader:ident => $impl:tt) => {
-        $crate::mz_read!($source, $reader => $impl, mzpeaks::CentroidPeak, mzpeaks::DeconvolutedPeak)
-    };
-    ($source:expr, $reader:ident => $impl:tt, $C:ty, $D:ty) => {{
-        let source = $crate::io::Source::<_, _>::from($source);
-        match source {
-            $crate::io::Source::PathLike(read_path) => {
-                let (format, is_gzipped) = $crate::io::infer_format(&read_path)?;
-                match format {
-                    $crate::io::MassSpectrometryFormat::MGF => {
-                        let handle = std::fs::File::open(read_path)?;
-                        if is_gzipped {
-                            let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new($crate::io::mgf::MGFReaderType::<_, $C, $D>::new(fh));
-                            Ok($impl)
-                        } else {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::mgf::MGFReaderType<_, $C, $D> = $crate::io::mgf::MGFReaderType::new_indexed(handle);
-                            Ok($impl)
-                        }
-                    }
-                    $crate::io::MassSpectrometryFormat::MzML => {
-                        let handle = std::fs::File::open(read_path)?;
-
-                        if is_gzipped {
-                            let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new($crate::io::mzml::MzMLReaderType::<_, $C, $D>::new(fh));
-                            Ok($impl)
-                        } else {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::mzml::MzMLReaderType<_, $C, $D> = $crate::io::mzml::MzMLReaderType::<_, $C, $D>::new_indexed(handle);
-                            Ok($impl)
-                        }
-                    }
-                    #[cfg(feature = "mzmlb")]
-                    $crate::io::MassSpectrometryFormat::MzMLb => {
-                        #[allow(unused_mut)]
-                        let mut $reader: $crate::io::mzmlb::MzMLbReaderType<$C, $D> = $crate::io::mzmlb::MzMLbReaderType::<$C, $D>::new(&read_path)?;
-                        Ok($impl)
-                    },
-                    #[cfg(feature = "thermorawfilereader")]
-                    $crate::io::MassSpectrometryFormat::ThermoRaw => {
-                        #[allow(unused_mut)]
-                        let mut $reader: $crate::io::thermo::ThermoRawReaderType<$C, $D> = $crate::io::thermo::ThermoRawReaderType::<$C, $D>::new(&read_path)?;
-                        Ok($impl)
-                    },
-                    _ => Err(std::io::Error::new(
-                        std::io::ErrorKind::Unsupported,
-                        format!(
-                            "Input file format for {} not supported",
-                            read_path.display()
-                        ),
-                    )),
-                }
-            },
-            $crate::io::Source::Reader(mut handle, format) => {
-                let (format, is_gzipped) = if let Some(format) = format { (format, false) } else { $crate::io::infer_from_stream(&mut handle)? };
-                match format {
-                    $crate::io::MassSpectrometryFormat::MGF => {
-                        let handle = std::io::BufReader::new(handle);
-                        #[allow(unused_mut)]
-                        if is_gzipped {
-                            let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new($crate::io::mgf::MGFReaderType::<_, $C, $D>::new(fh));
-                            Ok($impl)
-                        } else {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::mgf::MGFReaderType<_, $C, $D> = $crate::io::mgf::MGFReaderType::new_indexed(handle);
-                            Ok($impl)
-                        }
-                    },
-                    $crate::io::MassSpectrometryFormat::MzML => {
-                        let handle = std::io::BufReader::new(handle);
-                        #[allow(unused_mut)]
-                        if is_gzipped {
-                            let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new($crate::io::mzml::MzMLReaderType::<_, $C, $D>::new(fh));
-                            Ok($impl)
-                        } else {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::mzml::MzMLReaderType<_, $C, $D> = $crate::io::mzml::MzMLReaderType::<_, $C, $D>::new_indexed(handle);
-                            Ok($impl)
-                        }
-                    },
-                    _ => Err(std::io::Error::new(
-                        std::io::ErrorKind::Unsupported,
-                        format!(
-                            "Input file format for {:?} not supported from an io::Read",
-                            format
-                        ),
-                    )),
-                }
-            },
-            $crate::io::Source::Receiver(receiver) => {
-                #[allow(unused_mut)]
-                let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(receiver);
-                Ok($impl)
-            },
-            $crate::io::Source::Stdin => {
-                let mut buffered =
-                    $crate::io::PreBufferedStream::new_with_buffer_size(std::io::stdin(), 2usize.pow(20))?;
-                let (ms_format, compressed) = $crate::io::infer_from_stream(&mut buffered)?;
-                match ms_format {
-                    $crate::io::MassSpectrometryFormat::MGF => {
-                        if compressed {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(
-                                $crate::io::mgf::MGFReaderType::new(
-                                    $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(buffered)),
-                            ));
-                            Ok($impl)
-                        } else {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(
-                                $crate::io::mgf::MGFReaderType::new(buffered));
-                            Ok($impl)
-                        }
-                    }
-                    $crate::io::MassSpectrometryFormat::MzML => {
-                        if compressed {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(
-                                $crate::io::mzml::MzMLReaderType::new($crate::io::RestartableGzDecoder::new(std::io::BufReader::new(buffered)),
-                            ));
-                            Ok($impl)
-                        } else {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(
-                                $crate::io::mzml::MzMLReaderType::new(buffered));
-                            Ok($impl)
-                        }
-                    }
-                    _ => {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Unsupported,
-                            "{ms_format:?} format is not supported over Stdin",
-                        ).into())
-                    }
-                }
-            },
-        }
-    }};
-}
-
-/// A macro that dynamically works out how to get a [`SpectrumWriter`](crate::io::SpectrumWriter) from a path
-/// or [`io::Write`] boxed object.
-///
-/// `$sink` is coerced to a [`Sink`] which in turn the macro probes in order to determine how
-/// to create the appropriate writer type. Unlike other uses of [`Sink`], `Sender` and `SyncSender`
-/// are not supported.  It lets you interact with the concrete type intersection in an anonymous closure:
-///
-/// ```ignore
-/// # use std::io;
-/// # use mzdata::prelude::*;
-/// # fn main() -> io::Result<()> {
-///     use mzdata::{mz_read, mz_write};
-///     mzdata::mz_read!("./test/data/small.mzML".as_ref(), reader => {
-///         mzdata::mz_write!("./tmp/test.mzML".as_ref(), writer => {
-///             writer.copy_metadata_from(&reader);
-///             for s in reader {
-///                 writer.write_owned(s)?;
-///             }
-///         })?;
-///     })?;
-/// #   Ok(())
-/// # }
-/// ```
-///
-/// The closure will return a `std::io::Result` whose success value is inferred from context. The
-/// writer's lifetime is bound to the closure, and cannot be extracted without substantial type system
-/// torture.
-///
-/// If you want to use peak types *other than* the simple defaults, pass them as additional parameters after
-/// the closure
-#[macro_export]
-macro_rules! mz_write {
-    ($sink:expr, $writer:ident => $impl:tt) => {
-        mz_write!($sink, $writer => $impl, mzpeaks::CentroidPeak, mzpeaks::DeconvolutedPeak)
-    };
-    ($sink:expr, $writer:ident => $impl:tt, $C:ty, $D:ty) => {{
-        let sink = $crate::io::Sink::<$C, $D>::from($sink);
-        match sink {
-           $crate::io:: Sink::Sender(_) | $crate::io::Sink::SyncSender(_) =>  {
-                Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "Sender writers aren't supported by `mz_write`"))
-            }
-            $crate::io::Sink::PathLike(write_path) => {
-                let (writer_format, is_gzip) = $crate::io::infer_from_path(&write_path);
-                match writer_format {
-                    $crate::io::MassSpectrometryFormat::MGF => {
-                        let handle = std::io::BufWriter::new(std::fs::File::create(&write_path)?);
-                        if is_gzip {
-                            let handle = flate2::write::GzEncoder::new(handle, flate2::Compression::best());
-                            let mut $writer: $crate::io::mgf::MGFWriterType<_, $C, $D> = $crate::io::mgf::MGFWriterType::new(
-                                handle,
-                            );
-                            Ok($impl)
-                        } else {
-                            let mut $writer: $crate::io::mgf::MGFWriterType<_, $C, $D> = $crate::io::mgf::MGFWriterType::new(
-                                handle,
-                            );
-                            Ok($impl)
-
-                        }
-                    }
-                    $crate::io::MassSpectrometryFormat::MzML => {
-                        let handle = std::io::BufWriter::new(std::fs::File::create(&write_path)?);
-                        if is_gzip {
-                            let handle = flate2::write::GzEncoder::new(handle, flate2::Compression::best());
-                            let mut $writer: $crate::io::mzml::MzMLWriterType<_, $C, $D> = $crate::io::mzml::MzMLWriterType::new(
-                                handle,
-                            );
-                            Ok($impl)
-                        } else {
-                            let mut $writer: $crate::io::mzml::MzMLWriterType<_, $C, $D> = $crate::io::mzml::MzMLWriterType::new(
-                                handle,
-                            );
-                            Ok($impl)
-                        }
-                    }
-                    #[cfg(feature = "mzmlb")]
-                    $crate::io::MassSpectrometryFormat::MzMLb => {
-                        let mut $writer = $crate::io::mzmlb::MzMLbWriterBuilder::<$C, $D>::new(&write_path)
-                            .with_zlib_compression(9)
-                            .create()?;
-                        Ok($impl)
-                    }
-                    _ => Err(std::io::Error::new(
-                        std::io::ErrorKind::Unsupported,
-                        format!(
-                            "Output file format {:?} for {} not supported",
-                            writer_format,
-                            write_path.display()
-                        ),
-                    )),
-                }
-            },
-            $crate::io::Sink::Writer(handle, writer_format) => {
-                match writer_format {
-                    $crate::io::MassSpectrometryFormat::MGF => {
-                        let handle = std::io::BufWriter::new(handle);
-                        let mut $writer: $crate::io::mgf::MGFWriterType<_, $C, $D> = $crate::io::mgf::MGFWriterType::new(
-                            handle,
-                        );
-                        Ok($impl)
-                    }
-                    $crate::io::MassSpectrometryFormat::MzML => {
-                        let handle = std::io::BufWriter::new(handle);
-                        let mut $writer: $crate::io::mzml::MzMLWriterType<_, $C, $D> = $crate::io::mzml::MzMLWriterType::new(
-                            handle,
-                        );
-                        Ok($impl)
-                    }
-                    _ => {
-                        Err(std::io::Error::new(
-                                std::io::ErrorKind::Unsupported,
-                                format!(
-                                    "Output file format for {:?} not supported",
-                                    writer_format
-                                ),
-                            ))
-                    }
-                }
-            }
-        }
-    }};
-}
-
-
 #[cfg(test)]
 mod test {
     use crate::{
@@ -1084,39 +1005,14 @@ mod test {
     }
 
     #[test]
-    fn test_mz_read() -> io::Result<()> {
-        let val: Vec<_> = mz_read!("./test/data/small.mzML".as_ref(), reader => { reader.collect() })?;
-        assert_eq!(val.len(), 48);
-        let val: Vec<_> = mz_read!("./test/data/small.mgf".as_ref(), reader => { reader.collect() })?;
-        assert_eq!(val.len(), 34);
-        let val = mz_read!("./test/data/small.mzML".as_ref(), reader => { reader.file_description().clone() })?;
-        assert_eq!(val.source_files.len(), 1);
-        Ok(())
-    }
+    fn test_dispatch_mzreader() -> io::Result<()> {
+        let mut reader = MZReader::open_path("./test/data/small.mzML")?;
 
-    #[test]
-    fn test_mz_read_nested() -> io::Result<()> {
-        mz_read!("./test/data/small.mzML".as_ref(), reader => {
-            mz_read!("./test/data/small.mzML".as_ref(), reader2 => {
-                assert_eq!(reader.len(), reader2.len());
-            })?;
-        })?;
+        let n = reader.len();
+        let n_ms1 = reader.iter().filter(|s| s.ms_level() == 1).count();
+        let n_msn = reader.iter().filter(|s| s.ms_level() == 2).count();
 
-        Ok(())
-    }
-
-    #[test]
-    fn test_mz_write() -> io::Result<()> {
-        let tmpdir = tempfile::tempdir()?;
-        let path = tmpdir.path().join("test.mzML");
-        mz_read!("./test/data/small.mzML".as_ref(), reader => {
-            mz_write!(path.as_ref(), writer => {
-                writer.copy_metadata_from(&reader);
-                for s in reader {
-                    writer.write_owned(s)?;
-                }
-            })?;
-        })?;
+        assert_eq!(n, n_ms1 + n_msn);
         Ok(())
     }
 }

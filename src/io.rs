@@ -11,12 +11,13 @@ pub mod mzmlb;
 mod offset_index;
 pub(crate) mod traits;
 mod utils;
+mod shorthand;
 
 pub(crate) mod compression;
 
 pub use crate::io::infer_format::{
     infer_format, infer_from_path, infer_from_stream, open_file, MassSpectrometryFormat,
-    MassSpectrometryReadWriteProcess, Sink, Source
+    MassSpectrometryReadWriteProcess, Sink, Source, MZReader, MZReaderType
 };
 pub use crate::io::mgf::{MGFError, MGFReader, MGFWriter};
 #[cfg(feature = "async")]

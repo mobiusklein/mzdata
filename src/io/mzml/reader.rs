@@ -888,7 +888,6 @@ impl<
                         .decode_and_store()
                         .expect("Error during decoding and storing of array data");
                 }
-                debug!("Adding {}", array.name);
                 self.arrays.add(array);
                 return Ok(MzMLParserState::BinaryDataArrayList);
             }
