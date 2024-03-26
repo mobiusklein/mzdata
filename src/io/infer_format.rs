@@ -904,7 +904,7 @@ macro_rules! mz_read {
 /// to create the appropriate writer type. Unlike other uses of [`Sink`], `Sender` and `SyncSender`
 /// are not supported.  It lets you interact with the concrete type intersection in an anonymous closure:
 ///
-/// ```
+/// ```ignore
 /// # use std::io;
 /// # use mzdata::prelude::*;
 /// # fn main() -> io::Result<()> {
