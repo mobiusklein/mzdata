@@ -1,5 +1,5 @@
 #[allow(unused)]
-use super::{Sink, Source, SpectrumSource, open_file};
+use super::{Sink, Source, SpectrumSource};
 
 /// A macro that dynamically works out how to get a [`SpectrumSource`]-derived object
 /// from a path or [`io::Read`](std::io::Read) + [`io::Seek`](std::io::Seek) boxed object.
@@ -7,9 +7,8 @@ use super::{Sink, Source, SpectrumSource, open_file};
 /// without penalty.
 ///
 /// `$source` is coerced into a [`Source`] which the macro in turn probes to determine
-/// the appropriate file reading type. Unlike [`open_file`], this macro does not actually
-/// return the reading type behind an opaque object, but lets you interact
-/// with the concrete type intersection without concern with object safety in an anonymous closure:
+/// the appropriate file reading type. This lets you interact with the concrete type intersection
+/// without concern with object safety in an anonymous closure:
 ///
 /// ```
 /// # use std::io;

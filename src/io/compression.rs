@@ -20,6 +20,11 @@ pub fn is_gzipped_extension(path: path::PathBuf) -> (bool, path::PathBuf) {
     }
 }
 
+/// A [`flate2::bufread::MultiGzDecoder`] that implements [`std::io::Seek`] by
+/// by incrementally reading ahead, or rewinding to the beginning of the file and
+/// doing the same.
+///
+/// Not intended to be efficient, but provides a workable interface.
 pub struct RestartableGzDecoder<R: BufRead + Seek> {
     handle: Option<MultiGzDecoder<R>>,
     offset: u64,

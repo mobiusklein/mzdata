@@ -16,7 +16,7 @@ mod shorthand;
 pub(crate) mod compression;
 
 pub use crate::io::infer_format::{
-    infer_format, infer_from_path, infer_from_stream, open_file, MassSpectrometryFormat,
+    infer_format, infer_from_path, infer_from_stream, MassSpectrometryFormat,
     MassSpectrometryReadWriteProcess, Sink, Source, MZReader, MZReaderType
 };
 pub use crate::io::mgf::{MGFError, MGFReader, MGFWriter};

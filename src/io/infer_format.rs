@@ -11,10 +11,7 @@ use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, Deconvoluted
 use crate::io::PreBufferedStream;
 use crate::params::ControlledVocabulary;
 #[cfg(feature = "mzmlb")]
-pub use crate::{
-    io::mzmlb::{MzMLbReaderType, MzMLbWriterBuilder},
-    MzMLbReader,
-};
+pub use crate::io::mzmlb::{MzMLbReaderType, MzMLbWriterBuilder};
 
 use crate::io::compression::{is_gzipped, is_gzipped_extension, RestartableGzDecoder};
 use crate::io::mgf::{is_mgf, MGFReaderType, MGFWriterType};
@@ -23,10 +20,10 @@ use crate::io::traits::{RandomAccessSpectrumIterator, SpectrumSource, SpectrumWr
 use crate::meta::MSDataFileMetadata;
 use crate::spectrum::bindata::{BuildArrayMapFrom, BuildFromArrayMap};
 use crate::spectrum::MultiLayerSpectrum;
-use crate::{MGFReader, MzMLReader, Param};
+use crate::Param;
 
 #[cfg(feature = "thermorawfilereader")]
-use super::thermo::{ThermoRawReader, ThermoRawReaderType, is_thermo_raw_prefix};
+use super::thermo::{ThermoRawReaderType, is_thermo_raw_prefix};
 
 use super::traits::{SeekRead, SpectrumReceiver, StreamingSpectrumIterator};
 
@@ -87,6 +84,24 @@ pub enum MZReaderType<
     MzMLb(MzMLbReaderType<C, D>)
 }
 
+impl<R: io::Read + io::Seek,
+     C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> MZReaderType<R, C, D> {
+
+    /// Get the file format for this reader
+    pub fn as_format(&self) -> MassSpectrometryFormat {
+        match &self {
+            MZReaderType::MzML(_) => MassSpectrometryFormat::MzML,
+            MZReaderType::MGF(_) => MassSpectrometryFormat::MGF,
+            #[cfg(feature = "thermorawfilereader")]
+            MZReaderType::ThermoRaw(_) => MassSpectrometryFormat::ThermoRaw,
+            #[cfg(feature = "mzmlb")]
+            MZReaderType::MzMLb(_) => MassSpectrometryFormat::MzMLb,
+        }
+    }
+}
+
+/// A specialization of [`MZReaderType`] for the default peak types, for common use.
 pub type MZReader<R> = MZReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
 macro_rules! msfmt_dispatch {
@@ -112,7 +127,13 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
     fn open_path<P>(path: P) -> io::Result<Self>
         where
             P: Into<path::PathBuf> + Clone, {
-        let (format, _is_gzipped) = infer_format(path.clone())?;
+        let (format, is_gzipped) = infer_format(path.clone())?;
+        if is_gzipped {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "Gzipped files are not supported",
+            ))
+        }
         match format {
             MassSpectrometryFormat::MGF => {
                 let reader = MGFReaderType::open_path(path)?;
@@ -141,7 +162,14 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
     }
 
     fn open_file(mut source: fs::File) -> io::Result<Self> {
-        let (format, _is_gzipped) = infer_from_stream(&mut source)?;
+        let (format, is_gzipped) = infer_from_stream(&mut source)?;
+
+        if is_gzipped {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "Gzipped files are not supported",
+            ))
+        }
         match format {
             MassSpectrometryFormat::MGF => {
                 let reader = MGFReaderType::open_file(source)?;
@@ -358,47 +386,6 @@ pub fn infer_format<P: Into<path::PathBuf>>(path: P) -> io::Result<(MassSpectrom
             Ok((format, is_gzipped))
         }
         _ => Ok((format, is_gzipped)),
-    }
-}
-
-/// Given a local file system path, infer the file format, and attempt to open it
-/// for reading.
-pub fn open_file<P: Into<path::PathBuf>>(path: P) -> io::Result<MZReader<fs::File>> {
-    let path = path.into();
-    let (format, is_gzipped) = infer_format(path.clone())?;
-
-    if is_gzipped {
-        Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "Gzipped files are not supported",
-        ))
-    } else {
-        match format {
-            MassSpectrometryFormat::MGF => {
-                let handle = fs::File::open(path)?;
-                let reader = MGFReader::new_indexed(handle);
-                Ok(MZReader::MGF(reader))
-            }
-            MassSpectrometryFormat::MzML => {
-                let handle = fs::File::open(path)?;
-                let reader = MzMLReader::new_indexed(handle);
-                Ok(MZReader::MzML(reader))
-            }
-            #[cfg(feature = "thermorawfilereader")]
-            MassSpectrometryFormat::ThermoRaw => {
-                let reader = ThermoRawReader::new(&path)?;
-                Ok(MZReader::ThermoRaw(reader))
-            }
-            #[cfg(feature = "mzmlb")]
-            MassSpectrometryFormat::MzMLb => {
-                let reader = MzMLbReader::new(&path)?;
-                Ok(MZReader::MzMLb(reader))
-            }
-            _ => Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "File format not supported",
-            )),
-        }
     }
 }
 
@@ -973,7 +960,7 @@ mod test {
     fn infer_open() {
         let path = path::Path::new("./test/data/small.mzML");
         assert!(path.exists());
-        if let Ok(mut reader) = open_file(path) {
+        if let Ok(mut reader) = MZReader::open_path(path) {
             assert_eq!(reader.len(), 48);
 
             if let Some(spec) = reader.get_spectrum_by_index(10) {
@@ -1012,6 +999,7 @@ mod test {
         let n_ms1 = reader.iter().filter(|s| s.ms_level() == 1).count();
         let n_msn = reader.iter().filter(|s| s.ms_level() == 2).count();
 
+        assert_eq!(n, 48);
         assert_eq!(n, n_ms1 + n_msn);
         Ok(())
     }
