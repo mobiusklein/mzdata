@@ -10,6 +10,8 @@ use indexmap::IndexMap;
 /**
 An ordered mapping from entity ID to byte offset into the source
 file it resides in.
+
+A wrapper around [`indexmap::IndexMap`].
 */
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct OffsetIndex {
@@ -35,11 +37,13 @@ impl OffsetIndex {
         }
     }
 
+    /// Get the offset of the specified key
     #[inline]
     pub fn get(&self, key: &str) -> Option<u64> {
         self.offsets.get(key).copied()
     }
 
+    /// Get the associated key and offset for the specified index position
     #[inline]
     pub fn get_index(&self, index: usize) -> Option<(&String, u64)> {
         if let Some((key, offset)) = self.offsets.get_index(index) {
@@ -49,11 +53,13 @@ impl OffsetIndex {
         }
     }
 
+    /// Get the position in the index for a specific key
     #[inline]
     pub fn index_of(&self, key: &str) -> Option<usize> {
         self.offsets.get_index_of(key)
     }
 
+    /// Insert `key` into the index with an offset value
     #[inline]
     pub fn insert(&mut self, key: String, offset: u64) -> Option<u64> {
         self.offsets.insert(key, offset)
@@ -72,19 +78,23 @@ impl OffsetIndex {
         self.offsets.keys()
     }
 
+    /// Iterate over the keys and indices
     pub fn iter(&self) -> Iter<String, u64> {
         self.offsets.iter()
     }
 
+    /// Check if the key is in the index
     #[inline]
     pub fn contains_key(&self, key: &str) -> bool {
         self.offsets.contains_key(key)
     }
 
+    /// Write the index out in JSON format to `writer`
     pub fn to_writer<W: Write>(&self, writer: W) -> serde_json::Result<()> {
         serde_json::to_writer(writer, self)
     }
 
+    /// Read an index in JSON format from `reader`
     pub fn from_reader<R: Read>(reader: R) -> serde_json::Result<Self> {
         serde_json::from_reader(reader)
     }

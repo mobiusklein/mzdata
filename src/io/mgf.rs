@@ -6,10 +6,7 @@ Supports random access when reading from a source that supports [`io::Seek`].
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fs;
-use std::io;
-use std::io::prelude::*;
-use std::io::BufWriter;
-use std::io::SeekFrom;
+use std::io::{self, prelude::*, BufWriter, SeekFrom};
 use std::marker::PhantomData;
 use std::mem;
 use std::str;
@@ -24,27 +21,30 @@ use mzpeaks::{
 };
 use regex::Regex;
 
-use super::offset_index::OffsetIndex;
-use super::traits::{
-    MZFileReader, RandomAccessSpectrumIterator, SpectrumSource, SpectrumWriter, SeekRead,
-    SpectrumAccessError,
+use super::{
+    offset_index::OffsetIndex,
+    traits::{
+        MZFileReader, RandomAccessSpectrumIterator, SeekRead, SpectrumAccessError, SpectrumSource,
+        SpectrumWriter,
+    },
+    utils::DetailLevel,
 };
-use super::utils::DetailLevel;
+
 use crate::meta::{
-    DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, Software,
-    MassSpectrometryRun
+    DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
+    MassSpectrometryRun, Software,
 };
 use crate::params::{ControlledVocabulary, Param, ParamDescribed, ParamLike, CURIE};
 use crate::spectrum::{
-    IonProperties, RefPeakDataLevel, Precursor, PrecursorSelection, SelectedIon, SignalContinuity,
-    SpectrumDescription, SpectrumLike,
-    spectrum::{
-        CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
-    },
     bindata::{
         vec_as_bytes, ArrayType, BinaryArrayMap, BinaryDataArrayType, BuildArrayMapFrom,
         BuildFromArrayMap, DataArray,
-    }
+    },
+    spectrum::{
+        CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
+    },
+    IonProperties, Precursor, PrecursorSelection, RefPeakDataLevel, SelectedIon, SignalContinuity,
+    SpectrumDescription, SpectrumLike,
 };
 use crate::utils::neutral_mass;
 
@@ -230,7 +230,7 @@ impl<
         let mut chars = line.chars();
         let first = chars.next().unwrap();
         if first.is_numeric() {
-            let parts: Vec<&str> = PEAK_SEPERATOR.split(line).collect();
+            let parts: Vec<&str> = line.split_ascii_whitespace().collect();
             let nparts = parts.len();
             if !(2..=3).contains(&nparts) {
                 self.state = MGFParserState::Error;
@@ -292,14 +292,12 @@ impl<
                         parts.next().map(|v| v.parse().unwrap()).unwrap_or_default();
                     let charge: Option<i32> = parts.next().map(|c| c.parse().unwrap());
                     builder.description.precursor = Some(Precursor {
-                        ions: vec![
-                                SelectedIon {
-                                mz,
-                                intensity,
-                                charge,
-                                ..Default::default()
-                            },
-                        ],
+                        ions: vec![SelectedIon {
+                            mz,
+                            intensity,
+                            charge,
+                            ..Default::default()
+                        }],
                         ..Default::default()
                     });
                 }
@@ -463,7 +461,7 @@ impl<
             softwares: Vec::new(),
             file_description: Self::default_file_description(),
             detail_level: DetailLevel::Full,
-            run: MassSpectrometryRun::default()
+            run: MassSpectrometryRun::default(),
         }
     }
 }
@@ -672,7 +670,6 @@ impl<
     }
 }
 
-
 /// The MGF format does not contain any consistent metadata, but additional
 /// information can be included after creation.
 impl<
@@ -749,14 +746,11 @@ impl<
             instrument_configurations: Default::default(),
             softwares: Default::default(),
             data_processings: Default::default(),
-            run: Default::default()
+            run: Default::default(),
         }
     }
 
-    pub fn make_title<S: SpectrumLike<C, D>>(
-        &self,
-        spectrum: &S,
-    ) -> String {
+    pub fn make_title<S: SpectrumLike<C, D>>(&self, spectrum: &S) -> String {
         let idx = spectrum.index();
         let charge = spectrum
             .precursor()
@@ -767,9 +761,13 @@ impl<
         let source_file = self.source_file_name();
         let title = match (run_id, source_file) {
             (None, None) => format!("run.{idx}.{idx}.{charge} NativeID:\"{id}\""),
-            (None, Some(source_name)) => format!("run.{idx}.{idx}.{charge} SourceFile:\"{source_name}\""),
+            (None, Some(source_name)) => {
+                format!("run.{idx}.{idx}.{charge} SourceFile:\"{source_name}\"")
+            }
             (Some(run_id), None) => format!("{run_id}.{idx}.{idx}.{charge} NativeID:\"{id}\""),
-            (Some(run_id), Some(source_name)) => format!("{run_id}.{idx}.{idx}.{charge} SourceFile:\"{source_name}\", NativeID:\"{id}\""),
+            (Some(run_id), Some(source_name)) => format!(
+                "{run_id}.{idx}.{idx}.{charge} SourceFile:\"{source_name}\", NativeID:\"{id}\""
+            ),
         };
         title
     }

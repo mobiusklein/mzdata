@@ -47,7 +47,6 @@ pub enum PeakDataLevel<C: CentroidLike, D: DeconvolutedCentroidLike> {
     Deconvoluted(MassPeakSetType<D>),
 }
 
-
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
     /// Compute the base peak of a spectrum
     pub fn base_peak(&self) -> CentroidPeak {
@@ -165,10 +164,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
     pub fn len(&self) -> usize {
         match self {
             Self::Missing => 0,
-            Self::RawData(arrays) => arrays
-                .mzs()
-                .map(|arr| arr.len())
-                .unwrap_or_default(),
+            Self::RawData(arrays) => arrays.mzs().map(|arr| arr.len()).unwrap_or_default(),
             Self::Centroid(peaks) => peaks.len(),
             Self::Deconvoluted(peaks) => peaks.len(),
         }
@@ -179,7 +175,6 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
         self.len() == 0
     }
 }
-
 
 #[derive(Debug)]
 /// An variant for dispatching to different strategies of computing
@@ -308,10 +303,9 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D
     pub fn len(&self) -> usize {
         match self {
             RefPeakDataLevel::Missing => 0,
-            RefPeakDataLevel::RawData(arrays) => arrays
-                .mzs()
-                .map(|arr| arr.len())
-                .unwrap_or_default(),
+            RefPeakDataLevel::RawData(arrays) => {
+                arrays.mzs().map(|arr| arr.len()).unwrap_or_default()
+            }
             RefPeakDataLevel::Centroid(peaks) => peaks.len(),
             RefPeakDataLevel::Deconvoluted(peaks) => peaks.len(),
         }
@@ -322,7 +316,6 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D
         self.len() == 0
     }
 }
-
 
 impl<'a, C: CentroidLike + Clone, D: DeconvolutedCentroidLike + Clone> RefPeakDataLevel<'a, C, D> {
     pub fn cloned(&self) -> PeakDataLevel<C, D> {
@@ -486,11 +479,19 @@ pub enum SpectrumConversionError {
 pub enum SpectrumProcessingError {
     #[cfg(feature = "mzsignal")]
     #[error("An error occurred while denoising: {0:?}")]
-    DenoisingError(DenoisingError),
+    DenoisingError(
+        #[from]
+        #[source]
+        DenoisingError,
+    ),
 
     #[cfg(feature = "mzsignal")]
     #[error("An error occurred while peak picking: {0:?}")]
-    PeakPickerError(PeakPickerError),
+    PeakPickerError(
+        #[from]
+        #[source]
+        PeakPickerError,
+    ),
 
     #[error("An error occurred while trying to convert spectrum types: {0}")]
     SpectrumConversionError(
@@ -650,7 +651,12 @@ impl SpectrumLike for RawSpectrum {
         Some(&self.arrays)
     }
 
-    fn into_peaks_and_description(self) -> (PeakDataLevel<CentroidPeak, DeconvolutedPeak>, SpectrumDescription) {
+    fn into_peaks_and_description(
+        self,
+    ) -> (
+        PeakDataLevel<CentroidPeak, DeconvolutedPeak>,
+        SpectrumDescription,
+    ) {
         (PeakDataLevel::RawData(self.arrays), self.description)
     }
 }
@@ -705,7 +711,9 @@ impl<C: CentroidLike + Default> SpectrumLike<C> for CentroidSpectrumType<C> {
         None
     }
 
-    fn into_peaks_and_description(self) -> (PeakDataLevel<C, DeconvolutedPeak>, SpectrumDescription) {
+    fn into_peaks_and_description(
+        self,
+    ) -> (PeakDataLevel<C, DeconvolutedPeak>, SpectrumDescription) {
         (PeakDataLevel::Centroid(self.peaks), self.description)
     }
 }
@@ -793,7 +801,10 @@ impl<D: DeconvolutedCentroidLike + Default> SpectrumLike<CentroidPeak, D>
     }
 
     fn into_peaks_and_description(self) -> (PeakDataLevel<CentroidPeak, D>, SpectrumDescription) {
-        (PeakDataLevel::Deconvoluted(self.deconvoluted_peaks), self.description)
+        (
+            PeakDataLevel::Deconvoluted(self.deconvoluted_peaks),
+            self.description,
+        )
     }
 }
 
@@ -802,6 +813,8 @@ pub type DeconvolutedSpectrum = DeconvolutedSpectrumType<DeconvolutedPeak>;
 #[derive(Default, Debug, Clone)]
 /// Represent a spectrum with multiple layers of representation of the
 /// peak data.
+///
+/// This type is useful because it permits us to hold spectra in incrementally
 pub struct MultiLayerSpectrum<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
@@ -1009,7 +1022,10 @@ where
         }
     }
 
-    pub fn from_peaks_data_levels_and_description(peaks: PeakDataLevel<C, D>, description: SpectrumDescription) -> Self {
+    pub fn from_peaks_data_levels_and_description(
+        peaks: PeakDataLevel<C, D>,
+        description: SpectrumDescription,
+    ) -> Self {
         match peaks {
             PeakDataLevel::Missing => Self::new(description, None, None, None),
             PeakDataLevel::RawData(arrays) => Self::new(description, Some(arrays), None, None),
@@ -1191,6 +1207,8 @@ where
     }
 }
 
+/// A ready-to-use parameterized type for representing a spectrum
+/// in multiple overlapping layers.
 pub type Spectrum = MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>;
 
 impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> From<CentroidSpectrumType<C>>
@@ -1265,7 +1283,6 @@ where
         }
     }
 }
-
 
 #[cfg(test)]
 mod test {

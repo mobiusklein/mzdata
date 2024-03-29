@@ -62,6 +62,8 @@ impl Display for MassSpectrometryFormat {
 
 /// An explicit file format dispatching ADT that provides the complete [`SpectrumSource`],
 /// [`RandomAccessSpectrumIterator`], [`MZFileReader`] and [`MSDataFileMetadata`] APIs.
+/// The preferred means of creating an instance is through the [`MZReaderType::open_path`]
+/// function.
 ///
 /// This type internally wraps a concrete type and each operation has to perform a very
 /// fast test to decide which implementation to invoke. This overhead should be trivial
@@ -101,7 +103,8 @@ impl<R: io::Read + io::Seek,
     }
 }
 
-/// A specialization of [`MZReaderType`] for the default peak types, for common use.
+/// A specialization of [`MZReaderType`] for the default peak types, for common use. The preferred means
+/// of creating an instance is using the [`MZReader::open_path`] function.
 pub type MZReader<R> = MZReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
 macro_rules! msfmt_dispatch {

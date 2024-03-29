@@ -24,14 +24,14 @@
 //! use std::fs;
 //! use mzdata::prelude::*;
 //! use mzpeaks::Tolerance;
-//! use mzdata::io::MzMLReader;
+//! use mzdata::MZReader;
 //! use mzdata::spectrum::SignalContinuity;
 //!
-//! let reader = MzMLReader::open_path("./test/data/small.mzML").unwrap();
+//! let reader = MZReader::open_path("./test/data/small.mzML").unwrap();
 //! for spectrum in reader {
 //!     println!("Scan {} => BP {}", spectrum.id(), spectrum.peaks().base_peak().mz);
 //!
-//!     if spectrum.signal_continuity() < SignalContinuity::Profile {
+//!     if spectrum.signal_continuity() == SignalContinuity::Centroid {
 //!         let peak_picked = spectrum.into_centroid().unwrap();
 //!         println!("Matches for 579.155: {:?}",
 //!                  peak_picked.peaks.all_peaks_for(
@@ -62,12 +62,12 @@ pub mod spectrum;
 mod utils;
 
 pub use crate::io::MZReader;
-pub use crate::io::mgf::{MGFError, MGFReader, MGFWriter};
-pub use crate::io::mzml::{MzMLParserError as MzMLError, MzMLReader, MzMLWriter, MzMLWriterError};
+pub use crate::io::mgf::{MGFReader, MGFWriter};
+pub use crate::io::mzml::{MzMLReader, MzMLWriter};
 
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::{
-    MzMLbError, MzMLbReader, MzMLbWriter, MzMLbWriterBuilder, MzMLbWriterError,
+    MzMLbReader, MzMLbWriter, MzMLbWriterBuilder,
 };
 
 #[cfg(feature = "thermo")]
