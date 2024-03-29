@@ -1,5 +1,6 @@
 # mzdata
 [![Latest Version](https://img.shields.io/crates/v/mzdata.svg)](https://crates.io/crates/mzdata)
+[![docs.rs](https://img.shields.io/docsrs/mzdata)](https://docs.rs/mzdata/latest/mzdata/)
 
 A Rust library for reading mass spectrometry data file formats.
 
@@ -7,10 +8,9 @@ A Rust library for reading mass spectrometry data file formats.
 ```rust
 use std::fs;
 use mzdata::prelude::*;
-use mzpeaks::{Tolerance, prelude::*};
-use mzdata::io::MzMLReader;
+use mzpeaks::Tolerance;
+use mzdata::MzMLReader;
 use mzdata::spectrum::SignalContinuity;
-
 
 fn main() {
     let mut ms1_count = 0;
@@ -23,7 +23,7 @@ fn main() {
             msn_count += 1;
         }
         println!("Scan {} => BP {}", spectrum.id(), spectrum.peaks().base_peak().mz);
-        if spectrum.signal_continuity() < SignalContinuity::Profile {
+        if spectrum.signal_continuity() == SignalContinuity::Centroid {
             let peak_picked = spectrum.into_centroid().unwrap();
             println!("Matches for 579.155: {:?}", peak_picked.peaks.all_peaks_for(579.155, Tolerance::Da(0.02)));
         }
@@ -36,11 +36,12 @@ fn main() {
 
 ```
 
-### Supported Formats
+## Supported Formats
 1. `mzML` and `indexedmzML`
 2. `MGF`
 3. `mzMLb`
+4. Thermo RAW
 
-### Disclaimer
+## Disclaimer
 This library was made in part to learn Rust, so it may not use the preferred idioms,
 patterns, or libraries. Any recommendations are welcome.
