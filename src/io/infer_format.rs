@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::fmt::Display;
 use std::fs;
 use std::io::{self, prelude::*, BufReader};
@@ -17,7 +18,7 @@ use crate::io::compression::{is_gzipped, is_gzipped_extension, RestartableGzDeco
 use crate::io::mgf::{is_mgf, MGFReaderType, MGFWriterType};
 use crate::io::mzml::{is_mzml, MzMLReaderType, MzMLWriterType};
 use crate::io::traits::{RandomAccessSpectrumIterator, SpectrumSource, SpectrumWriter, MZFileReader};
-use crate::meta::MSDataFileMetadata;
+use crate::meta::{FormatConversion, MSDataFileMetadata};
 use crate::spectrum::bindata::{BuildArrayMapFrom, BuildFromArrayMap};
 use crate::spectrum::MultiLayerSpectrum;
 use crate::Param;
@@ -41,6 +42,14 @@ pub enum MassSpectrometryFormat {
 
 impl MassSpectrometryFormat {
 
+    pub fn as_conversion(&self) -> Option<FormatConversion> {
+        match self {
+            MassSpectrometryFormat::MzML => Some(FormatConversion::ConversionToMzML),
+            MassSpectrometryFormat::MzMLb => Some(FormatConversion::ConversionToMzMLb),
+            _ => None
+        }
+    }
+
     pub fn as_param(&self) -> Option<Param> {
         let p = match self {
             MassSpectrometryFormat::MGF => ControlledVocabulary::MS.const_param_ident("Mascot MGF format", 1001062),
@@ -50,6 +59,30 @@ impl MassSpectrometryFormat {
             MassSpectrometryFormat::Unknown => return None,
         };
         Some(p.into())
+    }
+}
+
+impl TryFrom<MassSpectrometryFormat> for Param {
+    type Error = &'static str;
+
+    fn try_from(value: MassSpectrometryFormat) -> Result<Self, Self::Error> {
+        if let Some(p) = value.as_param() {
+            Ok(p)
+        } else {
+            Err("No conversion")
+        }
+    }
+}
+
+impl TryFrom<MassSpectrometryFormat> for FormatConversion {
+    type Error = &'static str;
+
+    fn try_from(value: MassSpectrometryFormat) -> Result<Self, Self::Error> {
+        if let Some(p) = value.as_conversion() {
+            Ok(p)
+        } else {
+            Err("No conversion")
+        }
     }
 }
 

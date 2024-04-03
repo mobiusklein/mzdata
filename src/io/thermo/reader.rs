@@ -1,10 +1,12 @@
 use std::{collections::HashMap, io, marker::PhantomData, mem, path::PathBuf};
 
+use chrono::DateTime;
+
 use crate::{
     io::{DetailLevel, OffsetIndex, utils::checksum_file},
     meta::{
         Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration,
-        Software, SourceFile,
+        Software, SourceFile, MassSpectrometryRun
     },
     params::{ControlledVocabulary, Unit},
     prelude::*,
@@ -23,7 +25,7 @@ use thermorawfilereader::schema::{
 };
 use thermorawfilereader::{
     schema::{AcquisitionT, DissociationMethod, PrecursorT},
-    RawFileReader,
+    RawFileReader, FileDescription as ThermoFileDescription
 };
 
 #[allow(unused)]
@@ -64,6 +66,7 @@ pub struct ThermoRawReaderType<
     components_to_instrument_id: HashMap<(IonizationMode, MassAnalyzer), u32>,
     softwares: Vec<Software>,
     data_processings: Vec<DataProcessing>,
+    ms_run: MassSpectrometryRun,
     _c: PhantomData<C>,
     _d: PhantomData<D>,
 }
@@ -98,21 +101,36 @@ fn make_native_id(index: i32) -> String {
     )
 }
 
+const SOURCE_FILE_ID: &'static str = "RAW1";
+
 impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
     ThermoRawReaderType<C, D>
 {
+    fn make_ms_run(path: &PathBuf, thermo_file_description: &ThermoFileDescription) -> MassSpectrometryRun {
+        let mut run = MassSpectrometryRun::default();
+
+        run.default_instrument_id = Some(0);
+        run.default_source_file_id = Some(SOURCE_FILE_ID.to_string());
+        run.id = path.file_name().map(|s| s.to_string_lossy().split(".").next().unwrap().to_string());
+        run.start_time = thermo_file_description.creation_date().map(|s| {
+            let dt = DateTime::parse_from_rfc3339(s).unwrap();
+            dt
+        });
+        run
+    }
+
     fn make_file_description(
         path: &PathBuf,
-        handle: &RawFileReader,
+        thermo_file_description: &ThermoFileDescription
     ) -> io::Result<FileDescription> {
         let mut sf = SourceFile::default();
-        let description = handle.file_description();
+        let description = thermo_file_description;
         sf.name = path.file_name().unwrap().to_string_lossy().to_string();
         sf.location = format!(
             "file:///{}",
             path.canonicalize()?.parent().unwrap().display()
         );
-        sf.id = "RAW1".to_string();
+        sf.id = SOURCE_FILE_ID.to_string();
         sf.file_format = Some(
             ControlledVocabulary::MS
                 .const_param_ident("Thermo RAW format", 1000563)
@@ -319,13 +337,17 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 
         let spectrum_index = Self::build_index(&handle);
 
-        let file_description = Self::make_file_description(&path, &handle)?;
+        let thermo_file_description: ThermoFileDescription = handle.file_description();
+
+        let file_description = Self::make_file_description(&path, &thermo_file_description)?;
 
         let (sw, instrument_configurations, components_to_instrument_id) =
             Self::make_instrument_configuration(&handle);
 
+        let ms_run = Self::make_ms_run(&path, &thermo_file_description);
+
         Ok(Self {
-            path: path,
+            path,
             detail_level,
             handle,
             index: 0,
@@ -335,6 +357,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             components_to_instrument_id,
             softwares: vec![sw],
             data_processings: vec![],
+            ms_run: ms_run,
             _c: PhantomData,
             _d: PhantomData,
         })
@@ -686,6 +709,10 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 
     fn spectrum_count_hint(&self) -> Option<u64> {
         Some(self.spectrum_index.len() as u64)
+    }
+
+    fn run_description(&self) -> Option<&MassSpectrometryRun> {
+        Some(&self.ms_run)
     }
 }
 

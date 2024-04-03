@@ -5,7 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
-## [0.13.0] - Unreleased
+## [0.14.0] - Unreleased
+
+### Added
+- Added dependency on `chrono` to parse the `startTimeStamp` in mzML(b), and the equivalent Thermo property.
+- Added more conversion convenience methods for parameter-like enums:
+  - `MassSpectrometryFormat`
+  - `FormatConversion`
+- Added `mzdata::meta::custom_software_name` convenience for creating a CV parameter describing an unreleased tool.
+  Helpers to deal with *published* tools will be worked on soon.
+- Added `MassSpectrometryRun` to `ThermoRawReaderType`.
+
+### Changed
+- The `MassSpectrometryRun.start_time` field is now a `chrono::DateTime` instead of `String`.
+
+## [0.13.0] - 2024-03-28
 
 ### Added
 - `MGFReaderType` and `MGFWriterType` implement `MSDataFileMetadata`
@@ -150,8 +164,9 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.12.0...HEAD
-[0.11.0]: https://github.com/mobiusklein/mzdata/compare/v0.11.0...v0.12.0
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.13.0...HEAD
+[0.12.0]: https://github.com/mobiusklein/mzdata/compare/v0.13.0...v0.13.0
+[0.12.0]: https://github.com/mobiusklein/mzdata/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/mobiusklein/mzdata/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mobiusklein/mzdata/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/mobiusklein/mzdata/compare/v0.8.0...v0.9.0

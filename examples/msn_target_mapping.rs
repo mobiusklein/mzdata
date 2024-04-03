@@ -78,7 +78,6 @@ impl SelectedTarget {
     }
 }
 
-
 pub struct MSnTargetTrackingIterator<R: SpectrumSource> {
     source: SpectrumGroupingIterator<R, CentroidPeak, DeconvolutedPeak, MultiLayerSpectrum>,
     time_width: f64,
@@ -120,7 +119,10 @@ impl<R: SpectrumSource> MSnTargetTrackingIterator<R> {
                     .targets
                     .iter_mut()
                     .map(|p| {
-                        if error_tolerance.test(p.mz, mz) && (t > p.time_range.end) && (t - p.time_range.end) < time_width_half {
+                        if error_tolerance.test(p.mz, mz)
+                            && (t > p.time_range.end)
+                            && (t - p.time_range.end) < time_width_half
+                        {
                             p.time_range.end = t;
                             1
                         } else {
@@ -129,7 +131,7 @@ impl<R: SpectrumSource> MSnTargetTrackingIterator<R> {
                     })
                     .sum();
                 if hits == 0 {
-                    let p = SelectionTargetSpecification::new(mz, prec.charge(), t-0.5..t+0.5);
+                    let p = SelectionTargetSpecification::new(mz, prec.charge(), t - 0.5..t + 0.5);
                     // eprintln!("Added {p:?}");
                     self.targets.push_back(p);
                     1
@@ -165,9 +167,12 @@ impl<R: SpectrumSource> MSnTargetTrackingIterator<R> {
                 break;
             }
         }
-        eprintln!("{} targets extracted from buffer size {}", self.targets.len(), self.buffer.len());
+        eprintln!(
+            "{} targets extracted from buffer size {}",
+            self.targets.len(),
+            self.buffer.len()
+        );
     }
-
 
     fn get_current_window_end(&self) -> f64 {
         if self.buffer.len() == 0 {

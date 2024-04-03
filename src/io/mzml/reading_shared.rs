@@ -3,6 +3,7 @@ use std::fmt::Display;
 use std::io::SeekFrom;
 use std::{io, mem};
 
+use chrono::{DateTime, FixedOffset};
 use log::warn;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText};
 use quick_xml::Error as XMLError;
@@ -560,7 +561,7 @@ pub struct FileMetadataBuilder<'a> {
     pub run_id: Option<String>,
     pub default_instrument_config: Option<u32>,
     pub default_source_file: Option<String>,
-    pub start_timestamp: Option<String>,
+    pub start_timestamp: Option<DateTime<FixedOffset>>,
 
     // SpectrumList attributes
     pub num_spectra: Option<u64>,
@@ -845,10 +846,10 @@ impl<'a> FileMetadataBuilder<'a> {
                             );
                         }
                         b"startTimeStamp" => {
+                            let val = attr.unescape_value().expect("Error decoding start timestamp");
+                            let val = DateTime::parse_from_rfc3339(&val).expect("Expected a dateTime value conforming to ISO 8601 standard");
                             self.start_timestamp = Some(
-                                attr.unescape_value()
-                                    .expect("Error decoding start timestamp")
-                                    .to_string(),
+                                val
                             );
                         }
                         _ => {}

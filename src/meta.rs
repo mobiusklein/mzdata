@@ -9,8 +9,8 @@ mod run;
 #[macro_use]
 mod traits;
 
-pub use data_processing::{DataProcessing, ProcessingMethod};
-pub use software::Software;
+pub use data_processing::{DataProcessing, ProcessingMethod, FormatConversion, DataTransformationAction, DataProcessingAction};
+pub use software::{Software, custom_software_name};
 
 pub use file_description::{FileDescription, SourceFile};
 

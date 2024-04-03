@@ -44,6 +44,10 @@ impl DataProcessing {
     pub fn is_empty(&self) -> bool {
         self.methods.is_empty()
     }
+
+    pub fn highest_order(&self) -> i8 {
+        self.iter().map(|p| p.order).max().unwrap_or_default()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -73,6 +77,12 @@ pub enum DataProcessingAction {
     DataFiltering,
     AdductDeconvolution,
     IonMobilityDeconvolution,
+}
+
+impl Into<Param> for DataProcessingAction {
+    fn into(self) -> Param {
+        self.as_param_const().into()
+    }
 }
 
 impl Display for DataProcessingAction {
@@ -143,6 +153,12 @@ pub enum FormatConversion {
 impl Display for FormatConversion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+impl Into<Param> for FormatConversion {
+    fn into(self) -> Param {
+        self.to_param_const().into()
     }
 }
 

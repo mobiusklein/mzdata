@@ -1,5 +1,5 @@
-use std::{io, path, env};
 use std::time;
+use std::{env, io, path};
 
 use tokio;
 use tokio::fs;
@@ -7,17 +7,19 @@ use tokio::fs;
 use mzdata::io::mzml;
 use mzdata::prelude::*;
 
-async fn load_file<P: Into<path::PathBuf> + Clone>(path: P) -> io::Result<mzml::AsyncMzMLReader<fs::File>> {
+async fn load_file<P: Into<path::PathBuf> + Clone>(
+    path: P,
+) -> io::Result<mzml::AsyncMzMLReader<fs::File>> {
     let fh = fs::File::open(path.into()).await?;
     let mut reader = mzml::AsyncMzMLReader::new(fh).await;
-    reader.read_index_from_end().await.expect("Failed to read index from the file");
+    reader
+        .read_index_from_end()
+        .await
+        .expect("Failed to read index from the file");
     Ok(reader)
 }
 
-
-async fn scan_file(
-    reader: &mut mzml::AsyncMzMLReader<fs::File>,
-) {
+async fn scan_file(reader: &mut mzml::AsyncMzMLReader<fs::File>) {
     let start = time::Instant::now();
     let n = reader.len();
     let mut i = 0;
@@ -37,9 +39,12 @@ async fn scan_file(
         }
     }
     let end = time::Instant::now();
-    println!("Loaded in {} spectra {} seconds", i, (end - start).as_secs_f64());
+    println!(
+        "Loaded in {} spectra {} seconds",
+        i,
+        (end - start).as_secs_f64()
+    );
 }
-
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() -> io::Result<()> {

@@ -27,7 +27,12 @@ fn main() -> io::Result<()> {
     // Jump the iterator to that point in time
     reader.start_from_time(spec.start_time())?;
     let s = reader.next().unwrap();
-    eprintln!("Resuming at {} (level {}) at time {}", s.id(), s.ms_level(), s.start_time());
+    eprintln!(
+        "Resuming at {} (level {}) at time {}",
+        s.id(),
+        s.ms_level(),
+        s.start_time()
+    );
 
     // Convert the iterator into a group iterator
     let mut group_iter = reader.into_groups();

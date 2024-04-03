@@ -18,7 +18,8 @@ fn main() -> io::Result<()> {
     });
     let start = Instant::now();
     let groups = if input == "-" {
-        let stream = RestartableGzDecoder::new(io::BufReader::new(PreBufferedStream::new(io::stdin())?));
+        let stream =
+            RestartableGzDecoder::new(io::BufReader::new(PreBufferedStream::new(io::stdin())?));
         let reader = MzMLReader::new(stream);
         let groups: Vec<_> = reader.into_groups().collect();
         groups

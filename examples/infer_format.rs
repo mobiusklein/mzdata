@@ -2,13 +2,11 @@
  * Demo the minimum code needed to infer the input file format from a path
  * or STDIN using `infer_format`, `infer_from_stream` and
  */
-use std::process::exit;
 use std::env;
 use std::io;
+use std::process::exit;
 
 use mzdata::io::{infer_format, infer_from_stream, PreBufferedStream};
-
-
 
 fn main() -> io::Result<()> {
     let input = env::args().skip(1).next().unwrap_or_else(|| {

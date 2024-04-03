@@ -633,7 +633,7 @@ impl<
                     d if d > 1 => self.deque_group(false),
                     1 => self.deque_group(true),
                     _ => {
-                        if self.product_scan_mapping.len() > 0 {
+                        if !self.product_scan_mapping.is_empty() {
                             Some(self.deque_group_without_precursor())
                         } else {
                             None

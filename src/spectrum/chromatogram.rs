@@ -18,11 +18,11 @@ pub struct Chromatogram {
 const EMPTY: &[f64] = &[0.0];
 
 macro_rules! as_feature_view {
-    ($chromatogram:ident, $then:expr) => {
+    ($chromatogram:ident, $view:ident => $then:tt) => {
         if let Ok(t) = $chromatogram.time() {
             if let Ok(i) = $chromatogram.intensity() {
-                let view = FeatureView::<Time, Time>::new(t.borrow(), t.borrow(), i.borrow());
-                Some($then(view))
+                let $view = FeatureView::<Time, Time>::new(t.borrow(), t.borrow(), i.borrow());
+                Some($then)
             } else {
                 None
             }
@@ -63,11 +63,15 @@ impl TimeInterval<Time> for Chromatogram {
     }
 
     fn apex_time(&self) -> Option<f64> {
-        as_feature_view!(self, |view: FeatureView<'_, Time, Time>| view.apex_time())?
+        as_feature_view!(self, view => {
+            view.apex_time()
+        })?
     }
 
     fn area(&self) -> f32 {
-        as_feature_view!(self, |view: FeatureView<'_, Time, Time>| view.area()).unwrap()
+        as_feature_view!(self, view => {
+            view.area()
+        }).unwrap()
     }
 
     fn iter_time(&self) -> impl Iterator<Item = f64> {
