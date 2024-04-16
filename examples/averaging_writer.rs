@@ -9,13 +9,14 @@ use std::path;
 use std::thread;
 use std::time::Instant;
 
-use std::sync::mpsc::channel;
+use std::sync::mpsc::sync_channel;
 
+use mzdata::spectrum::SignalContinuity;
 use rayon::prelude::*;
 
 use mzdata::prelude::*;
 use mzdata::spectrum::utils::Collator;
-use mzdata::{MzMLReader, MzMLWriter};
+use mzdata::{MZReader, MzMLWriter};
 
 fn main() -> io::Result<()> {
     let path = path::PathBuf::from(
@@ -24,12 +25,12 @@ fn main() -> io::Result<()> {
             .expect("Please pass an MS data file path"),
     );
 
-    let mut reader = MzMLReader::open_path(path)?;
+    let mut reader = MZReader::open_path(path)?;
     let mut writer = MzMLWriter::new(io::BufWriter::new(io::stdout()));
     writer.copy_metadata_from(&reader);
 
-    let (input_sender, input_receiver) = channel();
-    let (output_sender, output_receiver) = channel();
+    let (input_sender, input_receiver) = sync_channel(5000);
+    let (output_sender, output_receiver) = sync_channel(5000);
 
     let start = Instant::now();
     let reader_task = thread::spawn(move || {
@@ -42,9 +43,9 @@ fn main() -> io::Result<()> {
                 || averager.clone(),
                 |averager, (i, g)| {
                     let (mut g, arrays) = g.average_with(averager);
-                    g.precursor_mut().and_then(|p| {
+                    g.precursor_mut().map(|p| {
                         p.arrays = Some(arrays.into());
-                        Some(())
+                        p.description_mut().signal_continuity = SignalContinuity::Profile;
                     });
                     (i, g)
                 },
@@ -59,7 +60,7 @@ fn main() -> io::Result<()> {
         );
     });
 
-    let collator_task = thread::spawn(move || Collator::collate(input_receiver, output_sender));
+    let collator_task = thread::spawn(move || Collator::collate_sync(input_receiver, output_sender));
 
     let writer_task = thread::spawn(move || -> io::Result<()> {
         for (_, group) in output_receiver {
