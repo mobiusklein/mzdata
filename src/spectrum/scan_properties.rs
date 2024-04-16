@@ -1,11 +1,15 @@
+use std::borrow::Cow;
 use std::fmt::Display;
 
+use log::warn;
 use num_traits::Float;
 
 use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
 use crate::io::traits::SpectrumSource;
-use crate::params::{ControlledVocabulary, Param, ParamLike, Unit, CURIE};
-use crate::{impl_param_described, ParamList};
+use crate::params::{
+    ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef, CURIE,
+};
+use crate::{curie, impl_param_described, ParamList};
 
 /**
 Describe the initialization stage of an isolation window
@@ -131,6 +135,73 @@ pub struct ScanEvent {
     pub params: Option<Box<ParamList>>,
 }
 
+const ION_MOBILITY_SCAN_TERMS: [CURIE; 4] = [
+    // ion mobility drift time
+    curie!(MS:1002476),
+    // inverse reduced ion mobility drift time
+    curie!(MS:1002815),
+    // FAIMS compensation voltage
+    curie!(MS:1001581),
+    // SELEXION compensation voltage
+    curie!(MS:1003371),
+];
+
+pub trait IonMobilityMeasure : ParamDescribed {
+    fn ion_mobility(&'_ self) -> Option<f64> {
+        for u in ION_MOBILITY_SCAN_TERMS {
+            if let Some(v) = self.get_param_by_curie(&u).map(|p| p.value()) {
+                return v.to_f64().map(|v| Some(v)).unwrap_or_else(|e| {
+                    warn!("Failed to parse ion mobility {u} value {v}: {e}");
+                    None
+                });
+            }
+        }
+        None
+    }
+
+    fn has_ion_mobility(&self) -> bool {
+        self.ion_mobility().is_some()
+    }
+}
+
+const PRESET_SCAN_CONFIGURATION: CURIE = curie!(MS:1000616);
+const MASS_RESOLUTION: CURIE = curie!(MS:1000011);
+const FILTER_STRING: CURIE = curie!(MS:1000512);
+const SCAN_TITLE: CURIE = curie!(MS:1000499);
+
+impl ScanEvent {
+    pub fn new(
+        start_time: f64,
+        injection_time: f32,
+        scan_windows: ScanWindowList,
+        instrument_configuration_id: u32,
+        params: Option<Box<ParamList>>,
+    ) -> Self {
+        Self {
+            start_time,
+            injection_time,
+            scan_windows,
+            instrument_configuration_id,
+            params,
+        }
+    }
+
+    pub fn filter_string(&self) -> Option<Cow<'_, str>> {
+        self.get_param_by_curie(&FILTER_STRING).map(|p| p.as_str())
+    }
+
+    pub fn resolution(&self) -> Option<ValueRef> {
+        self.get_param_by_curie(&MASS_RESOLUTION).map(|p| p.value())
+    }
+
+    pub fn scan_configuration(&self) -> Option<ValueRef> {
+        self.get_param_by_curie(&PRESET_SCAN_CONFIGURATION)
+            .map(|p| p.value())
+    }
+}
+
+impl IonMobilityMeasure for ScanEvent {}
+
 type ScanEventList = Vec<ScanEvent>;
 
 /// Represents means by which a spectrum is generated using
@@ -187,7 +258,7 @@ impl ScanCombination {
     pub fn to_param(&self) -> Param {
         Param {
             name: self.name().to_string(),
-            value: String::default(),
+            value: Default::default(),
             accession: Some(self.accession()),
             controlled_vocabulary: Some(ControlledVocabulary::MS),
             unit: Unit::Unknown,
@@ -237,6 +308,14 @@ impl Acquisition {
             .map(|s| s.instrument_configuration_id)
             .collect()
     }
+
+    pub fn iter(&self) -> impl Iterator<Item=&ScanEvent> {
+        self.scans.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item=&mut ScanEvent> {
+        self.scans.iter_mut()
+    }
 }
 
 /// Describe the precursor ion that this entity represents
@@ -280,6 +359,8 @@ impl IonProperties for SelectedIon {
         self.charge
     }
 }
+
+impl IonMobilityMeasure for SelectedIon {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivationMethod {
@@ -605,13 +686,13 @@ pub trait PrecursorSelection {
     /// The activation process applied to the precursor ion
     fn activation(&self) -> &Activation;
 
-    fn iter(&self) -> impl Iterator<Item=&SelectedIon>;
+    fn iter(&self) -> impl Iterator<Item = &SelectedIon>;
 
     fn last_ion(&self) -> &SelectedIon {
         self.iter().last().unwrap()
     }
 
-    fn iter_mut(&mut self) -> impl Iterator<Item=&mut SelectedIon>;
+    fn iter_mut(&mut self) -> impl Iterator<Item = &mut SelectedIon>;
     fn ion_mut(&mut self) -> &mut SelectedIon;
     fn activation_mut(&mut self) -> &mut Activation;
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow;
@@ -657,11 +738,11 @@ impl PrecursorSelection for Precursor {
         &mut self.isolation_window
     }
 
-    fn iter(&self) -> impl Iterator<Item=&SelectedIon> {
+    fn iter(&self) -> impl Iterator<Item = &SelectedIon> {
         self.ions.iter()
     }
 
-    fn iter_mut(&mut self) -> impl Iterator<Item=&mut SelectedIon> {
+    fn iter_mut(&mut self) -> impl Iterator<Item = &mut SelectedIon> {
         self.ions.iter_mut()
     }
 
@@ -791,6 +872,34 @@ pub struct SpectrumDescription {
     pub precursor: Option<Precursor>,
 }
 
+impl SpectrumDescription {
+    pub fn new(
+        id: String,
+        index: usize,
+        ms_level: u8,
+        polarity: ScanPolarity,
+        signal_continuity: SignalContinuity,
+        params: ParamList,
+        acquisition: Acquisition,
+        precursor: Option<Precursor>,
+    ) -> Self {
+        Self {
+            id,
+            index,
+            ms_level,
+            polarity,
+            signal_continuity,
+            params,
+            acquisition,
+            precursor,
+        }
+    }
+
+    pub fn title(&self) -> Option<Cow<'_, str>> {
+        self.get_param_by_curie(&SCAN_TITLE).map(|p| p.as_str())
+    }
+}
+
 impl_param_described!(Activation, SpectrumDescription);
 impl_param_described_deferred!(SelectedIon, Acquisition, ScanEvent);
 
@@ -838,10 +947,10 @@ impl ChromatogramType {
     pub fn is_aggregate(&self) -> bool {
         matches!(
             self,
-            Self::TotalIonCurrentChromatogram |
-                Self::BasePeakChromatogram |
-                Self::PressureChromatogram |
-                Self::FlowRateChromatogram
+            Self::TotalIonCurrentChromatogram
+                | Self::BasePeakChromatogram
+                | Self::PressureChromatogram
+                | Self::FlowRateChromatogram
         )
     }
 

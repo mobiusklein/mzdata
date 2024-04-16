@@ -599,7 +599,7 @@ where
             ArrayType::NonStandardDataArray { name } => {
                 let mut p =
                     self.get_ms_cv()
-                        .param_val("MS:1000786", "non-standard data array", name);
+                        .param_val("MS:1000786", "non-standard data array", name.as_str());
                 p = p.with_unit_t(&array.unit);
                 self.mzml_writer.write_param(&p)?;
             }

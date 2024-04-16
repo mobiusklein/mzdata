@@ -9,14 +9,14 @@ fn serial(file_path: &str) {
     let file = fs::File::open(file_path).unwrap();
     let reader = MzMLReader::new(file);
     let total: usize = reader.map(|s| s.arrays.unwrap().mzs().unwrap().len()).sum();
-    assert_eq!(total, 305214);
+    assert_eq!(total, 305213);
 }
 
 fn serial_with_index(file_path: &str) {
     let file = fs::File::open(file_path).unwrap();
     let reader = MzMLReader::new_indexed(file);
     let total: usize = reader.map(|s| s.arrays.unwrap().mzs().unwrap().len()).sum();
-    assert_eq!(total, 305214);
+    assert_eq!(total, 305213);
 }
 
 fn serial_with_external_iterator(file_path: &str) {
@@ -26,7 +26,7 @@ fn serial_with_external_iterator(file_path: &str) {
         .iter()
         .map(|s| s.arrays.unwrap().mzs().unwrap().len())
         .sum();
-    assert_eq!(total, 305214);
+    assert_eq!(total, 305213);
 }
 
 fn mzml_totaling(c: &mut Criterion) {

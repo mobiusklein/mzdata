@@ -15,9 +15,17 @@ and this project adheres to [Semantic Versioning].
 - Added `mzdata::meta::custom_software_name` convenience for creating a CV parameter describing an unreleased tool.
   Helpers to deal with *published* tools will be worked on soon.
 - Added `MassSpectrometryRun` to `ThermoRawReaderType`.
+- Added `Value` and `ValueRef` types which are used to hold `cvParam`/`userParam` values with eager parsing. While
+  not an actual space savings, this removes the need to repeatedly parse values if they are accessed more than once.
+  They support coercion via the `ParamValue` trait in the prelude. `Param` and `ParamCow` also implement this trait
+  and delegate it to their `value` field.
+- Added `ion_mobility`, `filter_string`, and `mass_resolution` methods to `ScanEvent` that perform `cvParam` look ups.
 
 ### Changed
 - The `MassSpectrometryRun.start_time` field is now a `chrono::DateTime` instead of `String`.
+- `Param` and `ParamCow` now store their values as `Value`/`ValueRef`, which eagerly parse their values
+  to elide the parsing cost on repeated access.
+- `CURIE` can now be constructed with the `mzdata::curie` macro
 
 ## [0.13.0] - 2024-03-28
 

@@ -6,11 +6,11 @@ pub use crate::io::traits::{
 };
 
 pub use crate::meta::MSDataFileMetadata;
-pub use crate::params::{ParamDescribed, ParamLike};
+pub use crate::params::{ParamDescribed, ParamLike, ParamValue};
 pub use crate::spectrum::bindata::{
     BuildArrayMapFrom, BuildFromArrayMap, ByteArrayView, ByteArrayViewMut,
 };
-pub use crate::spectrum::{IonProperties, PrecursorSelection, SpectrumLike};
+pub use crate::spectrum::{IonProperties, PrecursorSelection, SpectrumLike, IonMobilityMeasure};
 
 #[cfg(feature = "mzsignal")]
 pub use crate::spectrum::group::SpectrumGroupAveraging;

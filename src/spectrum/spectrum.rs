@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use mzpeaks::{
     peak_set::PeakSetVec, prelude::*, CentroidLike, CentroidPeak, DeconvolutedCentroidLike,
-    DeconvolutedPeak, IndexType, MZPeakSetType, MassPeakSetType, PeakSet, Tolerance,
+    DeconvolutedPeak, IndexType, MZPeakSetType, MassPeakSetType, PeakSet, Tolerance, MZ,
 };
 
 #[cfg(feature = "mzsignal")]
@@ -21,6 +21,7 @@ use crate::params::{ParamDescribed, ParamList};
 use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType};
 use crate::spectrum::scan_properties::{
     Acquisition, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
+    IonMobilityMeasure
 };
 use crate::utils::mass_charge_ratio;
 
@@ -332,8 +333,7 @@ impl<'a, C: CentroidLike + Clone, D: DeconvolutedCentroidLike + Clone> RefPeakDa
 pub trait SpectrumLike<
     C: CentroidLike = CentroidPeak,
     D: DeconvolutedCentroidLike = DeconvolutedPeak,
->
-{
+> {
     /// The method to access the spectrum description itself, which supplies
     /// the data for most other methods on this trait.
     fn description(&self) -> &SpectrumDescription;
@@ -425,6 +425,18 @@ pub trait SpectrumLike<
         &self.description().params
     }
 
+    /// Access the point measure of ion mobility associated with the scan if present. This is distinct from
+    /// having a frame-level scan across the ion mobility dimension.
+    fn ion_mobility(&self) -> Option<f64> {
+        self.acquisition().iter().flat_map(|s| s.ion_mobility()).next()
+    }
+
+    /// Check if this spectrum has a point measure of ion mobility. This is distinct from
+    /// having a frame-level scan across the ion mobility dimension.
+    fn has_ion_mobility(&self) -> bool {
+        self.ion_mobility().is_some()
+    }
+
     /// Retrieve the most processed representation of the mass spectrum's
     /// signal
     fn peaks(&'_ self) -> RefPeakDataLevel<'_, C, D>;
@@ -475,7 +487,7 @@ pub enum SpectrumConversionError {
 }
 
 /// Errors that may arise when performing signal processing or other data transformation
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum SpectrumProcessingError {
     #[cfg(feature = "mzsignal")]
     #[error("An error occurred while denoising: {0:?}")]
@@ -672,6 +684,13 @@ pub struct CentroidSpectrumType<C: CentroidLike + Default> {
 
 #[cfg(feature = "mzsignal")]
 impl<C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap> CentroidSpectrumType<C> {
+    /// Convert the centroid peaks in theoretical profile signal, producing a [`MultiLayerSpectrum`]
+    /// which contains both the `peaks` as well as a raw data array in profile mode.
+    ///
+    /// # Arguments
+    /// - `dx`: The m/z spacing to reprofile over. The smaller the value, the higher the resolution, but also
+    ///    the more memory required. For high resolution instruments, a value between `0.005` and `0.001` is suitable.
+    /// - `fwhm`: The full width at half max to assume when reprofiling each peak. This affects the peak shape width.
     pub fn reprofile_with_shape_into(
         self,
         dx: f64,
@@ -756,7 +775,7 @@ impl<D: DeconvolutedCentroidLike + Default> DeconvolutedSpectrumType<D> {
         }
     }
 
-    /// Convert a spectrum into a [`Spectrum`]
+    /// Convert a spectrum into a [`MultiLayerSpectrum`]
     pub fn into_spectrum<C>(self) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
     where
         C: CentroidLike + Default,
@@ -1120,6 +1139,8 @@ where
 impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike + Default>
     MultiLayerSpectrum<C, D>
 {
+    /// Using a pre-configured [`mzsignal::PeakPicker`](mzsignal::peak_picker::PeakPicker) to pick peaks
+    /// from `arrays`'s signal, populating the `peaks` field.
     pub fn pick_peaks_with(
         &mut self,
         peak_picker: &PeakPicker,
@@ -1127,14 +1148,24 @@ impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike +
         if let Some(arrays) = &self.arrays {
             let mz_array = arrays.mzs()?;
             let intensity_array = arrays.intensities()?;
-            let mut acc = Vec::new();
-            match peak_picker.discover_peaks(&mz_array, &intensity_array, &mut acc) {
-                Ok(_) => {
-                    let peaks: MZPeakSetType<C> = acc.into_iter().map(|p| C::from(p)).collect();
-                    self.peaks = Some(peaks);
-                    Ok(())
+
+            if matches!(self.signal_continuity(), SignalContinuity::Centroid) {
+                let mut peaks: PeakSetVec<C, MZ> = mz_array.iter().zip(intensity_array.iter()).map(|(mz, inten)| {
+                    FittedPeak::new(*mz, *inten, 0, 0.0, 0.0).into()
+                }).collect();
+                peaks.sort();
+                self.peaks = Some(peaks);
+                Ok(())
+            } else {
+                let mut acc = Vec::new();
+                match peak_picker.discover_peaks(&mz_array, &intensity_array, &mut acc) {
+                    Ok(_) => {
+                        let peaks: MZPeakSetType<C> = acc.into_iter().map(|p| C::from(p)).collect();
+                        self.peaks = Some(peaks);
+                        Ok(())
+                    }
+                    Err(err) => Err(SpectrumProcessingError::PeakPickerError(err)),
                 }
-                Err(err) => Err(SpectrumProcessingError::PeakPickerError(err)),
             }
         } else {
             Err(SpectrumProcessingError::SpectrumConversionError(

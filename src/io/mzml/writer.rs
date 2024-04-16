@@ -6,6 +6,8 @@ use std::{io, mem};
 
 use log::warn;
 use thiserror::Error;
+#[cfg(feature = "parallelism")]
+use rayon::prelude::*;
 
 use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, PeakCollection};
 use quick_xml::events::BytesDecl;
@@ -23,7 +25,7 @@ use crate::meta::{
     ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
     Software, MassSpectrometryRun,
 };
-use crate::params::{ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, Unit};
+use crate::params::{ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, Unit, ParamValue};
 use crate::spectrum::bindata::{
     to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType,
     BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
@@ -32,6 +34,9 @@ use crate::spectrum::spectrum::SpectrumLike;
 use crate::spectrum::{scan_properties::*, Chromatogram, ChromatogramLike, RefPeakDataLevel};
 
 const BUFFER_SIZE: usize = 10000;
+
+#[cfg(feature = "parallelism")]
+const PARALLEL_COMPRESSION_FAN: usize = 3;
 
 macro_rules! bstart {
     ($e:tt) => {
@@ -43,7 +48,7 @@ macro_rules! attrib {
     ($name:expr, $value:expr, $elt:ident) => {
         let key = $name.as_bytes();
         let value = $value.as_bytes();
-        $elt.push_attribute((key, value));
+        $elt.push_attribute((key, value.as_ref()));
     };
 }
 
@@ -236,8 +241,9 @@ impl<W: io::Write> InnerXMLWriter<W> {
         };
 
         attrib!("name", param.name(), elt);
-        if !param.value().is_empty() {
-            attrib!("value", param.value(), elt);
+        let param_val = param.value();
+        if !param_val.is_empty() {
+            attrib!("value", param_val, elt);
         }
         match param.unit() {
             Unit::Unknown => {}
@@ -491,7 +497,7 @@ where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
 {
-    const PSIMS_VERSION: &'static str = "4.1.135";
+    const PSIMS_VERSION: &'static str = "4.1.142";
     const UNIT_VERSION: &'static str = "releases/2020-03-10";
 
     pub const fn get_indent_size() -> u64 {
@@ -1105,15 +1111,10 @@ where
         Ok(())
     }
 
-    pub fn write_binary_data_array(
-        &mut self,
-        array: &DataArray,
-        default_array_len: usize,
-    ) -> WriterResult {
+    pub fn write_binary_data_array_pre_encoded(&mut self, array: &DataArray, default_array_len: usize, encoded_array: &[u8]) -> WriterResult {
         let mut outer = bstart!("binaryDataArray");
 
-        let encoded = array.encode_bytestring(self.data_array_compression);
-        let encoded_len = encoded.len().to_string();
+        let encoded_len = encoded_array.len().to_string();
         attrib!("encodedLength", encoded_len, outer);
         let array_len = array.data_len()?;
         if array_len != default_array_len {
@@ -1169,7 +1170,7 @@ where
             ArrayType::NonStandardDataArray { name } => {
                 let mut p = self
                     .ms_cv
-                    .param_val("MS:1000786", "non-standard data array", name);
+                    .param_val("MS:1000786", "non-standard data array", name.as_str());
                 p = p.with_unit_t(&array.unit);
                 self.handle.write_param(&p)?;
             }
@@ -1181,11 +1182,20 @@ where
         let bin = bstart!("binary");
         start_event!(self, bin);
         self.handle.write_event(Event::Text(BytesText::new(
-            String::from_utf8_lossy(&encoded).as_ref(),
+            String::from_utf8_lossy(&encoded_array).as_ref(),
         )))?;
         end_event!(self, bin);
         end_event!(self, outer);
         Ok(())
+    }
+
+    pub fn write_binary_data_array(
+        &mut self,
+        array: &DataArray,
+        default_array_len: usize,
+    ) -> WriterResult {
+        let encoded_array = array.encode_bytestring(self.data_array_compression);
+        self.write_binary_data_array_pre_encoded(array, default_array_len, &encoded_array)
     }
 
     pub fn write_binary_data_arrays(
@@ -1197,10 +1207,33 @@ where
         let mut outer = bstart!("binaryDataArrayList");
         attrib!("count", count, outer);
         start_event!(self, outer);
-        let mut array_pairs: Vec<(&ArrayType, &DataArray)> = arrays.iter().collect();
-        array_pairs.sort_by_key(|f| f.0);
-        for (_tp, array) in array_pairs {
-            self.write_binary_data_array(array, default_array_len)?
+        #[cfg(feature = "parallelism")]
+        {
+            let compression = self.data_array_compression;
+            let mut array_pairs: Vec<(&ArrayType, &DataArray, Vec<u8>)> = if arrays.len() < PARALLEL_COMPRESSION_FAN {
+                arrays.iter().map(|(t, d)| {
+                    let encoded = d.encode_bytestring(compression);
+                    (t, d, encoded)
+                }).collect()
+            } else {
+                arrays.par_iter().map(|(t, d)| {
+                    let encoded = d.encode_bytestring(compression);
+                    (t, d, encoded)
+                }).collect()
+            };
+            array_pairs.sort_by_key(|f| f.0);
+            for (_tp, array, encoded) in array_pairs {
+                self.write_binary_data_array_pre_encoded(array, default_array_len, &encoded)?
+            }
+        }
+
+        #[cfg(not(feature = "parallelism"))]
+        {
+            let mut array_pairs: Vec<(&ArrayType, &DataArray)> = arrays.iter().collect();
+            array_pairs.sort_by_key(|f| f.0);
+            for (_tp, array) in array_pairs {
+                self.write_binary_data_array(array, default_array_len)?
+            }
         }
         end_event!(self, outer);
         Ok(())
@@ -1218,7 +1251,7 @@ where
             RefPeakDataLevel::RawData(a) => a.mzs().unwrap().len(),
             RefPeakDataLevel::Centroid(a) => a.len(),
             RefPeakDataLevel::Deconvoluted(a) => a.len(),
-            RefPeakDataLevel::Missing => todo!(),
+            RefPeakDataLevel::Missing => 0,
         };
         let default_array_len = default_array_len_u.to_string();
 

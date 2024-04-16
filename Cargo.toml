@@ -118,6 +118,7 @@ thermorawfilereader = { version = "0.2.1", default-features = false, optional = 
 sha1 = "0.10.6"
 base16ct = { version = "0.2.0", features = ["alloc"] }
 chrono = "0.4.37"
+bitflags = "2.5.0"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = [ "html_reports" ] }

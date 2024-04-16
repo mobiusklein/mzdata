@@ -26,7 +26,7 @@ use crate::prelude::{MSDataFileMetadata, ParamLike};
 use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software,
 };
-use crate::params::{ControlledVocabulary, Param};
+use crate::params::{ControlledVocabulary, Param, ParamValue};
 use crate::spectrum::bindata::{
     as_bytes, delta_decoding, linear_prediction_decoding, ArrayRetrievalError,
     BinaryCompressionType, BinaryDataArrayType, BuildFromArrayMap, ByteArrayView, ByteArrayViewMut,
@@ -542,7 +542,7 @@ impl<
                                                 // external HDF5 dataset
                                                 1002841 => {
                                                     if self.current_data_range_query.name.is_empty()
-                                                        && !param.value.starts_with('/')
+                                                        && !param.value.as_str().starts_with('/')
                                                     {
                                                         self.current_data_range_query
                                                             .name
@@ -550,20 +550,20 @@ impl<
                                                     }
                                                     self.current_data_range_query
                                                         .name
-                                                        .push_str(&param.value);
+                                                        .push_str(&param.value.as_str());
                                                 }
                                                 // external offset
                                                 1002842 => {
                                                     self.current_data_range_query.offset = param
                                                         .value
-                                                        .parse()
-                                                        .expect("Failed to extract external offset")
+                                                        .to_u64()
+                                                        .expect("Failed to extract external offset") as usize
                                                 }
                                                 // external array length
                                                 1002843 => self.current_data_range_query.length =
-                                                    param.value.parse().expect(
+                                                    param.value.to_u64().expect(
                                                         "Failed to extract external array length",
-                                                    ),
+                                                    ) as usize,
                                                 _ => self.inner.fill_param_into(param, state),
                                             }
                                         }
@@ -680,11 +680,11 @@ impl<
         self.inner.into_spectrum(spectrum)
     }
 
-    fn fill_spectrum<P: ParamLike + Into<Param>>(&mut self, param: P) {
+    fn fill_spectrum<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P) {
         self.inner.fill_spectrum(param)
     }
 
-    fn fill_binary_data_array<P: ParamLike + Into<Param>>(&mut self, param: P) {
+    fn fill_binary_data_array<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P) {
         self.inner.fill_binary_data_array(param)
     }
 

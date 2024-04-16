@@ -2,25 +2,127 @@
 //!
 //! Directly maps to the usage of the PSI-MS controlled vocabulary in mzML
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fmt::Display;
-use std::{io, num};
 use std::str::{self, FromStr};
+use std::{io, num};
 
 use thiserror::Error;
 
-#[doc(hidden)]
+/// An owned parameter value that may be a string, a number, or empty. It is intended to
+/// be paired with the [`ParamValue`] trait.
+///
+/// The borrowed equivalent of this type is [`ValueRef`].
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
 pub enum Value {
+    /// A text value of arbitrary length
     String(String),
+    /// A floating point number
     Float(f64),
+    /// A integral number
     Int(i64),
+    /// Arbitrary binary data
     Buffer(Box<[u8]>),
+    /// No value specified
     #[default]
-    Empty
+    Empty,
 }
 
-impl Value {}
+impl Eq for Value {}
+
+impl From<String> for Value {
+    fn from(value: String) -> Self {
+        Value::new(value)
+    }
+}
+
+impl From<&str> for Value {
+    fn from(value: &str) -> Self {
+        Value::wrap(value)
+    }
+}
+
+impl From<Cow<'_, str>> for Value {
+    fn from(value: Cow<'_, str>) -> Self {
+        Value::wrap(&value)
+    }
+}
+
+/// Access a parameter's value, with specific coercion rules
+/// and eager type conversion.
+pub trait ParamValue {
+    /// Check if the value is empty
+    fn is_empty(&self) -> bool;
+
+    /// Check if the value is an integer
+    fn is_i64(&self) -> bool;
+
+    /// Check if the value is a floating point
+    /// number explicitly. An integral number might
+    /// still be usable as a floating point number
+    fn is_f64(&self) -> bool;
+
+    /// Check if the value is an arbitrary buffer
+    fn is_buffer(&self) -> bool;
+
+    /// Check if the value is stored as an explicit string.
+    /// All variants can be coerced to a string.
+    fn is_str(&self) -> bool;
+
+    /// Check if the value is of either numeric type.
+    fn is_numeric(&self) -> bool {
+        self.is_i64() | self.is_f64()
+    }
+
+    /// Get the value as an `f64`, if possible
+    fn to_f64(&self) -> Result<f64, ParamValueParseError>;
+
+    /// Get the value as an `f32`, if possible
+    fn to_f32(&self) -> Result<f32, ParamValueParseError> {
+        let v = self.to_f64()?;
+        Ok(v as f32)
+    }
+
+    /// Get the value as an `i64`, if possible
+    fn to_i64(&self) -> Result<i64, ParamValueParseError>;
+
+    /// Get the value as an `i32`, if possible
+    fn to_i32(&self) -> Result<i32, ParamValueParseError> {
+        let v = self.to_i64()?;
+        Ok(v as i32)
+    }
+
+    /// Get the value as an `u64`, if possible
+    fn to_u64(&self) -> Result<u64, ParamValueParseError> {
+        let v = self.to_i64()?;
+        Ok(v as u64)
+    }
+
+    /// Get the value as a string
+    fn to_str(&self) -> Cow<'_, str>;
+
+    /// Get the value as a string, possibly borrowed
+    fn as_str(&self) -> Cow<'_, str> {
+        self.to_str()
+    }
+
+    /// Get the value as a byte buffer, if possible.
+    ///
+    /// The intent here is distinct from [`ParamValue::as_bytes`]. The byte buffer
+    /// represents the byte representation of the native value, while
+    /// [`ParamValue::as_bytes`] is a byte string of the string representation.
+    fn to_buffer(&self) -> Result<Cow<'_, [u8]>, ParamValueParseError>;
+
+    /// Convert the value's string representation to `T` if possible
+    fn parse<T: FromStr>(&self) -> Result<T, T::Err>;
+
+    /// Convert the value to a byte string, the bytes
+    /// of the string representation.
+    fn as_bytes(&self) -> Cow<'_, [u8]>;
+
+    /// Get a reference to the stored value
+    fn as_ref(&self) -> ValueRef<'_>;
+}
 
 #[doc(hidden)]
 #[derive(Debug, Clone, Error, PartialEq)]
@@ -32,7 +134,7 @@ pub enum ParamValueParseError {
     #[error("Failed to extract a string")]
     FailedToExtractString,
     #[error("Failed to extract a buffer")]
-    FailedToExtractBuffer
+    FailedToExtractBuffer,
 }
 
 impl FromStr for Value {
@@ -40,7 +142,7 @@ impl FromStr for Value {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.is_empty() {
-            return Ok(Self::Empty)
+            return Ok(Self::Empty);
         }
         if let Ok(value) = s.parse::<i64>() {
             Ok(Self::Int(value))
@@ -52,14 +154,14 @@ impl FromStr for Value {
     }
 }
 
-impl ToString for Value {
-    fn to_string(&self) -> String {
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::String(v) => v.to_string(),
-            Value::Float(v) => v.to_string(),
-            Value::Int(v) => v.to_string(),
-            Value::Buffer(v) => String::from_utf8_lossy(v).to_string(),
-            Value::Empty => "".to_string(),
+            Value::String(v) => f.write_str(&v),
+            Value::Float(v) => v.fmt(f),
+            Value::Int(v) => v.fmt(f),
+            Value::Buffer(v) => f.write_str(&String::from_utf8_lossy(v)),
+            Value::Empty => f.write_str(""),
         }
     }
 }
@@ -71,12 +173,34 @@ impl From<ParamValueParseError> for io::Error {
 }
 
 impl Value {
+    /// Convert a string value into a precise value type by trying
+    /// successive types to parse, defaulting to storing the string
+    /// as-is.
+    ///
+    /// This takes ownership of the string. To coerce from a borrowed
+    /// string see [`Value::wrap`].
+    pub fn new(s: String) -> Self {
+        if s.is_empty() {
+            Self::Empty
+        } else if let Ok(value) = s.parse::<i64>() {
+            Self::Int(value)
+        } else if let Ok(value) = s.parse::<f64>() {
+            Self::Float(value)
+        } else {
+            Self::String(s)
+        }
+    }
 
+    /// Convert a borrowed string value into a precise value type by trying
+    /// successive types to parse, defaulting to storing the string
+    /// as-is.
+    ///
+    /// This only makes a copy of the string if it cannot be parsed into a
+    /// numeric type.
     pub fn wrap(s: &str) -> Self {
         if s.is_empty() {
             Self::Empty
-        }
-        else if let Ok(value) = s.parse::<i64>() {
+        } else if let Ok(value) = s.parse::<i64>() {
             Self::Int(value)
         } else if let Ok(value) = s.parse::<f64>() {
             Self::Float(value)
@@ -85,53 +209,527 @@ impl Value {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         matches!(self, Self::Empty)
     }
 
-    pub fn is_int(&self) -> bool {
+    fn is_i64(&self) -> bool {
         matches!(self, Self::Int(_))
     }
 
-    pub fn is_float(&self) -> bool {
+    fn is_f64(&self) -> bool {
         matches!(self, Self::Float(_))
     }
 
-    pub fn is_buffer(&self) -> bool {
+    fn is_buffer(&self) -> bool {
         matches!(self, Self::Buffer(_))
     }
 
-    pub fn is_string(&self) -> bool {
+    fn is_str(&self) -> bool {
         matches!(self, Self::String(_))
     }
 
-    pub fn to_f64(&self) -> Result<f64, ParamValueParseError> {
+    /// Store the value as a floating point number
+    pub fn coerce_f64(&mut self) -> Result<(), ParamValueParseError> {
+        let value = self.to_f64()?;
+        *self = Self::Float(value);
+        Ok(())
+    }
+
+    /// Store the value as an integer
+    pub fn coerce_i64(&mut self) -> Result<(), ParamValueParseError> {
+        let value = self.to_i64()?;
+        *self = Self::Int(value);
+        Ok(())
+    }
+
+    /// Store the value as a string
+    pub fn coerce_str(&mut self) -> Result<(), ParamValueParseError> {
+        let value = self.to_string();
+        *self = Self::String(value);
+        Ok(())
+    }
+
+    /// Discard the value, leaving this value [`Value::Empty`]
+    pub fn coerce_empty(&mut self) {
+        *self = Self::Empty;
+    }
+
+    /// Store the value as a byte buffer
+    pub fn coerce_buffer(&mut self) -> Result<(), ParamValueParseError> {
+        let buffer = self.to_buffer()?;
+        *self = Self::Buffer(buffer.into());
+        Ok(())
+    }
+
+    fn parse<T: FromStr>(&self) -> Result<T, T::Err> {
+        match self {
+            Value::String(s) => s.parse(),
+            Value::Float(v) => v.to_string().parse(),
+            Value::Int(i) => i.to_string().parse(),
+            Value::Buffer(b) => String::from_utf8_lossy(b).parse(),
+            Value::Empty => "".parse(),
+        }
+    }
+
+    fn to_f64(&self) -> Result<f64, ParamValueParseError> {
         if let Self::Float(val) = self {
-            Ok(*val)
-        } else {
-            Err(ParamValueParseError::FailedToExtractFloat(Some(self.to_string())))
+            return Ok(*val);
+        } else if let Self::Int(val) = self {
+            return Ok(*val as f64);
+        } else if let Self::String(val) = self {
+            if let Ok(v) = val.parse() {
+                return Ok(v);
+            }
         }
+        return Err(ParamValueParseError::FailedToExtractFloat(Some(
+            self.to_string(),
+        )));
     }
 
-    pub fn to_i64(&self) -> Result<i64, ParamValueParseError> {
+    fn to_i64(&self) -> Result<i64, ParamValueParseError> {
         if let Self::Int(val) = self {
-            Ok(*val)
-        } else {
-            Err(ParamValueParseError::FailedToExtractInt(Some(self.to_string())))
+            return Ok(*val);
+        } else if let Self::Float(val) = self {
+            return Ok(*val as i64);
+        } else if let Self::String(val) = self {
+            if let Ok(v) = val.parse() {
+                return Ok(v);
+            }
         }
+        return Err(ParamValueParseError::FailedToExtractInt(Some(
+            self.to_string(),
+        )));
     }
 
-    pub fn to_str(&self) -> Result<Cow<'_, str>, ParamValueParseError> {
+    fn to_str(&self) -> Cow<'_, str> {
         if let Self::String(val) = self {
-            Ok(Cow::Borrowed(val))
+            Cow::Borrowed(val)
         } else {
-            Ok(Cow::Owned(self.to_string()))
+            Cow::Owned(self.to_string())
         }
     }
 
-    pub fn to_buffer(&self) -> Result<Cow<'_, [u8]>, ParamValueParseError> {
-        if let  Self::Buffer(val) = self {
+    fn to_buffer(&self) -> Result<Cow<'_, [u8]>, ParamValueParseError> {
+        if let Self::Buffer(val) = self {
             Ok(Cow::Borrowed(val))
+        } else if let Self::String(val) = self {
+            Ok(Cow::Borrowed(val.as_bytes()))
+        } else {
+            Err(ParamValueParseError::FailedToExtractBuffer)
+        }
+    }
+
+    fn as_ref(&self) -> ValueRef<'_> {
+        self.into()
+    }
+}
+
+impl ParamValue for Value {
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+
+    fn is_i64(&self) -> bool {
+        self.is_i64()
+    }
+
+    fn is_f64(&self) -> bool {
+        self.is_f64()
+    }
+
+    fn is_buffer(&self) -> bool {
+        self.is_buffer()
+    }
+
+    fn is_str(&self) -> bool {
+        self.is_str()
+    }
+
+    fn to_f64(&self) -> Result<f64, ParamValueParseError> {
+        self.to_f64()
+    }
+
+    fn to_i64(&self) -> Result<i64, ParamValueParseError> {
+        self.to_i64()
+    }
+
+    fn to_str(&self) -> Cow<'_, str> {
+        self.to_str()
+    }
+
+    fn to_buffer(&self) -> Result<Cow<'_, [u8]>, ParamValueParseError> {
+        self.to_buffer()
+    }
+
+    fn parse<T: FromStr>(&self) -> Result<T, T::Err> {
+        self.parse()
+    }
+
+    fn as_bytes(&self) -> Cow<'_, [u8]> {
+        match self {
+            Self::String(v) => Cow::Borrowed(v.as_bytes()),
+            Self::Buffer(v) => Cow::Borrowed(v.as_ref()),
+            Self::Float(v) => Cow::Owned(v.to_string().into_bytes()),
+            Self::Int(v) => Cow::Owned(v.to_string().into_bytes()),
+            Self::Empty => Cow::Borrowed(b""),
+        }
+    }
+
+    fn as_ref(&self) -> ValueRef<'_> {
+        self.into()
+    }
+}
+
+impl PartialEq<String> for Value {
+    fn eq(&self, other: &String) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl PartialEq<str> for Value {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for Value {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl PartialEq<i64> for Value {
+    fn eq(&self, other: &i64) -> bool {
+        if let Self::Int(val) = self {
+            val == other
+        } else {
+            false
+        }
+    }
+}
+
+impl PartialEq<f64> for Value {
+    fn eq(&self, other: &f64) -> bool {
+        if let Self::Float(val) = self {
+            val == other
+        } else {
+            false
+        }
+    }
+}
+
+macro_rules! param_value_int {
+    ($val:ty) => {
+        impl From<$val> for Value {
+            fn from(value: $val) -> Self {
+                Self::Int(value as i64)
+            }
+        }
+
+        impl From<&$val> for Value {
+            fn from(value: &$val) -> Self {
+                Self::Int(*value as i64)
+            }
+        }
+
+        impl From<Option<$val>> for Value {
+            fn from(value: Option<$val>) -> Self {
+                if let Some(v) = value {
+                    Self::Int(v as i64)
+                } else {
+                    Self::Empty
+                }
+            }
+        }
+    };
+}
+
+macro_rules! param_value_float {
+    ($val:ty) => {
+        impl From<$val> for Value {
+            fn from(value: $val) -> Self {
+                Self::Float(value as f64)
+            }
+        }
+
+        impl From<&$val> for Value {
+            fn from(value: &$val) -> Self {
+                Self::Float(*value as f64)
+            }
+        }
+
+        impl From<Option<$val>> for Value {
+            fn from(value: Option<$val>) -> Self {
+                if let Some(v) = value {
+                    Self::Float(v as f64)
+                } else {
+                    Self::Empty
+                }
+            }
+        }
+    };
+}
+
+param_value_int!(i8);
+param_value_int!(i16);
+param_value_int!(i32);
+param_value_int!(i64);
+
+param_value_int!(u8);
+param_value_int!(u16);
+param_value_int!(u32);
+param_value_int!(u64);
+param_value_int!(usize);
+
+param_value_float!(f32);
+param_value_float!(f64);
+
+/// A borrowed parameter value that may be a string, a number, or empty. It is intended to
+/// be paired with the [`ParamValue`] trait.
+///
+/// The owned equivalent of this type is [`Value`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
+pub enum ValueRef<'a> {
+    /// A text value of arbitrary length
+    String(Cow<'a, str>),
+    /// A floating point number
+    Float(f64),
+    /// A integral number
+    Int(i64),
+    /// Arbitrary binary data
+    Buffer(Cow<'a, [u8]>),
+    /// No value specified
+    #[default]
+    Empty,
+}
+
+impl<'a> Eq for ValueRef<'a> {}
+
+impl<'a> From<String> for ValueRef<'a> {
+    fn from(value: String) -> Self {
+        value.parse().unwrap()
+    }
+}
+
+impl<'a> From<&'a str> for ValueRef<'a> {
+    fn from(value: &'a str) -> Self {
+        ValueRef::new(value)
+    }
+}
+
+impl<'a> From<Cow<'a, str>> for ValueRef<'a> {
+    fn from(value: Cow<'a, str>) -> Self {
+        match value {
+            Cow::Borrowed(s) => Self::new(s),
+            Cow::Owned(s) => s.parse().unwrap(),
+        }
+    }
+}
+
+impl<'a> PartialEq<String> for ValueRef<'a> {
+    fn eq(&self, other: &String) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl<'a> PartialEq<str> for ValueRef<'a> {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl<'a> PartialEq<&str> for ValueRef<'a> {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl<'a> PartialEq<i64> for ValueRef<'a> {
+    fn eq(&self, other: &i64) -> bool {
+        if let Self::Int(val) = self {
+            val == other
+        } else {
+            false
+        }
+    }
+}
+
+impl<'a> PartialEq<f64> for ValueRef<'a> {
+    fn eq(&self, other: &f64) -> bool {
+        if let Self::Float(val) = self {
+            val == other
+        } else {
+            false
+        }
+    }
+}
+
+impl FromStr for ValueRef<'_> {
+    type Err = ParamValueParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            return Ok(Self::Empty);
+        }
+        if let Ok(value) = s.parse::<i64>() {
+            Ok(Self::Int(value))
+        } else if let Ok(value) = s.parse::<f64>() {
+            Ok(Self::Float(value))
+        } else {
+            Ok(Self::String(Cow::Owned(s.to_string())))
+        }
+    }
+}
+
+impl<'a> Display for ValueRef<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::String(v) => f.write_str(&v),
+            Self::Float(v) => v.fmt(f),
+            Self::Int(v) => v.fmt(f),
+            Self::Buffer(v) => f.write_str(&String::from_utf8_lossy(v)),
+            Self::Empty => f.write_str(""),
+        }
+    }
+}
+
+impl<'a> ValueRef<'a> {
+    /// Convert a string value into a precise value type by trying
+    /// successive types to parse, defaulting to storing the string
+    /// as-is.
+    pub fn new(s: &'a str) -> Self {
+        if s.is_empty() {
+            return Self::Empty;
+        }
+        if let Ok(value) = s.parse::<i64>() {
+            Self::Int(value)
+        } else if let Ok(value) = s.parse::<f64>() {
+            Self::Float(value)
+        } else {
+            Self::String(Cow::Borrowed(s))
+        }
+    }
+
+    /// Create a string [`ValueRef`]
+    pub const fn wrap(s: &'a str) -> Self {
+        Self::String(Cow::Borrowed(s))
+    }
+
+    fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty)
+    }
+
+    fn is_i64(&self) -> bool {
+        matches!(self, Self::Int(_))
+    }
+
+    fn is_f64(&self) -> bool {
+        matches!(self, Self::Float(_))
+    }
+
+    fn is_buffer(&self) -> bool {
+        matches!(self, Self::Buffer(_))
+    }
+
+    fn is_str(&self) -> bool {
+        matches!(self, Self::String(_))
+    }
+
+    /// Store the value as a floating point number
+    pub fn coerce_f64(&mut self) -> Result<(), ParamValueParseError> {
+        let value = self.to_f64()?;
+        *self = Self::Float(value);
+        Ok(())
+    }
+
+    /// Store the value as an integer
+    pub fn coerce_i64(&mut self) -> Result<(), ParamValueParseError> {
+        let value = self.to_i64()?;
+        *self = Self::Int(value);
+        Ok(())
+    }
+
+    /// Store the value as a string
+    pub fn coerce_str(&mut self) -> Result<(), ParamValueParseError> {
+        if self.is_str() {
+        } else {
+            let value = self.to_string();
+            *self = Self::String(Cow::Owned(value));
+        }
+        Ok(())
+    }
+
+    /// Discard the value, leaving this value [`ValueRef::Empty`]
+    pub fn coerce_empty(&mut self) {
+        *self = Self::Empty;
+    }
+
+    /// Store the value as a byte buffer
+    pub fn coerce_buffer(&mut self) -> Result<(), ParamValueParseError> {
+        if self.is_buffer() {
+            Ok(())
+        } else {
+            let buffer = Cow::Owned(self.to_buffer()?.to_vec());
+            *self = Self::Buffer(buffer);
+            Ok(())
+        }
+    }
+
+    fn parse<T: FromStr>(&self) -> Result<T, T::Err> {
+        match self {
+            Self::String(s) => s.parse(),
+            Self::Float(v) => v.to_string().parse(),
+            Self::Int(i) => i.to_string().parse(),
+            Self::Buffer(b) => String::from_utf8_lossy(b).parse(),
+            Self::Empty => "".parse(),
+        }
+    }
+
+    fn to_f64(&self) -> Result<f64, ParamValueParseError> {
+        if let Self::Float(val) = self {
+            return Ok(*val);
+        } else if let Self::Int(val) = self {
+            return Ok(*val as f64);
+        } else if let Self::String(val) = self {
+            if let Ok(v) = val.parse() {
+                return Ok(v);
+            }
+        }
+        return Err(ParamValueParseError::FailedToExtractFloat(Some(
+            self.to_string(),
+        )));
+    }
+
+    fn to_i64(&self) -> Result<i64, ParamValueParseError> {
+        if let Self::Int(val) = self {
+            return Ok(*val);
+        } else if let Self::Float(val) = self {
+            return Ok(*val as i64);
+        } else if let Self::String(val) = self {
+            if let Ok(v) = val.parse() {
+                return Ok(v);
+            }
+        }
+        return Err(ParamValueParseError::FailedToExtractInt(Some(
+            self.to_string(),
+        )));
+    }
+
+    fn to_str(&self) -> Cow<'_, str> {
+        if let Self::String(val) = self {
+            Cow::Borrowed(val)
+        } else {
+            Cow::Owned(self.to_string())
+        }
+    }
+
+    fn to_buffer(&self) -> Result<Cow<'_, [u8]>, ParamValueParseError> {
+        if let Self::Buffer(val) = self {
+            match val {
+                Cow::Borrowed(v) => Ok(Cow::Borrowed(*v)),
+                Cow::Owned(v) => Ok(Cow::Borrowed(v)),
+            }
         } else if let Self::String(val) = self {
             Ok(Cow::Borrowed(val.as_bytes()))
         } else {
@@ -140,12 +738,170 @@ impl Value {
     }
 }
 
+impl<'a> ParamValue for ValueRef<'a> {
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+
+    fn is_i64(&self) -> bool {
+        self.is_i64()
+    }
+
+    fn is_f64(&self) -> bool {
+        self.is_f64()
+    }
+
+    fn is_buffer(&self) -> bool {
+        self.is_buffer()
+    }
+
+    fn is_str(&self) -> bool {
+        self.is_str()
+    }
+
+    fn to_f64(&self) -> Result<f64, ParamValueParseError> {
+        self.to_f64()
+    }
+
+    fn to_i64(&self) -> Result<i64, ParamValueParseError> {
+        self.to_i64()
+    }
+
+    fn to_str(&self) -> Cow<'_, str> {
+        self.to_str()
+    }
+
+    fn to_buffer(&self) -> Result<Cow<'_, [u8]>, ParamValueParseError> {
+        self.to_buffer()
+    }
+
+    fn parse<T: FromStr>(&self) -> Result<T, T::Err> {
+        self.parse()
+    }
+
+    fn as_bytes(&self) -> Cow<'_, [u8]> {
+        match self {
+            Self::String(v) => Cow::Borrowed(v.as_bytes()),
+            Self::Buffer(v) => Cow::Borrowed(v.as_ref()),
+            Self::Float(v) => Cow::Owned(v.to_string().into_bytes()),
+            Self::Int(v) => Cow::Owned(v.to_string().into_bytes()),
+            Self::Empty => Cow::Borrowed(b""),
+        }
+    }
+
+    fn as_ref(&self) -> ValueRef<'_> {
+        self.clone()
+    }
+}
+
+impl<'a> From<&'a Value> for ValueRef<'a> {
+    fn from(value: &'a Value) -> Self {
+        match value {
+            Value::String(s) => Self::String(Cow::Borrowed(s)),
+            Value::Float(v) => Self::Float(*v),
+            Value::Int(v) => Self::Int(*v),
+            Value::Buffer(v) => Self::Buffer(Cow::Borrowed(v)),
+            Value::Empty => Self::Empty,
+        }
+    }
+}
+
+impl<'a> From<ValueRef<'a>> for Value {
+    fn from(value: ValueRef<'a>) -> Self {
+        match value {
+            ValueRef::String(s) => match s {
+                Cow::Borrowed(s) => Self::String(s.to_string()),
+                Cow::Owned(s) => Self::String(s),
+            },
+            ValueRef::Float(v) => Self::Float(v),
+            ValueRef::Int(v) => Self::Int(v),
+            ValueRef::Buffer(v) => Self::Buffer(v.to_vec().into_boxed_slice()),
+            ValueRef::Empty => Self::Empty,
+        }
+    }
+}
+
+macro_rules! param_value_ref_int {
+    ($val:ty) => {
+        impl<'a> From<$val> for ValueRef<'a> {
+            fn from(value: $val) -> Self {
+                Self::Int(value as i64)
+            }
+        }
+
+        impl<'a> From<&$val> for ValueRef<'a> {
+            fn from(value: &$val) -> Self {
+                Self::Int(*value as i64)
+            }
+        }
+
+        impl<'a> From<Option<$val>> for ValueRef<'a> {
+            fn from(value: Option<$val>) -> Self {
+                if let Some(v) = value {
+                    Self::Int(v as i64)
+                } else {
+                    Self::Empty
+                }
+            }
+        }
+    };
+}
+
+macro_rules! param_value_ref_float {
+    ($val:ty) => {
+        impl<'a> From<$val> for ValueRef<'a> {
+            fn from(value: $val) -> Self {
+                Self::Float(value as f64)
+            }
+        }
+
+        impl<'a> From<&$val> for ValueRef<'a> {
+            fn from(value: &$val) -> Self {
+                Self::Float(*value as f64)
+            }
+        }
+
+        impl<'a> From<Option<$val>> for ValueRef<'a> {
+            fn from(value: Option<$val>) -> Self {
+                if let Some(v) = value {
+                    Self::Float(v as f64)
+                } else {
+                    Self::Empty
+                }
+            }
+        }
+    };
+}
+
+param_value_ref_int!(i8);
+param_value_ref_int!(i16);
+param_value_ref_int!(i32);
+param_value_ref_int!(i64);
+
+param_value_ref_int!(u8);
+param_value_ref_int!(u16);
+param_value_ref_int!(u32);
+param_value_ref_int!(u64);
+param_value_ref_int!(usize);
+
+param_value_ref_float!(f32);
+param_value_ref_float!(f64);
 
 /// A CURIE is a namespace + accession identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CURIE {
     controlled_vocabulary: ControlledVocabulary,
     accession: u32,
+}
+
+#[macro_export]
+macro_rules! curie {
+    (MS:$acc:literal) => {
+        $crate::params::CURIE::new($crate::params::ControlledVocabulary::MS, $acc)
+    };
+    (UO:$acc:literal) => {
+        $crate::params::CURIE::new($crate::params::ControlledVocabulary::UO, $acc)
+    };
 }
 
 impl CURIE {
@@ -223,6 +979,42 @@ impl FromStr for CURIE {
     }
 }
 
+impl TryFrom<&Param> for CURIE {
+    type Error = String;
+
+    fn try_from(value: &Param) -> Result<Self, Self::Error> {
+        if value.is_controlled() {
+            Ok(CURIE::new(
+                value.controlled_vocabulary.unwrap(),
+                value.accession.unwrap(),
+            ))
+        } else {
+            Err(format!(
+                "{} does is not a controlled vocabulary term",
+                value.name()
+            ))
+        }
+    }
+}
+
+impl<'a> TryFrom<&ParamCow<'a>> for CURIE {
+    type Error = String;
+
+    fn try_from(value: &ParamCow<'a>) -> Result<Self, Self::Error> {
+        if value.is_controlled() {
+            Ok(CURIE::new(
+                value.controlled_vocabulary.unwrap(),
+                value.accession.unwrap(),
+            ))
+        } else {
+            Err(format!(
+                "{} does is not a controlled vocabulary term",
+                value.name()
+            ))
+        }
+    }
+}
+
 pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<u32>) {
     let mut parts = curie.split(':');
     let prefix = match parts.next() {
@@ -242,7 +1034,7 @@ pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<u32>) 
 /// Describe a controlled vocabulary parameter or a user-defined parameter
 pub trait ParamLike {
     fn name(&self) -> &str;
-    fn value(&self) -> &str;
+    fn value(&self) -> ValueRef;
     fn accession(&self) -> Option<u32>;
     fn controlled_vocabulary(&self) -> Option<ControlledVocabulary>;
     fn unit(&self) -> Unit;
@@ -278,23 +1070,73 @@ pub trait ParamLike {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ParamCow<'a> {
     pub name: Cow<'a, str>,
-    pub value: Cow<'a, str>,
+    pub value: ValueRef<'a>,
     pub accession: Option<u32>,
     pub controlled_vocabulary: Option<ControlledVocabulary>,
     pub unit: Unit,
 }
 
+impl<'a> ParamValue for ParamCow<'a> {
+    fn is_empty(&self) -> bool {
+        <ValueRef<'a> as ParamValue>::is_empty(&self.value)
+    }
+
+    fn is_i64(&self) -> bool {
+        <ValueRef<'a> as ParamValue>::is_i64(&self.value)
+    }
+
+    fn is_f64(&self) -> bool {
+        <ValueRef<'a> as ParamValue>::is_f64(&self.value)
+    }
+
+    fn is_buffer(&self) -> bool {
+        <ValueRef<'a> as ParamValue>::is_buffer(&self.value)
+    }
+
+    fn is_str(&self) -> bool {
+        <ValueRef<'a> as ParamValue>::is_str(&self.value)
+    }
+
+    fn to_f64(&self) -> Result<f64, ParamValueParseError> {
+        <ValueRef<'a> as ParamValue>::to_f64(&self.value)
+    }
+
+    fn to_i64(&self) -> Result<i64, ParamValueParseError> {
+        <ValueRef<'a> as ParamValue>::to_i64(&self.value)
+    }
+
+    fn to_str(&self) -> Cow<'_, str> {
+        <ValueRef<'a> as ParamValue>::to_str(&self.value)
+    }
+
+    fn to_buffer(&self) -> Result<Cow<'_, [u8]>, ParamValueParseError> {
+        <ValueRef<'a> as ParamValue>::to_buffer(&self.value)
+    }
+
+    fn parse<T: FromStr>(&self) -> Result<T, T::Err> {
+        <ValueRef<'a> as ParamValue>::parse(&self.value)
+    }
+
+    fn as_bytes(&self) -> Cow<'_, [u8]> {
+        <ValueRef<'a> as ParamValue>::as_bytes(&self.value)
+    }
+
+    fn as_ref(&self) -> ValueRef<'_> {
+        <ValueRef<'a> as ParamValue>::as_ref(&self.value)
+    }
+}
+
 impl ParamCow<'static> {
     pub const fn const_new(
         name: &'static str,
-        value: &'static str,
+        value: ValueRef<'static>,
         accession: Option<u32>,
         controlled_vocabulary: Option<ControlledVocabulary>,
         unit: Unit,
     ) -> Self {
         Self {
             name: Cow::Borrowed(name),
-            value: Cow::Borrowed(value),
+            value: value,
             accession,
             controlled_vocabulary,
             unit,
@@ -305,7 +1147,7 @@ impl ParamCow<'static> {
 impl<'a> ParamCow<'a> {
     pub fn new(
         name: Cow<'a, str>,
-        value: Cow<'a, str>,
+        value: ValueRef<'a>,
         accession: Option<u32>,
         controlled_vocabulary: Option<ControlledVocabulary>,
         unit: Unit,
@@ -333,8 +1175,8 @@ impl<'a> ParamLike for ParamCow<'a> {
         &self.name
     }
 
-    fn value(&self) -> &str {
-        &self.value
+    fn value(&self) -> ValueRef<'a> {
+        self.value.clone()
     }
 
     fn accession(&self) -> Option<u32> {
@@ -354,7 +1196,7 @@ impl<'a> From<ParamCow<'a>> for Param {
     fn from(value: ParamCow<'a>) -> Self {
         Param {
             name: value.name.into_owned(),
-            value: value.value.into_owned(),
+            value: value.value.into(),
             accession: value.accession,
             controlled_vocabulary: value.controlled_vocabulary,
             unit: value.unit,
@@ -368,14 +1210,76 @@ impl<'a> PartialEq<CURIE> for ParamCow<'a> {
     }
 }
 
+impl<'a> AsRef<ValueRef<'a>> for ParamCow<'a> {
+    fn as_ref(&self) -> &ValueRef<'a> {
+        &self.value
+    }
+}
+
 /// A controlled vocabulary or user parameter
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Param {
     pub name: String,
-    pub value: String,
+    pub value: Value,
     pub accession: Option<u32>,
     pub controlled_vocabulary: Option<ControlledVocabulary>,
     pub unit: Unit,
+}
+
+impl AsRef<Value> for Param {
+    fn as_ref(&self) -> &Value {
+        &self.value
+    }
+}
+
+impl ParamValue for Param {
+    fn is_empty(&self) -> bool {
+        <Value as ParamValue>::is_empty(&self.value)
+    }
+
+    fn is_i64(&self) -> bool {
+        <Value as ParamValue>::is_i64(&self.value)
+    }
+
+    fn is_f64(&self) -> bool {
+        <Value as ParamValue>::is_f64(&self.value)
+    }
+
+    fn is_buffer(&self) -> bool {
+        <Value as ParamValue>::is_buffer(&self.value)
+    }
+
+    fn is_str(&self) -> bool {
+        <Value as ParamValue>::is_str(&self.value)
+    }
+
+    fn to_f64(&self) -> Result<f64, ParamValueParseError> {
+        <Value as ParamValue>::to_f64(&self.value)
+    }
+
+    fn to_i64(&self) -> Result<i64, ParamValueParseError> {
+        <Value as ParamValue>::to_i64(&self.value)
+    }
+
+    fn to_str(&self) -> Cow<'_, str> {
+        <Value as ParamValue>::to_str(&self.value)
+    }
+
+    fn to_buffer(&self) -> Result<Cow<'_, [u8]>, ParamValueParseError> {
+        <Value as ParamValue>::to_buffer(&self.value)
+    }
+
+    fn parse<T: FromStr>(&self) -> Result<T, T::Err> {
+        <Value as ParamValue>::parse(&self.value)
+    }
+
+    fn as_bytes(&self) -> Cow<'_, [u8]> {
+        <Value as ParamValue>::as_bytes(&self.value)
+    }
+
+    fn as_ref(&self) -> ValueRef<'_> {
+        <Value as ParamValue>::as_ref(&self.value)
+    }
 }
 
 impl Display for Param {
@@ -408,7 +1312,7 @@ impl Param {
     pub fn new_key_value<K: Into<String>, V: Into<String>>(name: K, value: V) -> Param {
         let mut inst = Self::new();
         inst.name = name.into();
-        inst.value = value.into();
+        inst.value = value.into().into();
         inst
     }
 
@@ -450,8 +1354,8 @@ impl ParamLike for Param {
         &self.name
     }
 
-    fn value(&self) -> &str {
-        &self.value
+    fn value(&self) -> ValueRef {
+        self.value.as_ref()
     }
 
     fn accession(&self) -> Option<u32> {
@@ -486,12 +1390,11 @@ const UO_CV: &str = "UO";
 const MS_CV_BYTES: &[u8] = MS_CV.as_bytes();
 const UO_CV_BYTES: &[u8] = UO_CV.as_bytes();
 
-
 /// Anything that can be converted into an accession code portion of a [`CURIE`]
 #[derive(Debug, Clone)]
 pub enum AccessionLike<'a> {
     Text(Cow<'a, str>),
-    Number(u32)
+    Number(u32),
 }
 
 impl<'a> From<u32> for AccessionLike<'a> {
@@ -536,7 +1439,11 @@ impl<'a> ControlledVocabulary {
         }
     }
 
-    pub fn param<A: Into<AccessionLike<'a>>, S: Into<String>>(&self, accession: A, name: S) -> Param {
+    pub fn param<A: Into<AccessionLike<'a>>, S: Into<String>>(
+        &self,
+        accession: A,
+        name: S,
+    ) -> Param {
         let mut param = Param::new();
         param.controlled_vocabulary = Some(*self);
         param.name = name.into();
@@ -546,17 +1453,13 @@ impl<'a> ControlledVocabulary {
         match accession {
             AccessionLike::Text(s) => {
                 if let Some(nb) = s.split(":").last() {
-                    param.accession = Some(nb.parse().unwrap_or_else(|_| {
-                        panic!(
-                            "Expected accession to be numeric, got {}",
-                            s
-                        )
-                    }))
+                    param.accession =
+                        Some(nb.parse().unwrap_or_else(|_| {
+                            panic!("Expected accession to be numeric, got {}", s)
+                        }))
                 }
-            },
-            AccessionLike::Number(n) => {
-                param.accession = Some(n)
-            },
+            }
+            AccessionLike::Number(n) => param.accession = Some(n),
         }
         param
     }
@@ -568,13 +1471,13 @@ impl<'a> ControlledVocabulary {
     pub const fn const_param(
         &self,
         name: &'static str,
-        value: &'static str,
+        value: ValueRef<'static>,
         accession: u32,
         unit: Unit,
     ) -> ParamCow<'static> {
         ParamCow {
             name: Cow::Borrowed(name),
-            value: Cow::Borrowed(value),
+            value: value,
             accession: Some(accession),
             controlled_vocabulary: Some(*self),
             unit,
@@ -582,7 +1485,7 @@ impl<'a> ControlledVocabulary {
     }
 
     pub const fn const_param_ident(&self, name: &'static str, accession: u32) -> ParamCow<'static> {
-        self.const_param(name, "", accession, Unit::Unknown)
+        self.const_param(name, ValueRef::Empty, accession, Unit::Unknown)
     }
 
     pub const fn const_param_ident_unit(
@@ -591,17 +1494,17 @@ impl<'a> ControlledVocabulary {
         accession: u32,
         unit: Unit,
     ) -> ParamCow<'static> {
-        self.const_param(name, "", accession, unit)
+        self.const_param(name, ValueRef::Empty, accession, unit)
     }
 
-    pub fn param_val<S: Into<String>, A: Into<AccessionLike<'a>>, V: ToString>(
+    pub fn param_val<S: Into<String>, A: Into<AccessionLike<'a>>, V: Into<Value>>(
         &self,
         accession: A,
         name: S,
         value: V,
     ) -> Param {
         let mut param = self.param(accession, name);
-        param.value = value.to_string();
+        param.value = value.into();
         param
     }
 }
@@ -626,8 +1529,6 @@ impl FromStr for ControlledVocabulary {
 }
 
 pub type ParamList = Vec<Param>;
-
-pub type ParamMap = HashMap<String, Param>;
 
 pub trait ParamDescribed {
     fn params(&self) -> &[Param];
@@ -772,87 +1673,155 @@ impl Unit {
         }
     }
 
-    pub fn from_name(name: &str) -> Unit {
-        match name {
-            "millisecond" => Self::Millisecond,
-            "second" => Self::Second,
-            "minute" => Self::Minute,
+    pub const fn from_name(name: &str) -> Unit {
+        let bytes = name.as_bytes();
+        match bytes {
+            b"millisecond" => Self::Millisecond,
+            b"second" => Self::Second,
+            b"minute" => Self::Minute,
 
-            "m/z" => Self::MZ,
-            "dalton" => Self::Mass,
+            b"m/z" => Self::MZ,
+            b"dalton" => Self::Mass,
 
-            "number of detector counts" => Self::DetectorCounts,
-            "percent of base peak" => Self::PercentBasePeak,
-            "percent of base peak times 100" => Self::PercentBasePeakTimes100,
-            "absorbance unit" => Self::AbsorbanceUnit,
-            "counts per second" => Self::CountsPerSecond,
+            b"number of detector counts" => Self::DetectorCounts,
+            b"percent of base peak" => Self::PercentBasePeak,
+            b"percent of base peak times 100" => Self::PercentBasePeakTimes100,
+            b"absorbance unit" => Self::AbsorbanceUnit,
+            b"counts per second" => Self::CountsPerSecond,
 
-            "electronvolt" => Self::Electronvolt,
-            "percent" => Self::PercentElectronVolt,
+            b"electronvolt" => Self::Electronvolt,
+            b"percent" => Self::PercentElectronVolt,
             _ => Unit::Unknown,
         }
     }
 
-    pub fn from_accession(acc: &str) -> Unit {
-        match acc {
-            "UO:0000028" => Self::Millisecond,
-            "UO:0000010" => Self::Second,
-            "UO:0000031" => Self::Minute,
+    pub const fn from_accession(acc: &str) -> Unit {
+        let bytes = acc.as_bytes();
+        match bytes {
+            b"UO:0000028" => Self::Millisecond,
+            b"UO:0000010" => Self::Second,
+            b"UO:0000031" => Self::Minute,
 
-            "MS:1000040" => Self::MZ,
-            "UO:000221" => Self::Mass,
+            b"MS:1000040" => Self::MZ,
+            b"UO:000221" => Self::Mass,
 
-            "MS:1000131" => Self::DetectorCounts,
-            "MS:1000132" => Self::PercentBasePeak,
-            "MS:1000905" => Self::PercentBasePeakTimes100,
-            "UO:0000269" => Self::AbsorbanceUnit,
-            "MS:1000814" => Self::CountsPerSecond,
+            b"MS:1000131" => Self::DetectorCounts,
+            b"MS:1000132" => Self::PercentBasePeak,
+            b"MS:1000905" => Self::PercentBasePeakTimes100,
+            b"UO:0000269" => Self::AbsorbanceUnit,
+            b"MS:1000814" => Self::CountsPerSecond,
 
-            "UO:0000266" => Self::Electronvolt,
-            "UO:0000187" => Self::PercentElectronVolt,
+            b"UO:0000266" => Self::Electronvolt,
+            b"UO:0000187" => Self::PercentElectronVolt,
             _ => Unit::Unknown,
         }
     }
 
     pub const fn from_curie(acc: &CURIE) -> Unit {
         match acc {
-            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 28 } => Self::Millisecond,
-            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 10 } => Self::Second,
-            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 31 } => Self::Minute,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 28,
+            } => Self::Millisecond,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 10,
+            } => Self::Second,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 31,
+            } => Self::Minute,
 
-            CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000040 } => Self::MZ,
-            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 221 } => Self::Mass,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1000040,
+            } => Self::MZ,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 221,
+            } => Self::Mass,
 
-            CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000131 } => Self::DetectorCounts,
-            CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000132 } => Self::PercentBasePeak,
-            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 269 } => Self::AbsorbanceUnit,
-            CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000814 } => Self::CountsPerSecond,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1000131,
+            } => Self::DetectorCounts,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1000132,
+            } => Self::PercentBasePeak,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 269,
+            } => Self::AbsorbanceUnit,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1000814,
+            } => Self::CountsPerSecond,
 
-            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 266 } => Self::Electronvolt,
-            CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 187 } => Self::PercentElectronVolt,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 266,
+            } => Self::Electronvolt,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 187,
+            } => Self::PercentElectronVolt,
 
-            _ => Unit::Unknown
+            _ => Unit::Unknown,
         }
     }
 
     pub const fn to_curie(&self) -> Option<CURIE> {
         match self {
-            Self::Millisecond => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 28 }),
-            Self::Second => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 10 }),
-            Self::Minute => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 31 }),
+            Self::Millisecond => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 28,
+            }),
+            Self::Second => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 10,
+            }),
+            Self::Minute => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 31,
+            }),
 
-            Self::MZ => Some(CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000040 }),
-            Self::Mass => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 221 }),
+            Self::MZ => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1000040,
+            }),
+            Self::Mass => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 221,
+            }),
 
-            Self::DetectorCounts => Some(CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000131 }),
-            Self::PercentBasePeak => Some(CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000132 }),
-            Self::AbsorbanceUnit => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 269 }),
-            Self::CountsPerSecond => Some(CURIE { controlled_vocabulary: ControlledVocabulary::MS, accession: 1000814 }),
+            Self::DetectorCounts => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1000131,
+            }),
+            Self::PercentBasePeak => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1000132,
+            }),
+            Self::AbsorbanceUnit => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 269,
+            }),
+            Self::CountsPerSecond => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1000814,
+            }),
 
-            Self::Electronvolt => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 266 }),
-            Self::PercentElectronVolt => Some(CURIE { controlled_vocabulary: ControlledVocabulary::UO, accession: 187 }),
+            Self::Electronvolt => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 266,
+            }),
+            Self::PercentElectronVolt => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 187,
+            }),
 
-            _ => None
+            _ => None,
         }
     }
 

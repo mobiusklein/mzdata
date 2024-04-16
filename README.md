@@ -1,6 +1,6 @@
 # mzdata
-[![Latest Version](https://img.shields.io/crates/v/mzdata.svg)](https://crates.io/crates/mzdata)
-[![docs.rs](https://img.shields.io/docsrs/mzdata)](https://docs.rs/mzdata/latest/mzdata/)
+[![Latest Version](https://img.shields.io/crates/v/mzdata?style=for-the-badge&color=mediumpurple&logo=rust)](https://crates.io/crates/mzdata)
+[![docs.rs](https://img.shields.io/docsrs/mzdata?style=for-the-badge&logo=docs.rs&color=mediumseagreen)](https://docs.rs/mzdata/latest/mzdata/)
 
 A Rust library for reading mass spectrometry data file formats.
 

@@ -224,7 +224,7 @@ pub trait CVParamParse: XMLParseBase {
         }
         let param = ParamCow::new(
             name.unwrap(),
-            value.unwrap_or_default(),
+            value.unwrap_or_default().into(),
             accession,
             controlled_vocabulary,
             unit,
@@ -260,7 +260,7 @@ pub trait CVParamParse: XMLParseBase {
                                     reader_position, e
                                 )
                             })
-                            .to_string();
+                            .into();
                     }
                     b"cvRef" => {
                         let cv_id = attr.unescape_value().unwrap_or_else(|e| {

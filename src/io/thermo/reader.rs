@@ -3,10 +3,10 @@ use std::{collections::HashMap, io, marker::PhantomData, mem, path::PathBuf};
 use chrono::DateTime;
 
 use crate::{
-    io::{DetailLevel, OffsetIndex, utils::checksum_file},
+    io::{utils::checksum_file, DetailLevel, OffsetIndex},
     meta::{
         Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration,
-        Software, SourceFile, MassSpectrometryRun
+        MassSpectrometryRun, Software, SourceFile,
     },
     params::{ControlledVocabulary, Unit},
     prelude::*,
@@ -25,7 +25,7 @@ use thermorawfilereader::schema::{
 };
 use thermorawfilereader::{
     schema::{AcquisitionT, DissociationMethod, PrecursorT},
-    RawFileReader, FileDescription as ThermoFileDescription
+    FileDescription as ThermoFileDescription, RawFileReader,
 };
 
 #[allow(unused)]
@@ -94,6 +94,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
     }
 }
 
+#[inline(always)]
 fn make_native_id(index: i32) -> String {
     format!(
         "controllerType=0 controllerNumber=1 scan={}",
@@ -106,12 +107,17 @@ const SOURCE_FILE_ID: &'static str = "RAW1";
 impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
     ThermoRawReaderType<C, D>
 {
-    fn make_ms_run(path: &PathBuf, thermo_file_description: &ThermoFileDescription) -> MassSpectrometryRun {
+    fn make_ms_run(
+        path: &PathBuf,
+        thermo_file_description: &ThermoFileDescription,
+    ) -> MassSpectrometryRun {
         let mut run = MassSpectrometryRun::default();
 
         run.default_instrument_id = Some(0);
         run.default_source_file_id = Some(SOURCE_FILE_ID.to_string());
-        run.id = path.file_name().map(|s| s.to_string_lossy().split(".").next().unwrap().to_string());
+        run.id = path
+            .file_name()
+            .map(|s| s.to_string_lossy().split(".").next().unwrap().to_string());
         run.start_time = thermo_file_description.creation_date().map(|s| {
             let dt = DateTime::parse_from_rfc3339(s).unwrap();
             dt
@@ -121,7 +127,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 
     fn make_file_description(
         path: &PathBuf,
-        thermo_file_description: &ThermoFileDescription
+        thermo_file_description: &ThermoFileDescription,
     ) -> io::Result<FileDescription> {
         let mut sf = SourceFile::default();
         let description = thermo_file_description;
@@ -141,7 +147,13 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
                 .const_param_ident("Thermo nativeID format", 1000768)
                 .into(),
         );
-        sf.add_param(ControlledVocabulary::MS.param_val("1000569", "SHA-1", checksum_file(path)?));
+        sf.add_param(
+            ControlledVocabulary::MS.param_val(
+                1000569,
+                "SHA-1",
+                checksum_file(path)?
+            )
+        );
 
         let levels: Vec<_> = description
             .spectra_per_ms_level()
@@ -291,11 +303,13 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             config.components.push(detector);
 
             if let Some(serial) = descr.serial_number() {
-                config.add_param(ControlledVocabulary::MS.param_val(
-                    "1000529",
-                    "instrument serial number",
-                    serial,
-                ));
+                config.add_param(
+                    ControlledVocabulary::MS.param_val(
+                        1000529,
+                        "instrument serial number",
+                        serial,
+                    )
+                );
             }
             config.software_reference = sw.id.clone();
             config.id = i as u32;
@@ -536,7 +550,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             self.populate_scan_event(&vacq, event);
             if let Some(filter) = view.filter_string() {
                 let mut p: Param = param!("filter string", 1000512).into();
-                p.value = filter.to_string();
+                p.value = filter.into();
                 event.add_param(p);
             }
         }
@@ -713,6 +727,14 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 
     fn run_description(&self) -> Option<&MassSpectrometryRun> {
         Some(&self.ms_run)
+    }
+
+    fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
+        Some(&mut self.ms_run)
+    }
+
+    fn source_file_name(&self) -> Option<&str> {
+        self.path.file_name().and_then(|s| s.to_str())
     }
 }
 

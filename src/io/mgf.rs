@@ -34,7 +34,9 @@ use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
     MassSpectrometryRun, Software,
 };
-use crate::params::{ControlledVocabulary, Param, ParamDescribed, ParamLike, CURIE};
+use crate::params::{
+    ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue as _, CURIE,
+};
 use crate::spectrum::{
     bindata::{
         vec_as_bytes, ArrayType, BinaryArrayMap, BinaryDataArrayType, BuildArrayMapFrom,
@@ -712,11 +714,72 @@ const TITLE_CV: CURIE = ControlledVocabulary::MS.curie(1000796);
 const MS_LEVEL_CV: CURIE = ControlledVocabulary::MS.curie(1000511);
 const MSN_SPECTRUM_CV: CURIE = ControlledVocabulary::MS.curie(1000580);
 
-/// An MGF writer type that only writes centroided MSn spectra
+/// A trait that controls what additional descriptive entries
+/// are written in the spectrum header of an MGF file, not including
+/// the essential items like `RTINSECONDS` and `PEPMASS`
+pub trait MGFHeaderStyle : Sized {
+    #[allow(unused)]
+    fn write_header<
+        W: io::Write,
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        S: SpectrumLike<C, D>,
+    >(
+        writer: &mut MGFWriterType<W, C, D, Self>,
+        spectrum: &S,
+    ) -> io::Result<()> {
+        let desc = spectrum.description();
+        writer.write_kv("SCANS", &desc.index.to_string())?;
+        Ok(())
+    }
+}
+
+/// An MGF style that writes the `SCANS` entry, but no additional
+/// descriptions beyond the minimum.
+#[derive(Debug, Clone, Copy)]
+pub struct SimpleMGFStyle();
+
+impl MGFHeaderStyle for SimpleMGFStyle {}
+
+/// An MGF style that writes the contents of [`SpectrumLike::params`]
+/// as spectrum header entries. This is the default style.
+#[derive(Debug, Clone, Copy)]
+pub struct MZDataMGFStyle();
+
+impl MGFHeaderStyle for MZDataMGFStyle {
+    fn write_header<
+        W: io::Write,
+        C: CentroidPeakAdapting + From<CentroidPeak>,
+        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        S: SpectrumLike<C, D>,
+    >(
+        writer: &mut MGFWriterType<W, C, D, Self>,
+        spectrum: &S,
+    ) -> io::Result<()> {
+        let desc = spectrum.description();
+        writer.write_kv("NATIVEID", spectrum.id())?;
+        writer.write_kv("SCANS", &desc.index.to_string())?;
+        for param in desc
+            .params()
+            .iter()
+            .filter(|p| TITLE_CV != **p && MSN_SPECTRUM_CV != **p && MS_LEVEL_CV != **p)
+        {
+            writer.write_param(param)?;
+        }
+        Ok(())
+    }
+}
+
+/// An MGF writer type that only writes centroided MSn spectra.
+///
+/// To customize the way that spectrum metadata is written, provide
+/// a type implementing [`MGFHeaderStyle`]. The default style, [`MZDataMGFStyle`]
+/// writes all parameters it can find.
 pub struct MGFWriterType<
     W: io::Write,
     C: CentroidPeakAdapting + From<CentroidPeak> = CentroidPeak,
     D: DeconvolutedPeakAdapting + From<DeconvolutedPeak> = DeconvolutedPeak,
+    Y: MGFHeaderStyle = MZDataMGFStyle
 > {
     pub handle: io::BufWriter<W>,
     pub offset: usize,
@@ -726,6 +789,7 @@ pub struct MGFWriterType<
     instrument_configurations: HashMap<u32, InstrumentConfiguration>,
     softwares: Vec<Software>,
     data_processings: Vec<DataProcessing>,
+    style_type: PhantomData<Y>,
     run: MassSpectrometryRun,
 }
 
@@ -733,9 +797,10 @@ impl<
         W: io::Write,
         C: CentroidPeakAdapting + From<CentroidPeak>,
         D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
-    > MGFWriterType<W, C, D>
+        Y: MGFHeaderStyle
+    > MGFWriterType<W, C, D, Y>
 {
-    pub fn new(file: W) -> MGFWriterType<W, C, D> {
+    pub fn new(file: W) -> MGFWriterType<W, C, D, Y> {
         let handle = io::BufWriter::with_capacity(500, file);
         MGFWriterType {
             handle,
@@ -747,9 +812,12 @@ impl<
             softwares: Default::default(),
             data_processings: Default::default(),
             run: Default::default(),
+            style_type: PhantomData
         }
     }
 
+    /// Format a spectrum title similarly to the [Trans-Proteomic Pipeline](https://tools.proteomecenter.org/software.php)
+    /// compatibility.
     pub fn make_title<S: SpectrumLike<C, D>>(&self, spectrum: &S) -> String {
         let idx = spectrum.index();
         let charge = spectrum
@@ -776,16 +844,21 @@ impl<
         self.handle
     }
 
-    fn write_param<P: ParamLike>(&mut self, param: &P) -> io::Result<()> {
+    /// Convert a [`ParamLike`](crate::params::ParamLike) value into a spectrum header `key=value`
+    /// pair.
+    ///
+    /// Calles [`MGFWriterType::write_kv`].
+    pub fn write_param<P: ParamLike>(&mut self, param: &P) -> io::Result<()> {
         self.handle
             .write_all(param.name().to_uppercase().replace(" ", "_").as_bytes())?;
         self.handle.write_all(b"=")?;
-        self.handle.write_all(param.value().as_bytes())?;
+        self.handle.write_all(&param.value().as_bytes())?;
         self.handle.write_all(b"\n")?;
         Ok(())
     }
 
-    fn write_kv(&mut self, key: &str, value: &str) -> io::Result<()> {
+    /// Write a spectrum header `KEY=value`
+    pub fn write_kv(&mut self, key: &str, value: &str) -> io::Result<()> {
         self.handle.write_all(key.as_bytes())?;
         self.handle.write_all(b"=")?;
         self.handle.write_all(value.as_bytes())?;
@@ -793,68 +866,56 @@ impl<
         Ok(())
     }
 
-    fn write_header<T: SpectrumLike<C, D>>(&mut self, spectrum: &T) -> io::Result<()> {
-        let desc = spectrum.description();
-        if desc.ms_level == 1 {
-            log::warn!(
-                "Attempted to write an MS1 spectrum to MGF, {}, skipping.",
-                desc.id
-            );
-            return Ok(());
+    fn write_precursor(&mut self, precursor: &Precursor) -> io::Result<()> {
+        let ion = precursor.ion();
+        self.handle.write_all(b"PEPMASS=")?;
+        self.handle.write_all(ion.mz.to_string().as_bytes())?;
+        self.handle.write_all(b" ")?;
+        self.handle
+            .write_all(ion.intensity.to_string().as_bytes())?;
+        if let Some(charge) = ion.charge {
+            self.handle.write_all(b" ")?;
+            self.handle.write_all(charge.to_string().as_bytes())?;
         }
-        // spectrum
-        self.handle.write_all(
-            br#"BEGIN IONS
-TITLE="#,
-        )?;
+        self.handle.write_all(b"\n")?;
+
+        for param in precursor
+            .ion()
+            .params()
+            .iter()
+            .chain(precursor.activation.params())
+        {
+            self.write_param(param)?;
+        }
+        if let Some(pid) = precursor.precursor_id() {
+            self.handle.write_all(b"PRECURSORSCAN=")?;
+            self.handle.write_all(pid.as_bytes())?;
+            self.handle.write_all(b"\n")?;
+        }
+        Ok(())
+    }
+
+    /// Write the header of a spectrum, everything after `BEGIN IONS`, before writing
+    /// the peak list.
+    pub fn write_header<T: SpectrumLike<C, D>>(&mut self, spectrum: &T) -> io::Result<()> {
+        let desc = spectrum.description();
         let (title, _had_title) = desc
             .get_param_by_curie(&TITLE_CV)
             .and_then(|p| Some((p.value.clone(), true)))
-            .unwrap_or_else(|| (self.make_title(spectrum), false));
-        self.handle.write_all(title.as_bytes())?;
-        self.write_kv("\nNATIVEID", spectrum.id())?;
-        self.handle.write_all(b"RTINSECONDS=")?;
+            .unwrap_or_else(|| (self.make_title(spectrum).into(), false));
+        self.handle.write_all(&title.as_bytes())?;
+        self.handle.write_all(b"\nRTINSECONDS=")?;
         self.handle
             .write_all((spectrum.start_time() * 60.0).to_string().as_bytes())?;
         self.handle.write_all(b"\n")?;
         match &desc.precursor {
             Some(precursor) => {
-                let ion = precursor.ion();
-                self.handle.write_all(b"PEPMASS=")?;
-                self.handle.write_all(ion.mz.to_string().as_bytes())?;
-                self.handle.write_all(b" ")?;
-                self.handle
-                    .write_all(ion.intensity.to_string().as_bytes())?;
-                if let Some(charge) = ion.charge {
-                    self.handle.write_all(b" ")?;
-                    self.handle.write_all(charge.to_string().as_bytes())?;
-                }
-                self.handle.write_all(b"\n")?;
-
-                for param in precursor
-                    .ion()
-                    .params()
-                    .iter()
-                    .chain(precursor.activation.params())
-                {
-                    self.write_param(param)?;
-                }
-                if let Some(pid) = precursor.precursor_id() {
-                    self.handle.write_all(b"PRECURSORSCAN=")?;
-                    self.handle.write_all(pid.as_bytes())?;
-                    self.handle.write_all(b"\n")?;
-                }
+                self.write_precursor(precursor)?;
             }
             None => {}
         }
-        for param in desc
-            .params()
-            .iter()
-            .filter(|p| TITLE_CV != **p && MSN_SPECTRUM_CV != **p && MS_LEVEL_CV != **p)
-        {
-            self.write_param(param)?;
-        }
 
+        Y::write_header(self, spectrum)?;
         Ok(())
     }
 
@@ -910,16 +971,9 @@ TITLE="#,
         Ok(())
     }
 
-    pub fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
+    /// Write the peak list of a spectrum, everything unitl the `END IONS`
+    pub fn write_peaks<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<()> {
         let description = spectrum.description();
-        if description.ms_level == 1 {
-            log::warn!(
-                "Attempted to write an MS1 spectrum to MGF, {}, skipping.",
-                description.id
-            );
-            return Ok(0);
-        }
-        self.write_header(spectrum)?;
         match spectrum.peaks() {
             RefPeakDataLevel::Missing => {
                 log::warn!(
@@ -935,6 +989,26 @@ TITLE="#,
                 self.write_deconvoluted_centroids(&deconvoluted[0..deconvoluted.len()])?
             }
         }
+        Ok(())
+    }
+
+    /// Write a spectrum from start to finish. It will skip spectra where `ms_level() == 1`
+    pub fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
+        let description = spectrum.description();
+        if description.ms_level == 1 {
+            log::warn!(
+                "Attempted to write an MS1 spectrum to MGF, {}, skipping.",
+                description.id
+            );
+            return Ok(0);
+        }
+        // spectrum
+        self.handle.write_all(
+            br#"BEGIN IONS
+TITLE="#,
+        )?;
+        self.write_header(spectrum)?;
+        self.write_peaks(spectrum)?;
         self.handle.write_all(b"END IONS\n")?;
         Ok(0)
     }
@@ -944,7 +1018,8 @@ impl<
         W: io::Write,
         C: CentroidPeakAdapting + From<CentroidPeak>,
         D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
-    > MSDataFileMetadata for MGFWriterType<W, C, D>
+        Y: MGFHeaderStyle,
+    > MSDataFileMetadata for MGFWriterType<W, C, D, Y>
 {
     crate::impl_metadata_trait!();
 
@@ -996,7 +1071,7 @@ impl<
 }
 
 /// A convenient alias for [`MGFWriterType`] with the peak types specified
-pub type MGFWriter<W> = MGFWriterType<W, CentroidPeak, DeconvolutedPeak>;
+pub type MGFWriter<W> = MGFWriterType<W, CentroidPeak, DeconvolutedPeak, MZDataMGFStyle>;
 
 #[cfg(test)]
 mod test {

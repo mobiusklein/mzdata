@@ -71,9 +71,9 @@ pub trait SpectrumBuilding<
 
     fn into_chromatogram(self, chromatogram: &mut Chromatogram);
 
-    fn fill_spectrum<P: ParamLike + Into<Param>>(&mut self, param: P);
+    fn fill_spectrum<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P);
 
-    fn fill_binary_data_array<P: ParamLike + Into<Param>>(&mut self, param: P) {
+    fn fill_binary_data_array<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P) {
         if param.is_ms() {
             match param.accession().unwrap() {
                 // Compression types
@@ -188,15 +188,15 @@ pub trait SpectrumBuilding<
     fn fill_selected_ion(&mut self, param: Param) {
         match param.name.as_ref() {
             "selected ion m/z" => {
-                self.selected_ion_mut().mz = param.parse().expect("Failed to parse ion m/z");
+                self.selected_ion_mut().mz = param.to_f64().expect("Failed to parse ion m/z");
             }
             "peak intensity" => {
                 self.selected_ion_mut().intensity =
-                    param.parse().expect("Failed to parse peak intensity");
+                    param.to_f32().expect("Failed to parse peak intensity");
             }
             "charge state" => {
                 self.selected_ion_mut().charge =
-                    Some(param.parse().expect("Failed to parse ion charge"));
+                    Some(param.to_i32().expect("Failed to parse ion charge"));
             }
             &_ => {
                 self.selected_ion_mut().add_param(param);
@@ -209,7 +209,7 @@ pub trait SpectrumBuilding<
         match param.name.as_ref() {
             "isolation window target m/z" => {
                 window.target = param
-                    .parse()
+                    .to_f32()
                     .expect("Failed to parse isolation window target");
                 window.flags = match window.flags {
                     IsolationWindowState::Unknown => IsolationWindowState::Complete,
@@ -224,7 +224,7 @@ pub trait SpectrumBuilding<
             }
             "isolation window lower offset" => {
                 let lower_bound = param
-                    .parse()
+                    .to_f32()
                     .expect("Failed to parse isolation window limit");
                 match window.flags {
                     IsolationWindowState::Unknown => {
@@ -239,7 +239,7 @@ pub trait SpectrumBuilding<
             }
             "isolation window upper offset" => {
                 let upper_bound = param
-                    .parse()
+                    .to_f32()
                     .expect("Failed to parse isolation window limit");
                 match window.flags {
                     IsolationWindowState::Unknown => {
@@ -254,7 +254,7 @@ pub trait SpectrumBuilding<
             }
             "isolation window lower limit" => {
                 let lower_bound = param
-                    .parse()
+                    .to_f32()
                     .expect("Failed to parse isolation window limit");
                 if let IsolationWindowState::Unknown = window.flags {
                     window.flags = IsolationWindowState::Explicit;
@@ -263,7 +263,7 @@ pub trait SpectrumBuilding<
             }
             "isolation window upper limit" => {
                 let upper_bound = param
-                    .parse()
+                    .to_f32()
                     .expect("Failed to parse isolation window limit");
                 if let IsolationWindowState::Unknown = window.flags {
                     window.flags = IsolationWindowState::Explicit;
@@ -278,10 +278,10 @@ pub trait SpectrumBuilding<
         let window = self.scan_window_mut();
         match param.name.as_ref() {
             "scan window lower limit" => {
-                window.lower_bound = param.parse().expect("Failed to parse scan window limit");
+                window.lower_bound = param.to_f32().expect("Failed to parse scan window limit");
             }
             "scan window upper limit" => {
-                window.upper_bound = param.parse().expect("Failed to parse scan window limit");
+                window.upper_bound = param.to_f32().expect("Failed to parse scan window limit");
             }
             &_ => {}
         }
@@ -395,10 +395,10 @@ impl<
         spectrum.arrays = Some(self.arrays);
     }
 
-    fn fill_spectrum<P: ParamLike + Into<Param>>(&mut self, param: P) {
+    fn fill_spectrum<P: ParamLike + Into<Param>  + ParamValue>(&mut self, param: P) {
         match param.name() {
             "ms level" => {
-                self.ms_level = param.parse().expect("Failed to parse ms level");
+                self.ms_level = param.to_i32().expect("Failed to parse ms level") as u8;
             }
             "positive scan" => {
                 self.polarity = ScanPolarity::Positive;
@@ -540,7 +540,7 @@ impl<
                 match param.name.as_bytes() {
                     b"scan start time" => {
                         let value: f64 = param
-                            .parse()
+                            .to_f64()
                             .expect("Expected floating point number for scan time");
                         let value = match &param.unit {
                             Unit::Minute => value,
@@ -555,8 +555,8 @@ impl<
                     }
                     b"ion injection time" => {
                         event.injection_time = param
-                            .parse()
-                            .expect("Expected floating point number for injection time");
+                            .to_f64()
+                            .expect("Expected floating point number for injection time") as f32;
                     }
                     _ => event.add_param(param),
                 }
@@ -582,7 +582,7 @@ impl<
                     match param.name.as_ref() {
                         "collision energy" | "activation energy" => {
                             self.precursor.activation.energy =
-                                param.parse().expect("Failed to parse collision energy");
+                                param.to_f32().expect("Failed to parse collision energy");
                         }
                         &_ => {
                             self.precursor.activation.add_param(param);
@@ -792,7 +792,7 @@ impl<
                             match param.name.as_bytes() {
                                 b"scan start time" => {
                                     let value: f64 = param
-                                        .parse()
+                                        .to_f64()
                                         .expect("Expected floating point number for scan time");
                                     let value = match &param.unit {
                                         Unit::Minute => value,
@@ -806,7 +806,7 @@ impl<
                                     event.start_time = value;
                                 }
                                 b"ion injection time" => {
-                                    event.injection_time = param.parse().expect(
+                                    event.injection_time = param.to_f32().expect(
                                         "Expected floating point number for injection time",
                                     );
                                 }
@@ -837,7 +837,7 @@ impl<
                                 match param.name.as_ref() {
                                     "collision energy" | "activation energy" => {
                                         self.precursor.activation.energy = param
-                                            .parse()
+                                            .to_f32()
                                             .expect("Failed to parse collision energy");
                                     }
                                     &_ => {
@@ -2045,7 +2045,7 @@ mod test {
             let configs = scan.acquisition().instrument_configuration_ids();
             let conf = configs[0];
             println!("Processing scan {}", scan.index());
-            if filter_string.value.contains("ITMS") {
+            if filter_string.value.to_string().contains("ITMS") {
                 assert_eq!(conf, 1);
             } else {
                 assert_eq!(conf, 0);
