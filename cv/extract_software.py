@@ -1,4 +1,5 @@
 import gzip
+import json
 import io
 import re
 
@@ -49,10 +50,12 @@ def format_name(match: re.Match) -> str:
 def make_entry_for(term: TermFrame):
     name = None
     flags = SoftwareType.NoType
+    parents = []
     for clause in term:
         if isinstance(clause, NameClause):
             name = str(clause.name)
         if isinstance(clause, IsAClause):
+            parents.append(str(clause.term))
             if clause.term == DP_SW:
                 flags |= SoftwareType.DataProcessing
             elif clause.term == ANALYSIS_SW:
@@ -76,7 +79,7 @@ def make_entry_for(term: TermFrame):
     vname = vname[0].upper() + vname[1:]
 
     return f"""
-    #[term(cv=MS, accession={term.id.local}, name="{name}", flags={{{int(flags)}}})]
+    #[term(cv=MS, accession={term.id.local}, name="{name}", flags={{{int(flags)}}}, parents={{{json.dumps(parents)}}})]
     {vname},"""
 
 

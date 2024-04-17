@@ -26,7 +26,7 @@ macro_rules! cvmap {
         $(#[$enum_attrs:meta])*
         $vis:vis enum $enum_name:ident {
             $(
-                #[term(cv=$cv:ident, accession=$accession:literal, name=$term_name:literal, flags=$flags:tt)]
+                #[term(cv=$cv:ident, accession=$accession:literal, name=$term_name:literal, flags=$flags:tt, parents=$parents:tt)]
                 $(#[$variant_attrs:meta])*
                 $variant:ident
             ),*
@@ -95,6 +95,15 @@ macro_rules! cvmap {
             pub fn flags(&self) -> $flag_type {
                 match self {
                     $(Self::$variant => $flags.into(),)*
+                }
+            }
+
+            pub fn parents(&self) -> Vec<Self> {
+                match self {
+                    $(Self::$variant => $parents.iter().map(|s: &&str| {
+                        let curie = s.parse::<$crate::params::CURIE>().unwrap();
+                        Self::from_accession(curie.accession).unwrap()
+                    }).collect(),)*
                 }
             }
 

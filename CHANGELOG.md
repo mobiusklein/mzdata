@@ -20,12 +20,19 @@ and this project adheres to [Semantic Versioning].
   They support coercion via the `ParamValue` trait in the prelude. `Param` and `ParamCow` also implement this trait
   and delegate it to their `value` field.
 - Added `ion_mobility`, `filter_string`, and `mass_resolution` methods to `ScanEvent` that perform `cvParam` look ups.
+- Added `MGFStyle` traits and marker types that control how MGF spectrum headers are populated. The default behavior
+  is now encapsulated in the default style, `MZDataMGFStyle`.
+- Added `SoftwareTerm` enumeration generated from the [`psi-ms.obo`](https://github.com/HUPO-PSI/psi-ms-CV).
 
 ### Changed
 - The `MassSpectrometryRun.start_time` field is now a `chrono::DateTime` instead of `String`.
 - `Param` and `ParamCow` now store their values as `Value`/`ValueRef`, which eagerly parse their values
   to elide the parsing cost on repeated access.
 - `CURIE` can now be constructed with the `mzdata::curie` macro
+- `MGFWriterType` now takes a fourth template parameter, a type implementing the `MGFStyle` trait. This
+  is parameterized by default.
+- The `MGFWriterType`'s public API has been expanded and the internal responsibilities refactored so that
+  the `write_header` and `write_peaks` methods are more succinct.
 
 ## [0.13.0] - 2024-03-28
 

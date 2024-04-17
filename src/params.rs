@@ -890,8 +890,8 @@ param_value_ref_float!(f64);
 /// A CURIE is a namespace + accession identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CURIE {
-    controlled_vocabulary: ControlledVocabulary,
-    accession: u32,
+    pub controlled_vocabulary: ControlledVocabulary,
+    pub accession: u32,
 }
 
 #[macro_export]
