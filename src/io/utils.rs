@@ -209,17 +209,15 @@ impl<R: io::Read> io::Seek for PreBufferedStream<R> {
                         log::trace!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
                         r
                     }
+                } else if offset as usize + self.position > self.buffer_size {
+                    Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "Cannot seeking beyond buffered prefix",
+                    ))
                 } else {
-                    if offset as usize + self.position > self.buffer_size {
-                        Err(io::Error::new(
-                            io::ErrorKind::InvalidInput,
-                            "Cannot seeking beyond buffered prefix",
-                        ))
-                    } else {
-                        let r = self.buffer.seek(io::SeekFrom::Current(offset));
-                        log::trace!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
-                        r
-                    }
+                    let r = self.buffer.seek(io::SeekFrom::Current(offset));
+                    log::trace!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
+                    r
                 }
             }
         }
@@ -289,8 +287,7 @@ impl<R: io::Read> PreBufferedStream<R> {
 pub fn checksum_file(path: &PathBuf) -> io::Result<String> {
     let mut checksum = sha1::Sha1::new();
     let mut reader = io::BufReader::new(fs::File::open(path)?);
-    let mut buf = Vec::new();
-    buf.resize(2usize.pow(20), 0);
+    let mut buf = vec![0; 2usize.pow(20)];
     while let Ok(i) = reader.read(&mut buf) {
         if i == 0 {
             break;

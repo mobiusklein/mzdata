@@ -25,7 +25,7 @@ use crate::io::utils::DetailLevel;
 use crate::meta::{FileDescription, InstrumentConfiguration, DataProcessing, MSDataFileMetadata, Software, MassSpectrometryRun};
 use crate::params::Param;
 use crate::spectrum::bindata::BuildFromArrayMap;
-use crate::spectrum::spectrum::{
+use crate::spectrum::spectrum_types::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
 };
 

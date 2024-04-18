@@ -79,9 +79,15 @@ pub enum DataProcessingAction {
     IonMobilityDeconvolution,
 }
 
-impl Into<Param> for DataProcessingAction {
-    fn into(self) -> Param {
-        self.as_param_const().into()
+impl From<DataProcessingAction> for Param {
+    fn from(value: DataProcessingAction) -> Self {
+        value.as_param_const().into()
+    }
+}
+
+impl From<DataProcessingAction> for ParamCow<'static> {
+    fn from(value: DataProcessingAction) -> Self {
+        value.as_param_const()
     }
 }
 
@@ -156,9 +162,15 @@ impl Display for FormatConversion {
     }
 }
 
-impl Into<Param> for FormatConversion {
-    fn into(self) -> Param {
-        self.to_param_const().into()
+impl From<FormatConversion> for Param {
+    fn from(value: FormatConversion) -> Self {
+        value.to_param_const().into()
+    }
+}
+
+impl From<FormatConversion> for ParamCow<'static> {
+    fn from(value: FormatConversion) -> Self {
+        value.to_param_const()
     }
 }
 

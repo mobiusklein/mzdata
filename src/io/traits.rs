@@ -17,7 +17,7 @@ use crate::meta::{
 };
 use crate::prelude::MSDataFileMetadata;
 use crate::spectrum::group::{SpectrumGroup, SpectrumGroupingIterator};
-use crate::spectrum::spectrum::{MultiLayerSpectrum, SpectrumLike};
+use crate::spectrum::spectrum_types::{MultiLayerSpectrum, SpectrumLike};
 
 use super::utils::FileSource;
 use super::OffsetIndex;
@@ -556,21 +556,11 @@ impl<
     }
 
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<S> {
-        while let Some(s) = self.next() {
-            if s.id() == id {
-                return Some(s);
-            }
-        }
-        None
+        self.by_ref().iter().find(|s| s.id() == id)
     }
 
     fn get_spectrum_by_index(&mut self, index: usize) -> Option<S> {
-        while let Some(s) = self.next() {
-            if s.index() == index {
-                return Some(s);
-            }
-        }
-        None
+        self.by_ref().iter().find(|s| s.index() == index)
     }
 
     fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {

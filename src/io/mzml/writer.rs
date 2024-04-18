@@ -30,7 +30,7 @@ use crate::spectrum::bindata::{
     to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType,
     BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
 };
-use crate::spectrum::spectrum::SpectrumLike;
+use crate::spectrum::spectrum_types::SpectrumLike;
 use crate::spectrum::{scan_properties::*, Chromatogram, ChromatogramLike, RefPeakDataLevel};
 
 const BUFFER_SIZE: usize = 10000;
@@ -441,7 +441,7 @@ pub struct MzMLWriterType<
     ms_cv: ControlledVocabulary,
 }
 
-impl<'a, W: Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom>
+impl<W: Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom>
     SpectrumWriter<C, D> for MzMLWriterType<W, C, D>
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
@@ -1182,7 +1182,7 @@ where
         let bin = bstart!("binary");
         start_event!(self, bin);
         self.handle.write_event(Event::Text(BytesText::new(
-            String::from_utf8_lossy(&encoded_array).as_ref(),
+            String::from_utf8_lossy(encoded_array).as_ref(),
         )))?;
         end_event!(self, bin);
         end_event!(self, outer);

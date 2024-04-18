@@ -38,7 +38,7 @@ use crate::spectrum::bindata::vec_as_bytes;
 #[cfg(feature = "numpress")]
 use numpress::numpress_decompress;
 
-use crate::spectrum::spectrum::{
+use crate::spectrum::spectrum_types::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
 };
 use crate::spectrum::{Chromatogram, IsolationWindow, ScanWindow, SelectedIon};

@@ -4,7 +4,7 @@ use std::fmt::Display;
 use log::warn;
 use num_traits::Float;
 
-use super::spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
+use super::spectrum_types::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
 use crate::io::traits::SpectrumSource;
 use crate::params::{
     ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef, CURIE,
@@ -146,11 +146,11 @@ const ION_MOBILITY_SCAN_TERMS: [CURIE; 4] = [
     curie!(MS:1003371),
 ];
 
-pub trait IonMobilityMeasure : ParamDescribed {
+pub trait IonMobilityMeasure: ParamDescribed {
     fn ion_mobility(&'_ self) -> Option<f64> {
         for u in ION_MOBILITY_SCAN_TERMS {
             if let Some(v) = self.get_param_by_curie(&u).map(|p| p.value()) {
-                return v.to_f64().map(|v| Some(v)).unwrap_or_else(|e| {
+                return v.to_f64().map(Some).unwrap_or_else(|e| {
                     warn!("Failed to parse ion mobility {u} value {v}: {e}");
                     None
                 });
@@ -309,11 +309,11 @@ impl Acquisition {
             .collect()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=&ScanEvent> {
+    pub fn iter(&self) -> impl Iterator<Item = &ScanEvent> {
         self.scans.iter()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item=&mut ScanEvent> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut ScanEvent> {
         self.scans.iter_mut()
     }
 }
@@ -570,34 +570,34 @@ impl Activation {
     }
 
     pub fn accession_to_activation(accession: u32) -> bool {
-        match accession {
-            1000133 => true,
-            1000134 => true,
-            1000135 => true,
-            1000136 => true,
-            1000242 => true,
-            1000250 => true,
-            1000282 => true,
-            1000433 => true,
-            1000435 => true,
-            1000598 => true,
-            1000599 => true,
-            1001880 => true,
-            1002000 => true,
-            1003181 => true,
-            1003247 => true,
-            1000422 => true,
-            1002472 => true,
-            1002679 => true,
-            1003294 => true,
-            1000262 => true,
-            1003246 => true,
-            1002631 => true,
-            1003182 => true,
-            1002481 => true,
-            1002678 => true,
-            _ => false,
-        }
+        matches!(
+            accession,
+            1000133
+                | 1000134
+                | 1000135
+                | 1000136
+                | 1000242
+                | 1000250
+                | 1000282
+                | 1000433
+                | 1000435
+                | 1000598
+                | 1000599
+                | 1001880
+                | 1002000
+                | 1003181
+                | 1003247
+                | 1000422
+                | 1002472
+                | 1002679
+                | 1003294
+                | 1000262
+                | 1003246
+                | 1002631
+                | 1003182
+                | 1002481
+                | 1002678
+        )
     }
 
     pub fn _set_method(&mut self) {
@@ -873,6 +873,7 @@ pub struct SpectrumDescription {
 }
 
 impl SpectrumDescription {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: String,
         index: usize,

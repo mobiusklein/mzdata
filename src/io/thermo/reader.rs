@@ -462,12 +462,12 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
         event.scan_windows.push(window);
         if let Some(cv) = vevent.compensation_voltage() {
             let mut param =
-                ControlledVocabulary::MS.param_val("1001581", "FAIMS compensation voltage", cv);
+                ControlledVocabulary::MS.param_val(1001581, "FAIMS compensation voltage", cv);
             param.unit = Unit::Volt;
             event.add_param(param);
         }
         event.add_param(ControlledVocabulary::MS.param_val(
-            "1000616",
+            1000616,
             "preset scan configuration",
             vevent.scan_event(),
         ));

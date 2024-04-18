@@ -4,20 +4,27 @@
 mod file_description;
 mod data_processing;
 mod instrument;
-mod software;
 mod run;
+mod software;
 #[macro_use]
 mod traits;
 
-pub use data_processing::{DataProcessing, ProcessingMethod, FormatConversion, DataTransformationAction, DataProcessingAction};
-pub use software::{Software, custom_software_name};
+use std::borrow::Cow;
+
+pub use data_processing::{
+    DataProcessing, DataProcessingAction, DataTransformationAction, FormatConversion,
+    ProcessingMethod,
+};
+pub use software::{custom_software_name, Software};
 
 pub use file_description::{FileDescription, SourceFile};
 
 pub use instrument::{Component, ComponentType, InstrumentConfiguration};
 
-pub use traits::MSDataFileMetadata;
 pub use run::MassSpectrometryRun;
+pub use traits::MSDataFileMetadata;
+
+use crate::params::{ParamValueParseError, Value, ValueRef};
 
 #[macro_export]
 macro_rules! cvmap {
@@ -74,7 +81,7 @@ macro_rules! cvmap {
                 }
             }
 
-            pub const fn to_param(&self) -> $crate::params::ParamCow<'static> {
+            pub const fn to_param(self) -> $crate::params::ParamCow<'static> {
                 $crate::params::ParamCow::const_new(
                     self.name(),
                     $crate::params::ValueRef::Empty,
@@ -111,7 +118,17 @@ macro_rules! cvmap {
 
         impl<P> From<P> for $enum_name where P: $crate::params::ParamLike {
             fn from(value: P) -> Self {
-                Self::from_accession(value.accession().unwrap()).unwrap()
+                Self::from_accession(
+                    value.accession().expect(
+                        concat!("Cannot convert an uncontrolled parameter to ", stringify!($enum_name)))
+                ).unwrap_or_else(
+                    || panic!(
+                        "Could not map {:?}:{} to {}",
+                        value.controlled_vocabulary().unwrap(),
+                        value.accession().unwrap(),
+                        stringify!($enum_name)
+                    )
+                )
             }
         }
 
@@ -121,4 +138,46 @@ macro_rules! cvmap {
             }
         }
     };
+}
+
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct ValueType: u16 {
+        const NoType = 0;
+        const String = 0b00000001;
+        const Integer = 0b00000010;
+        const Float = 0b00000100;
+        const Double = 0b00001000;
+        const NonNegativeInteger = 0b00010000;
+        const PositiveInteger = 0b00100000;
+        const DateTime = 0b01000000;
+
+        const ListOf = 0b1000000000000000;
+    }
+}
+
+impl From<u16> for ValueType {
+    fn from(value: u16) -> Self {
+        Self::from_bits_retain(value)
+    }
+}
+
+impl ValueType {
+    pub fn parse(&self, s: String) -> Result<Value, ParamValueParseError> {
+        let v = match *self {
+            Self::Integer | Self::NonNegativeInteger | Self::PositiveInteger => Value::Int(s.parse().map_err(|_| ParamValueParseError::FailedToExtractInt(Some(s)))?),
+            Self::Float | Self::Double => Value::Float(s.parse().map_err(|_| ParamValueParseError::FailedToExtractFloat(Some(s)))?),
+            _ => Value::String(s)
+        };
+        Ok(v)
+    }
+
+    pub fn parse_str<'a>(&self, s: &'a str) -> Result<ValueRef<'a>, ParamValueParseError> {
+        let v = match *self {
+            Self::Integer | Self::NonNegativeInteger | Self::PositiveInteger => ValueRef::Int(s.parse().map_err(|_| ParamValueParseError::FailedToExtractInt(Some(s.to_string())))?),
+            Self::Float | Self::Double => ValueRef::Float(s.parse().map_err(|_| ParamValueParseError::FailedToExtractFloat(Some(s.to_string())))?),
+            _ => ValueRef::String(Cow::Borrowed(s))
+        };
+        Ok(v)
+    }
 }

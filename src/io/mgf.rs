@@ -42,7 +42,7 @@ use crate::spectrum::{
         vec_as_bytes, ArrayType, BinaryArrayMap, BinaryDataArrayType, BuildArrayMapFrom,
         BuildFromArrayMap, DataArray,
     },
-    spectrum::{
+    spectrum_types::{
         CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
     },
     IonProperties, Precursor, PrecursorSelection, RefPeakDataLevel, SelectedIon, SignalContinuity,
@@ -703,11 +703,7 @@ pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
 pub(crate) fn is_mgf(buf: &[u8]) -> bool {
     let needle = b"BEGIN IONS";
-    matches!(
-        buf.windows(needle.len())
-            .position(|window| window == needle),
-        Some(_)
-    )
+    buf.windows(needle.len()).any(|window| window == needle)
 }
 
 const TITLE_CV: CURIE = ControlledVocabulary::MS.curie(1000796);
@@ -827,7 +823,7 @@ impl<
         let id = spectrum.id();
         let run_id = self.run_description().and_then(|d| d.id.as_ref());
         let source_file = self.source_file_name();
-        let title = match (run_id, source_file) {
+        match (run_id, source_file) {
             (None, None) => format!("run.{idx}.{idx}.{charge} NativeID:\"{id}\""),
             (None, Some(source_name)) => {
                 format!("run.{idx}.{idx}.{charge} SourceFile:\"{source_name}\"")
@@ -836,8 +832,7 @@ impl<
             (Some(run_id), Some(source_name)) => format!(
                 "{run_id}.{idx}.{idx}.{charge} SourceFile:\"{source_name}\", NativeID:\"{id}\""
             ),
-        };
-        title
+        }
     }
 
     pub fn into_inner(self) -> BufWriter<W> {
@@ -850,7 +845,7 @@ impl<
     /// Calles [`MGFWriterType::write_kv`].
     pub fn write_param<P: ParamLike>(&mut self, param: &P) -> io::Result<()> {
         self.handle
-            .write_all(param.name().to_uppercase().replace(" ", "_").as_bytes())?;
+            .write_all(param.name().to_uppercase().replace(' ', "_").as_bytes())?;
         self.handle.write_all(b"=")?;
         self.handle.write_all(&param.value().as_bytes())?;
         self.handle.write_all(b"\n")?;
@@ -901,7 +896,7 @@ impl<
         let desc = spectrum.description();
         let (title, _had_title) = desc
             .get_param_by_curie(&TITLE_CV)
-            .and_then(|p| Some((p.value.clone(), true)))
+            .map(|p| (p.value.clone(), true))
             .unwrap_or_else(|| (self.make_title(spectrum).into(), false));
         self.handle.write_all(&title.as_bytes())?;
         self.handle.write_all(b"\nRTINSECONDS=")?;

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::params::{ControlledVocabulary, ParamCow, ParamList};
+use crate::params::{ControlledVocabulary, ParamList};
 use crate::{impl_param_described, Param};
 
 /// A piece of software that was associated with the acquisition, transformation or otherwise
@@ -87,10 +87,8 @@ impl Software {
     ) -> String {
         let software_ids: HashSet<_> = softwares.into_iter().map(|sw| &sw.id).collect();
         (0..)
-            .into_iter()
             .map(|i| format!("{id_stem}_{i}"))
-            .filter(|s| !software_ids.contains(s))
-            .next()
+            .find(|s| !software_ids.contains(s))
             .unwrap()
     }
 }
@@ -104,7 +102,7 @@ impl_param_described!(Software);
 
 crate::cvmap! {
     #[flag_type=SoftwareType]
-    #[allow(unused)]
+    #[allow(unused, clippy::upper_case_acronyms)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     /*[[[cog
     import cog

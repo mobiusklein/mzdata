@@ -19,10 +19,12 @@ impl SourceFile {
     pub fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         let path = path.as_ref();
         let (format, _gz) = infer_format(path)?;
-        let mut inst = Self::default();
-        inst.name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-        inst.location = path.canonicalize()?.parent().map(|s| format!("file://{}", s.to_string_lossy())).unwrap_or_else(|| "file://".to_string());
-        inst.file_format = format.as_param();
+        let inst = Self {
+            name: path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+            location: path.canonicalize()?.parent().map(|s| format!("file://{}", s.to_string_lossy())).unwrap_or_else(|| "file://".to_string()),
+            file_format: format.as_param(),
+            ..Default::default()
+        };
         Ok(inst)
     }
 }

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::impl_param_described;
-use crate::params::{ParamCow, ParamList};
+use crate::params::{ParamCow, ParamLike, ParamList};
 
 /// A distinguishing tag describing the part of an instrument a [`Component`] refers to
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -31,43 +31,67 @@ pub struct Component {
 }
 
 impl Component {
+    pub fn mass_analyzer(&self) -> Option<MassAnalyzerTerm> {
+        self.params
+            .iter()
+            .filter(|p| p.is_ms())
+            .flat_map(|p| {
+                if let Some(u) = p.accession {
+                    MassAnalyzerTerm::from_accession(u)
+                } else {
+                    None
+                }
+            })
+            .next()
+    }
+
+    pub fn detector(&self) -> Option<DetectorTypeTerm> {
+        self.params
+            .iter()
+            .filter(|p| p.is_ms())
+            .flat_map(|p| {
+                if let Some(u) = p.accession {
+                    DetectorTypeTerm::from_accession(u)
+                } else {
+                    None
+                }
+            })
+            .next()
+    }
+
+    pub fn ionization_type(&self) -> Option<IonizationTypeTerm> {
+        self.params
+            .iter()
+            .filter(|p| p.is_ms())
+            .flat_map(|p| {
+                if let Some(u) = p.accession {
+                    IonizationTypeTerm::from_accession(u)
+                } else {
+                    None
+                }
+            })
+            .next()
+    }
+
     pub fn name(&self) -> Option<&str> {
+        let it = self.params.iter().filter(|p| p.is_ms());
         match self.component_type {
-            ComponentType::Analyzer => self
-                .params
-                .iter()
+            ComponentType::Analyzer => it
                 .flat_map(|p| {
-                    if let Some(u) = p.accession {
-                        Some(MassAnalyzerTerm::from_accession(u).unwrap().name())
-                    } else {
-                        None
-                    }
+                    p.accession
+                        .map(|u| MassAnalyzerTerm::from_accession(u).unwrap().name())
                 })
                 .next(),
-            ComponentType::IonSource => self
-                .params
-                .iter()
+            ComponentType::IonSource => it
                 .flat_map(|p| {
-                    if let Some(u) = p.accession {
-                        if let Some(t) = IonizationTypeTerm::from_accession(u) {
-                            Some(t.name())
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
+                    p.accession
+                        .map(|u| IonizationTypeTerm::from_accession(u).unwrap().name())
                 })
                 .next(),
-            ComponentType::Detector => self
-                .params
-                .iter()
+            ComponentType::Detector => it
                 .flat_map(|p| {
-                    if let Some(u) = p.accession {
-                        Some(DetectorTypeTerm::from_accession(u).unwrap().name())
-                    } else {
-                        None
-                    }
+                    p.accession
+                        .map(|u| DetectorTypeTerm::from_accession(u).unwrap().name())
                 })
                 .next(),
             ComponentType::Unknown => None,
@@ -80,18 +104,10 @@ impl Component {
                 .params
                 .iter()
                 .flat_map(|p| {
-                    if let Some(u) = p.accession {
-                        Some(
-                            MassAnalyzerTerm::from_accession(u)
-                                .unwrap()
-                                .parents()
-                                .into_iter()
-                                .map(|t| t.to_param())
-                                .collect(),
-                        )
-                    } else {
-                        None
-                    }
+                    p.accession.and_then(|u| {
+                        MassAnalyzerTerm::from_accession(u)
+                            .map(|t| t.parents().into_iter().map(|t| t.to_param()).collect())
+                    })
                 })
                 .next()
                 .unwrap_or_default(),
@@ -99,15 +115,10 @@ impl Component {
                 .params
                 .iter()
                 .flat_map(|p| {
-                    if let Some(u) = p.accession {
-                        if let Some(t) = IonizationTypeTerm::from_accession(u) {
-                            Some(t.parents().into_iter().map(|t| t.to_param()).collect())
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
+                    p.accession.and_then(|u| {
+                        IonizationTypeTerm::from_accession(u)
+                            .map(|t| t.parents().into_iter().map(|t| t.to_param()).collect())
+                    })
                 })
                 .next()
                 .unwrap_or_default(),
@@ -115,18 +126,10 @@ impl Component {
                 .params
                 .iter()
                 .flat_map(|p| {
-                    if let Some(u) = p.accession {
-                        Some(
-                            DetectorTypeTerm::from_accession(u)
-                                .unwrap()
-                                .parents()
-                                .into_iter()
-                                .map(|t| t.to_param())
-                                .collect(),
-                        )
-                    } else {
-                        None
-                    }
+                    p.accession.and_then(|u| {
+                        DetectorTypeTerm::from_accession(u)
+                            .map(|t| t.parents().into_iter().map(|t| t.to_param()).collect())
+                    })
                 })
                 .next()
                 .unwrap_or_default(),

@@ -1,18 +1,17 @@
 use std::borrow::{Borrow, Cow};
 
+use super::bindata::{ArrayRetrievalError, ArrayType, BinaryArrayMap, ByteArrayView};
 use crate::params::{Param, ParamDescribed};
 use crate::spectrum::scan_properties::{
-    Precursor, ScanPolarity, ChromatogramType, ChromatogramDescription,
+    ChromatogramDescription, ChromatogramType, Precursor, ScanPolarity,
 };
-use super::bindata::{ArrayType, BinaryArrayMap, ArrayRetrievalError, ByteArrayView};
 use mzpeaks::coordinate::{Time, MZ};
 use mzpeaks::feature::{FeatureView, SimpleFeature, TimeInterval};
-
 
 #[derive(Debug, Default, Clone)]
 pub struct Chromatogram {
     description: ChromatogramDescription,
-    pub arrays: BinaryArrayMap
+    pub arrays: BinaryArrayMap,
 }
 
 const EMPTY: &[f64] = &[0.0];
@@ -32,14 +31,13 @@ macro_rules! as_feature_view {
     };
 }
 
-
 #[allow(unused)]
 pub(crate) fn as_simple_feature(chromatogram: &Chromatogram) -> Option<SimpleFeature<MZ, Time>> {
     if let Ok(t) = chromatogram.time() {
         if let Ok(i) = chromatogram.intensity() {
             let mut f = SimpleFeature::<MZ, Time>::empty(0.0);
             f.extend(t.iter().zip(i.iter()).map(|(y, z)| (0.0f64, *y, *z)));
-            return Some(f)
+            return Some(f);
         }
     }
     None
@@ -71,7 +69,8 @@ impl TimeInterval<Time> for Chromatogram {
     fn area(&self) -> f32 {
         as_feature_view!(self, view => {
             view.area()
-        }).unwrap()
+        })
+        .unwrap()
     }
 
     fn iter_time(&self) -> impl Iterator<Item = f64> {
@@ -165,7 +164,12 @@ pub trait ChromatogramLike {
 }
 
 impl Chromatogram {
-    pub fn new(description: ChromatogramDescription, arrays: BinaryArrayMap) -> Self { Self { description, arrays } }
+    pub fn new(description: ChromatogramDescription, arrays: BinaryArrayMap) -> Self {
+        Self {
+            description,
+            arrays,
+        }
+    }
 
     pub fn time(&self) -> Result<Cow<'_, [f64]>, ArrayRetrievalError> {
         if let Some(a) = self.arrays.get(&ArrayType::TimeArray) {
@@ -192,7 +196,6 @@ impl Chromatogram {
     }
 }
 
-
 impl ChromatogramLike for Chromatogram {
     fn description(&self) -> &ChromatogramDescription {
         &self.description
@@ -210,7 +213,6 @@ impl ChromatogramLike for Chromatogram {
         &mut self.description
     }
 }
-
 
 impl ParamDescribed for Chromatogram {
     fn params(&self) -> &[Param] {

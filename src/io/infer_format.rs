@@ -393,7 +393,7 @@ pub fn infer_from_stream<R: Read + Seek>(
         // io::Read::read_to_end is not an option.
         decompressed_buf.resize(bytes_read, b'\0');
         let mut decoder = GzDecoder::new(io::Cursor::new(buf));
-        decoder.read(&mut decompressed_buf)?;
+        decoder.read_exact(&mut decompressed_buf)?;
         buf = decompressed_buf;
     }
     stream.seek(io::SeekFrom::Start(current_pos))?;
@@ -500,7 +500,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildArrayMapFrom + BuildF
 impl<C: CentroidLike + Default + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
      D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<SpectrumReceiver<C, D, MultiLayerSpectrum<C, D>>> for Source<C, D> {
     fn from(value: SpectrumReceiver<C, D, MultiLayerSpectrum<C, D>>) -> Self {
-        Self::Receiver(value.into())
+        Self::Receiver(value)
     }
 }
 
@@ -581,14 +581,14 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildArrayMapFrom + BuildF
 impl<C: CentroidLike + Default + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
      D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<Sender<MultiLayerSpectrum<C, D>>> for Sink<C, D> {
     fn from(value: Sender<MultiLayerSpectrum<C, D>>) -> Self {
-        Self::Sender(value.into())
+        Self::Sender(value)
     }
 }
 
 impl<C: CentroidLike + Default + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
      D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<SyncSender<MultiLayerSpectrum<C, D>>> for Sink<C, D> {
     fn from(value: SyncSender<MultiLayerSpectrum<C, D>>) -> Self {
-        Self::SyncSender(value.into())
+        Self::SyncSender(value)
     }
 }
 
@@ -778,7 +778,7 @@ pub trait MassSpectrometryReadWriteProcess<
                         Ok(())
                     }
                     _ => {
-                        return Err(io::Error::new(
+                        Err(io::Error::new(
                             io::ErrorKind::Unsupported,
                             "{ms_format:?} format is not supported over Stdin",
                         ).into())
@@ -802,10 +802,10 @@ pub trait MassSpectrometryReadWriteProcess<
 
         match write_path {
             Sink::Sender(writer) =>  {
-                return self.task(reader, writer)
+                self.task(reader, writer)
             },
             Sink::SyncSender(writer) => {
-                return self.task(reader, writer)
+                self.task(reader, writer)
             },
             Sink::PathLike(write_path) => {
                 let (writer_format, is_gzip) = infer_from_path(&write_path);

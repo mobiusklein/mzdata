@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use mzpeaks::{
     peak_set::PeakSetVec, prelude::*, CentroidLike, CentroidPeak, DeconvolutedCentroidLike,
-    DeconvolutedPeak, IndexType, MZPeakSetType, MassPeakSetType, PeakSet, Tolerance, MZ,
+    DeconvolutedPeak, IndexType, MZPeakSetType, MassPeakSetType, PeakSet, Tolerance,
 };
 
 #[cfg(feature = "mzsignal")]
@@ -1150,7 +1150,7 @@ impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike +
             let intensity_array = arrays.intensities()?;
 
             if matches!(self.signal_continuity(), SignalContinuity::Centroid) {
-                let mut peaks: PeakSetVec<C, MZ> = mz_array.iter().zip(intensity_array.iter()).map(|(mz, inten)| {
+                let mut peaks: MZPeakSetType<C> = mz_array.iter().zip(intensity_array.iter()).map(|(mz, inten)| {
                     FittedPeak::new(*mz, *inten, 0, 0.0, 0.0).into()
                 }).collect();
                 peaks.sort();

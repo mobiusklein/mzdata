@@ -858,25 +858,23 @@ impl<'a> FileMetadataBuilder<'a> {
                 return Ok(MzMLParserState::Run);
             }
             b"spectrumList" => {
-                for attr_parsed in event.attributes() {
-                    if let Ok(attr) = attr_parsed {
-                        match attr.key.as_ref() {
-                            b"count" => {
-                                self.num_spectra = Some(
-                                    attr.unescape_value()
-                                        .expect("Error decoding spectrum list size")
-                                        .parse()
-                                        .expect("Error parsing spectrum list size"),
-                                );
-                            }
-                            b"defaultDataProcessingRef" => {
-                                let value = attr
-                                    .unescape_value()
-                                    .expect("Error decoding default instrument configuration ID");
-                                self.default_data_processing = Some(value.to_string())
-                            }
-                            _ => {}
+                for attr in event.attributes().flatten() {
+                    match attr.key.as_ref() {
+                        b"count" => {
+                            self.num_spectra = Some(
+                                attr.unescape_value()
+                                    .expect("Error decoding spectrum list size")
+                                    .parse()
+                                    .expect("Error parsing spectrum list size"),
+                            );
                         }
+                        b"defaultDataProcessingRef" => {
+                            let value = attr
+                                .unescape_value()
+                                .expect("Error decoding default instrument configuration ID");
+                            self.default_data_processing = Some(value.to_string())
+                        }
+                        _ => {}
                     }
                 }
                 return Ok(MzMLParserState::SpectrumList);

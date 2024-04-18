@@ -157,7 +157,7 @@ impl FromStr for Value {
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::String(v) => f.write_str(&v),
+            Value::String(v) => f.write_str(v),
             Value::Float(v) => v.fmt(f),
             Value::Int(v) => v.fmt(f),
             Value::Buffer(v) => f.write_str(&String::from_utf8_lossy(v)),
@@ -282,9 +282,9 @@ impl Value {
                 return Ok(v);
             }
         }
-        return Err(ParamValueParseError::FailedToExtractFloat(Some(
+        Err(ParamValueParseError::FailedToExtractFloat(Some(
             self.to_string(),
-        )));
+        )))
     }
 
     fn to_i64(&self) -> Result<i64, ParamValueParseError> {
@@ -297,9 +297,9 @@ impl Value {
                 return Ok(v);
             }
         }
-        return Err(ParamValueParseError::FailedToExtractInt(Some(
+        Err(ParamValueParseError::FailedToExtractInt(Some(
             self.to_string(),
-        )));
+        )))
     }
 
     fn to_str(&self) -> Cow<'_, str> {
@@ -585,7 +585,7 @@ impl FromStr for ValueRef<'_> {
 impl<'a> Display for ValueRef<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::String(v) => f.write_str(&v),
+            Self::String(v) => f.write_str(v),
             Self::Float(v) => v.fmt(f),
             Self::Int(v) => v.fmt(f),
             Self::Buffer(v) => f.write_str(&String::from_utf8_lossy(v)),
@@ -696,9 +696,9 @@ impl<'a> ValueRef<'a> {
                 return Ok(v);
             }
         }
-        return Err(ParamValueParseError::FailedToExtractFloat(Some(
+        Err(ParamValueParseError::FailedToExtractFloat(Some(
             self.to_string(),
-        )));
+        )))
     }
 
     fn to_i64(&self) -> Result<i64, ParamValueParseError> {
@@ -711,9 +711,9 @@ impl<'a> ValueRef<'a> {
                 return Ok(v);
             }
         }
-        return Err(ParamValueParseError::FailedToExtractInt(Some(
+        Err(ParamValueParseError::FailedToExtractInt(Some(
             self.to_string(),
-        )));
+        )))
     }
 
     fn to_str(&self) -> Cow<'_, str> {
@@ -936,7 +936,7 @@ impl<T: ParamLike> PartialEq<T> for CURIE {
         if !other.is_controlled()
             || other.controlled_vocabulary().unwrap() != self.controlled_vocabulary
         {
-            return false;
+            false
         } else {
             other.accession().unwrap() == self.accession
         }
@@ -1136,7 +1136,7 @@ impl ParamCow<'static> {
     ) -> Self {
         Self {
             name: Cow::Borrowed(name),
-            value: value,
+            value,
             accession,
             controlled_vocabulary,
             unit,
@@ -1452,7 +1452,7 @@ impl<'a> ControlledVocabulary {
 
         match accession {
             AccessionLike::Text(s) => {
-                if let Some(nb) = s.split(":").last() {
+                if let Some(nb) = s.split(':').last() {
                     param.accession =
                         Some(nb.parse().unwrap_or_else(|_| {
                             panic!("Expected accession to be numeric, got {}", s)
@@ -1477,7 +1477,7 @@ impl<'a> ControlledVocabulary {
     ) -> ParamCow<'static> {
         ParamCow {
             name: Cow::Borrowed(name),
-            value: value,
+            value,
             accession: Some(accession),
             controlled_vocabulary: Some(*self),
             unit,
@@ -1841,3 +1841,4 @@ impl Display for Unit {
         f.write_str(format!("{:?}", self).as_str())
     }
 }
+

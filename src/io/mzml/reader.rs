@@ -36,7 +36,7 @@ use crate::spectrum::bindata::{
 };
 use crate::spectrum::chromatogram::{Chromatogram, ChromatogramLike};
 use crate::spectrum::scan_properties::*;
-use crate::spectrum::spectrum::{
+use crate::spectrum::spectrum_types::{
     CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
     RawSpectrum, Spectrum,
 };
@@ -1382,9 +1382,9 @@ impl<
                 if accumulator.is_chromatogram_entry() {
                     let mut chrom = Chromatogram::default();
                     accumulator.into_chromatogram(&mut chrom);
-                    return Ok(chrom);
+                    Ok(chrom)
                 } else {
-                    return Err(MzMLParserError::UnknownError(self.state));
+                    Err(MzMLParserError::UnknownError(self.state))
                 }
             }
             Err(err) => Err(err),
@@ -1943,7 +1943,7 @@ impl<
 mod test {
     use super::*;
     use crate::io::traits::SpectrumGrouping;
-    use crate::spectrum::spectrum::SpectrumLike;
+    use crate::spectrum::spectrum_types::SpectrumLike;
     use std::fs;
     use std::path;
 
