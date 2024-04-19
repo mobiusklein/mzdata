@@ -19,7 +19,7 @@ pub use software::{custom_software_name, Software};
 
 pub use file_description::{FileDescription, SourceFile};
 
-pub use instrument::{Component, ComponentType, InstrumentConfiguration};
+pub use instrument::{Component, ComponentType, InstrumentConfiguration, DetectorTypeTerm, MassAnalyzerTerm, InletTypeTerm, IonizationTypeTerm};
 
 pub use run::MassSpectrometryRun;
 pub use traits::MSDataFileMetadata;

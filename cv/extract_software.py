@@ -1,6 +1,7 @@
 import gzip
 import json
 import io
+import itertools
 import re
 
 from enum import IntFlag
@@ -36,7 +37,7 @@ def collect_software_types(cv: OboDoc) -> Tuple[Set[PrefixedIdent], Dict[Prefixe
     software_ids = {
         PrefixedIdent("MS", "1000531")
     }
-    for term in cv:
+    for term in itertools.chain(cv, cv):
         id_to_clause[term.id] = term
         for clause in term:
             if isinstance(clause, IsAClause):
@@ -63,7 +64,7 @@ def make_entry_for(term: TermFrame):
             elif clause.term == ACQUISITION_SW:
                 flags |= SoftwareType.Acquisition
 
-    vname = name
+    vname: str = name
     if "-" in vname:
         vname = vname.replace("-", "_")
     if ":" in vname:
@@ -75,8 +76,11 @@ def make_entry_for(term: TermFrame):
     if "!" in vname:
         vname = vname.replace("!", "_")
 
-    vname = segment_pattern.sub(format_name, vname.replace(" ", "_").replace("software", "Software"))
-    vname = vname[0].upper() + vname[1:]
+    vname: str = segment_pattern.sub(format_name, vname.replace(" ", "_").replace("software", "Software"))
+    vname: str = vname[0].upper() + vname[1:]
+
+    if vname[0].isdigit():
+        vname = "_" + vname
 
     return f"""
     #[term(cv=MS, accession={term.id.local}, name="{name}", flags={{{int(flags)}}}, parents={{{json.dumps(parents)}}})]

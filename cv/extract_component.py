@@ -2,6 +2,7 @@ import argparse
 import gzip
 import json
 import io
+import itertools
 import re
 
 from enum import IntFlag
@@ -72,7 +73,8 @@ def collect_components(
     term: TermFrame
     id_to_clause = {}
     component_ids = {base_term}
-    for term in cv:
+    # Make multiple passes
+    for term in itertools.chain(cv, cv):
         id_to_clause[term.id] = term
         for clause in term:
             if isinstance(clause, IsAClause):
@@ -123,6 +125,9 @@ def make_entry_for(term: TermFrame):
         format_name, vname.replace(" ", "_")
     )
     vname = vname[0].upper() + vname[1:]
+
+    if vname[0].isdigit():
+        vname = "_" + vname
 
     return f"""
     #[term(cv=MS, accession={term.id.local}, name="{name}", flags={{{int(flags)}}}, parents={{{json.dumps(parents)}}})]

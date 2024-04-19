@@ -165,12 +165,18 @@ crate::cvmap! {
         cog.outl(line)
     ]]]*/
     pub enum MassAnalyzerTerm {
+        #[term(cv=MS, accession=1000078, name="axial ejection linear ion trap", flags={0}, parents={["MS:1000291"]})]
+        AxialEjectionLinearIonTrap,
         #[term(cv=MS, accession=1000079, name="fourier transform ion cyclotron resonance mass spectrometer", flags={0}, parents={["MS:1000443"]})]
         FourierTransformIonCyclotronResonanceMassSpectrometer,
         #[term(cv=MS, accession=1000080, name="magnetic sector", flags={0}, parents={["MS:1000443"]})]
         MagneticSector,
         #[term(cv=MS, accession=1000081, name="quadrupole", flags={0}, parents={["MS:1000443"]})]
         Quadrupole,
+        #[term(cv=MS, accession=1000082, name="quadrupole ion trap", flags={0}, parents={["MS:1000264"]})]
+        QuadrupoleIonTrap,
+        #[term(cv=MS, accession=1000083, name="radial ejection linear ion trap", flags={0}, parents={["MS:1000291"]})]
+        RadialEjectionLinearIonTrap,
         #[term(cv=MS, accession=1000084, name="time-of-flight", flags={0}, parents={["MS:1000443"]})]
         TimeOfFlight,
         #[term(cv=MS, accession=1000254, name="electrostatic energy analyzer", flags={0}, parents={["MS:1000443"]})]
@@ -190,7 +196,7 @@ crate::cvmap! {
         #[term(cv=MS, accession=1003379, name="asymmetric track lossless time-of-flight analyzer", flags={0}, parents={["MS:1000084"]})]
         AsymmetricTrackLosslessTimeOfFlightAnalyzer,
     }
-    //[[[end]]] (checksum: 6db5fba0f613bb1ce44fa5312b4383b3)
+    //[[[end]]] (checksum: ec2eb148ac1dd4696c0be8740825ce25)
 }
 
 crate::cvmap! {
@@ -207,14 +213,20 @@ crate::cvmap! {
     pub enum IonizationTypeTerm {
         #[term(cv=MS, accession=1000008, name="ionization type", flags={0}, parents={[]})]
         IonizationType,
+        #[term(cv=MS, accession=1000070, name="atmospheric pressure chemical ionization", flags={0}, parents={["MS:1000240"]})]
+        AtmosphericPressureChemicalIonization,
         #[term(cv=MS, accession=1000071, name="chemical ionization", flags={0}, parents={["MS:1000008"]})]
         ChemicalIonization,
         #[term(cv=MS, accession=1000073, name="electrospray ionization", flags={0}, parents={["MS:1000008"]})]
         ElectrosprayIonization,
         #[term(cv=MS, accession=1000074, name="fast atom bombardment ionization", flags={0}, parents={["MS:1000008"]})]
         FastAtomBombardmentIonization,
+        #[term(cv=MS, accession=1000075, name="matrix-assisted laser desorption ionization", flags={0}, parents={["MS:1000247"]})]
+        MatrixAssistedLaserDesorptionIonization,
         #[term(cv=MS, accession=1000227, name="multiphoton ionization", flags={0}, parents={["MS:1000008"]})]
         MultiphotonIonization,
+        #[term(cv=MS, accession=1000239, name="atmospheric pressure matrix-assisted laser desorption ionization", flags={0}, parents={["MS:1000240"]})]
+        AtmosphericPressureMatrixAssistedLaserDesorptionIonization,
         #[term(cv=MS, accession=1000240, name="atmospheric pressure ionization", flags={0}, parents={["MS:1000008"]})]
         AtmosphericPressureIonization,
         #[term(cv=MS, accession=1000247, name="desorption ionization", flags={0}, parents={["MS:1000008"]})]
@@ -237,6 +249,10 @@ crate::cvmap! {
         PyrolysisMassSpectrometry,
         #[term(cv=MS, accession=1000276, name="resonance enhanced multiphoton ionization", flags={0}, parents={["MS:1000008"]})]
         ResonanceEnhancedMultiphotonIonization,
+        #[term(cv=MS, accession=1000278, name="surface enhanced laser desorption ionization", flags={0}, parents={["MS:1000406"]})]
+        SurfaceEnhancedLaserDesorptionIonization,
+        #[term(cv=MS, accession=1000279, name="surface enhanced neat desorption", flags={0}, parents={["MS:1000406"]})]
+        SurfaceEnhancedNeatDesorption,
         #[term(cv=MS, accession=1000380, name="adiabatic ionization", flags={0}, parents={["MS:1000008"]})]
         AdiabaticIonization,
         #[term(cv=MS, accession=1000381, name="associative ionization", flags={0}, parents={["MS:1000008"]})]
@@ -294,7 +310,7 @@ crate::cvmap! {
         #[term(cv=MS, accession=1003249, name="proton transfer charge reduction", flags={0}, parents={["MS:1000008"]})]
         ProtonTransferChargeReduction,
     }
-    // [[[end]]] (checksum: 75410a9cb2735cb0ac1665d65cbf8eb7)
+    // [[[end]]] (checksum: 698624c65fdd3d93821efcc08a36fa94)
 }
 
 crate::cvmap! {
@@ -369,10 +385,20 @@ crate::cvmap! {
         DetectorType,
         #[term(cv=MS, accession=1000107, name="channeltron", flags={0}, parents={["MS:1000026"]})]
         Channeltron,
+        #[term(cv=MS, accession=1000108, name="conversion dynode electron multiplier", flags={0}, parents={["MS:1000346"]})]
+        ConversionDynodeElectronMultiplier,
+        #[term(cv=MS, accession=1000109, name="conversion dynode photomultiplier", flags={0}, parents={["MS:1000346"]})]
+        ConversionDynodePhotomultiplier,
         #[term(cv=MS, accession=1000110, name="daly detector", flags={0}, parents={["MS:1000026"]})]
         DalyDetector,
+        #[term(cv=MS, accession=1000111, name="electron multiplier tube", flags={0}, parents={["MS:1000253"]})]
+        ElectronMultiplierTube,
         #[term(cv=MS, accession=1000112, name="faraday cup", flags={0}, parents={["MS:1000026"]})]
         FaradayCup,
+        #[term(cv=MS, accession=1000113, name="focal plane array", flags={0}, parents={["MS:1000348"]})]
+        FocalPlaneArray,
+        #[term(cv=MS, accession=1000114, name="microchannel plate detector", flags={0}, parents={["MS:1000345"]})]
+        MicrochannelPlateDetector,
         #[term(cv=MS, accession=1000115, name="multi-collector", flags={0}, parents={["MS:1000026"]})]
         MultiCollector,
         #[term(cv=MS, accession=1000116, name="photomultiplier", flags={0}, parents={["MS:1000026"]})]
@@ -399,8 +425,10 @@ crate::cvmap! {
         InductiveDetector,
         #[term(cv=MS, accession=1000818, name="Acquity UPLC PDA", flags={0}, parents={["MS:1000126", "MS:1000621"]})]
         AcquityUPLCPDA,
+        #[term(cv=MS, accession=1000819, name="Acquity UPLC FLR", flags={0}, parents={["MS:1000126", "MS:1002308"]})]
+        AcquityUPLCFLR,
         #[term(cv=MS, accession=1002308, name="fluorescence detector", flags={0}, parents={["MS:1000026"]})]
         FluorescenceDetector,
     }
-    //[[[end]]] (checksum: 5b1d0baa7e3919e011a06b4061265fab)
+    //[[[end]]] (checksum: d9af30bcef0594299b3551ec2078b4d4)
 }

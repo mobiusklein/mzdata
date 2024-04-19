@@ -114,6 +114,94 @@ crate::cvmap! {
     pub enum SoftwareTerm {
         #[term(cv=MS, accession=1000531, name="software", flags={0}, parents={[]})]
         Software,
+        #[term(cv=MS, accession=1000532, name="Xcalibur", flags={7}, parents={["MS:1000693", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        Xcalibur,
+        #[term(cv=MS, accession=1000533, name="Bioworks", flags={3}, parents={["MS:1000693", "MS:1001456", "MS:1001457"]})]
+        Bioworks,
+        #[term(cv=MS, accession=1000534, name="MassLynx", flags={7}, parents={["MS:1000694", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        MassLynx,
+        #[term(cv=MS, accession=1000535, name="FlexAnalysis", flags={3}, parents={["MS:1000692", "MS:1001456", "MS:1001457"]})]
+        FlexAnalysis,
+        #[term(cv=MS, accession=1000536, name="Data Explorer", flags={7}, parents={["MS:1000691", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        DataExplorer,
+        #[term(cv=MS, accession=1000537, name="4700 Explorer", flags={7}, parents={["MS:1000691", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        _4700Explorer,
+        #[term(cv=MS, accession=1000538, name="massWolf", flags={2}, parents={["MS:1001457"]})]
+        MassWolf,
+        #[term(cv=MS, accession=1000539, name="Voyager Biospectrometry Workstation System", flags={7}, parents={["MS:1000691", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        VoyagerBiospectrometryWorkstationSystem,
+        #[term(cv=MS, accession=1000540, name="FlexControl", flags={4}, parents={["MS:1000692", "MS:1001455"]})]
+        FlexControl,
+        #[term(cv=MS, accession=1000541, name="ReAdW", flags={2}, parents={["MS:1001457"]})]
+        ReAdW,
+        #[term(cv=MS, accession=1000542, name="MzStar", flags={2}, parents={["MS:1001457"]})]
+        MzStar,
+        #[term(cv=MS, accession=1000551, name="Analyst", flags={7}, parents={["MS:1000690", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        Analyst,
+        #[term(cv=MS, accession=1000553, name="Trapper", flags={2}, parents={["MS:1001457"]})]
+        Trapper,
+        #[term(cv=MS, accession=1000591, name="MzWiff", flags={2}, parents={["MS:1001457"]})]
+        MzWiff,
+        #[term(cv=MS, accession=1000600, name="Proteios", flags={3}, parents={["MS:1001456", "MS:1001457"]})]
+        Proteios,
+        #[term(cv=MS, accession=1000601, name="ProteinLynx Global Server", flags={3}, parents={["MS:1000694", "MS:1001456", "MS:1001457"]})]
+        ProteinLynxGlobalServer,
+        #[term(cv=MS, accession=1000615, name="ProteoWizard software", flags={3}, parents={["MS:1001456", "MS:1001457"]})]
+        ProteoWizardSoftware,
+        #[term(cv=MS, accession=1000650, name="Proteome Discoverer", flags={3}, parents={["MS:1000693", "MS:1001456", "MS:1001457"]})]
+        ProteomeDiscoverer,
+        #[term(cv=MS, accession=1000659, name="4000 Series Explorer Software", flags={7}, parents={["MS:1000690", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        _4000SeriesExplorerSoftware,
+        #[term(cv=MS, accession=1000661, name="GPS Explorer", flags={7}, parents={["MS:1000690", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        GPSExplorer,
+        #[term(cv=MS, accession=1000662, name="LightSight Software", flags={3}, parents={["MS:1000690", "MS:1001456", "MS:1001457"]})]
+        LightSightSoftware,
+        #[term(cv=MS, accession=1000663, name="ProteinPilot Software", flags={3}, parents={["MS:1000690", "MS:1001456", "MS:1001457"]})]
+        ProteinPilotSoftware,
+        #[term(cv=MS, accession=1000664, name="TissueView Software", flags={3}, parents={["MS:1000690", "MS:1001456", "MS:1001457"]})]
+        TissueViewSoftware,
+        #[term(cv=MS, accession=1000665, name="MarkerView Software", flags={3}, parents={["MS:1000690", "MS:1001456", "MS:1001457"]})]
+        MarkerViewSoftware,
+        #[term(cv=MS, accession=1000666, name="MRMPilot Software", flags={3}, parents={["MS:1000690", "MS:1001456", "MS:1001457"]})]
+        MRMPilotSoftware,
+        #[term(cv=MS, accession=1000667, name="BioAnalyst", flags={3}, parents={["MS:1000690", "MS:1001456", "MS:1001457"]})]
+        BioAnalyst,
+        #[term(cv=MS, accession=1000668, name="Pro ID", flags={3}, parents={["MS:1000690", "MS:1001456", "MS:1001457"]})]
+        ProID,
+        #[term(cv=MS, accession=1000669, name="Pro ICAT", flags={3}, parents={["MS:1000690", "MS:1001456", "MS:1001457"]})]
+        ProICAT,
+        #[term(cv=MS, accession=1000670, name="Pro Quant", flags={3}, parents={["MS:1000690", "MS:1001456", "MS:1001457"]})]
+        ProQuant,
+        #[term(cv=MS, accession=1000671, name="Pro BLAST", flags={3}, parents={["MS:1000690", "MS:1001456", "MS:1001457"]})]
+        ProBLAST,
+        #[term(cv=MS, accession=1000672, name="Cliquid", flags={0}, parents={["MS:1000690"]})]
+        Cliquid,
+        #[term(cv=MS, accession=1000673, name="MIDAS Workflow Designer", flags={0}, parents={["MS:1000690"]})]
+        MIDASWorkflowDesigner,
+        #[term(cv=MS, accession=1000674, name="MultiQuant", flags={3}, parents={["MS:1000690", "MS:1001456", "MS:1001457"]})]
+        MultiQuant,
+        #[term(cv=MS, accession=1000678, name="MassHunter Data Acquisition", flags={4}, parents={["MS:1000689", "MS:1001455"]})]
+        MassHunterDataAcquisition,
+        #[term(cv=MS, accession=1000679, name="MassHunter Easy Access", flags={4}, parents={["MS:1000689", "MS:1001455"]})]
+        MassHunterEasyAccess,
+        #[term(cv=MS, accession=1000680, name="MassHunter Qualitative Analysis", flags={3}, parents={["MS:1000689", "MS:1001456", "MS:1001457"]})]
+        MassHunterQualitativeAnalysis,
+        #[term(cv=MS, accession=1000681, name="MassHunter Quantitative Analysis", flags={3}, parents={["MS:1000689", "MS:1001456", "MS:1001457"]})]
+        MassHunterQuantitativeAnalysis,
+        #[term(cv=MS, accession=1000682, name="MassHunter Metabolite ID", flags={3}, parents={["MS:1000689", "MS:1001456", "MS:1001457"]})]
+        MassHunterMetaboliteID,
+        #[term(cv=MS, accession=1000683, name="MassHunter BioConfirm", flags={3}, parents={["MS:1000689", "MS:1001456", "MS:1001457"]})]
+        MassHunterBioConfirm,
+        #[term(cv=MS, accession=1000684, name="Genespring MS", flags={3}, parents={["MS:1000689", "MS:1001456", "MS:1001457"]})]
+        GenespringMS,
+        #[term(cv=MS, accession=1000685, name="MassHunter Mass Profiler", flags={3}, parents={["MS:1000689", "MS:1001456", "MS:1001457"]})]
+        MassHunterMassProfiler,
+        #[term(cv=MS, accession=1000686, name="METLIN", flags={3}, parents={["MS:1000689", "MS:1001456", "MS:1001457"]})]
+        METLIN,
+        #[term(cv=MS, accession=1000687, name="Spectrum Mill for MassHunter Workstation", flags={3}, parents={["MS:1000689", "MS:1001456", "MS:1001457"]})]
+        SpectrumMillForMassHunterWorkstation,
+        #[term(cv=MS, accession=1000688, name="6300 Series Ion Trap Data Analysis Software", flags={7}, parents={["MS:1000689", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        _6300SeriesIonTrapDataAnalysisSoftware,
         #[term(cv=MS, accession=1000689, name="Agilent software", flags={0}, parents={["MS:1000531"]})]
         AgilentSoftware,
         #[term(cv=MS, accession=1000690, name="SCIEX software", flags={0}, parents={["MS:1000531"]})]
@@ -194,6 +282,36 @@ crate::cvmap! {
         TargetAnalysis,
         #[term(cv=MS, accession=1000739, name="WARP-LC", flags={0}, parents={["MS:1000692", "MS:1001139"]})]
         WARPLC,
+        #[term(cv=MS, accession=1000752, name="TOPP software", flags={3}, parents={["MS:1001456", "MS:1001457"]})]
+        TOPPSoftware,
+        #[term(cv=MS, accession=1000753, name="BaselineFilter", flags={0}, parents={["MS:1000752"]})]
+        BaselineFilter,
+        #[term(cv=MS, accession=1000754, name="DBExporter", flags={0}, parents={["MS:1000752"]})]
+        DBExporter,
+        #[term(cv=MS, accession=1000755, name="DBImporter", flags={0}, parents={["MS:1000752"]})]
+        DBImporter,
+        #[term(cv=MS, accession=1000756, name="FileConverter", flags={0}, parents={["MS:1000752"]})]
+        FileConverter,
+        #[term(cv=MS, accession=1000757, name="FileFilter", flags={0}, parents={["MS:1000752"]})]
+        FileFilter,
+        #[term(cv=MS, accession=1000758, name="FileMerger", flags={0}, parents={["MS:1000752"]})]
+        FileMerger,
+        #[term(cv=MS, accession=1000759, name="InternalCalibration", flags={0}, parents={["MS:1000752"]})]
+        InternalCalibration,
+        #[term(cv=MS, accession=1000760, name="MapAligner", flags={0}, parents={["MS:1000752"]})]
+        MapAligner,
+        #[term(cv=MS, accession=1000761, name="MapNormalizer", flags={0}, parents={["MS:1000752"]})]
+        MapNormalizer,
+        #[term(cv=MS, accession=1000762, name="NoiseFilter", flags={0}, parents={["MS:1000752"]})]
+        NoiseFilter,
+        #[term(cv=MS, accession=1000763, name="PeakPicker", flags={0}, parents={["MS:1000752"]})]
+        PeakPicker,
+        #[term(cv=MS, accession=1000764, name="Resampler", flags={0}, parents={["MS:1000752"]})]
+        Resampler,
+        #[term(cv=MS, accession=1000765, name="SpectraFilter", flags={0}, parents={["MS:1000752"]})]
+        SpectraFilter,
+        #[term(cv=MS, accession=1000766, name="TOFCalibration", flags={0}, parents={["MS:1000752"]})]
+        TOFCalibration,
         #[term(cv=MS, accession=1000799, name="custom unreleased software tool", flags={0}, parents={["MS:1000531"]})]
         CustomUnreleasedSoftwareTool,
         #[term(cv=MS, accession=1000817, name="HyStar", flags={0}, parents={["MS:1000692"]})]
@@ -214,6 +332,14 @@ crate::cvmap! {
         ATAQS,
         #[term(cv=MS, accession=1001139, name="quantitation software name", flags={0}, parents={["MS:1000531", "MS:1001129"]})]
         QuantitationSoftwareName,
+        #[term(cv=MS, accession=1001207, name="Mascot", flags={1}, parents={["MS:1001456"]})]
+        Mascot,
+        #[term(cv=MS, accession=1001208, name="SEQUEST", flags={1}, parents={["MS:1001456"]})]
+        SEQUEST,
+        #[term(cv=MS, accession=1001209, name="Phenyx", flags={1}, parents={["MS:1001456"]})]
+        Phenyx,
+        #[term(cv=MS, accession=1001327, name="Spectronaut", flags={1}, parents={["MS:1001456", "MS:1003207"]})]
+        Spectronaut,
         #[term(cv=MS, accession=1001455, name="acquisition software", flags={0}, parents={["MS:1000531"]})]
         AcquisitionSoftware,
         #[term(cv=MS, accession=1001456, name="analysis software", flags={0}, parents={["MS:1000531"]})]
@@ -312,6 +438,158 @@ crate::cvmap! {
         ProteoSuite,
         #[term(cv=MS, accession=1002129, name="ITRAQAnalyzer", flags={0}, parents={["MS:1001139", "MS:1000752"]})]
         ITRAQAnalyzer,
+        #[term(cv=MS, accession=1002131, name="TOPP noise filter", flags={0}, parents={["MS:1000752"]})]
+        TOPPNoiseFilter,
+        #[term(cv=MS, accession=1002132, name="TOPP NoiseFilterGaussian", flags={0}, parents={["MS:1002131"]})]
+        TOPPNoiseFilterGaussian,
+        #[term(cv=MS, accession=1002133, name="TOPP NoiseFilterSGolay", flags={0}, parents={["MS:1002131"]})]
+        TOPPNoiseFilterSGolay,
+        #[term(cv=MS, accession=1002134, name="TOPP peak picker", flags={0}, parents={["MS:1000752"]})]
+        TOPPPeakPicker,
+        #[term(cv=MS, accession=1002135, name="TOPP PeakPickerHiRes", flags={0}, parents={["MS:1002134"]})]
+        TOPPPeakPickerHiRes,
+        #[term(cv=MS, accession=1002136, name="TOPP PeakPickerWavelet", flags={0}, parents={["MS:1002134"]})]
+        TOPPPeakPickerWavelet,
+        #[term(cv=MS, accession=1002137, name="TOPP spectra filter", flags={0}, parents={["MS:1000752"]})]
+        TOPPSpectraFilter,
+        #[term(cv=MS, accession=1002138, name="TOPP SpectraFilterBernNorm", flags={0}, parents={["MS:1002137"]})]
+        TOPPSpectraFilterBernNorm,
+        #[term(cv=MS, accession=1002139, name="TOPP SpectraFilterMarkerMower", flags={0}, parents={["MS:1002137"]})]
+        TOPPSpectraFilterMarkerMower,
+        #[term(cv=MS, accession=1002140, name="TOPP SpectraFilterNLargest", flags={0}, parents={["MS:1002137"]})]
+        TOPPSpectraFilterNLargest,
+        #[term(cv=MS, accession=1002141, name="TOPP SpectraFilterNormalizer", flags={0}, parents={["MS:1002137"]})]
+        TOPPSpectraFilterNormalizer,
+        #[term(cv=MS, accession=1002142, name="TOPP SpectraFilterParentPeakMower", flags={0}, parents={["MS:1002137"]})]
+        TOPPSpectraFilterParentPeakMower,
+        #[term(cv=MS, accession=1002143, name="TOPP SpectraFilterScaler", flags={0}, parents={["MS:1002137"]})]
+        TOPPSpectraFilterScaler,
+        #[term(cv=MS, accession=1002144, name="TOPP SpectraFilterSqrtMower", flags={0}, parents={["MS:1002137"]})]
+        TOPPSpectraFilterSqrtMower,
+        #[term(cv=MS, accession=1002145, name="TOPP SpectraFilterThresholdMower", flags={0}, parents={["MS:1002137"]})]
+        TOPPSpectraFilterThresholdMower,
+        #[term(cv=MS, accession=1002146, name="TOPP SpectraFilterWindowMower", flags={0}, parents={["MS:1002137"]})]
+        TOPPSpectraFilterWindowMower,
+        #[term(cv=MS, accession=1002147, name="TOPP map aligner", flags={0}, parents={["MS:1000752"]})]
+        TOPPMapAligner,
+        #[term(cv=MS, accession=1002148, name="TOPP MapAlignerIdentification", flags={0}, parents={["MS:1002147"]})]
+        TOPPMapAlignerIdentification,
+        #[term(cv=MS, accession=1002149, name="TOPP MapAlignerPoseClustering", flags={0}, parents={["MS:1002147"]})]
+        TOPPMapAlignerPoseClustering,
+        #[term(cv=MS, accession=1002150, name="TOPP MapAlignerSpectrum", flags={0}, parents={["MS:1002147"]})]
+        TOPPMapAlignerSpectrum,
+        #[term(cv=MS, accession=1002154, name="TOPP DTAExtractor", flags={0}, parents={["MS:1000752"]})]
+        TOPPDTAExtractor,
+        #[term(cv=MS, accession=1002155, name="TOPP IDMerger", flags={0}, parents={["MS:1000752"]})]
+        TOPPIDMerger,
+        #[term(cv=MS, accession=1002156, name="TOPP IDFileConverter", flags={0}, parents={["MS:1000752"]})]
+        TOPPIDFileConverter,
+        #[term(cv=MS, accession=1002157, name="TOPP SpectraMerger", flags={0}, parents={["MS:1000752"]})]
+        TOPPSpectraMerger,
+        #[term(cv=MS, accession=1002158, name="TOPP MzTabExporter", flags={0}, parents={["MS:1000752"]})]
+        TOPPMzTabExporter,
+        #[term(cv=MS, accession=1002159, name="TOPP MassTraceExtractor", flags={0}, parents={["MS:1000752"]})]
+        TOPPMassTraceExtractor,
+        #[term(cv=MS, accession=1002160, name="TOPP PrecursorMassCorrector", flags={0}, parents={["MS:1000752"]})]
+        TOPPPrecursorMassCorrector,
+        #[term(cv=MS, accession=1002161, name="TOPP HighResPrecursorMassCorrector", flags={0}, parents={["MS:1000752"]})]
+        TOPPHighResPrecursorMassCorrector,
+        #[term(cv=MS, accession=1002162, name="TOPP AdditiveSeries", flags={0}, parents={["MS:1000752"]})]
+        TOPPAdditiveSeries,
+        #[term(cv=MS, accession=1002163, name="TOPP Decharger", flags={0}, parents={["MS:1000752"]})]
+        TOPPDecharger,
+        #[term(cv=MS, accession=1002164, name="TOPP EICExtractor", flags={0}, parents={["MS:1000752"]})]
+        TOPPEICExtractor,
+        #[term(cv=MS, accession=1002165, name="TOPP feature finder", flags={0}, parents={["MS:1000752"]})]
+        TOPPFeatureFinder,
+        #[term(cv=MS, accession=1002166, name="TOPP FeatureFinderCentroided", flags={0}, parents={["MS:1002165"]})]
+        TOPPFeatureFinderCentroided,
+        #[term(cv=MS, accession=1002167, name="TOPP FeatureFinderRaw", flags={0}, parents={["MS:1002165"]})]
+        TOPPFeatureFinderRaw,
+        #[term(cv=MS, accession=1002168, name="TOPP FeatureFinderIsotopeWavelet", flags={0}, parents={["MS:1002165"]})]
+        TOPPFeatureFinderIsotopeWavelet,
+        #[term(cv=MS, accession=1002169, name="TOPP FeatureFinderMetabo", flags={0}, parents={["MS:1002165"]})]
+        TOPPFeatureFinderMetabo,
+        #[term(cv=MS, accession=1002170, name="TOPP FeatureFinderMRM", flags={0}, parents={["MS:1002165"]})]
+        TOPPFeatureFinderMRM,
+        #[term(cv=MS, accession=1002171, name="TOPP ProteinQuantifier", flags={0}, parents={["MS:1000752"]})]
+        TOPPProteinQuantifier,
+        #[term(cv=MS, accession=1002172, name="TOPP ConsensusMapNormalizer", flags={0}, parents={["MS:1000752"]})]
+        TOPPConsensusMapNormalizer,
+        #[term(cv=MS, accession=1002173, name="TOPP MapRTTransformer", flags={0}, parents={["MS:1000752"]})]
+        TOPPMapRTTransformer,
+        #[term(cv=MS, accession=1002174, name="TOPP feature linker", flags={0}, parents={["MS:1000752"]})]
+        TOPPFeatureLinker,
+        #[term(cv=MS, accession=1002175, name="TOPP FeatureLinkerLabeled", flags={0}, parents={["MS:1002174"]})]
+        TOPPFeatureLinkerLabeled,
+        #[term(cv=MS, accession=1002176, name="TOPP FeatureLinkerUnlabeled", flags={0}, parents={["MS:1002174"]})]
+        TOPPFeatureLinkerUnlabeled,
+        #[term(cv=MS, accession=1002177, name="TOPP FeatureLinkerUnlabeledQT", flags={0}, parents={["MS:1002174"]})]
+        TOPPFeatureLinkerUnlabeledQT,
+        #[term(cv=MS, accession=1002178, name="TOPP CompNovo", flags={0}, parents={["MS:1000752"]})]
+        TOPPCompNovo,
+        #[term(cv=MS, accession=1002179, name="TOPP CompNovoCID", flags={0}, parents={["MS:1000752"]})]
+        TOPPCompNovoCID,
+        #[term(cv=MS, accession=1002180, name="TOPP software adaptor", flags={0}, parents={["MS:1000752"]})]
+        TOPPSoftwareAdaptor,
+        #[term(cv=MS, accession=1002181, name="TOPP InspectAdapter", flags={0}, parents={["MS:1002180"]})]
+        TOPPInspectAdapter,
+        #[term(cv=MS, accession=1002182, name="TOPP MascotAdapter", flags={0}, parents={["MS:1002180"]})]
+        TOPPMascotAdapter,
+        #[term(cv=MS, accession=1002183, name="TOPP MascotAdapterOnline", flags={0}, parents={["MS:1002180"]})]
+        TOPPMascotAdapterOnline,
+        #[term(cv=MS, accession=1002184, name="TOPP OMSSAAdapter", flags={0}, parents={["MS:1002180"]})]
+        TOPPOMSSAAdapter,
+        #[term(cv=MS, accession=1002185, name="TOPP PepNovoAdapter", flags={0}, parents={["MS:1002180"]})]
+        TOPPPepNovoAdapter,
+        #[term(cv=MS, accession=1002186, name="TOPP XTandemAdapter", flags={0}, parents={["MS:1002180"]})]
+        TOPPXTandemAdapter,
+        #[term(cv=MS, accession=1002187, name="TOPP SpecLibSearcher", flags={0}, parents={["MS:1000752"]})]
+        TOPPSpecLibSearcher,
+        #[term(cv=MS, accession=1002188, name="TOPP ConsensusID", flags={0}, parents={["MS:1000752"]})]
+        TOPPConsensusID,
+        #[term(cv=MS, accession=1002189, name="TOPP IDConflictResolver", flags={0}, parents={["MS:1000752"]})]
+        TOPPIDConflictResolver,
+        #[term(cv=MS, accession=1002190, name="TOPP IDFilter", flags={0}, parents={["MS:1000752"]})]
+        TOPPIDFilter,
+        #[term(cv=MS, accession=1002191, name="TOPP IDMapper", flags={0}, parents={["MS:1000752"]})]
+        TOPPIDMapper,
+        #[term(cv=MS, accession=1002192, name="TOPP IDPosteriorErrorProbability", flags={0}, parents={["MS:1000752"]})]
+        TOPPIDPosteriorErrorProbability,
+        #[term(cv=MS, accession=1002193, name="TOPP IDRTCalibration", flags={0}, parents={["MS:1000752"]})]
+        TOPPIDRTCalibration,
+        #[term(cv=MS, accession=1002194, name="TOPP PeptideIndexer", flags={0}, parents={["MS:1000752"]})]
+        TOPPPeptideIndexer,
+        #[term(cv=MS, accession=1002195, name="TOPP PrecursorIonSelector", flags={0}, parents={["MS:1000752"]})]
+        TOPPPrecursorIonSelector,
+        #[term(cv=MS, accession=1002196, name="TOPP MRMMapper", flags={0}, parents={["MS:1000752"]})]
+        TOPPMRMMapper,
+        #[term(cv=MS, accession=1002197, name="TOPP OpenSwath component", flags={0}, parents={["MS:1000752"]})]
+        TOPPOpenSwathComponent,
+        #[term(cv=MS, accession=1002198, name="TOPP OpenSwathAnalyzer", flags={0}, parents={["MS:1002197"]})]
+        TOPPOpenSwathAnalyzer,
+        #[term(cv=MS, accession=1002199, name="TOPP OpenSwathChromatogramExtractor", flags={0}, parents={["MS:1002197"]})]
+        TOPPOpenSwathChromatogramExtractor,
+        #[term(cv=MS, accession=1002200, name="TOPP OpenSwathDecoyGenerator", flags={0}, parents={["MS:1002197"]})]
+        TOPPOpenSwathDecoyGenerator,
+        #[term(cv=MS, accession=1002201, name="TOPP OpenSwathFeatureXMLToTSV", flags={0}, parents={["MS:1002197"]})]
+        TOPPOpenSwathFeatureXMLToTSV,
+        #[term(cv=MS, accession=1002202, name="TOPP OpenSwathRTNormalizer", flags={0}, parents={["MS:1002197"]})]
+        TOPPOpenSwathRTNormalizer,
+        #[term(cv=MS, accession=1002203, name="TOPP ProteinInference", flags={0}, parents={["MS:1000752"]})]
+        TOPPProteinInference,
+        #[term(cv=MS, accession=1002204, name="TOPP FalseDiscoveryRate", flags={0}, parents={["MS:1000752"]})]
+        TOPPFalseDiscoveryRate,
+        #[term(cv=MS, accession=1002205, name="ProteoWizard msconvert", flags={0}, parents={["MS:1000615"]})]
+        ProteoWizardMsconvert,
+        #[term(cv=MS, accession=1002206, name="ProteoWizard idconvert", flags={0}, parents={["MS:1000615"]})]
+        ProteoWizardIdconvert,
+        #[term(cv=MS, accession=1002207, name="ProteoWizard chainsaw", flags={0}, parents={["MS:1000615"]})]
+        ProteoWizardChainsaw,
+        #[term(cv=MS, accession=1002208, name="ProteoWizard msaccess", flags={0}, parents={["MS:1000615"]})]
+        ProteoWizardMsaccess,
+        #[term(cv=MS, accession=1002209, name="ProteoWizard SeeMS", flags={0}, parents={["MS:1000615"]})]
+        ProteoWizardSeeMS,
         #[term(cv=MS, accession=1002210, name="IsobariQ", flags={1}, parents={["MS:1001139", "MS:1001456"]})]
         IsobariQ,
         #[term(cv=MS, accession=1002220, name="MRMaid", flags={0}, parents={["MS:1000871"]})]
@@ -410,6 +688,8 @@ crate::cvmap! {
         MSDK,
         #[term(cv=MS, accession=1002661, name="Morpheus", flags={1}, parents={["MS:1001456"]})]
         Morpheus,
+        #[term(cv=MS, accession=1002673, name="OpenXQuest", flags={0}, parents={["MS:1000752"]})]
+        OpenXQuest,
         #[term(cv=MS, accession=1002714, name="FLASHDeconv", flags={3}, parents={["MS:1001456", "MS:1001457"]})]
         FLASHDeconv,
         #[term(cv=MS, accession=1002720, name="MSPathFinder", flags={1}, parents={["MS:1001456"]})]
@@ -494,6 +774,8 @@ crate::cvmap! {
         MSFragger,
         #[term(cv=MS, accession=1003018, name="Philosopher", flags={1}, parents={["MS:1001456"]})]
         Philosopher,
+        #[term(cv=MS, accession=1003023, name="OpenPepXL", flags={0}, parents={["MS:1000752"]})]
+        OpenPepXL,
         #[term(cv=MS, accession=1003082, name="MS-DIAL", flags={2}, parents={["MS:1002878", "MS:1001457"]})]
         MSDIAL,
         #[term(cv=MS, accession=1003108, name="PatternLab", flags={1}, parents={["MS:1001139", "MS:1001456"]})]
@@ -557,7 +839,7 @@ crate::cvmap! {
         #[term(cv=MS, accession=4000151, name="MsQuality", flags={1}, parents={["MS:1001456"]})]
         MsQuality,
     }
-    //[[[end]]] (checksum: 435c7f3e6fc2452a2cbeac779d53ad00)
+    //[[[end]]] (checksum: 803f852827324b545051151c5d2c0076)
 }
 
 #[cfg(test)]

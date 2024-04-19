@@ -104,7 +104,7 @@ and this project adheres to [Semantic Versioning].
   `io::Write`, the underlying writer isn't actually "closed" until the whole struct is dropped.
 - Added `Drop` implementation for `MzMLWriterType` and `MzMLbWriterType` which ensures that the `close` method is called to make the
   resulting file well-formed.
-- Added new peak picking methods `MulitLayerSpectrum::pick_peaks_in_intervals` and `RawSpectrum::pick_peaks_in_intervals_into` that
+- Added new peak picking methods `MultiLayerSpectrum::pick_peaks_in_intervals` and `RawSpectrum::pick_peaks_in_intervals_into` that
   pick peaks only in selected m/z regions.
 - Added `MassSpectrometryRun` to record information found on or near the `<run>` element in mzML which includes several default values
   otherwise absent from the data model. It is accessible via `MSDataFileMetadata::run_description` trait method, included in the prelude.
