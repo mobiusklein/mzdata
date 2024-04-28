@@ -215,6 +215,12 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    /// Decode the compressed data, if needed, and store that buffer in `self.data`. After
+    /// decoding `self.compression` will always be [`BinaryCompressionType::Decoded`].
+    ///
+    /// The return value is the content of `self.compression` after decoding.
+    ///
+    /// This may fail if the decoding fails for any reason.
     pub fn decode_and_store(&mut self) -> Result<BinaryCompressionType, ArrayRetrievalError> {
         match self.decode() {
             Ok(data) => {
@@ -348,6 +354,8 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         self.params = None;
     }
 
+    /// The reverse of [`DataArray::decode_and_store`], this method compresses `self.data` to the desired
+    /// compression method and stores that buffer as `self.data`.
     pub fn store_compressed(&mut self, compression: BinaryCompressionType) -> Result<(), ArrayRetrievalError> {
         if self.compression == compression {
             Ok(())

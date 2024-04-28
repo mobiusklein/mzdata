@@ -60,6 +60,13 @@ impl BinaryArrayMap {
         self.byte_buffer_map.par_iter_mut()
     }
 
+
+    /// Compress a specific [`DataArray`] with the `compression` scheme provided, if it is present.
+    ///
+    /// This method may fail if the compression fails or if the array type is missing.
+    ///
+    /// ## See Also
+    /// [`DataArray::store_compressed`]
     pub fn encode_array(&mut self, array_type: &ArrayType, compression: BinaryCompressionType) -> Result<(), ArrayRetrievalError> {
         if let Some(arr) = self.get_mut(array_type) {
             arr.store_compressed(compression)?;
