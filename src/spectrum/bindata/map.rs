@@ -60,6 +60,15 @@ impl BinaryArrayMap {
         self.byte_buffer_map.par_iter_mut()
     }
 
+    pub fn encode_array(&mut self, array_type: &ArrayType, compression: BinaryCompressionType) -> Result<(), ArrayRetrievalError> {
+        if let Some(arr) = self.get_mut(array_type) {
+            arr.store_compressed(compression)?;
+            Ok(())
+        } else {
+            Err(ArrayRetrievalError::NotFound(array_type.clone()))
+        }
+    }
+
     /// Decode all [`DataArray`] in this map. If there are many arrays and the
     /// `parallelism` feature is enabled, each array will be decoded on a separate
     /// thread.
