@@ -348,6 +348,16 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         self.params = None;
     }
 
+    pub fn store_compressed(&mut self, compression: BinaryCompressionType) -> Result<(), ArrayRetrievalError> {
+        if self.compression == compression {
+            Ok(())
+        } else {
+            let bytes = self.encode_bytestring(compression);
+            self.data = bytes;
+            Ok(())
+        }
+    }
+
     pub fn store_as(&mut self, dtype: BinaryDataArrayType) -> Result<usize, ArrayRetrievalError> {
         if self.dtype == dtype {
             return Ok(self.data.len());
