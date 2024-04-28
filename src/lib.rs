@@ -59,7 +59,7 @@ pub mod meta;
 pub mod params;
 pub mod prelude;
 pub mod spectrum;
-mod utils;
+pub mod utils;
 
 pub use crate::io::MZReader;
 pub use crate::io::mgf::{MGFReader, MGFWriter};
