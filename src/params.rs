@@ -1380,7 +1380,9 @@ impl PartialEq<CURIE> for Param {
 /// Controlled vocabularies used in mass spectrometry data files
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ControlledVocabulary {
+    /// The PSI-MS Controlled Vocabulary [https://www.ebi.ac.uk/ols4/ontologies/ms](https://www.ebi.ac.uk/ols4/ontologies/ms)
     MS,
+    /// The Unit Ontology [https://www.ebi.ac.uk/ols4/ontologies/uo](https://www.ebi.ac.uk/ols4/ontologies/uo)
     UO,
     Unknown,
 }
@@ -1395,6 +1397,7 @@ const UO_CV_BYTES: &[u8] = UO_CV.as_bytes();
 pub enum AccessionLike<'a> {
     Text(Cow<'a, str>),
     Number(u32),
+    CURIE(CURIE)
 }
 
 impl<'a> From<u32> for AccessionLike<'a> {
@@ -1416,6 +1419,7 @@ impl<'a> From<String> for AccessionLike<'a> {
 }
 
 impl<'a> ControlledVocabulary {
+    /// Get the CURIE namespace prefix for this controlled vocabulary
     pub const fn prefix(&self) -> Cow<'static, str> {
         match &self {
             Self::MS => Cow::Borrowed(MS_CV),
@@ -1424,6 +1428,7 @@ impl<'a> ControlledVocabulary {
         }
     }
 
+    /// Like [`ControlledVocabulary::prefix`], but obtain a byte string instead
     pub const fn as_bytes(&self) -> &'static [u8] {
         match &self {
             Self::MS => MS_CV_BYTES,
@@ -1439,6 +1444,15 @@ impl<'a> ControlledVocabulary {
         }
     }
 
+    /// Create a [`Param`] whose accession comes from this controlled vocabulary namespace with
+    /// an empty value.
+    ///
+    /// # Arguments
+    /// - `accession`: The accession code for the [`Param`]. If specified as a [`CURIE`] or a string-like type,
+    ///     any namespace is ignored.
+    /// - `name`: The name of the parameter
+    /// # See Also
+    /// - [`ControlledVocabulary::param_val`]
     pub fn param<A: Into<AccessionLike<'a>>, S: Into<String>>(
         &self,
         accession: A,
@@ -1460,6 +1474,9 @@ impl<'a> ControlledVocabulary {
                 }
             }
             AccessionLike::Number(n) => param.accession = Some(n),
+            AccessionLike::CURIE(c) => {
+                param.accession = Some(c.accession)
+            }
         }
         param
     }
@@ -1468,6 +1485,16 @@ impl<'a> ControlledVocabulary {
         CURIE::new(*self, accession)
     }
 
+    /// Create a [`ParamCow`] from this namespace in a `const` context, useful for preparing
+    /// global constants or inlined variables.
+    ///
+    /// All parameters must have a `'static` lifetime.
+    ///
+    /// # Arguments
+    /// - `name`: The name of the controlled vocabulary term.
+    /// - `value`: The wrapped value as a constant.
+    /// - `accession`: The a priori determined accession code for the term
+    /// - `unit`: The unit associated with the value
     pub const fn const_param(
         &self,
         name: &'static str,
@@ -1484,10 +1511,20 @@ impl<'a> ControlledVocabulary {
         }
     }
 
+    /// Create a [`ParamCow`] from this namespace in a `const` context with an empty
+    /// value and no unit.
+    ///
+    /// See [`ControlledVocabulary::const_param`] for more details.
     pub const fn const_param_ident(&self, name: &'static str, accession: u32) -> ParamCow<'static> {
         self.const_param(name, ValueRef::Empty, accession, Unit::Unknown)
     }
 
+    /// Create a [`ParamCow`] from this namespace in a `const` context with an empty
+    /// value but a specified unit.
+    ///
+    /// This is intended to create a "template" that will be copied and have a value specified.
+    ///
+    /// See [`ControlledVocabulary::const_param`] for more details.
     pub const fn const_param_ident_unit(
         &self,
         name: &'static str,
@@ -1497,6 +1534,17 @@ impl<'a> ControlledVocabulary {
         self.const_param(name, ValueRef::Empty, accession, unit)
     }
 
+    /// Create a [`Param`] whose accession comes from this controlled vocabulary namespace with
+    /// the given value.
+    ///
+    /// # Arguments
+    /// - `accession`: The accession code for the [`Param`]. If specified as a [`CURIE`] or a string-like type,
+    ///     any namespace is ignored.
+    /// - `name`: The name of the parameter
+    /// - `value`: The value of the parameter
+    ///
+    /// # See Also
+    /// - [`ControlledVocabulary::param`]
     pub fn param_val<S: Into<String>, A: Into<AccessionLike<'a>>, V: Into<Value>>(
         &self,
         accession: A,
@@ -1531,31 +1579,51 @@ impl FromStr for ControlledVocabulary {
 pub type ParamList = Vec<Param>;
 
 pub trait ParamDescribed {
+    /// Obtain an immutable slice over the encapsulated [`Param`] list
     fn params(&self) -> &[Param];
+
+    /// Obtain an mutable slice over the encapsulated [`Param`] list
     fn params_mut(&mut self) -> &mut ParamList;
 
+    /// Add a new [`Param`] to the entity
     fn add_param(&mut self, param: Param) {
         self.params_mut().push(param);
     }
 
+    /// Remove the `i`th [`Param`] from the entity.
     fn remove_param(&mut self, index: usize) -> Param {
         self.params_mut().remove(index)
     }
 
+    /// Find the first [`Param`] whose name matches `name`
     fn get_param_by_name(&self, name: &str) -> Option<&Param> {
         self.params().iter().find(|&param| param.name == name)
     }
 
+    /// Find the first [`Param`] whose [`CURIE`] matches `curie`
     fn get_param_by_curie(&self, curie: &CURIE) -> Option<&Param> {
         self.params().iter().find(|&param| curie == param)
     }
 
+    /// Find the first [`Param`] whose [`Param::accession`] matches `accession`
+    ///
+    /// This is equivalent to [`ParamDescribed::get_param_by_curie`] on `accession.parse::<CURIE>().unwrap()`
     fn get_param_by_accession(&self, accession: &str) -> Option<&Param> {
         let (cv, acc_num) = curie_to_num(accession);
         return self
             .params()
             .iter()
             .find(|&param| param.accession == acc_num && param.controlled_vocabulary == cv);
+    }
+
+    /// Iterate over the encapsulated parameter list
+    fn iter_params(&self) -> std::slice::Iter<Param> {
+        self.params().iter()
+    }
+
+    /// Iterate mutably over the encapsulated parameter list
+    fn iter_params_mut(&mut self) -> std::slice::IterMut<Param> {
+        self.params_mut().iter_mut()
     }
 }
 
