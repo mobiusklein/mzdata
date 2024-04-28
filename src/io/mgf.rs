@@ -79,7 +79,7 @@ pub enum MGFError {
     ),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct SpectrumBuilderFlex<
     C: CentroidPeakAdapting = CentroidPeak,
     D: DeconvolutedPeakAdapting = DeconvolutedPeak,
@@ -92,6 +92,24 @@ struct SpectrumBuilderFlex<
     pub detail_level: DetailLevel,
     centroided_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
+}
+
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Default for SpectrumBuilderFlex<C, D> {
+    fn default() -> Self {
+        let mut description = SpectrumDescription::default();
+        description.signal_continuity = SignalContinuity::Centroid;
+        description.ms_level = 2;
+        Self {
+            description,
+            mz_array: Default::default(),
+            intensity_array: Default::default(),
+            charge_array: Default::default(),
+            has_charge: Default::default(),
+            detail_level: Default::default(),
+            centroided_type: Default::default(),
+            deconvoluted_type: Default::default(),
+        }
+    }
 }
 
 impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilderFlex<C, D>>
@@ -713,7 +731,7 @@ const MSN_SPECTRUM_CV: CURIE = ControlledVocabulary::MS.curie(1000580);
 /// A trait that controls what additional descriptive entries
 /// are written in the spectrum header of an MGF file, not including
 /// the essential items like `RTINSECONDS` and `PEPMASS`
-pub trait MGFHeaderStyle : Sized {
+pub trait MGFHeaderStyle: Sized {
     #[allow(unused)]
     fn write_header<
         W: io::Write,
@@ -775,7 +793,7 @@ pub struct MGFWriterType<
     W: io::Write,
     C: CentroidPeakAdapting + From<CentroidPeak> = CentroidPeak,
     D: DeconvolutedPeakAdapting + From<DeconvolutedPeak> = DeconvolutedPeak,
-    Y: MGFHeaderStyle = MZDataMGFStyle
+    Y: MGFHeaderStyle = MZDataMGFStyle,
 > {
     pub handle: io::BufWriter<W>,
     pub offset: usize,
@@ -793,7 +811,7 @@ impl<
         W: io::Write,
         C: CentroidPeakAdapting + From<CentroidPeak>,
         D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
-        Y: MGFHeaderStyle
+        Y: MGFHeaderStyle,
     > MGFWriterType<W, C, D, Y>
 {
     pub fn new(file: W) -> MGFWriterType<W, C, D, Y> {
@@ -808,7 +826,7 @@ impl<
             softwares: Default::default(),
             data_processings: Default::default(),
             run: Default::default(),
-            style_type: PhantomData
+            style_type: PhantomData,
         }
     }
 
