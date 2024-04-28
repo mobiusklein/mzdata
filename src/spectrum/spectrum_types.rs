@@ -20,8 +20,7 @@ use crate::params::{ParamDescribed, ParamList};
 #[allow(unused)]
 use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType};
 use crate::spectrum::scan_properties::{
-    Acquisition, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
-    IonMobilityMeasure
+    Acquisition, IonMobilityMeasure, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
 };
 use crate::utils::mass_charge_ratio;
 
@@ -29,8 +28,11 @@ use super::bindata::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
 #[allow(unused)]
 use super::DataArray;
 
-pub trait CentroidPeakAdapting: CentroidLike + Default {}
-impl<C: CentroidLike + Default> CentroidPeakAdapting for C {}
+/// A blanket trait that ties together all the assumed behaviors of an m/z coordinate centroid peak
+pub trait CentroidPeakAdapting: CentroidLike + Default + From<CentroidPeak> {}
+impl<C: CentroidLike + Default + From<CentroidPeak>> CentroidPeakAdapting for C {}
+
+/// A blanket trait that ties together all the assumed behaviors of an neutral mass coordinate centroid peak
 pub trait DeconvolutedPeakAdapting:
     DeconvolutedCentroidLike + Default + From<DeconvolutedPeak>
 {
@@ -333,7 +335,8 @@ impl<'a, C: CentroidLike + Clone, D: DeconvolutedCentroidLike + Clone> RefPeakDa
 pub trait SpectrumLike<
     C: CentroidLike = CentroidPeak,
     D: DeconvolutedCentroidLike = DeconvolutedPeak,
-> {
+>
+{
     /// The method to access the spectrum description itself, which supplies
     /// the data for most other methods on this trait.
     fn description(&self) -> &SpectrumDescription;
@@ -428,7 +431,10 @@ pub trait SpectrumLike<
     /// Access the point measure of ion mobility associated with the scan if present. This is distinct from
     /// having a frame-level scan across the ion mobility dimension.
     fn ion_mobility(&self) -> Option<f64> {
-        self.acquisition().iter().flat_map(|s| s.ion_mobility()).next()
+        self.acquisition()
+            .iter()
+            .flat_map(|s| s.ion_mobility())
+            .next()
     }
 
     /// Check if this spectrum has a point measure of ion mobility. This is distinct from
@@ -1150,9 +1156,11 @@ impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike +
             let intensity_array = arrays.intensities()?;
 
             if matches!(self.signal_continuity(), SignalContinuity::Centroid) {
-                let mut peaks: MZPeakSetType<C> = mz_array.iter().zip(intensity_array.iter()).map(|(mz, inten)| {
-                    FittedPeak::new(*mz, *inten, 0, 0.0, 0.0).into()
-                }).collect();
+                let mut peaks: MZPeakSetType<C> = mz_array
+                    .iter()
+                    .zip(intensity_array.iter())
+                    .map(|(mz, inten)| FittedPeak::new(*mz, *inten, 0, 0.0, 0.0).into())
+                    .collect();
                 peaks.sort();
                 self.peaks = Some(peaks);
                 Ok(())

@@ -65,7 +65,7 @@ pub use crate::spectrum::scan_properties::*;
 pub use crate::spectrum::spectrum_types::{
     CentroidSpectrum, CentroidSpectrumType, DeconvolutedSpectrum, DeconvolutedSpectrumType,
     MultiLayerSpectrum, RefPeakDataLevel, RawSpectrum, Spectrum, SpectrumConversionError,
-    SpectrumLike, SpectrumProcessingError, PeakDataLevel
+    SpectrumLike, SpectrumProcessingError, PeakDataLevel, CentroidPeakAdapting, DeconvolutedPeakAdapting
 };
 
 pub use group::{

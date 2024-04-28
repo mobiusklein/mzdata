@@ -943,7 +943,7 @@ impl<'a> From<MzMLSpectrumBuilder<'a>> for RawSpectrum {
 
 /**
 An mzML parser that supports iteration and random access. The parser produces
-[`Spectrum`] instances, which may be converted to [`RawSpectrum`](crate::spectrum::spectrum::RawSpectrum)
+[`Spectrum`] instances, which may be converted to [`RawSpectrum`](crate::spectrum::RawSpectrum)
 or [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum) as is appropriate to the data.
 
 When the readable stream the parser is wrapped around supports [`io::Seek`],

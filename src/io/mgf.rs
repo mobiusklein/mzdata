@@ -139,8 +139,8 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilderF
 }
 
 impl<
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
     > SpectrumBuilderFlex<C, D>
 {
     pub fn into_spectrum(self, spectrum: &mut MultiLayerSpectrum<C, D>) {
@@ -182,8 +182,8 @@ impl<
 }
 
 impl<
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
     > From<SpectrumBuilderFlex<C, D>> for MultiLayerSpectrum<C, D>
 {
     fn from(builder: SpectrumBuilderFlex<C, D>) -> MultiLayerSpectrum<C, D> {
@@ -194,8 +194,8 @@ impl<
 }
 
 impl<
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
     > From<SpectrumBuilderFlex<C, D>> for CentroidSpectrumType<C>
 where
     C: BuildFromArrayMap + BuildArrayMapFrom,
@@ -238,8 +238,8 @@ lazy_static! {
 
 impl<
         R: io::Read,
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
     > MGFReaderType<R, C, D>
 {
     fn parse_peak_from_line_flex(
@@ -488,8 +488,8 @@ impl<
 
 impl<
         R: io::Read,
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
     > Iterator for MGFReaderType<R, C, D>
 {
     type Item = MultiLayerSpectrum<C, D>;
@@ -502,8 +502,8 @@ impl<
 
 impl<
         R: SeekRead,
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
     > MGFReaderType<R, C, D>
 {
     /// Construct a new MGFReaderType and build an offset index
@@ -573,8 +573,8 @@ impl<
 
 impl<
         R: SeekRead,
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
     > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
     /// Retrieve a spectrum by it's native ID
@@ -641,8 +641,8 @@ impl<
 
 impl<
         R: SeekRead,
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
     > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
@@ -677,8 +677,8 @@ impl<
 }
 
 impl<
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
     > MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<fs::File, C, D>
 {
     fn open_file(source: fs::File) -> io::Result<Self> {
@@ -694,8 +694,8 @@ impl<
 /// information can be included after creation.
 impl<
         R: io::Read,
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
     > MSDataFileMetadata for MGFReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
@@ -735,8 +735,8 @@ pub trait MGFHeaderStyle: Sized {
     #[allow(unused)]
     fn write_header<
         W: io::Write,
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
         S: SpectrumLike<C, D>,
     >(
         writer: &mut MGFWriterType<W, C, D, Self>,
@@ -763,8 +763,8 @@ pub struct MZDataMGFStyle();
 impl MGFHeaderStyle for MZDataMGFStyle {
     fn write_header<
         W: io::Write,
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
         S: SpectrumLike<C, D>,
     >(
         writer: &mut MGFWriterType<W, C, D, Self>,
@@ -791,8 +791,8 @@ impl MGFHeaderStyle for MZDataMGFStyle {
 /// writes all parameters it can find.
 pub struct MGFWriterType<
     W: io::Write,
-    C: CentroidPeakAdapting + From<CentroidPeak> = CentroidPeak,
-    D: DeconvolutedPeakAdapting + From<DeconvolutedPeak> = DeconvolutedPeak,
+    C: CentroidPeakAdapting  = CentroidPeak,
+    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
     Y: MGFHeaderStyle = MZDataMGFStyle,
 > {
     pub handle: io::BufWriter<W>,
@@ -809,8 +809,8 @@ pub struct MGFWriterType<
 
 impl<
         W: io::Write,
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
         Y: MGFHeaderStyle,
     > MGFWriterType<W, C, D, Y>
 {
@@ -857,7 +857,7 @@ impl<
         self.handle
     }
 
-    /// Convert a [`ParamLike`](crate::params::ParamLike) value into a spectrum header `key=value`
+    /// Convert a [`ParamLike`] value into a spectrum header `key=value`
     /// pair.
     ///
     /// Calles [`MGFWriterType::write_kv`].
@@ -1029,8 +1029,8 @@ TITLE="#,
 
 impl<
         W: io::Write,
-        C: CentroidPeakAdapting + From<CentroidPeak>,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak>,
+        C: CentroidPeakAdapting ,
+        D: DeconvolutedPeakAdapting,
         Y: MGFHeaderStyle,
     > MSDataFileMetadata for MGFWriterType<W, C, D, Y>
 {
@@ -1047,8 +1047,8 @@ impl<
 
 impl<
         W: io::Write,
-        C: CentroidPeakAdapting + From<CentroidPeak> + 'static,
-        D: DeconvolutedPeakAdapting + From<DeconvolutedPeak> + 'static,
+        C: CentroidPeakAdapting  + 'static,
+        D: DeconvolutedPeakAdapting + 'static,
     > SpectrumWriter<C, D> for MGFWriterType<W, C, D>
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {

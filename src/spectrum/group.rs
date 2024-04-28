@@ -387,7 +387,7 @@ all MSn spectra with their associated MS1 spectrum, producing [`SpectrumGroup`]
 instances.
 
 This type emulates the same interface that [`Iterator`] exposes, save that instead
-of yield individual [`Spectrum`](crate::spectrum::spectrum::Spectrum), it yields [`SpectrumGroup`] instead.
+of yield individual [`Spectrum`](crate::spectrum::Spectrum), it yields [`SpectrumGroup`] instead.
 */
 #[derive(Debug)]
 pub struct SpectrumGroupingIterator<
