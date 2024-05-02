@@ -14,9 +14,9 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         buffer: Cow<'transient, [u8]>,
     ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
         let n = buffer.len();
-        // if n == 0 {
-        //     return Ok(Cow::Owned(Vec::new()))
-        // }
+        if n == 0 {
+            return Ok(Cow::Owned(Vec::new()))
+        }
         let z = mem::size_of::<T>();
         if n % z != 0 {
             return Err(ArrayRetrievalError::DataTypeSizeMismatch);
