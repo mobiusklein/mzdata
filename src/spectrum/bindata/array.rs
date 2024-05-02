@@ -362,6 +362,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         } else {
             let bytes = self.encode_bytestring(compression);
             self.data = bytes;
+            self.compression = compression;
             Ok(())
         }
     }
