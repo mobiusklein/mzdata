@@ -14,17 +14,24 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         buffer: Cow<'transient, [u8]>,
     ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
         let n = buffer.len();
+        // if n == 0 {
+        //     return Ok(Cow::Owned(Vec::new()))
+        // }
         let z = mem::size_of::<T>();
         if n % z != 0 {
             return Err(ArrayRetrievalError::DataTypeSizeMismatch);
         }
-        let m = n / z;
-        unsafe {
-            Ok(Cow::Borrowed(slice::from_raw_parts(
-                buffer.as_ptr() as *const T,
-                m,
-            )))
-        }
+        return match buffer {
+            Cow::Borrowed(c) => {
+                Ok(Cow::Borrowed(bytemuck::try_cast_slice(c)?))
+            },
+            Cow::Owned(v) => {
+                match bytemuck::try_cast_vec(v) {
+                    Ok(v) => Ok(Cow::Owned(v)),
+                    Err((e, _)) => Err(e.into())
+                }
+            },
+        };
     }
 
     fn coerce<T: Pod>(

@@ -201,6 +201,17 @@ pub enum ArrayRetrievalError {
     DataTypeSizeMismatch,
 }
 
+impl From<bytemuck::PodCastError> for ArrayRetrievalError {
+    fn from(value: bytemuck::PodCastError) -> Self {
+        match value {
+            bytemuck::PodCastError::TargetAlignmentGreaterAndInputNotAligned => Self::DataTypeSizeMismatch,
+            bytemuck::PodCastError::OutputSliceWouldHaveSlop => Self::DataTypeSizeMismatch,
+            bytemuck::PodCastError::SizeMismatch => Self::DataTypeSizeMismatch,
+            bytemuck::PodCastError::AlignmentMismatch => Self::DataTypeSizeMismatch,
+        }
+    }
+}
+
 impl From<ArrayRetrievalError> for io::Error {
     fn from(value: ArrayRetrievalError) -> Self {
         match value {
