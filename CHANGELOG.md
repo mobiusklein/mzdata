@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.15.0] - 2024-05-02
+
+### Added
+
+- Added `store_compressed` to `DataArray` to support compression at-will
+- Added `encode_array` to specify compression state of a `DataArray` in `BinaryArrayMap`
+
+### Changed
+
+- Export the utils module for convenience
+
+### Documentation
+
+- Add documentation for more of the param module
+- Simplify and document peak type blanket traits
+- Document new compression methods
+
+### Fixed
+
+- MGF spectra are properly classified as MS2 and centroid
+- PeakDataLevel is now exported as was originally intended
+
+### Maintenance
+
+- Use git-cliff
+
 ## [0.14.0] - 2024-04-25
 
 ### Added
@@ -179,7 +205,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.14.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.15.0...HEAD
+[0.14.0]: https://github.com/mobiusklein/mzdata/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/mobiusklein/mzdata/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/mobiusklein/mzdata/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/mobiusklein/mzdata/compare/v0.11.0...v0.12.0
