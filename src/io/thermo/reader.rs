@@ -5,7 +5,9 @@ use chrono::DateTime;
 use crate::{
     io::{utils::checksum_file, DetailLevel, OffsetIndex},
     meta::{
-        Component, ComponentType, DataProcessing, DetectorTypeTerm, FileDescription, InstrumentConfiguration, IonizationTypeTerm, MassAnalyzerTerm, MassSpectrometryRun, Software, SourceFile
+        Component, ComponentType, DataProcessing, DetectorTypeTerm, FileDescription,
+        InstrumentConfiguration, IonizationTypeTerm, MassAnalyzerTerm, MassSpectrometryRun,
+        Software, SourceFile,
     },
     params::{ControlledVocabulary, Unit},
     prelude::*,
@@ -19,13 +21,10 @@ use crate::{
 
 use mzpeaks::{peak_set::PeakSetVec, prelude::*, CentroidPeak, DeconvolutedPeak, MZ};
 
-use thermorawfilereader::schema::{
-    Polarity, SpectrumData, SpectrumMode,
-};
+use thermorawfilereader::schema::{Polarity, SpectrumData, SpectrumMode};
 use thermorawfilereader::{
     schema::{AcquisitionT, DissociationMethod, PrecursorT},
-    FileDescription as ThermoFileDescription, RawFileReader,
-    IonizationMode, MassAnalyzer
+    FileDescription as ThermoFileDescription, IonizationMode, MassAnalyzer, RawFileReader,
 };
 
 #[allow(unused)]
@@ -147,13 +146,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
                 .const_param_ident("Thermo nativeID format", 1000768)
                 .into(),
         );
-        sf.add_param(
-            ControlledVocabulary::MS.param_val(
-                1000569,
-                "SHA-1",
-                checksum_file(path)?
-            )
-        );
+        sf.add_param(ControlledVocabulary::MS.param_val(1000569, "SHA-1", checksum_file(path)?));
 
         let levels: Vec<_> = description
             .spectra_per_ms_level()
@@ -200,6 +193,21 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
         let mut configs = HashMap::new();
         let mut components_to_instrument_id = HashMap::new();
 
+        let method_texts: Vec<Param> = (0..handle.instrument_method_count())
+            .into_iter()
+            .flat_map(|i| {
+                handle.instrument_method(i as u8)
+            })
+            .flat_map(|m| {
+                m.text().map(|s| {
+                    Param::new_key_value(
+                        "instrument method text",
+                        s.to_string(),
+                    )
+                })
+            })
+            .collect();
+
         for (i, vconf) in descr.configurations().enumerate() {
             let mut config = InstrumentConfiguration::default();
 
@@ -227,32 +235,23 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
                     IonizationMode::CardNanoSprayIonization | IonizationMode::NanoSpray => {
                         IonizationTypeTerm::Nanoelectrospray
                     }
-                    IonizationMode::ElectroSpray => {
-                        IonizationTypeTerm::ElectrosprayIonization
-                    }
+                    IonizationMode::ElectroSpray => IonizationTypeTerm::ElectrosprayIonization,
                     IonizationMode::AtmosphericPressureChemicalIonization => {
                         IonizationTypeTerm::AtmosphericPressureChemicalIonization
                     }
                     IonizationMode::FastAtomBombardment => {
                         IonizationTypeTerm::FastAtomBombardmentIonization
                     }
-                    IonizationMode::GlowDischarge => {
-                        IonizationTypeTerm::GlowDischargeIonization
-                    }
-                    IonizationMode::ElectronImpact => {
-                        IonizationTypeTerm::ElectronIonization
-                    }
+                    IonizationMode::GlowDischarge => IonizationTypeTerm::GlowDischargeIonization,
+                    IonizationMode::ElectronImpact => IonizationTypeTerm::ElectronIonization,
                     IonizationMode::MatrixAssistedLaserDesorptionIonization => {
                         IonizationTypeTerm::MatrixAssistedLaserDesorptionIonization
                     }
-                    IonizationMode::ChemicalIonization => {
-                        IonizationTypeTerm::ChemicalIonization
-                    }
-                    _ => {
-                        IonizationTypeTerm::IonizationType
-                    }
+                    IonizationMode::ChemicalIonization => IonizationTypeTerm::ChemicalIonization,
+                    _ => IonizationTypeTerm::IonizationType,
                 }
-                .to_param().into(),
+                .to_param()
+                .into(),
             );
             config.components.push(ion_source);
 
@@ -262,28 +261,25 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 
             analyzer.add_param(
                 match vconf.mass_analyzer {
-                    MassAnalyzer::ITMS => {
-                        MassAnalyzerTerm::RadialEjectionLinearIonTrap
-                    }
-                    MassAnalyzer::FTMS => {
-                        MassAnalyzerTerm::Orbitrap
-                    }
+                    MassAnalyzer::ITMS => MassAnalyzerTerm::RadialEjectionLinearIonTrap,
+                    MassAnalyzer::FTMS => MassAnalyzerTerm::Orbitrap,
                     MassAnalyzer::ASTMS => {
                         MassAnalyzerTerm::AsymmetricTrackLosslessTimeOfFlightAnalyzer
                     }
-                    MassAnalyzer::TOFMS => {
-                        MassAnalyzerTerm::TimeOfFlight
-                    }
+                    MassAnalyzer::TOFMS => MassAnalyzerTerm::TimeOfFlight,
                     // MassAnalyzer::TQMS => {}
                     // MassAnalyzer::SQMS => {}
-                    MassAnalyzer::Sector => {
-                        MassAnalyzerTerm::MagneticSector
-                    }
+                    MassAnalyzer::Sector => MassAnalyzerTerm::MagneticSector,
                     _ => MassAnalyzerTerm::MassAnalyzerType,
                 }
-                .to_param().into(),
+                .to_param()
+                .into(),
             );
             config.components.push(analyzer);
+
+            for p in method_texts.iter() {
+                config.add_param(p.clone())
+            }
 
             let mut detector = Component::default();
             detector.order = 2;
@@ -293,27 +289,24 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
                     MassAnalyzer::ITMS | MassAnalyzer::ASTMS => {
                         DetectorTypeTerm::ElectronMultiplier
                     }
-                    MassAnalyzer::FTMS => {
-                        DetectorTypeTerm::InductiveDetector
-                    }
+                    MassAnalyzer::FTMS => DetectorTypeTerm::InductiveDetector,
                     _ => DetectorTypeTerm::DetectorType,
                     // MassAnalyzer::TOFMS => {}
                     // MassAnalyzer::TQMS => {}
                     // MassAnalyzer::SQMS => {}
                     // MassAnalyzer::Sector => {}
                 }
-                .to_param().into(),
+                .to_param()
+                .into(),
             );
             config.components.push(detector);
 
             if let Some(serial) = descr.serial_number() {
-                config.add_param(
-                    ControlledVocabulary::MS.param_val(
-                        1000529,
-                        "instrument serial number",
-                        serial,
-                    )
-                );
+                config.add_param(ControlledVocabulary::MS.param_val(
+                    1000529,
+                    "instrument serial number",
+                    serial,
+                ));
             }
             config.software_reference = sw.id.clone();
             config.id = i as u32;
@@ -475,7 +468,10 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             "preset scan configuration",
             vevent.scan_event(),
         ));
-        let ic_key = (vevent.ionization_mode().0.into(), vevent.mass_analyzer().0.into());
+        let ic_key = (
+            vevent.ionization_mode().0.into(),
+            vevent.mass_analyzer().0.into(),
+        );
         if let Some(conf_id) = self.components_to_instrument_id.get(&ic_key) {
             event.instrument_configuration_id = *conf_id;
         }
@@ -874,7 +870,6 @@ mod test {
         assert_eq!(spec.ms_level(), 1);
         assert_eq!(spec.signal_continuity(), SignalContinuity::Profile);
         assert_eq!(spec.polarity(), ScanPolarity::Positive);
-
 
         let event = spec.acquisition().first_scan().unwrap();
         assert_eq!(1, event.instrument_configuration_id);

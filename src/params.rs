@@ -122,6 +122,8 @@ pub trait ParamValue {
 
     /// Get a reference to the stored value
     fn as_ref(&self) -> ValueRef<'_>;
+
+    fn data_len(&self) -> usize;
 }
 
 #[doc(hidden)]
@@ -378,6 +380,16 @@ impl ParamValue for Value {
 
     fn as_ref(&self) -> ValueRef<'_> {
         self.into()
+    }
+
+    fn data_len(&self) -> usize {
+        match self {
+            Self::String(v) => v.len(),
+            Self::Buffer(v) => v.len(),
+            Self::Float(_) => 8,
+            Self::Int(_) => 8,
+            Self::Empty => 0,
+        }
     }
 }
 
@@ -792,6 +804,16 @@ impl<'a> ParamValue for ValueRef<'a> {
     fn as_ref(&self) -> ValueRef<'_> {
         self.clone()
     }
+
+    fn data_len(&self) -> usize {
+        match self {
+            Self::String(v) => v.len(),
+            Self::Buffer(v) => v.len(),
+            Self::Float(_) => 8,
+            Self::Int(_) => 8,
+            Self::Empty => 0,
+        }
+    }
 }
 
 impl<'a> From<&'a Value> for ValueRef<'a> {
@@ -1124,6 +1146,10 @@ impl<'a> ParamValue for ParamCow<'a> {
     fn as_ref(&self) -> ValueRef<'_> {
         <ValueRef<'a> as ParamValue>::as_ref(&self.value)
     }
+
+    fn data_len(&self) -> usize {
+        <ValueRef<'a> as ParamValue>::data_len(&self.value)
+    }
 }
 
 impl ParamCow<'static> {
@@ -1279,6 +1305,10 @@ impl ParamValue for Param {
 
     fn as_ref(&self) -> ValueRef<'_> {
         <Value as ParamValue>::as_ref(&self.value)
+    }
+
+    fn data_len(&self) -> usize {
+        <Value as ParamValue>::data_len(&self.value)
     }
 }
 
