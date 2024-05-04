@@ -160,6 +160,9 @@ pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
         buffer: &mut [u8],
     ) -> Result<&'transient mut [T], ArrayRetrievalError> {
         let n = buffer.len();
+        if n == 0 {
+            return Ok(&mut [])
+        }
         let z = mem::size_of::<T>();
         if n % z != 0 {
             return Err(ArrayRetrievalError::DataTypeSizeMismatch);
