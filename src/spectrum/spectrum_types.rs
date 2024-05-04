@@ -60,7 +60,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
                 let result = intensities
                     .iter()
                     .enumerate()
-                    .max_by(|ia, ib| ia.1.partial_cmp(ib.1).unwrap());
+                    .max_by(|ia, ib| ia.1.total_cmp(ib.1));
                 if let Some((i, inten)) = result {
                     CentroidPeak::new(arrays.mzs().unwrap()[i], *inten, i as IndexType)
                 } else {
@@ -199,7 +199,7 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D
                 let result = intensities
                     .iter()
                     .enumerate()
-                    .max_by(|ia, ib| ia.1.partial_cmp(ib.1).unwrap());
+                    .max_by(|ia, ib| ia.1.total_cmp(ib.1));
                 if let Some((i, inten)) = result {
                     CentroidPeak::new(arrays.mzs().unwrap()[i], *inten, i as IndexType)
                 } else {
