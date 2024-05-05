@@ -1,19 +1,18 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::io::{BufWriter, Write};
 use std::marker::PhantomData;
-use std::{io, mem};
+use std::{io, mem, borrow::Cow};
 
 use log::warn;
-use thiserror::Error;
 #[cfg(feature = "parallelism")]
 use rayon::prelude::*;
+use thiserror::Error;
 
 use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, PeakCollection};
-use quick_xml::events::BytesDecl;
-use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::Error as XMLError;
-use quick_xml::Writer;
+use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event, BytesDecl};
+use quick_xml::{Error as XMLError, Writer};
+use quick_xml::escape;
 
 use super::super::offset_index::OffsetIndex;
 use super::super::traits::SpectrumWriter;
@@ -21,11 +20,14 @@ use super::super::utils::MD5HashingStream;
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
+use crate::impl_param_described;
 use crate::meta::{
     ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
-    Software, MassSpectrometryRun,
+    MassSpectrometryRun, Software,
 };
-use crate::params::{ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, Unit, ParamValue};
+use crate::params::{
+    ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, ParamValue, Unit,
+};
 use crate::spectrum::bindata::{
     to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType,
     BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
@@ -48,7 +50,16 @@ macro_rules! attrib {
     ($name:expr, $value:expr, $elt:ident) => {
         let key = $name.as_bytes();
         let value = $value.as_bytes();
-        $elt.push_attribute((key, value.as_ref()));
+        // Because quick_xml::escape does not escape newlines
+        let decoded = unsafe { std::str::from_utf8_unchecked(&value) };
+        let mut escaped_value = escape::escape(&decoded);
+        if escaped_value.contains(['\n', '\r']) {
+            escaped_value = Cow::Owned(escaped_value.replace('\n', "&#10;"));
+            if escaped_value.contains('\r') {
+                escaped_value = Cow::Owned(escaped_value.replace('\r', "&#13;"));
+            }
+        }
+        $elt.push_attribute((key, escaped_value.as_bytes()));
     };
 }
 
@@ -96,7 +107,6 @@ macro_rules! param_pack {
         par
     }};
 }
-
 
 /// All the ways that mzML writing can go wrong
 #[derive(Debug, Error)]
@@ -273,6 +283,37 @@ impl<W: io::Write> InnerXMLWriter<W> {
         Ok(())
     }
 
+    pub fn write_reference_group(&mut self, param_group: &ParamGroup) -> WriterResult {
+        let mut tag_ref = bstart!("referenceableParamGroupRef");
+        attrib!("ref", param_group.id, tag_ref);
+        self.handle.write_event(Event::Empty(tag_ref))?;
+        Ok(())
+    }
+
+    pub fn write_param_list_with_refs<'a, T: Iterator<Item = &'a Param>>(
+        &mut self,
+        params: T,
+        param_groups: &[ParamGroup]
+    ) -> WriterResult {
+        let mut params: Vec<_> = params.collect();
+        let mut ref_tags = Vec::new();
+        for param_group in param_groups.iter() {
+            if param_group.covers(params.as_ref()) {
+                param_group.filter(&mut params);
+                ref_tags.push(param_group);
+            }
+        }
+
+        for p in params {
+            self.write_param(p)?;
+        }
+
+        for pg in ref_tags {
+            self.write_reference_group(pg)?;
+        }
+        Ok(())
+    }
+
     pub fn write_event(&mut self, event: Event) -> WriterResult {
         self.handle.write_event(event)?;
         Ok(())
@@ -439,10 +480,15 @@ pub struct MzMLWriterType<
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
     ms_cv: ControlledVocabulary,
+
+    param_groups: Vec<ParamGroup>,
 }
 
-impl<W: Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom>
-    SpectrumWriter<C, D> for MzMLWriterType<W, C, D>
+impl<
+        W: Write,
+        C: CentroidLike + Default + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+    > SpectrumWriter<C, D> for MzMLWriterType<W, C, D>
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
         match self.write_spectrum(spectrum) {
@@ -467,8 +513,11 @@ impl<W: Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCen
     }
 }
 
-impl<W: Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom> MSDataFileMetadata
-    for MzMLWriterType<W, C, D>
+impl<
+        W: Write,
+        C: CentroidLike + Default + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+    > MSDataFileMetadata for MzMLWriterType<W, C, D>
 {
     crate::impl_metadata_trait!();
 
@@ -490,6 +539,57 @@ impl<W: Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCen
         Some(&mut self.run)
     }
 }
+
+#[derive(Debug, Default, Clone)]
+pub struct ParamGroup {
+    pub id: String,
+    pub params: Vec<Param>,
+}
+
+#[allow(unused)]
+impl ParamGroup {
+    pub fn new(id: String, params: Vec<Param>) -> Self {
+        Self { id, params }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Param> {
+        self.params.iter()
+    }
+
+    pub fn contains(&self, item: &Param) -> bool {
+        self.params.contains(item)
+    }
+
+    pub fn covers(&self, params: &[&Param]) -> bool {
+        let mut covered = self.params.clone();
+        for param in params {
+            if let Some(i) = covered.iter().position(|p| **param == *p) {
+                covered.remove(i);
+            }
+        }
+        covered.is_empty()
+    }
+
+    pub fn filter(&self, params: &mut Vec<&Param>) {
+        for p in self.iter() {
+            if let Some(i) = params.iter().position(|p2| *p == **p2) {
+                params.remove(i);
+            }
+        }
+    }
+}
+
+impl IntoIterator for ParamGroup {
+    type Item = Param;
+
+    type IntoIter = <Vec<Param> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.params.into_iter()
+    }
+}
+
+impl_param_described!(ParamGroup);
 
 impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
     MzMLWriterType<W, C, D>
@@ -540,6 +640,7 @@ where
             data_array_compression,
             wrote_summaries: false,
             run: MassSpectrometryRun::default(),
+            param_groups: Vec::default(),
         }
     }
 
@@ -562,6 +663,79 @@ where
     /// Imitate the [`io::Seek`] method using an internal byte counter
     pub fn stream_position(&mut self) -> io::Result<u64> {
         Ok(self.handle.handle.get_mut().bytes_written())
+    }
+
+    fn count_params<'a>(&self, entry: &'a impl ParamDescribed) -> HashMap<&'a Param, usize> {
+        let mut acc = HashMap::new();
+        for p in entry.params().iter() {
+            *acc.entry(p).or_default() += 1;
+        }
+        acc
+    }
+
+    fn find_repeated_params<'a, P: ParamDescribed + 'a>(
+        &self,
+        entries: impl Iterator<Item = &'a P>,
+        tag: &str,
+    ) -> Option<ParamGroup> {
+        let mut limit_counters: HashMap<_, (usize, usize)> = HashMap::new();
+        let mut total_counters: HashMap<_, usize> = HashMap::new();
+
+        let blocks: Vec<_> = entries.map(|entry| self.count_params(entry)).collect();
+        for block in blocks.iter() {
+            for (k, v) in block.iter() {
+                let b = limit_counters.entry(*k).or_insert((usize::MAX, usize::MIN));
+                *b = (*v.min(&b.0), *v.max(&b.1));
+                *total_counters.entry(*k).or_default() += *v;
+            }
+        }
+
+        let mut candidates = Vec::new();
+        for (param, (min_count, _max_count)) in limit_counters.iter() {
+            if *total_counters.get(param).unwrap() > *min_count {
+                candidates.push((*param, *min_count))
+            }
+        }
+
+        let spanned_blocks: HashSet<_> = blocks
+            .iter()
+            .map(|block| {
+                let members: Vec<_> = candidates
+                    .iter()
+                    .filter(|(p, count)| *block.get(p).unwrap_or(&0) >= *count)
+                    .collect();
+                members
+            })
+            .collect();
+
+        if let Some(block) = spanned_blocks.iter().min_by_key(|block| block.len()) {
+            let members: Vec<_> = block
+                .iter()
+                .map(|(p, s)| {
+                    let mut v = Vec::with_capacity(*s);
+                    for _ in 0..*s {
+                        v.push((*p).clone());
+                    }
+                    v.into_iter()
+                })
+                .flatten()
+                .collect();
+            if members.len() < 2 {
+                None
+            } else {
+                let id = format!("{}_params_shared", tag);
+                Some(ParamGroup::new(id, members))
+            }
+        } else {
+            None
+        }
+    }
+
+    fn analyze_header_params(&mut self) {
+        self.param_groups.extend(self.find_repeated_params(
+            self.instrument_configurations.values(),
+            "instrument_configuration_",
+        ));
     }
 
     fn make_psi_ms_cv(&self) -> BytesStart<'static> {
@@ -633,8 +807,10 @@ where
         } else {
             return self.transition_err(MzMLWriterState::Header);
         }
+        self.analyze_header_params();
         self.write_cv_list()?;
         self.write_file_description()?;
+        self.write_referenceable_param_group_list()?;
         self.write_software_list()?;
         self.write_instrument_configuration()?;
         self.write_data_processing()?;
@@ -681,6 +857,26 @@ where
         Ok(())
     }
 
+    fn write_referenceable_param_group_list(&mut self) -> WriterResult {
+        if !self.param_groups.is_empty() {
+            let mut list = bstart!("referenceableParamGroupList");
+            let count = self.param_groups.len().to_string();
+            attrib!("count", count, list);
+            start_event!(self, list);
+            for param_group in self.param_groups.iter() {
+                let mut group_tag = bstart!("referenceableParamGroup");
+                attrib!("id", param_group.id, group_tag);
+                start_event!(self, group_tag);
+                for param in param_group.iter() {
+                    self.handle.write_param(param)?;
+                }
+                end_event!(self, group_tag);
+            }
+            end_event!(self, list);
+        }
+        Ok(())
+    }
+
     fn write_software_list(&mut self) -> WriterResult {
         let mut outer = bstart!("softwareList");
         let count = self.softwares.len().to_string();
@@ -715,9 +911,7 @@ where
             let inst_id = instrument_id(&ic.id);
             attrib!("id", inst_id, tag);
             self.handle.write_event(Event::Start(tag.borrow()))?;
-            for param in ic.params() {
-                self.handle.write_param(param)?
-            }
+            self.handle.write_param_list_with_refs(ic.params().iter(), &self.param_groups)?;
             let mut comp_list_tag = bstart!("componentList");
             let comp_count = ic.components.len().to_string();
             attrib!("count", comp_count, comp_list_tag);
@@ -1111,7 +1305,12 @@ where
         Ok(())
     }
 
-    pub fn write_binary_data_array_pre_encoded(&mut self, array: &DataArray, default_array_len: usize, encoded_array: &[u8]) -> WriterResult {
+    pub fn write_binary_data_array_pre_encoded(
+        &mut self,
+        array: &DataArray,
+        default_array_len: usize,
+        encoded_array: &[u8],
+    ) -> WriterResult {
         let mut outer = bstart!("binaryDataArray");
 
         let encoded_len = encoded_array.len().to_string();
@@ -1168,9 +1367,9 @@ where
                 .handle
                 .write_param(&array.name.as_param_with_unit_const(array.unit))?,
             ArrayType::NonStandardDataArray { name } => {
-                let mut p = self
-                    .ms_cv
-                    .param_val("MS:1000786", "non-standard data array", name.as_str());
+                let mut p =
+                    self.ms_cv
+                        .param_val("MS:1000786", "non-standard data array", name.as_str());
                 p = p.with_unit_t(&array.unit);
                 self.handle.write_param(&p)?;
             }
@@ -1210,17 +1409,24 @@ where
         #[cfg(feature = "parallelism")]
         {
             let compression = self.data_array_compression;
-            let mut array_pairs: Vec<(&ArrayType, &DataArray, Vec<u8>)> = if arrays.len() < PARALLEL_COMPRESSION_FAN {
-                arrays.iter().map(|(t, d)| {
-                    let encoded = d.encode_bytestring(compression);
-                    (t, d, encoded)
-                }).collect()
-            } else {
-                arrays.par_iter().map(|(t, d)| {
-                    let encoded = d.encode_bytestring(compression);
-                    (t, d, encoded)
-                }).collect()
-            };
+            let mut array_pairs: Vec<(&ArrayType, &DataArray, Vec<u8>)> =
+                if arrays.len() < PARALLEL_COMPRESSION_FAN {
+                    arrays
+                        .iter()
+                        .map(|(t, d)| {
+                            let encoded = d.encode_bytestring(compression);
+                            (t, d, encoded)
+                        })
+                        .collect()
+                } else {
+                    arrays
+                        .par_iter()
+                        .map(|(t, d)| {
+                            let encoded = d.encode_bytestring(compression);
+                            (t, d, encoded)
+                        })
+                        .collect()
+                };
             array_pairs.sort_by_key(|f| f.0);
             for (_tp, array, encoded) in array_pairs {
                 self.write_binary_data_array_pre_encoded(array, default_array_len, &encoded)?
@@ -1546,12 +1752,40 @@ where
         self.handle.write_param_list(params)
     }
 
+    pub fn write_param_list_with_refs<'a, T: Iterator<Item = &'a Param>>(
+        &mut self,
+        params: T,
+    ) -> WriterResult {
+        let mut params: Vec<_> = params.collect();
+        let mut ref_tags = Vec::new();
+        for param_group in self.param_groups.iter() {
+            if param_group.covers(params.as_ref()) {
+                param_group.filter(&mut params);
+                ref_tags.push(param_group);
+            }
+        }
+
+        for p in params {
+            self.handle.write_param(p)?;
+        }
+
+        for pg in ref_tags {
+            self.handle.write_reference_group(pg)?;
+        }
+        Ok(())
+    }
+
     pub fn get_ms_cv(&self) -> &ControlledVocabulary {
         &self.ms_cv
     }
 }
 
-impl<W: io::Write, C: CentroidLike + Default + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom> Drop for MzMLWriterType<W, C, D> {
+impl<
+        W: io::Write,
+        C: CentroidLike + Default + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+    > Drop for MzMLWriterType<W, C, D>
+{
     fn drop(&mut self) {
         MzMLWriterType::close(self).unwrap();
     }
