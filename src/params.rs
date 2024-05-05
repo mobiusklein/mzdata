@@ -4,6 +4,7 @@
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fmt::Display;
+use std::hash::Hash;
 use std::str::{self, FromStr};
 use std::{io, num};
 
@@ -431,6 +432,19 @@ impl PartialEq<f64> for Value {
     }
 }
 
+impl Hash for Value {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        match self {
+            Value::String(s) => s.hash(state),
+            Value::Float(v) => v.to_bits().hash(state),
+            Value::Int(v) => (*v).hash(state),
+            Value::Buffer(v) => v.hash(state),
+            Value::Empty => ().hash(state),
+        }
+    }
+}
+
 macro_rules! param_value_int {
     ($val:ty) => {
         impl From<$val> for Value {
@@ -843,6 +857,18 @@ impl<'a> From<ValueRef<'a>> for Value {
     }
 }
 
+impl<'a> Hash for ValueRef<'a> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        match self {
+            Self::String(s) => s.hash(state),
+            Self::Float(v) => v.to_bits().hash(state),
+            Self::Int(v) => (*v).hash(state),
+            Self::Buffer(v) => v.hash(state),
+            Self::Empty => ().hash(state),
+        }
+    }
+}
 macro_rules! param_value_ref_int {
     ($val:ty) => {
         impl<'a> From<$val> for ValueRef<'a> {
@@ -1354,7 +1380,14 @@ impl Param {
         self.accession.is_some()
     }
 
-    pub fn curie(&self) -> Option<String> {
+    pub fn curie(&self) -> Option<CURIE> {
+        match (self.controlled_vocabulary(), self.accession()) {
+            (Some(cv), Some(acc)) => Some(CURIE::new(cv, acc)),
+            _ => None
+        }
+    }
+
+    pub fn curie_str(&self) -> Option<String> {
         if !self.is_controlled() {
             None
         } else {
@@ -1404,6 +1437,16 @@ impl ParamLike for Param {
 impl PartialEq<CURIE> for Param {
     fn eq(&self, other: &CURIE) -> bool {
         other.eq(self)
+    }
+}
+
+impl Hash for Param {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.value.hash(state);
+        self.accession.hash(state);
+        self.controlled_vocabulary.hash(state);
+        self.unit.hash(state);
     }
 }
 
