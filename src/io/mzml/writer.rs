@@ -2,17 +2,17 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::io::{BufWriter, Write};
 use std::marker::PhantomData;
-use std::{io, mem, borrow::Cow};
+use std::{borrow::Cow, io, mem};
 
 use log::warn;
 #[cfg(feature = "parallelism")]
 use rayon::prelude::*;
 use thiserror::Error;
 
-use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, PeakCollection};
-use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event, BytesDecl};
-use quick_xml::{Error as XMLError, Writer};
+use mzpeaks::{CentroidLike, DeconvolutedCentroidLike};
 use quick_xml::escape;
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::{Error as XMLError, Writer};
 
 use super::super::offset_index::OffsetIndex;
 use super::super::traits::SpectrumWriter;
@@ -293,7 +293,7 @@ impl<W: io::Write> InnerXMLWriter<W> {
     pub fn write_param_list_with_refs<'a, T: Iterator<Item = &'a Param>>(
         &mut self,
         params: T,
-        param_groups: &[ParamGroup]
+        param_groups: &[ParamGroup],
     ) -> WriterResult {
         let mut params: Vec<_> = params.collect();
         let mut ref_tags = Vec::new();
@@ -537,6 +537,28 @@ impl<
 
     fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
         Some(&mut self.run)
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct SpectrumSummary {
+    pub base_peak: CentroidPeak,
+    pub tic: f32,
+    pub mz_range: (f64, f64),
+    pub count: usize
+}
+
+impl SpectrumSummary {
+    pub fn new(base_peak: CentroidPeak, tic: f32, mz_range: (f64, f64), count: usize) -> Self {
+        Self { base_peak, tic, mz_range, count }
+    }
+
+    pub fn len(&self) -> usize {
+        self.count
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
     }
 }
 
@@ -911,7 +933,8 @@ where
             let inst_id = instrument_id(&ic.id);
             attrib!("id", inst_id, tag);
             self.handle.write_event(Event::Start(tag.borrow()))?;
-            self.handle.write_param_list_with_refs(ic.params().iter(), &self.param_groups)?;
+            self.handle
+                .write_param_list_with_refs(ic.params().iter(), &self.param_groups)?;
             let mut comp_list_tag = bstart!("componentList");
             let comp_count = ic.components.len().to_string();
             attrib!("count", comp_count, comp_list_tag);
@@ -1449,16 +1472,12 @@ where
         &mut self,
         spectrum: &S,
         outer: &mut BytesStart,
+        summary_metrics: &SpectrumSummary
     ) -> Result<usize, MzMLWriterError> {
         attrib!("id", spectrum.id(), outer);
         let count = self.spectrum_counter.to_string();
         attrib!("index", count, outer);
-        let default_array_len_u = match spectrum.peaks() {
-            RefPeakDataLevel::RawData(a) => a.mzs().unwrap().len(),
-            RefPeakDataLevel::Centroid(a) => a.len(),
-            RefPeakDataLevel::Deconvoluted(a) => a.len(),
-            RefPeakDataLevel::Missing => 0,
-        };
+        let default_array_len_u = summary_metrics.count;
         let default_array_len = default_array_len_u.to_string();
 
         attrib!("defaultArrayLength", default_array_len, outer);
@@ -1511,18 +1530,76 @@ where
         }
     }
 
+    pub fn compute_summary_metrics<S: SpectrumLike<C, D> + 'static>(
+        &self,
+        spectrum: &S,
+    ) -> SpectrumSummary {
+        let peaks = spectrum.peaks();
+        match peaks {
+
+            // Re-write summary metrics
+            RefPeakDataLevel::RawData(arrays) => {
+                let mzs = arrays.mzs().unwrap();
+                let intensities = arrays.intensities().unwrap();
+                if mzs.is_empty() {
+                    let base_peak = CentroidPeak::default();
+                    let tic = 0.0;
+                    let mz_range = (0.0, 0.0);
+                    SpectrumSummary {
+                        base_peak,
+                        tic,
+                        mz_range,
+                        count: 0
+                    }
+                } else {
+                    let mz_range = (*mzs.first().unwrap(), *mzs.last().unwrap());
+                    let mut state = mzs.iter().zip(intensities.iter()).fold(
+                        SpectrumSummary::default(),
+                        |mut state, (mz, inten)| {
+                            state.tic += *inten;
+                            if *inten > state.base_peak.intensity {
+                                state.base_peak.intensity = *inten;
+                                state.base_peak.mz = *mz;
+                            }
+                            state
+                        },
+                    );
+                    state.mz_range = mz_range;
+                    state.count = mzs.len();
+                    state
+                }
+            }
+            _ => {
+                let base_peak = peaks.base_peak();
+                let tic = peaks.tic();
+                let mz_range = peaks.mz_range();
+
+                SpectrumSummary {
+                    base_peak,
+                    tic,
+                    mz_range,
+                    count: peaks.len()
+                }
+            }
+        }
+    }
+
     fn write_signal_properties<S: SpectrumLike<C, D> + 'static>(
         &mut self,
-        spectrum: &S,
+        _spectrum: &S,
+        summary_metrics: &SpectrumSummary
     ) -> WriterResult {
-        let peaks = spectrum.peaks();
-        let bp = peaks.base_peak();
-        let tic = peaks.tic();
-        let (min_mz, max_mz) = peaks.mz_range();
+
+        let SpectrumSummary {
+            tic,
+            base_peak,
+            mz_range: (min_mz, max_mz),
+            count: _,
+        } = summary_metrics;
 
         let tic_param = param_pack!(TIC_TERM, tic);
-        let bpmz_param = param_pack!(BPMZ_TERM, bp.mz);
-        let bpi_param = param_pack!(BPI_TERM, bp.intensity);
+        let bpmz_param = param_pack!(BPMZ_TERM, base_peak.mz);
+        let bpi_param = param_pack!(BPI_TERM, base_peak.intensity);
         let low_mz_param = param_pack!(LOWEST_MZ_TERM, min_mz);
         let high_mz_param = param_pack!(HIGHEST_MZ_TERM, max_mz);
 
@@ -1538,11 +1615,12 @@ where
     pub fn write_spectrum_descriptors<S: SpectrumLike<C, D> + 'static>(
         &mut self,
         spectrum: &S,
+        summary_metrics: &SpectrumSummary
     ) -> WriterResult {
         self.write_ms_level(spectrum)?;
         self.write_polarity(spectrum)?;
         self.write_continuity(spectrum)?;
-        self.write_signal_properties(spectrum)?;
+        self.write_signal_properties(spectrum, summary_metrics)?;
 
         self.write_scan_list(spectrum.acquisition())?;
         if let Some(precursor) = spectrum.precursor() {
@@ -1580,10 +1658,12 @@ where
         self.spectrum_offset_index
             .insert(spectrum.id().to_string(), pos);
 
-        let mut outer = bstart!("spectrum");
-        let default_array_len = self.start_spectrum(spectrum, &mut outer)?;
+        let summary_metrics = self.compute_summary_metrics(spectrum);
 
-        self.write_spectrum_descriptors(spectrum)?;
+        let mut outer = bstart!("spectrum");
+        let default_array_len = self.start_spectrum(spectrum, &mut outer, &summary_metrics)?;
+
+        self.write_spectrum_descriptors(spectrum, &summary_metrics)?;
 
         self.tic_collector
             .add(spectrum.start_time(), spectrum.peaks().tic());

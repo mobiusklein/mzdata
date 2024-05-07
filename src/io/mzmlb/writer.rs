@@ -694,9 +694,10 @@ where
             .insert(spectrum.id().to_string(), pos);
 
         let mut outer = bstart!("spectrum");
-        let default_array_size = self.mzml_writer.start_spectrum(spectrum, &mut outer)?;
+        let summaries = self.mzml_writer.compute_summary_metrics(spectrum);
+        let default_array_size = self.mzml_writer.start_spectrum(spectrum, &mut outer, &summaries)?;
 
-        self.mzml_writer.write_spectrum_descriptors(spectrum)?;
+        self.mzml_writer.write_spectrum_descriptors(spectrum, &summaries)?;
 
         self.mzml_writer
             .tic_collector
