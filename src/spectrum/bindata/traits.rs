@@ -26,10 +26,12 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
                 Ok(Cow::Borrowed(bytemuck::try_cast_slice(c)?))
             },
             Cow::Owned(v) => {
-                match bytemuck::try_cast_vec(v) {
-                    Ok(v) => Ok(Cow::Owned(v)),
-                    Err((e, _)) => Err(e.into())
-                }
+                let size_type = n / z;
+                let mut buf = Vec::with_capacity(size_type);
+                v.chunks_exact(z).for_each(|c| {
+                    buf.extend(bytemuck::cast_slice(c));
+                });
+                Ok(Cow::Owned(buf))
             },
         };
     }
@@ -168,7 +170,7 @@ pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
             return Err(ArrayRetrievalError::DataTypeSizeMismatch);
         }
         let m = n / z;
-        unsafe { Ok(slice::from_raw_parts_mut(buffer.as_ptr() as *mut T, m)) }
+        unsafe { Ok(slice::from_raw_parts_mut(buffer.as_mut_ptr() as *mut T, m)) }
     }
 
     fn coerce_mut<T: Clone + Sized>(

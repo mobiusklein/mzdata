@@ -498,6 +498,22 @@ mod test {
     }
 
     #[test]
+    fn test_decode_roundtrip() -> io::Result<()> {
+        let mut da = make_array_from_file()?;
+        let compressed_size = da.data_len()?;
+        da.decode_and_store()?;
+        let view = da.to_f64()?;
+        assert_eq!(view.len(), 19800);
+        drop(view);
+        da.store_compressed(BinaryCompressionType::Zlib)?;
+        assert_eq!(da.compression, BinaryCompressionType::Zlib);
+        assert_eq!(da.data_len()?, compressed_size);
+        let view = da.to_f64()?;
+        assert_eq!(view.len(), 19800);
+        Ok(())
+    }
+
+    #[test]
     fn test_decode_empty() {
         let mut da = DataArray::wrap(&ArrayType::MZArray, BinaryDataArrayType::Float64, Vec::new());
         da.compression = BinaryCompressionType::Zlib;
