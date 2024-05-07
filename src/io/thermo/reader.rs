@@ -200,8 +200,9 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             })
             .flat_map(|m| {
                 m.text().map(|s| {
-                    Param::new_key_value(
-                        "instrument method text",
+                    ControlledVocabulary::MS.param_val(
+                        1000032,
+                        "customization",
                         s.to_string(),
                     )
                 })
