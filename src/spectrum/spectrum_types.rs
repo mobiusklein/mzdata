@@ -56,16 +56,19 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
         match self {
             Self::Missing => CentroidPeak::new(0.0, 0.0, 0),
             Self::RawData(arrays) => {
-                let intensities = arrays.intensities().unwrap();
-                let result = intensities
-                    .iter()
-                    .enumerate()
-                    .max_by(|ia, ib| ia.1.total_cmp(ib.1));
-                if let Some((i, inten)) = result {
-                    CentroidPeak::new(arrays.mzs().unwrap()[i], *inten, i as IndexType)
-                } else {
-                    CentroidPeak::new(0.0, 0.0, 0)
+                let mut peak = CentroidPeak::new(0.0, 0.0, 0);
+                if let Ok(intensities) = arrays.intensities() {
+                    let result = intensities
+                        .iter()
+                        .enumerate()
+                        .max_by(|ia, ib| ia.1.total_cmp(ib.1));
+                    if let Ok(mzs) = arrays.mzs() {
+                        if let Some((i, inten)) = result {
+                            peak = CentroidPeak::new(mzs[i], *inten, i as IndexType)
+                        }
+                    }
                 }
+                peak
             }
             Self::Centroid(peaks) => {
                 let result = peaks
@@ -112,10 +115,10 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
                 }
             }
             Self::Centroid(peaks) => {
-                if peaks.len() == 0 {
+                if peaks.is_empty() {
                     (0.0, 0.0)
                 } else {
-                    (peaks[0].mz(), peaks[peaks.len() - 1].mz())
+                    (peaks.first().as_ref().unwrap().mz(), peaks.last().as_ref().unwrap().mz())
                 }
             }
             Self::Deconvoluted(peaks) => {
@@ -195,16 +198,19 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D
         match self {
             RefPeakDataLevel::Missing => CentroidPeak::new(0.0, 0.0, 0),
             RefPeakDataLevel::RawData(arrays) => {
-                let intensities = arrays.intensities().unwrap();
-                let result = intensities
-                    .iter()
-                    .enumerate()
-                    .max_by(|ia, ib| ia.1.total_cmp(ib.1));
-                if let Some((i, inten)) = result {
-                    CentroidPeak::new(arrays.mzs().unwrap()[i], *inten, i as IndexType)
-                } else {
-                    CentroidPeak::new(0.0, 0.0, 0)
+                let mut peak = CentroidPeak::new(0.0, 0.0, 0);
+                if let Ok(intensities) = arrays.intensities() {
+                    let result = intensities
+                        .iter()
+                        .enumerate()
+                        .max_by(|ia, ib| ia.1.total_cmp(ib.1));
+                    if let Ok(mzs) = arrays.mzs() {
+                        if let Some((i, inten)) = result {
+                            peak = CentroidPeak::new(mzs[i], *inten, i as IndexType)
+                        }
+                    }
                 }
+                peak
             }
             RefPeakDataLevel::Centroid(peaks) => {
                 let result = peaks
@@ -238,26 +244,27 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D
     /// Find the minimum and maximum m/z values of a spectrum
     pub fn mz_range(&self) -> (f64, f64) {
         match self {
-            RefPeakDataLevel::Missing => (0.0, 0.0),
-            RefPeakDataLevel::RawData(arrays) => {
+            Self::Missing => (0.0, 0.0),
+            Self::RawData(arrays) => {
                 if let Ok(mzs) = arrays.mzs() {
                     if mzs.len() == 0 {
                         (0.0, 0.0)
                     } else {
+                        eprintln!("Size: {} | {:?} - {:?}", mzs.len(), mzs.first(), mzs.last());
                         (*mzs.first().unwrap(), *mzs.last().unwrap())
                     }
                 } else {
                     (0.0, 0.0)
                 }
             }
-            RefPeakDataLevel::Centroid(peaks) => {
-                if peaks.len() == 0 {
+            Self::Centroid(peaks) => {
+                if peaks.is_empty() {
                     (0.0, 0.0)
                 } else {
-                    (peaks[0].mz(), peaks[peaks.len() - 1].mz())
+                    (peaks.first().as_ref().unwrap().mz(), peaks.last().as_ref().unwrap().mz())
                 }
             }
-            RefPeakDataLevel::Deconvoluted(peaks) => {
+            Self::Deconvoluted(peaks) => {
                 if peaks.len() == 0 {
                     (0.0, 0.0)
                 } else {
@@ -279,25 +286,25 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D
     /// Compute the total ion current for a spectrum
     pub fn tic(&self) -> f32 {
         match self {
-            RefPeakDataLevel::Missing => 0.0,
-            RefPeakDataLevel::RawData(arrays) => {
+            Self::Missing => 0.0,
+            Self::RawData(arrays) => {
                 if let Ok(intensities) = arrays.intensities() {
                     intensities.iter().sum()
                 } else {
                     0.0
                 }
             }
-            RefPeakDataLevel::Centroid(peaks) => peaks.iter().map(|p| p.intensity()).sum(),
-            RefPeakDataLevel::Deconvoluted(peaks) => peaks.iter().map(|p| p.intensity()).sum(),
+            Self::Centroid(peaks) => peaks.iter().map(|p| p.intensity()).sum(),
+            Self::Deconvoluted(peaks) => peaks.iter().map(|p| p.intensity()).sum(),
         }
     }
 
     pub fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize> {
         match self {
-            RefPeakDataLevel::Missing => None,
-            RefPeakDataLevel::RawData(arrays) => arrays.search(query, error_tolerance),
-            RefPeakDataLevel::Centroid(peaks) => peaks.search(query, error_tolerance),
-            RefPeakDataLevel::Deconvoluted(peaks) => peaks.search(query, error_tolerance),
+            Self::Missing => None,
+            Self::RawData(arrays) => arrays.search(query, error_tolerance),
+            Self::Centroid(peaks) => peaks.search(query, error_tolerance),
+            Self::Deconvoluted(peaks) => peaks.search(query, error_tolerance),
         }
     }
 
