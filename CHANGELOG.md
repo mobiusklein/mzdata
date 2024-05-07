@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.16.0] - 2024-05-07
+
+### Added
+
+- Added Thermo instrument methods to Thermo instrumentConfiguration
+- Add `Hash` implementation for `Param`, `Value`, and associated ref types
+- Add `referenceParamGroup` inference for `instrumentConfiguration` when writing mzML, and escape newlines in `Param` values
+
+### Fixed
+
+- Properly set compression in store_compressed
+- Empty buffer coercion failure on Linux (#2)
+- Prevent slice coercion from failing in coerce_mut
+- Prevent potential unwrap failures in PeakData.base_peak when dealing with unorderable floats
+
 ## [0.15.0] - 2024-05-02
 
 ### Added
@@ -205,8 +220,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.15.0...HEAD
-[0.14.0]: https://github.com/mobiusklein/mzdata/compare/v0.14.0...v0.15.0
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.16.0...HEAD
+[0.15.0]: https://github.com/mobiusklein/mzdata/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/mobiusklein/mzdata/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/mobiusklein/mzdata/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/mobiusklein/mzdata/compare/v0.11.0...v0.12.0

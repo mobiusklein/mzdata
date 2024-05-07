@@ -22,17 +22,15 @@ update-cv:
 update-cv-terms:
     cog -c -r -U src/meta/software.rs src/meta/instrument.rs
 
-changelog:
+changelog version:
     #!/usr/bin/env python
 
     import subprocess
     import re
 
-    new_content = subprocess.check_output(['git', 'cliff', '-s', 'all', '-u', '--bump'], stderr=subprocess.DEVNULL).decode()
+    new_content = subprocess.check_output(['git', 'cliff', '-s', 'all', '-u', '-t', '{{version}}'], stderr=subprocess.DEVNULL).decode()
 
-    new_version = subprocess.check_output(
-        ["git", "cliff", "--bumped-version"], stderr=subprocess.DEVNULL
-    ).decode().strip()
+    new_version = "{{version}}"
 
     buffer = open('CHANGELOG.md').read()
 
