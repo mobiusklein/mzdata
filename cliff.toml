@@ -22,6 +22,9 @@ body = """
     ### {{ group | upper_first }}
     {% for commit in commits %}
         - {{ commit.message | upper_first }}\
+            {% if commit.body %}
+            {{ commit.body }}\
+            {% endif %}\
     {% endfor %}
 {% endfor %}\n
 """
