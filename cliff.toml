@@ -61,7 +61,8 @@ commit_parsers = [
   { message = "^fix", group = "Fixed" },
   { message = "^.*: fix", group = "Fixed" },
   { message = "^doc", group = "Documentation" },
-  { message = "^.: change(d?)*", group = "Changed" },
+  { message = "^.*: change(d?)*", group = "Changed" },
+  { message = "^.*: upgrade(d?)*", group = "Changed" },
 ]
 # protect breaking changes from being skipped due to matching a skipping commit_parser
 protect_breaking_commits = false
