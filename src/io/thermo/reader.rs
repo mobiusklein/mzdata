@@ -317,6 +317,10 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             config.add_param(model_type.to_param());
             configs.insert(i as u32, config);
         }
+
+        if configs.is_empty() {
+            log::warn!("No instrument configurations were found in Thermo RAW file?")
+        }
         (sw, configs, components_to_instrument_id)
     }
 
@@ -563,6 +567,8 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
                 spec.arrays = Some(self.populate_raw_signal(&data));
             }
         }
+
+        spec.update_summaries();
         Some(spec)
     }
 

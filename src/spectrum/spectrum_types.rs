@@ -16,7 +16,7 @@ use mzsignal::{
     FittedPeak,
 };
 
-use crate::params::{ParamDescribed, ParamList};
+use crate::params::{ParamDescribed, ParamList, Unit, Value};
 #[allow(unused)]
 use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType};
 use crate::spectrum::scan_properties::{
@@ -118,7 +118,10 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
                 if peaks.is_empty() {
                     (0.0, 0.0)
                 } else {
-                    (peaks.first().as_ref().unwrap().mz(), peaks.last().as_ref().unwrap().mz())
+                    (
+                        peaks.first().as_ref().unwrap().mz(),
+                        peaks.last().as_ref().unwrap().mz(),
+                    )
                 }
             }
             Self::Deconvoluted(peaks) => {
@@ -192,6 +195,33 @@ pub enum RefPeakDataLevel<'a, C: CentroidLike, D: DeconvolutedCentroidLike> {
     Deconvoluted(&'a MassPeakSetType<D>),
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct SpectrumSummary {
+    pub tic: f32,
+    pub bp: CentroidPeak,
+    pub mz_range: (f64, f64),
+    pub count: usize,
+}
+
+impl SpectrumSummary {
+    pub fn new(tic: f32, bp: CentroidPeak, mz_range: (f64, f64), count: usize) -> Self {
+        Self {
+            tic,
+            bp,
+            mz_range,
+            count,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.count
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+}
+
 impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D> {
     /// Compute the base peak of a spectrum
     pub fn base_peak(&self) -> CentroidPeak {
@@ -261,7 +291,10 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D
                 if peaks.is_empty() {
                     (0.0, 0.0)
                 } else {
-                    (peaks.first().as_ref().unwrap().mz(), peaks.last().as_ref().unwrap().mz())
+                    (
+                        peaks.first().as_ref().unwrap().mz(),
+                        peaks.last().as_ref().unwrap().mz(),
+                    )
                 }
             }
             Self::Deconvoluted(peaks) => {
@@ -324,6 +357,87 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D
     /// Check if the collection is empty
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    pub fn fetch_summaries(&self) -> SpectrumSummary {
+        match self {
+            RefPeakDataLevel::Missing => {
+                SpectrumSummary::new(0.0, CentroidPeak::default(), (0.0, 0.0), 0)
+            }
+            RefPeakDataLevel::RawData(arrays) => {
+                let mzs = arrays.mzs().unwrap();
+                let intensities = arrays.intensities().unwrap();
+                let (tic, (bpmz, bpint, bpidx)) =
+                    mzs.iter().zip(intensities.iter()).enumerate().fold(
+                        (0.0, (0.0, 0.0f32, 0)),
+                        |(mut tic, (mut bpmz, mut bpint, mut bpidx)), (idx, (mz, int))| {
+                            tic += int;
+                            if *int > bpint {
+                                bpint = *int;
+                                bpmz = *mz;
+                                bpidx = idx;
+                            }
+
+                            (tic, (bpmz, bpint, bpidx))
+                        },
+                    );
+                let mz_range = if mzs.is_empty() {
+                    (0.0, 0.0)
+                } else {
+                    (mzs.first().copied().unwrap(), mzs.last().copied().unwrap())
+                };
+                SpectrumSummary::new(
+                    tic,
+                    CentroidPeak::new(bpmz, bpint, bpidx as u32),
+                    mz_range,
+                    mzs.len(),
+                )
+            }
+            RefPeakDataLevel::Centroid(peaks) => {
+                let state = peaks.iter().fold(
+                    (
+                        0.0f32,
+                        CentroidPeak::default(),
+                        (f64::INFINITY, f64::NEG_INFINITY),
+                    ),
+                    |(mut tic, mut bp, (mut mz_min, mut mz_max)), p| {
+                        tic += p.intensity();
+                        if p.intensity() > bp.intensity {
+                            bp = p.as_centroid();
+                        }
+                        let mz = p.mz();
+                        mz_min = mz_min.min(mz);
+                        mz_max = mz_max.max(mz);
+                        (tic, bp, (mz_min, mz_max))
+                    },
+                );
+
+                SpectrumSummary::new(state.0, state.1, state.2, peaks.len())
+            }
+            RefPeakDataLevel::Deconvoluted(peaks) => {
+                let state = peaks.iter().fold(
+                    (
+                        0.0f32,
+                        CentroidPeak::default(),
+                        (f64::INFINITY, f64::NEG_INFINITY),
+                    ),
+                    |(mut tic, mut bp, (mut mz_min, mut mz_max)), p| {
+                        tic += p.intensity();
+                        let mz = mass_charge_ratio(p.neutral_mass(), p.charge());
+                        if p.intensity() > bp.intensity {
+                            bp.intensity = p.intensity();
+                            bp.index = p.get_index();
+                            bp.mz = mz;
+                        }
+                        mz_min = mz_min.min(mz);
+                        mz_max = mz_max.max(mz);
+                        (tic, bp, (mz_min, mz_max))
+                    },
+                );
+
+                SpectrumSummary::new(state.0, state.1, state.2, peaks.len())
+            }
+        }
     }
 }
 
@@ -457,6 +571,77 @@ pub trait SpectrumLike<
     fn into_peaks_and_description(self) -> (PeakDataLevel<C, D>, SpectrumDescription);
 
     fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap>;
+
+    /// Compute and update the the total ion current, base peak, and m/z range for
+    /// the spectrum based upon its current peak data.
+    ///
+    /// Uses [`RefPeakDataLevel::fetch_summaries`]
+    fn update_summaries(&mut self) {
+        let SpectrumSummary {
+            tic,
+            bp,
+            mz_range,
+            count: _,
+        } = self.peaks().fetch_summaries();
+
+        let desc = self.description_mut();
+        let params = desc.params_mut();
+        let tic_curie = curie!(MS:1000285);
+
+        if let Some(p) = params.iter_mut().find(|p| **p == tic_curie) {
+            p.value = Value::Float(tic as f64);
+        } else {
+            let mut p = tic_curie.as_param();
+            p.name = "total ion current".to_string();
+            p.value = Value::Float(tic as f64);
+            p.unit = Unit::DetectorCounts;
+            params.push(p)
+        }
+
+        let bpmz_curie = curie!(MS:1000504);
+        if let Some(p) = params.iter_mut().find(|p| **p == bpmz_curie) {
+            p.value = Value::Float(bp.mz());
+        } else {
+            let mut p = bpmz_curie.as_param();
+            p.name = "base peak m/z".to_string();
+            p.value = Value::Float(bp.mz());
+            p.unit = Unit::MZ;
+            params.push(p);
+        }
+
+        let lowest_mz_curie = curie!(MS:1000528);
+        if let Some(p) = params.iter_mut().find(|p| **p == lowest_mz_curie) {
+            p.value = Value::Float(mz_range.0);
+        } else {
+            let mut p = lowest_mz_curie.as_param();
+            p.name = "lowest observed m/z".to_string();
+            p.value = Value::Float(mz_range.0);
+            p.unit = Unit::MZ;
+            params.push(p);
+        }
+
+        let lowest_mz_curie = curie!(MS:1000527);
+        if let Some(p) = params.iter_mut().find(|p| **p == lowest_mz_curie) {
+            p.value = Value::Float(mz_range.0);
+        } else {
+            let mut p = lowest_mz_curie.as_param();
+            p.name = "highest observed m/z".to_string();
+            p.value = Value::Float(mz_range.0);
+            p.unit = Unit::MZ;
+            params.push(p);
+        }
+
+        let bpint_curie = curie!(MS:1000505);
+        if let Some(p) = params.iter_mut().find(|p| **p == bpint_curie) {
+            p.value = Value::Float(bp.intensity() as f64);
+        } else {
+            let mut p = bpint_curie.as_param();
+            p.name = "base peak intensity".to_string();
+            p.value = Value::Float(bp.intensity() as f64);
+            p.unit = Unit::DetectorCounts;
+            params.push(p);
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone)]

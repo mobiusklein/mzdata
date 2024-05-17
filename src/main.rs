@@ -1,10 +1,10 @@
+use std::collections::HashMap;
 use std::env;
 use std::io;
 use std::path;
 use std::process;
 use std::thread::spawn;
 use std::time;
-use std::collections::HashMap;
 
 use std::sync::mpsc::sync_channel;
 
@@ -14,16 +14,33 @@ use mzdata::spectrum::{
     DeconvolutedSpectrum, MultiLayerSpectrum, RefPeakDataLevel, SignalContinuity, SpectrumLike,
 };
 
-#[derive(Default)]
 struct MSDataFileSummary {
+    pub start_time: f64,
+    pub end_time: f64,
     pub level_table: HashMap<u8, usize>,
     pub charge_table: HashMap<i32, usize>,
     pub peak_charge_table: HashMap<u8, HashMap<i32, usize>>,
     pub peak_mode_table: HashMap<SignalContinuity, usize>,
 }
 
+impl Default for MSDataFileSummary {
+    fn default() -> Self {
+        Self {
+            start_time: f64::INFINITY,
+            end_time: f64::NEG_INFINITY,
+            level_table: Default::default(),
+            charge_table: Default::default(),
+            peak_charge_table: Default::default(),
+            peak_mode_table: Default::default(),
+        }
+    }
+}
+
 impl MSDataFileSummary {
     pub fn handle_scan(&mut self, scan: MultiLayerSpectrum) {
+        let time = scan.start_time();
+        self.start_time = self.start_time.min(time);
+        self.end_time = self.end_time.max(time);
         let level = scan.ms_level();
         *self.level_table.entry(level).or_default() += 1;
         if level > 1 {
@@ -107,6 +124,8 @@ impl MSDataFileSummary {
     }
 
     pub fn write_out(&self) {
+        println!("Start Time: {:0.2}", self.start_time);
+        println!("End Time: {:0.2}", self.end_time);
         println!("MS Levels:");
         let mut level_set: Vec<(&u8, &usize)> = self.level_table.iter().collect();
         level_set.sort_by_key(|(a, _)| *a);

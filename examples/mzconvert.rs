@@ -84,7 +84,6 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
         self.task(reader, writer)
     }
 
-    #[allow(unused)]
     fn transform_writer<
         R: RandomAccessSpectrumIterator<CentroidPeak, DeconvolutedPeak>
             + MSDataFileMetadata

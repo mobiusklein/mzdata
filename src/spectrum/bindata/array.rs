@@ -27,6 +27,7 @@ pub struct DataArray {
     pub name: ArrayType,
     pub params: Option<Box<ParamList>>,
     pub unit: Unit,
+    item_count: Option<usize>
 }
 
 impl core::fmt::Debug for DataArray {
@@ -133,6 +134,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         if self.dtype.size_of() != mem::size_of::<T>() {
             Err(ArrayRetrievalError::DataTypeSizeMismatch)
         } else {
+            self.item_count = Some(data_buffer.len());
             self.data = to_bytes(data_buffer);
             Ok(self.data.len())
         }
@@ -147,6 +149,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         } else {
             let data = bytemuck::bytes_of(&value);
             self.data.extend(data.iter());
+            self.item_count = self.item_count.map(|i| i + 1);
             Ok(())
         }
     }
@@ -158,6 +161,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         if self.dtype.size_of() != mem::size_of::<T>() {
             Err(ArrayRetrievalError::DataTypeSizeMismatch)
         } else {
+            self.item_count = self.item_count.map(|i| i + values.len());
             let data = bytemuck::cast_slice(values);
             self.data.extend(data.iter());
             Ok(())
@@ -229,6 +233,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                     // decoded.
                     Cow::Borrowed(_view) => Ok(self.compression),
                     Cow::Owned(buffer) => {
+                        self.item_count = Some(buffer.len() / self.dtype.size_of());
                         self.data = buffer;
                         self.compression = BinaryCompressionType::Decoded;
                         Ok(self.compression)
@@ -352,6 +357,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     pub fn clear(&mut self) {
         self.data.clear();
         self.params = None;
+        self.item_count = None;
     }
 
     /// The reverse of [`DataArray::decode_and_store`], this method compresses `self.data` to the desired
@@ -422,6 +428,16 @@ impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan> for
 
     fn dtype(&self) -> BinaryDataArrayType {
         self.dtype
+    }
+
+    fn data_len(&'lifespan self) -> Result<usize, ArrayRetrievalError> {
+        if let Some(z) = self.item_count {
+            Ok(z)
+        } else {
+            let view = self.view()?;
+            let n = view.len();
+            Ok(n / self.dtype().size_of())
+        }
     }
 }
 
