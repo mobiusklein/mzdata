@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.17.0] - 2024-05-18
+
+### Changed
+
+- Upgraded `mzpeaks` minimum version to 0.12.0, `mzsignal` minimum version to 0.13.0
+- Change how spectrum summary descriptions are calculated
+	- Do not pre-emptively re-calculate summaries when writing to avoid decoding overhead.
+	- Added `update_summaries` to `SpectrumLike` and `fetch_summaries` to `RefPeakDataLevel` to do
+	  this work.
+
+### Fixed
+
+- Fix changelog
+
 ## [0.16.0] - 2024-05-07
 
 ### Added
@@ -220,6 +234,7 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/0.17.0...HEAD
 [unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.16.0...HEAD
 [0.16.0]: https://github.com/mobiusklein/mzdata/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/mobiusklein/mzdata/compare/v0.14.0...v0.15.0
