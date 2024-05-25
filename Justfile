@@ -28,7 +28,7 @@ changelog version:
     import subprocess
     import re
 
-    new_content = subprocess.check_output(['git', 'cliff', '-s', 'all', '-u', '-t', '{{version}}'], stderr=subprocess.DEVNULL).decode()
+    new_content = subprocess.check_output(['git', 'cliff', '-s', 'all', '--latest', '-t', '{{version}}'], stderr=subprocess.DEVNULL).decode()
 
     new_version = "{{version}}"
 

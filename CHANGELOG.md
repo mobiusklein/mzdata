@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.18.0] - 2024-05-25
+
+### Changed
+
+- Upgraded `mzpeaks` minimum version to 0.12.0, `mzsignal` minimum version to 0.13.0
+- Change how spectrum summary descriptions are calculated
+	- Do not pre-emptively re-calculate summaries when writing to avoid decoding overhead.
+	- Added `update_summaries` to `SpectrumLike` and `fetch_summaries` to `RefPeakDataLevel` to do
+	  this work.
+- Upgrade mzsignal minimum version to 0.14.0
+
+### Fixed
+
+- Fix changelog
+
 ## [0.17.0] - 2024-05-18
 
 ### Changed
