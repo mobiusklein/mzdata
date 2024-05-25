@@ -1783,9 +1783,9 @@ checksum = "f0b6ea3480bad4f190fb1454477d2c8466e2ea0cfbf44f2033cdd2fd47c4114d"
 
 [[package]]
 name = "mzsignal"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "929caa4b0b9b18808327324a1d81afc527e07343f0e77fa51dcb0b3287378cc9"
+checksum = "3f0020a64c7c76f1558bbe3e0d1c045b69e0b4e5aa94cd42b721ddc28c2a48a7"
 dependencies = [
  "cfg-if",
  "log",
