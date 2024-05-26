@@ -137,6 +137,24 @@ macro_rules! cvmap {
                 value.to_param()
             }
         }
+
+        impl From<$enum_name> for $crate::params::Param {
+            fn from(value: $enum_name) -> Self {
+                value.to_param().into()
+            }
+        }
+
+        impl From<&$enum_name> for $crate::params::ParamCow<'static> {
+            fn from(value: &$enum_name) -> Self {
+                value.to_param()
+            }
+        }
+
+        impl From<&$enum_name> for $crate::params::Param {
+            fn from(value: &$enum_name) -> Self {
+                value.to_param().into()
+            }
+        }
     };
 }
 

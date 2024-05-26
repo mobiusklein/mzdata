@@ -22,10 +22,16 @@ impl Display for ComponentType {
     }
 }
 
-/// A description of a combination of parts that are described as part of an [`InstrumentConfiguration`]
+/// A description of a combination of parts that are described as part of an [`InstrumentConfiguration`].
+/// There may be more than one component of the same type in a singel configuration, e.g. a triple-quad instrument
+/// can have three separate [`ComponentType::MassAnalyzer`] components.
+///
+/// A component may also be described by more than one [`Param`], such as the
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Component {
+    /// The kind of component this describes
     pub component_type: ComponentType,
+    /// The order in the sequence of components that the analytes interact with
     pub order: u8,
     pub params: ParamList,
 }
@@ -149,6 +155,44 @@ pub struct InstrumentConfiguration {
     pub software_reference: String,
     /// A unique identifier translated to an ordinal identifying this configuration
     pub id: u32,
+}
+
+impl InstrumentConfiguration {
+    /// Add a new [`Component`] to the configuration, added at the end of the list
+    pub fn new_component(&mut self, component_type: ComponentType) -> &mut Component {
+        let mut component = Component::default();
+        component.component_type = component_type;
+        self.push(component);
+        self.components.last_mut().unwrap()
+    }
+
+    pub fn len(&self) -> usize {
+        self.components.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.components.is_empty()
+    }
+
+    /// Add a new [`Component`] to the end of the list, setting the [`Component::order`] field
+    /// accordingly.
+    pub fn push(&mut self, mut value: Component) {
+        let n = self.len();
+        value.order = n as u8;
+        self.components.push(value)
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<Component> {
+        self.components.iter()
+    }
+
+    pub fn last(&self) -> Option<&Component> {
+        self.components.last()
+    }
+
+    pub fn last_mut(&mut self) -> Option<&mut Component> {
+        self.components.last_mut()
+    }
 }
 
 impl_param_described!(InstrumentConfiguration, Component);

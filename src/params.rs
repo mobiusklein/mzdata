@@ -1663,6 +1663,11 @@ pub trait ParamDescribed {
         self.params_mut().push(param);
     }
 
+    /// Add all parameters from an iterator of [`Param`] to the entity
+    fn extend_params(&mut self, it: impl IntoIterator<Item=Param>) {
+        self.params_mut().extend(it)
+    }
+
     /// Remove the `i`th [`Param`] from the entity.
     fn remove_param(&mut self, index: usize) -> Param {
         self.params_mut().remove(index)
