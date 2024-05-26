@@ -34,7 +34,13 @@ impl MZConvert {
         } else {
             Source::<_, _>::from(self.inpath.as_ref())
         };
-        let sink = Sink::<CentroidPeak, DeconvolutedPeak>::from(self.outpath.as_ref());
+
+        let sink = if self.outpath == "-" {
+            Sink::Writer(Box::new(io::stdout()), MassSpectrometryFormat::MzML)
+        } else {
+            Sink::<CentroidPeak, DeconvolutedPeak>::from(self.outpath.as_ref())
+        };
+
         self.open_reader(source, sink)
     }
 
