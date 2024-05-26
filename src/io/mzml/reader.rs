@@ -760,13 +760,7 @@ impl<
     ) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
-            // b"cvParam" | b"userParam" => match Self::handle_param(event, reader_position, state) {
-            //     Ok(param) => {
-            //         self.fill_param_into(param, state);
-            //         return Ok(state);
-            //     }
-            //     Err(err) => return Err(err),
-            // },
+            // Inline the `fill_param_into` to avoid excessive copies.
             b"cvParam" | b"userParam" => {
                 match Self::handle_param_borrowed(event, reader_position, state) {
                     Ok(param) => match state {
