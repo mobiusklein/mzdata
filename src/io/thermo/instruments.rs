@@ -2,6 +2,8 @@
 //! Thank you ProteoWizard for building all of these look up tables.
 use std::fmt::Display;
 
+use crate::meta::{Component, ComponentType, DetectorTypeTerm, InstrumentConfiguration, IonizationTypeTerm, MassAnalyzerTerm};
+use crate::params::ParamDescribed;
 use crate::{params::ControlledVocabulary, Param};
 
 macro_rules! param {
@@ -619,14 +621,114 @@ pub fn parse_instrument_model(instrument_model: &str) -> InstrumentModelType {
 }
 
 
-#[derive(Debug, Clone, Copy)]
-pub enum Detector {
-    InductiveDetector,
-    ElectronMultiplier,
-    InductiveDetectorElectronMultiplier,
+pub fn instrument_model_to_mass_analyzers(model: InstrumentModelType) -> Vec<MassAnalyzerTerm> {
+    match model {
+        InstrumentModelType::Exactive
+        | InstrumentModelType::Exactive_Plus
+        | InstrumentModelType::Q_Exactive
+        | InstrumentModelType::Q_Exactive_Plus
+        | InstrumentModelType::Q_Exactive_HF_X
+        | InstrumentModelType::Q_Exactive_HF
+        | InstrumentModelType::Q_Exactive_UHMR
+        | InstrumentModelType::Orbitrap_Exploris_120
+        | InstrumentModelType::Orbitrap_Exploris_240
+        | InstrumentModelType::Orbitrap_Exploris_480
+        | InstrumentModelType::Orbitrap_GC => {
+            vec![MassAnalyzerTerm::Orbitrap]
+        }
+        InstrumentModelType::LTQ_Orbitrap
+        | InstrumentModelType::LTQ_Orbitrap_Classic
+        | InstrumentModelType::LTQ_Orbitrap_Discovery
+        | InstrumentModelType::LTQ_Orbitrap_XL
+        | InstrumentModelType::MALDI_LTQ_Orbitrap
+        | InstrumentModelType::LTQ_Orbitrap_Velos
+        | InstrumentModelType::LTQ_Orbitrap_Velos_Pro
+        | InstrumentModelType::LTQ_Orbitrap_Elite
+        | InstrumentModelType::Orbitrap_Fusion
+        | InstrumentModelType::Orbitrap_Fusion_Lumos
+        | InstrumentModelType::Orbitrap_Fusion_ETD
+        | InstrumentModelType::Orbitrap_Ascend
+        | InstrumentModelType::Orbitrap_ID_X
+        | InstrumentModelType::Orbitrap_Eclipse => {
+            vec![MassAnalyzerTerm::Orbitrap, MassAnalyzerTerm::LinearIonTrap]
+        }
+        InstrumentModelType::Orbitrap_Astral => {
+            vec![
+                MassAnalyzerTerm::Orbitrap,
+                MassAnalyzerTerm::AsymmetricTrackLosslessTimeOfFlightAnalyzer,
+            ]
+        }
+        InstrumentModelType::LTQ_FT | InstrumentModelType::LTQ_FT_Ultra => {
+            vec![
+                MassAnalyzerTerm::FourierTransformIonCyclotronResonanceMassSpectrometer,
+                MassAnalyzerTerm::LinearIonTrap,
+            ]
+        }
+        InstrumentModelType::SSQ_7000
+        | InstrumentModelType::Surveyor_MSQ
+        | InstrumentModelType::DSQ
+        | InstrumentModelType::DSQ_II
+        | InstrumentModelType::ISQ
+        | InstrumentModelType::Trace_DSQ
+        | InstrumentModelType::GC_IsoLink => {
+            vec![MassAnalyzerTerm::Quadrupole]
+        }
+        InstrumentModelType::TSQ_7000
+        | InstrumentModelType::TSQ_8000_Evo
+        | InstrumentModelType::TSQ_9000
+        | InstrumentModelType::TSQ
+        | InstrumentModelType::TSQ_Quantum
+        | InstrumentModelType::TSQ_Quantum_Access
+        | InstrumentModelType::TSQ_Quantum_Ultra
+        | InstrumentModelType::TSQ_Quantum_Ultra_AM
+        | InstrumentModelType::GC_Quantum
+        | InstrumentModelType::TSQ_Quantiva
+        | InstrumentModelType::TSQ_Endura
+        | InstrumentModelType::TSQ_Altis
+        | InstrumentModelType::TSQ_Altis_Plus
+        | InstrumentModelType::TSQ_Quantis => {
+            vec![MassAnalyzerTerm::Quadrupole]
+        }
+
+        InstrumentModelType::LCQ_Advantage
+        | InstrumentModelType::LCQ_Classic
+        | InstrumentModelType::LCQ_Deca
+        | InstrumentModelType::LCQ_Deca_XP_Plus
+        | InstrumentModelType::LCQ_Fleet
+        | InstrumentModelType::PolarisQ
+        | InstrumentModelType::ITQ_700
+        | InstrumentModelType::ITQ_900 => {
+            vec![MassAnalyzerTerm::QuadrupoleIonTrap]
+        }
+
+        InstrumentModelType::LTQ
+        | InstrumentModelType::LXQ
+        | InstrumentModelType::LTQ_XL
+        | InstrumentModelType::LTQ_XL_ETD
+        | InstrumentModelType::LTQ_Orbitrap_XL_ETD
+        | InstrumentModelType::ITQ_1100
+        | InstrumentModelType::MALDI_LTQ_XL
+        | InstrumentModelType::LTQ_Velos
+        | InstrumentModelType::LTQ_Velos_ETD
+        | InstrumentModelType::LTQ_Velos_Plus => {
+            vec![MassAnalyzerTerm::LinearIonTrap]
+        }
+
+        InstrumentModelType::DFS
+        | InstrumentModelType::MAT253
+        | InstrumentModelType::MAT900XP
+        | InstrumentModelType::MAT900XP_Trap
+        | InstrumentModelType::MAT95XP
+        | InstrumentModelType::MAT95XP_Trap => {
+            vec![MassAnalyzerTerm::MagneticSector]
+        }
+
+        InstrumentModelType::Tempus_TOF => vec![MassAnalyzerTerm::TimeOfFlight],
+        _ => Vec::default(),
+    }
 }
 
-pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<Detector> {
+pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<DetectorTypeTerm> {
     match model {
         InstrumentModelType::Q_Exactive |
         InstrumentModelType::Q_Exactive_Plus |
@@ -637,21 +739,21 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<Detector>
         InstrumentModelType::Orbitrap_Exploris_240 |
         InstrumentModelType::Orbitrap_Exploris_480 |
         InstrumentModelType::Orbitrap_GC => {
-            vec![Detector::InductiveDetector]
+            vec![DetectorTypeTerm::InductiveDetector]
         },
 
         InstrumentModelType::Exactive |
         InstrumentModelType::Exactive_Plus => {
-            vec![Detector::InductiveDetector]
+            vec![DetectorTypeTerm::InductiveDetector]
         },
 
         InstrumentModelType::Orbitrap_Astral => {
-            vec![Detector::InductiveDetector, Detector::ElectronMultiplier]
+            vec![DetectorTypeTerm::InductiveDetector, DetectorTypeTerm::ElectronMultiplier]
         },
 
         InstrumentModelType::LTQ_FT |
         InstrumentModelType::LTQ_FT_Ultra => {
-            vec![Detector::InductiveDetector, Detector::ElectronMultiplier]
+            vec![DetectorTypeTerm::InductiveDetector, DetectorTypeTerm::ElectronMultiplier]
         }
 
         InstrumentModelType::Orbitrap_Fusion |
@@ -660,7 +762,7 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<Detector>
         InstrumentModelType::Orbitrap_Ascend |
         InstrumentModelType::Orbitrap_ID_X |
         InstrumentModelType::Orbitrap_Eclipse => {
-            vec![Detector::InductiveDetector, Detector::ElectronMultiplier]
+            vec![DetectorTypeTerm::InductiveDetector, DetectorTypeTerm::ElectronMultiplier]
         }
 
 
@@ -673,7 +775,7 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<Detector>
         InstrumentModelType::LTQ_Orbitrap_Velos |
         InstrumentModelType::LTQ_Orbitrap_Velos_Pro |
         InstrumentModelType::LTQ_Orbitrap_Elite => {
-            vec![Detector::InductiveDetector, Detector::ElectronMultiplier]
+            vec![DetectorTypeTerm::InductiveDetector, DetectorTypeTerm::ElectronMultiplier]
         }
 
         InstrumentModelType::LCQ_Advantage |
@@ -684,7 +786,7 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<Detector>
         InstrumentModelType::PolarisQ |
         InstrumentModelType::ITQ_700 |
         InstrumentModelType::ITQ_900 => {
-            vec![Detector::ElectronMultiplier]
+            vec![DetectorTypeTerm::ElectronMultiplier]
         }
 
         InstrumentModelType::LTQ |
@@ -696,7 +798,7 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<Detector>
         InstrumentModelType::LTQ_Velos |
         InstrumentModelType::LTQ_Velos_ETD |
         InstrumentModelType::LTQ_Velos_Plus => {
-            vec![Detector::ElectronMultiplier]
+            vec![DetectorTypeTerm::ElectronMultiplier]
         }
 
         InstrumentModelType::SSQ_7000 |
@@ -706,7 +808,7 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<Detector>
         InstrumentModelType::ISQ |
         InstrumentModelType::Trace_DSQ |
         InstrumentModelType::GC_IsoLink => {
-            vec![Detector::ElectronMultiplier]
+            vec![DetectorTypeTerm::ElectronMultiplier]
         },
 
         InstrumentModelType::TSQ_7000 |
@@ -726,7 +828,7 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<Detector>
         InstrumentModelType::TSQ_Altis |
         InstrumentModelType::TSQ_Altis_Plus |
         InstrumentModelType::TSQ_Quantis => {
-            vec![Detector::ElectronMultiplier]
+            vec![DetectorTypeTerm::ElectronMultiplier]
         }
 
         InstrumentModelType::DFS |
@@ -735,7 +837,7 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<Detector>
         InstrumentModelType::MAT900XP_Trap |
         InstrumentModelType::MAT95XP |
         InstrumentModelType::MAT95XP_Trap => {
-            vec![Detector::ElectronMultiplier]
+            vec![DetectorTypeTerm::ElectronMultiplier]
         }
 
         InstrumentModelType::Tempus_TOF |
@@ -758,4 +860,315 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<Detector>
             vec![]
         },
     }
+}
+
+pub fn instrument_model_to_ion_sources(model: InstrumentModelType) -> Vec<IonizationTypeTerm> {
+    match model {
+        InstrumentModelType::SSQ_7000
+        | InstrumentModelType::TSQ_7000
+        | InstrumentModelType::TSQ_8000_Evo
+        | InstrumentModelType::TSQ_9000
+        | InstrumentModelType::Surveyor_MSQ
+        | InstrumentModelType::LCQ_Advantage
+        | InstrumentModelType::LCQ_Classic
+        | InstrumentModelType::LCQ_Deca
+        | InstrumentModelType::LCQ_Deca_XP_Plus
+        | InstrumentModelType::LCQ_Fleet
+        | InstrumentModelType::LXQ
+        | InstrumentModelType::LTQ
+        | InstrumentModelType::LTQ_XL
+        | InstrumentModelType::LTQ_XL_ETD
+        | InstrumentModelType::LTQ_Velos
+        | InstrumentModelType::LTQ_Velos_ETD
+        | InstrumentModelType::LTQ_Velos_Plus
+        | InstrumentModelType::LTQ_FT
+        | InstrumentModelType::LTQ_FT_Ultra
+        | InstrumentModelType::LTQ_Orbitrap
+        | InstrumentModelType::LTQ_Orbitrap_Classic
+        | InstrumentModelType::LTQ_Orbitrap_Discovery
+        | InstrumentModelType::LTQ_Orbitrap_XL
+        | InstrumentModelType::LTQ_Orbitrap_XL_ETD
+        | InstrumentModelType::LTQ_Orbitrap_Velos
+        | InstrumentModelType::LTQ_Orbitrap_Velos_Pro
+        | InstrumentModelType::LTQ_Orbitrap_Elite
+        | InstrumentModelType::Exactive
+        | InstrumentModelType::Exactive_Plus
+        | InstrumentModelType::Q_Exactive
+        | InstrumentModelType::Q_Exactive_Plus
+        | InstrumentModelType::Q_Exactive_HF
+        | InstrumentModelType::Q_Exactive_HF_X
+        | InstrumentModelType::Q_Exactive_UHMR
+        | InstrumentModelType::Orbitrap_Exploris_120
+        | InstrumentModelType::Orbitrap_Exploris_240
+        | InstrumentModelType::Orbitrap_Exploris_480
+        | InstrumentModelType::Orbitrap_Eclipse
+        | InstrumentModelType::Orbitrap_Fusion
+        | InstrumentModelType::Orbitrap_Fusion_Lumos
+        | InstrumentModelType::Orbitrap_Fusion_ETD
+        | InstrumentModelType::Orbitrap_Ascend
+        | InstrumentModelType::Orbitrap_ID_X
+        | InstrumentModelType::Orbitrap_Astral
+        | InstrumentModelType::TSQ
+        | InstrumentModelType::TSQ_Quantum
+        | InstrumentModelType::TSQ_Quantum_Access
+        | InstrumentModelType::TSQ_Quantum_Ultra
+        | InstrumentModelType::TSQ_Quantum_Ultra_AM
+        | InstrumentModelType::TSQ_Quantiva
+        | InstrumentModelType::TSQ_Endura
+        | InstrumentModelType::TSQ_Altis
+        | InstrumentModelType::TSQ_Altis_Plus
+        | InstrumentModelType::TSQ_Quantis => {
+            vec![IonizationTypeTerm::ElectrosprayIonization]
+        }
+
+        InstrumentModelType::DSQ
+        | InstrumentModelType::PolarisQ
+        | InstrumentModelType::ITQ_700
+        | InstrumentModelType::ITQ_900
+        | InstrumentModelType::ITQ_1100
+        | InstrumentModelType::Trace_DSQ
+        | InstrumentModelType::GC_Quantum
+        | InstrumentModelType::DFS
+        | InstrumentModelType::DSQ_II
+        | InstrumentModelType::ISQ
+        | InstrumentModelType::GC_IsoLink
+        | InstrumentModelType::Orbitrap_GC => {
+            vec![IonizationTypeTerm::ElectronIonization]
+        }
+        InstrumentModelType::MALDI_LTQ_XL | InstrumentModelType::MALDI_LTQ_Orbitrap => {
+            vec![IonizationTypeTerm::MatrixAssistedLaserDesorptionIonization]
+        }
+        _ => Vec::default(),
+    }
+}
+
+
+macro_rules! comp {
+    ($config:ident, $comptype:expr, $term:expr) => {
+        $config.new_component($comptype).add_param($term.into())
+    };
+}
+
+macro_rules! analyzer {
+    ($config:ident, $term:expr) => {
+        comp!($config, ComponentType::Analyzer, $term)
+    };
+    ($config:ident quadrupole) => {
+        analyzer!($config, MassAnalyzerTerm::Quadrupole)
+    };
+    ($config:ident orbitrap) => {
+        analyzer!($config, MassAnalyzerTerm::Orbitrap)
+    };
+    ($config:ident radial) => {
+        analyzer!($config, MassAnalyzerTerm::RadialEjectionLinearIonTrap)
+    }
+}
+
+macro_rules! detector {
+    ($config:ident, $term:expr) => {
+        comp!($config, ComponentType::Detector, $term)
+    };
+    ($config:ident inductive) => {
+        detector!($config, DetectorTypeTerm::InductiveDetector)
+    };
+    ($config:ident electron) => {
+        detector!($config, DetectorTypeTerm::ElectronMultiplier)
+    }
+}
+
+
+pub fn create_instrument_configurations(model: InstrumentModelType, source: Component) -> Vec<InstrumentConfiguration> {
+    let mut configs = Vec::new();
+
+    match model {
+        InstrumentModelType::Q_Exactive |
+        InstrumentModelType::Q_Exactive_Plus |
+        InstrumentModelType::Q_Exactive_HF |
+        InstrumentModelType::Q_Exactive_HF_X |
+        InstrumentModelType::Q_Exactive_UHMR |
+        InstrumentModelType::Orbitrap_Exploris_120 |
+        InstrumentModelType::Orbitrap_Exploris_240 |
+        InstrumentModelType::Orbitrap_Exploris_480 |
+		InstrumentModelType::Orbitrap_GC  => {
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+            comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::Quadrupole);
+            comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::Orbitrap);
+            comp!(config, ComponentType::Detector, DetectorTypeTerm::InductiveDetector);
+        },
+
+        InstrumentModelType::Exactive |
+        InstrumentModelType::Exactive_Plus => {
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+            comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::Orbitrap);
+            comp!(config, ComponentType::Detector, DetectorTypeTerm::InductiveDetector);
+
+        }
+
+        InstrumentModelType::Orbitrap_Astral => {
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+            comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::Quadrupole);
+            comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::Orbitrap);
+            comp!(config, ComponentType::Detector, DetectorTypeTerm::InductiveDetector);
+
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+            comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::Quadrupole);
+            comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::AsymmetricTrackLosslessTimeOfFlightAnalyzer);
+            comp!(config, ComponentType::Detector, DetectorTypeTerm::InductiveDetector);
+        }
+        InstrumentModelType::LTQ_FT |
+        InstrumentModelType::LTQ_FT_Ultra => {
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+            analyzer!(config, MassAnalyzerTerm::FourierTransformIonCyclotronResonanceMassSpectrometer);
+            detector!(config, DetectorTypeTerm::InductiveDetector);
+
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+            analyzer!(config, MassAnalyzerTerm::RadialEjectionLinearIonTrap);
+            detector!(config, DetectorTypeTerm::ElectronMultiplier);
+        },
+        InstrumentModelType::Orbitrap_Fusion |
+        InstrumentModelType::Orbitrap_Fusion_Lumos |
+        InstrumentModelType::Orbitrap_Fusion_ETD |
+        InstrumentModelType::Orbitrap_Ascend |
+        InstrumentModelType::Orbitrap_ID_X |
+        InstrumentModelType::Orbitrap_Eclipse => {
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+
+            analyzer!(config quadrupole);
+            analyzer!(config orbitrap);
+            detector!(config inductive);
+
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+
+            analyzer!(config quadrupole);
+            analyzer!(config radial);
+            detector!(config electron);
+
+        }
+
+        InstrumentModelType::LTQ_Orbitrap |
+        InstrumentModelType::LTQ_Orbitrap_Classic |
+        InstrumentModelType::LTQ_Orbitrap_Discovery |
+        InstrumentModelType::LTQ_Orbitrap_XL |
+        InstrumentModelType::LTQ_Orbitrap_XL_ETD |
+        InstrumentModelType::MALDI_LTQ_Orbitrap |
+        InstrumentModelType::LTQ_Orbitrap_Velos |
+        InstrumentModelType::LTQ_Orbitrap_Velos_Pro |
+        InstrumentModelType::LTQ_Orbitrap_Elite => {
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+
+            analyzer!(config orbitrap);
+            detector!(config inductive);
+
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+
+            analyzer!(config radial);
+            detector!(config electron);
+        },
+        InstrumentModelType::LCQ_Advantage |
+        InstrumentModelType::LCQ_Classic |
+        InstrumentModelType::LCQ_Deca |
+        InstrumentModelType::LCQ_Deca_XP_Plus |
+        InstrumentModelType::LCQ_Fleet |
+        InstrumentModelType::PolarisQ |
+        InstrumentModelType::ITQ_700 |
+        InstrumentModelType::ITQ_900 => {
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+
+            analyzer!(config, MassAnalyzerTerm::QuadrupoleIonTrap);
+            detector!(config electron);
+        },
+
+
+        InstrumentModelType::LTQ |
+        InstrumentModelType::LXQ |
+        InstrumentModelType::LTQ_XL |
+        InstrumentModelType::LTQ_XL_ETD |
+        InstrumentModelType::ITQ_1100 |
+        InstrumentModelType::MALDI_LTQ_XL |
+        InstrumentModelType::LTQ_Velos |
+        InstrumentModelType::LTQ_Velos_ETD |
+        InstrumentModelType::LTQ_Velos_Plus => {
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+
+            analyzer!(config radial);
+            detector!(config electron);
+        },
+        InstrumentModelType::SSQ_7000 |
+        InstrumentModelType::Surveyor_MSQ |
+        InstrumentModelType::DSQ |
+        InstrumentModelType::DSQ_II |
+        InstrumentModelType::ISQ |
+        InstrumentModelType::Trace_DSQ |
+        InstrumentModelType::GC_IsoLink => {
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+
+            analyzer!(config quadrupole);
+            detector!(config electron);
+
+        },
+        InstrumentModelType::TSQ_7000 |
+        InstrumentModelType::TSQ_8000_Evo |
+        InstrumentModelType::TSQ_9000 |
+        InstrumentModelType::TSQ |
+        InstrumentModelType::TSQ_Quantum |
+        InstrumentModelType::TSQ_Quantum_Access |
+        InstrumentModelType::TSQ_Quantum_Ultra |
+        InstrumentModelType::TSQ_Quantum_Ultra_AM |
+        InstrumentModelType::GC_Quantum |
+        InstrumentModelType::TSQ_Quantiva |
+        InstrumentModelType::TSQ_Endura |
+        InstrumentModelType::TSQ_Altis |
+        InstrumentModelType::TSQ_Altis_Plus |
+        InstrumentModelType::TSQ_Quantis => {
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+            analyzer!(config quadrupole);
+            analyzer!(config quadrupole);
+            analyzer!(config quadrupole);
+            detector!(config electron);
+        },
+        InstrumentModelType::DFS |
+        InstrumentModelType::MAT253 |
+        InstrumentModelType::MAT900XP |
+        InstrumentModelType::MAT900XP_Trap |
+        InstrumentModelType::MAT95XP |
+        InstrumentModelType::MAT95XP_Trap => {
+            configs.push(InstrumentConfiguration::default());
+            let config = configs.last_mut().unwrap();
+            config.push(source.clone());
+
+            analyzer!(config, MassAnalyzerTerm::MagneticSector);
+            detector!(config, DetectorTypeTerm::ElectronMultiplier);
+        },
+        _ => {}
+    }
+
+    configs
 }

@@ -1,6 +1,7 @@
 use std::{collections::HashMap, io, marker::PhantomData, mem, path::PathBuf};
 
 use chrono::DateTime;
+use log::{debug, warn};
 
 use crate::{
     io::{utils::checksum_file, DetailLevel, OffsetIndex},
@@ -27,9 +28,13 @@ use thermorawfilereader::{
     FileDescription as ThermoFileDescription, IonizationMode, MassAnalyzer, RawFileReader,
 };
 
+use super::instruments::{
+    create_instrument_configurations, instrument_model_to_ion_sources,
+    instrument_model_to_mass_analyzers,
+};
 #[allow(unused)]
 use super::instruments::{
-    instrument_model_to_detector, parse_instrument_model, Detector, InstrumentModelType,
+    instrument_model_to_detector, parse_instrument_model, InstrumentModelType,
 };
 
 macro_rules! param {
@@ -62,7 +67,7 @@ pub struct ThermoRawReaderType<
     spectrum_index: OffsetIndex,
     file_description: FileDescription,
     instrument_configurations: HashMap<u32, InstrumentConfiguration>,
-    components_to_instrument_id: HashMap<(IonizationMode, MassAnalyzer), u32>,
+    components_to_instrument_id: HashMap<MassAnalyzer, u32>,
     softwares: Vec<Software>,
     data_processings: Vec<DataProcessing>,
     ms_run: MassSpectrometryRun,
@@ -99,6 +104,84 @@ fn make_native_id(index: i32) -> String {
         "controllerType=0 controllerNumber=1 scan={}",
         index as usize + 1
     )
+}
+
+fn ionization_mode_to_inlet(value: IonizationMode) -> Option<Param> {
+    match value {
+        IonizationMode::CardNanoSprayIonization | IonizationMode::NanoSpray => {
+            Some(param!("nanospray inlet", 1000485).into())
+        }
+        IonizationMode::ElectroSpray => Some(param!("electrospray inlet", 1000057).into()),
+        IonizationMode::ThermoSpray => Some(param!("thermospray inlet", 1000069).into()),
+        IonizationMode::FastAtomBombardment => {
+            Some(param!("continuous flow fast atom bombardment", 1000055).into())
+        }
+        _ => None,
+    }
+}
+
+fn translate_ionization_mode(value: IonizationMode) -> Param {
+    match value {
+        IonizationMode::CardNanoSprayIonization | IonizationMode::NanoSpray => {
+            IonizationTypeTerm::Nanoelectrospray
+        }
+        IonizationMode::ElectroSpray => IonizationTypeTerm::ElectrosprayIonization,
+        IonizationMode::AtmosphericPressureChemicalIonization => {
+            IonizationTypeTerm::AtmosphericPressureChemicalIonization
+        }
+        IonizationMode::FastAtomBombardment => IonizationTypeTerm::FastAtomBombardmentIonization,
+        IonizationMode::GlowDischarge => IonizationTypeTerm::GlowDischargeIonization,
+        IonizationMode::ElectronImpact => IonizationTypeTerm::ElectronIonization,
+        IonizationMode::MatrixAssistedLaserDesorptionIonization => {
+            IonizationTypeTerm::MatrixAssistedLaserDesorptionIonization
+        }
+        IonizationMode::ChemicalIonization => IonizationTypeTerm::ChemicalIonization,
+        _ => IonizationTypeTerm::IonizationType,
+    }
+    .to_param()
+    .into()
+}
+
+fn translate_mass_analyzer(value: MassAnalyzer) -> Param {
+    match value {
+        MassAnalyzer::ITMS => MassAnalyzerTerm::RadialEjectionLinearIonTrap,
+        MassAnalyzer::FTMS => MassAnalyzerTerm::Orbitrap,
+        MassAnalyzer::ASTMS => MassAnalyzerTerm::AsymmetricTrackLosslessTimeOfFlightAnalyzer,
+        MassAnalyzer::TOFMS => MassAnalyzerTerm::TimeOfFlight,
+        // MassAnalyzer::TQMS => {}
+        // MassAnalyzer::SQMS => {}
+        MassAnalyzer::Sector => MassAnalyzerTerm::MagneticSector,
+        _ => MassAnalyzerTerm::MassAnalyzerType,
+    }
+    .to_param()
+    .into()
+}
+
+fn translate_mass_analyzer_detector(value: MassAnalyzer) -> Param {
+    match value {
+        MassAnalyzer::ITMS | MassAnalyzer::ASTMS => DetectorTypeTerm::ElectronMultiplier,
+        MassAnalyzer::FTMS => DetectorTypeTerm::InductiveDetector,
+        _ => DetectorTypeTerm::DetectorType,
+        // MassAnalyzer::TOFMS => {}
+        // MassAnalyzer::TQMS => {}
+        // MassAnalyzer::SQMS => {}
+        // MassAnalyzer::Sector => {}
+    }
+    .to_param()
+    .into()
+}
+
+fn translate_mass_analyzer_reverse(value: &MassAnalyzerTerm) -> MassAnalyzer {
+    match value {
+        MassAnalyzerTerm::RadialEjectionLinearIonTrap => MassAnalyzer::ITMS,
+        MassAnalyzerTerm::Orbitrap => MassAnalyzer::FTMS,
+        MassAnalyzerTerm::AsymmetricTrackLosslessTimeOfFlightAnalyzer => MassAnalyzer::ASTMS,
+        MassAnalyzerTerm::TimeOfFlight => MassAnalyzer::TOFMS,
+        // { => MassAnalyzer::TQMS}
+        // { => MassAnalyzer::SQMS}
+        MassAnalyzerTerm::MagneticSector => MassAnalyzer::Sector,
+        _ => MassAnalyzer::Unknown,
+    }
 }
 
 const SOURCE_FILE_ID: &'static str = "RAW1";
@@ -171,7 +254,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
     ) -> (
         Software,
         HashMap<u32, InstrumentConfiguration>,
-        HashMap<(IonizationMode, MassAnalyzer), u32>,
+        HashMap<MassAnalyzer, u32>,
     ) {
         let descr = handle.instrument_model();
 
@@ -195,129 +278,133 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 
         let method_texts: Vec<Param> = (0..handle.instrument_method_count())
             .into_iter()
-            .flat_map(|i| {
-                handle.instrument_method(i as u8)
-            })
+            .flat_map(|i| handle.instrument_method(i as u8))
             .flat_map(|m| {
                 m.text().map(|s| {
-                    ControlledVocabulary::MS.param_val(
-                        1000032,
-                        "customization",
-                        s.to_string(),
-                    )
+                    ControlledVocabulary::MS.param_val(1000032, "customization", s.to_string())
                 })
             })
             .collect();
 
+        let serial_number_param = if let Some(serial) = descr.serial_number() {
+            Some(ControlledVocabulary::MS.param_val(1000529, "instrument serial number", serial))
+        } else {
+            None
+        };
+
+        // Try to build the instrument configuration from the metadata
         for (i, vconf) in descr.configurations().enumerate() {
             let mut config = InstrumentConfiguration::default();
 
-            let mut ion_source = Component::default();
-            ion_source.order = 0;
-            ion_source.component_type = ComponentType::IonSource;
-            match vconf.ionization_mode {
-                IonizationMode::CardNanoSprayIonization | IonizationMode::NanoSpray => {
-                    ion_source.add_param(param!("nanospray inlet", 1000485).into());
-                }
-                IonizationMode::ElectroSpray => {
-                    ion_source.add_param(param!("electrospray inlet", 1000057).into());
-                }
-                IonizationMode::ThermoSpray => {
-                    ion_source.add_param(param!("thermospray inlet", 1000069).into());
-                }
-                IonizationMode::FastAtomBombardment => {
-                    ion_source
-                        .add_param(param!("continuous flow fast atom bombardment", 1000055).into());
-                }
-                _ => {}
-            }
-            ion_source.add_param(
-                match vconf.ionization_mode {
-                    IonizationMode::CardNanoSprayIonization | IonizationMode::NanoSpray => {
-                        IonizationTypeTerm::Nanoelectrospray
-                    }
-                    IonizationMode::ElectroSpray => IonizationTypeTerm::ElectrosprayIonization,
-                    IonizationMode::AtmosphericPressureChemicalIonization => {
-                        IonizationTypeTerm::AtmosphericPressureChemicalIonization
-                    }
-                    IonizationMode::FastAtomBombardment => {
-                        IonizationTypeTerm::FastAtomBombardmentIonization
-                    }
-                    IonizationMode::GlowDischarge => IonizationTypeTerm::GlowDischargeIonization,
-                    IonizationMode::ElectronImpact => IonizationTypeTerm::ElectronIonization,
-                    IonizationMode::MatrixAssistedLaserDesorptionIonization => {
-                        IonizationTypeTerm::MatrixAssistedLaserDesorptionIonization
-                    }
-                    IonizationMode::ChemicalIonization => IonizationTypeTerm::ChemicalIonization,
-                    _ => IonizationTypeTerm::IonizationType,
-                }
-                .to_param()
-                .into(),
+            config.extend_params(
+                method_texts
+                    .iter()
+                    .cloned()
+                    .chain(serial_number_param.clone())
+                    .chain([model_type.to_param()]),
             );
-            config.components.push(ion_source);
 
-            let mut analyzer = Component::default();
-            analyzer.order = 1;
-            analyzer.component_type = ComponentType::Analyzer;
+            let ion_source = config.new_component(ComponentType::IonSource);
+            ion_source.extend_params(ionization_mode_to_inlet(vconf.ionization_mode));
+            ion_source.add_param(translate_ionization_mode(vconf.ionization_mode));
 
-            analyzer.add_param(
-                match vconf.mass_analyzer {
-                    MassAnalyzer::ITMS => MassAnalyzerTerm::RadialEjectionLinearIonTrap,
-                    MassAnalyzer::FTMS => MassAnalyzerTerm::Orbitrap,
-                    MassAnalyzer::ASTMS => {
-                        MassAnalyzerTerm::AsymmetricTrackLosslessTimeOfFlightAnalyzer
-                    }
-                    MassAnalyzer::TOFMS => MassAnalyzerTerm::TimeOfFlight,
-                    // MassAnalyzer::TQMS => {}
-                    // MassAnalyzer::SQMS => {}
-                    MassAnalyzer::Sector => MassAnalyzerTerm::MagneticSector,
-                    _ => MassAnalyzerTerm::MassAnalyzerType,
-                }
-                .to_param()
-                .into(),
-            );
-            config.components.push(analyzer);
+            let analyzer = config.new_component(ComponentType::Analyzer);
+            analyzer.add_param(translate_mass_analyzer(vconf.mass_analyzer));
 
-            for p in method_texts.iter() {
-                config.add_param(p.clone())
-            }
+            let detector = config.new_component(ComponentType::Detector);
+            detector.add_param(translate_mass_analyzer_detector(vconf.mass_analyzer));
 
-            let mut detector = Component::default();
-            detector.order = 2;
-            detector.component_type = ComponentType::Detector;
-            detector.add_param(
-                match vconf.mass_analyzer {
-                    MassAnalyzer::ITMS | MassAnalyzer::ASTMS => {
-                        DetectorTypeTerm::ElectronMultiplier
-                    }
-                    MassAnalyzer::FTMS => DetectorTypeTerm::InductiveDetector,
-                    _ => DetectorTypeTerm::DetectorType,
-                    // MassAnalyzer::TOFMS => {}
-                    // MassAnalyzer::TQMS => {}
-                    // MassAnalyzer::SQMS => {}
-                    // MassAnalyzer::Sector => {}
-                }
-                .to_param()
-                .into(),
-            );
-            config.components.push(detector);
-
-            if let Some(serial) = descr.serial_number() {
-                config.add_param(ControlledVocabulary::MS.param_val(
-                    1000529,
-                    "instrument serial number",
-                    serial,
-                ));
-            }
             config.software_reference = sw.id.clone();
             config.id = i as u32;
 
-            components_to_instrument_id
-                .insert((vconf.ionization_mode, vconf.mass_analyzer), i as u32);
-            config.add_param(model_type.to_param());
+            components_to_instrument_id.insert(vconf.mass_analyzer, i as u32);
+
             configs.insert(i as u32, config);
         }
 
+        // If the configurations weren't detectable from the top level metadata,
+        // try to guess them from the instrument model.
+        if configs.is_empty() && !handle.is_empty() {
+            debug!("Using instrument mode {model_type} to infer configurations");
+            if let Some(first_ionization) = handle.get(0).and_then(|s| {
+                s.acquisition()
+                    .map(|acq| -> thermorawfilereader::IonizationMode {
+                        acq.ionization_mode().0.into()
+                    })
+            }) {
+                let mut source = Component::default();
+                source.component_type = ComponentType::IonSource;
+                source.extend_params(ionization_mode_to_inlet(first_ionization));
+                source.add_param(translate_ionization_mode(first_ionization));
+
+                for (i, mut config) in create_instrument_configurations(model_type, source)
+                    .into_iter()
+                    .enumerate()
+                {
+                    config.extend_params(
+                        method_texts
+                            .iter()
+                            .cloned()
+                            .chain([model_type.to_param()])
+                            .chain(serial_number_param.clone()),
+                    );
+                    config.id = i as u32;
+                    config.software_reference = sw.id.clone();
+
+                    if let Some(mass_analyzer) =
+                        config.iter().rev().flat_map(|c| c.mass_analyzer()).next()
+                    {
+                        let vconf_mass_analyzer = translate_mass_analyzer_reverse(&mass_analyzer);
+                        components_to_instrument_id.insert(vconf_mass_analyzer, i as u32);
+                    } else {
+                        warn!("Failed to locate mass analyzer from {config:?}")
+                    }
+
+                    configs.insert(i as u32, config);
+                }
+            }
+        }
+
+        // If the whole configurations weren't specified by the instrument model,
+        // try to guess them piece-meal.
+        if configs.is_empty() {
+            debug!("Using instrument mode {model_type} to infer configurations by parts");
+            let mass_analyzers = instrument_model_to_mass_analyzers(model_type);
+            let ionization_types = instrument_model_to_ion_sources(model_type);
+            let detectors = instrument_model_to_detector(model_type);
+            let mut i = 0;
+            for ionization in ionization_types.iter() {
+                for (mass_analyzer, detector_type) in mass_analyzers.iter().zip(detectors.iter()) {
+                    let mut config = InstrumentConfiguration::default();
+
+                    config.extend_params(
+                        method_texts
+                            .iter()
+                            .cloned()
+                            .chain(serial_number_param.clone())
+                            .chain([model_type.to_param()]),
+                    );
+
+                    let ion_source = config.new_component(ComponentType::IonSource);
+                    ion_source.add_param(ionization.into());
+
+                    let analyzer = config.new_component(ComponentType::Analyzer);
+                    analyzer.add_param(mass_analyzer.into());
+
+                    let detector = config.new_component(ComponentType::Detector);
+                    detector.add_param(detector_type.into());
+
+                    config.software_reference = sw.id.clone();
+                    config.id = i as u32;
+
+                    let vconf_mass_analyzer = translate_mass_analyzer_reverse(mass_analyzer);
+                    components_to_instrument_id.insert(vconf_mass_analyzer, i as u32);
+
+                    configs.insert(i, config);
+                    i += 1;
+                }
+            }
+        }
         if configs.is_empty() {
             log::warn!("No instrument configurations were found in Thermo RAW file?")
         }
@@ -473,13 +560,21 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             "preset scan configuration",
             vevent.scan_event(),
         ));
-        let ic_key = (
-            vevent.ionization_mode().0.into(),
-            vevent.mass_analyzer().0.into(),
-        );
-        if let Some(conf_id) = self.components_to_instrument_id.get(&ic_key) {
-            event.instrument_configuration_id = *conf_id;
-        }
+        let ic_key = vevent.mass_analyzer().0.into();
+        event.instrument_configuration_id =
+            self.get_instrument_configuration_by_mass_analyzer(ic_key);
+    }
+
+    fn get_instrument_configuration_by_mass_analyzer(&self, mass_analyzer: MassAnalyzer) -> u32 {
+        *self
+            .components_to_instrument_id
+            .get(&mass_analyzer)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Failed to map instrument configuration for {:?}",
+                    mass_analyzer
+                )
+            })
     }
 
     fn populate_raw_signal(&self, data: &SpectrumData) -> BinaryArrayMap {
