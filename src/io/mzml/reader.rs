@@ -6,8 +6,7 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::marker::PhantomData;
 use std::mem;
 
-use log::debug;
-use log::warn;
+use log::{debug, trace, warn};
 
 use mzpeaks::CentroidLike;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
@@ -1404,7 +1403,7 @@ impl<
         let matched_tag = match reader.read_event_into(&mut self.buffer) {
             Ok(event) => match event {
                 Event::Start(ref e) => {
-                    debug!(
+                    trace!(
                         "From {}, the next element started was {}",
                         position,
                         String::from_utf8_lossy(e.name().0)
@@ -1412,7 +1411,7 @@ impl<
                     e.name().0 == next_tag.as_bytes()
                 }
                 Event::End(ref e) => {
-                    debug!(
+                    trace!(
                         "From {}, the next element ended was {}",
                         position,
                         String::from_utf8_lossy(e.name().0)
@@ -1420,7 +1419,7 @@ impl<
                     false
                 }
                 Event::Empty(ref e) => {
-                    debug!(
+                    trace!(
                         "From {}, the next empty element was {}",
                         position,
                         String::from_utf8_lossy(e.name().0)
@@ -1428,7 +1427,7 @@ impl<
                     e.name().0 == next_tag.as_bytes()
                 }
                 Event::Text(ref e) => {
-                    debug!(
+                    trace!(
                         "From {}, the next was a text node of {} bytes",
                         position,
                         e.len()
@@ -1436,11 +1435,11 @@ impl<
                     false
                 }
                 Event::Eof => {
-                    debug!("From {}, the next was EOF", position);
+                    trace!("From {}, the next was EOF", position);
                     false
                 }
                 e => {
-                    debug!("From {}, the next was {:?}", position, e);
+                    trace!("From {}, the next was {:?}", position, e);
                     false
                 }
             },

@@ -295,7 +295,9 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
         // Try to build the instrument configuration from the metadata
         for (i, vconf) in descr.configurations().enumerate() {
             let mut config = InstrumentConfiguration::default();
-
+            if vconf.mass_analyzer == MassAnalyzer::Unknown {
+                continue;
+            }
             config.extend_params(
                 method_texts
                     .iter()
@@ -555,6 +557,13 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             param.unit = Unit::Volt;
             event.add_param(param);
         }
+        if let Some(resolution) = vevent.resolution() {
+            event.add_param(ControlledVocabulary::MS.param_val(
+                1000011,
+                "mass resolution",
+                resolution,
+            ));
+        }
         event.add_param(ControlledVocabulary::MS.param_val(
             1000616,
             "preset scan configuration",
@@ -571,8 +580,8 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             .get(&mass_analyzer)
             .unwrap_or_else(|| {
                 panic!(
-                    "Failed to map instrument configuration for {:?}",
-                    mass_analyzer
+                    "Failed to map instrument configuration for {:?} from among {:?}",
+                    mass_analyzer, self.components_to_instrument_id,
                 )
             })
     }

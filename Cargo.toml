@@ -114,7 +114,7 @@ bytemuck = { version = "1.15.0", features = ["extern_crate_alloc"]}
 base64-simd = "0.8.0"
 thiserror = "1.0.50"
 
-thermorawfilereader = { version = "0.2.4", default-features = false, optional = true }
+thermorawfilereader = { version = "0.2.5", default-features = false, optional = true }
 sha1 = "0.10.6"
 base16ct = { version = "0.2.0", features = ["alloc"] }
 chrono = "0.4.37"
