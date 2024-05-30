@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.20.0] - 2024-05-30
+
+### Fixed
+
+- Handle unknown mass analyzers slightly more gracefully.
+- Actually use the fast path when pre-encoding arrays
+
 ## [0.19.0] - 2024-05-26
 
 ### Added
@@ -260,7 +267,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.19.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/mobiusklein/mzdata/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/mobiusklein/mzdata/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/mobiusklein/mzdata/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/mobiusklein/mzdata/compare/v0.16.0...v0.17.0
