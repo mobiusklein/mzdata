@@ -169,6 +169,10 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     }
 
     pub fn encode_bytestring(&self, compression: BinaryCompressionType) -> Bytes {
+        if self.compression == compression {
+            log::debug!("Fast-path encoding {}:{}", self.name, self.dtype);
+            return self.data.clone()
+        }
         let bytestring = match self.compression {
             BinaryCompressionType::Decoded => Cow::Borrowed(self.data.as_slice()),
             _ => self.decode().expect("Failed to decode binary data"),

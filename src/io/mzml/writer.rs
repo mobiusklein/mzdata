@@ -1843,7 +1843,7 @@ mod test {
     use std::path;
     use tempfile;
 
-    #[test]
+    #[test_log::test]
     fn write_test() -> WriterResult {
         let tmpdir = tempfile::tempdir()?;
         let dest_path = tmpdir.path().join("duplicate.mzML");
@@ -1857,8 +1857,13 @@ mod test {
         let mut writer = MzMLWriterType::new(dest);
         writer.copy_metadata_from(&reader);
         *writer.spectrum_count_mut() = reader.len() as u64;
-        for group in reader.groups() {
-            for prec in group.precursor.iter() {
+        for mut group in reader.groups() {
+            if let Some(prec) = group.precursor_mut() {
+                if let Some(arrays) = prec.arrays.as_mut() {
+                    arrays.iter_mut().for_each(|(_, arr)| {
+                        arr.store_compressed(BinaryCompressionType::Zlib).unwrap();
+                    });
+                }
                 writer.write_spectrum(prec)?
             }
             for prod in group.products.iter() {
