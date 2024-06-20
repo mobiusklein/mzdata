@@ -1794,6 +1794,8 @@ pub enum Unit {
     Electronvolt,
     PercentElectronVolt,
     Volt,
+
+    Dimensionless,
 }
 
 impl Unit {
@@ -1814,6 +1816,8 @@ impl Unit {
 
             Self::Electronvolt => ("UO:0000266", "electronvolt"),
             Self::PercentElectronVolt => ("UO:0000187", "percent"),
+
+            Self::Dimensionless => ("UO:0000186", "dimensionless unit"),
 
             _ => ("", ""),
         }
@@ -1837,6 +1841,9 @@ impl Unit {
 
             b"electronvolt" => Self::Electronvolt,
             b"percent" => Self::PercentElectronVolt,
+
+            b"dimensionless unit" => Self::Dimensionless,
+
             _ => Unit::Unknown,
         }
     }
@@ -1859,6 +1866,9 @@ impl Unit {
 
             b"UO:0000266" => Self::Electronvolt,
             b"UO:0000187" => Self::PercentElectronVolt,
+
+            b"UO:0000186" => Self::Dimensionless,
+
             _ => Unit::Unknown,
         }
     }
@@ -1912,7 +1922,10 @@ impl Unit {
                 controlled_vocabulary: ControlledVocabulary::UO,
                 accession: 187,
             } => Self::PercentElectronVolt,
-
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 186,
+            } => Self::Dimensionless,
             _ => Unit::Unknown,
         }
     }
@@ -1967,6 +1980,10 @@ impl Unit {
                 accession: 187,
             }),
 
+            Self::Dimensionless => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 186
+            }),
             _ => None,
         }
     }
