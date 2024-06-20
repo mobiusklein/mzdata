@@ -80,7 +80,7 @@ pub enum MGFError {
 }
 
 #[derive(Debug)]
-struct SpectrumBuilderFlex<
+struct SpectrumBuilder<
     C: CentroidPeakAdapting = CentroidPeak,
     D: DeconvolutedPeakAdapting = DeconvolutedPeak,
 > {
@@ -94,7 +94,7 @@ struct SpectrumBuilderFlex<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Default for SpectrumBuilderFlex<C, D> {
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Default for SpectrumBuilder<C, D> {
     fn default() -> Self {
         let mut description = SpectrumDescription::default();
         description.signal_continuity = SignalContinuity::Centroid;
@@ -112,10 +112,10 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Default for SpectrumB
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilderFlex<C, D>>
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilder<C, D>>
     for BinaryArrayMap
 {
-    fn from(val: SpectrumBuilderFlex<C, D>) -> Self {
+    fn from(val: SpectrumBuilder<C, D>) -> Self {
         let mut arrays = BinaryArrayMap::new();
         arrays.add(DataArray::wrap(
             &ArrayType::MZArray,
@@ -141,7 +141,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilderF
 impl<
         C: CentroidPeakAdapting ,
         D: DeconvolutedPeakAdapting,
-    > SpectrumBuilderFlex<C, D>
+    > SpectrumBuilder<C, D>
 {
     pub fn into_spectrum(self, spectrum: &mut MultiLayerSpectrum<C, D>) {
         if self.has_charge > 0 {
@@ -184,9 +184,9 @@ impl<
 impl<
         C: CentroidPeakAdapting ,
         D: DeconvolutedPeakAdapting,
-    > From<SpectrumBuilderFlex<C, D>> for MultiLayerSpectrum<C, D>
+    > From<SpectrumBuilder<C, D>> for MultiLayerSpectrum<C, D>
 {
-    fn from(builder: SpectrumBuilderFlex<C, D>) -> MultiLayerSpectrum<C, D> {
+    fn from(builder: SpectrumBuilder<C, D>) -> MultiLayerSpectrum<C, D> {
         let mut spec = MultiLayerSpectrum::default();
         builder.into_spectrum(&mut spec);
         spec
@@ -196,12 +196,12 @@ impl<
 impl<
         C: CentroidPeakAdapting ,
         D: DeconvolutedPeakAdapting,
-    > From<SpectrumBuilderFlex<C, D>> for CentroidSpectrumType<C>
+    > From<SpectrumBuilder<C, D>> for CentroidSpectrumType<C>
 where
     C: BuildFromArrayMap + BuildArrayMapFrom,
     D: BuildFromArrayMap + BuildArrayMapFrom,
 {
-    fn from(builder: SpectrumBuilderFlex<C, D>) -> CentroidSpectrumType<C> {
+    fn from(builder: SpectrumBuilder<C, D>) -> CentroidSpectrumType<C> {
         let spec: MultiLayerSpectrum<C, D> = builder.into();
         spec.try_into().unwrap()
     }
@@ -242,10 +242,10 @@ impl<
         D: DeconvolutedPeakAdapting,
     > MGFReaderType<R, C, D>
 {
-    fn parse_peak_from_line_flex(
+    fn parse_peak_from_line(
         &mut self,
         line: &str,
-        builder: &mut SpectrumBuilderFlex<C, D>,
+        builder: &mut SpectrumBuilder<C, D>,
     ) -> Option<bool> {
         let mut chars = line.chars();
         let first = chars.next().unwrap();
@@ -278,13 +278,13 @@ impl<
         }
     }
 
-    fn handle_scan_header_flex(
+    fn handle_scan_header(
         &mut self,
         line: &str,
-        builder: &mut SpectrumBuilderFlex<C, D>,
+        builder: &mut SpectrumBuilder<C, D>,
     ) -> bool {
         let peak_line = self
-            .parse_peak_from_line_flex(line, builder)
+            .parse_peak_from_line(line, builder)
             .unwrap_or(false);
         if peak_line {
             self.state = MGFParserState::Peaks;
@@ -337,9 +337,9 @@ impl<
         }
     }
 
-    fn handle_peak_flex(&mut self, line: &str, builder: &mut SpectrumBuilderFlex<C, D>) -> bool {
+    fn handle_peak(&mut self, line: &str, builder: &mut SpectrumBuilder<C, D>) -> bool {
         let peak_line = self
-            .parse_peak_from_line_flex(line, builder)
+            .parse_peak_from_line(line, builder)
             .unwrap_or(false);
         if peak_line {
             true
@@ -374,8 +374,8 @@ impl<
 
     /// Read the next spectrum from the file, if there is one.
     pub fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
-        let mut builder = SpectrumBuilderFlex::<C, D>::default();
-        match self._parse_into_flex(&mut builder) {
+        let mut builder = SpectrumBuilder::<C, D>::default();
+        match self._parse_into(&mut builder) {
             Ok(offset) => {
                 if offset > 0 {
                     Some(builder.into())
@@ -391,9 +391,9 @@ impl<
     }
 
     /// Read the next spectrum's contents directly into the passed struct.
-    fn _parse_into_flex(
+    fn _parse_into(
         &mut self,
-        builder: &mut SpectrumBuilderFlex<C, D>,
+        builder: &mut SpectrumBuilder<C, D>,
     ) -> Result<usize, MGFError> {
         let mut buffer = String::new();
         let mut work = true;
@@ -427,9 +427,9 @@ impl<
             } else if self.state == MGFParserState::Between {
                 work = self.handle_between(line);
             } else if self.state == MGFParserState::ScanHeaders {
-                work = self.handle_scan_header_flex(line, builder)
+                work = self.handle_scan_header(line, builder)
             } else if self.state == MGFParserState::Peaks {
-                work = self.handle_peak_flex(line, builder);
+                work = self.handle_peak(line, builder);
             }
             if matches!(self.state, MGFParserState::Error) {
                 let mut err = None;
@@ -445,8 +445,8 @@ impl<
         &mut self,
         spectrum: &mut MultiLayerSpectrum<C, D>,
     ) -> Result<usize, MGFError> {
-        let mut accumulator = SpectrumBuilderFlex::default();
-        match self._parse_into_flex(&mut accumulator) {
+        let mut accumulator = SpectrumBuilder::default();
+        match self._parse_into(&mut accumulator) {
             Ok(sz) => {
                 accumulator.into_spectrum(spectrum);
                 Ok(sz)
