@@ -20,7 +20,6 @@ use super::super::utils::MD5HashingStream;
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
-use crate::impl_param_described;
 use crate::meta::{
     ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
     MassSpectrometryRun, Software,
@@ -34,6 +33,7 @@ use crate::spectrum::bindata::{
 };
 use crate::spectrum::spectrum_types::SpectrumLike;
 use crate::spectrum::{scan_properties::*, Chromatogram, ChromatogramLike, RefPeakDataLevel};
+use crate::{curie, impl_param_described};
 
 const BUFFER_SIZE: usize = 10000;
 
@@ -77,6 +77,18 @@ macro_rules! end_event {
 
 fn instrument_id(id: &u32) -> String {
     format!("IC{}", *id + 1)
+}
+
+fn param_val_xsd<V: ParamValue>(param: &V) -> Option<&[u8]> {
+    if param.is_f64() {
+        Some(b"xsd:double")
+    } else if param.is_i64() {
+        Some(b"xsd:integer")
+    } else if param.is_str() {
+        Some(b"xsd:string")
+    } else {
+        None
+    }
 }
 
 const MS1_SPECTRUM: ParamCow = ControlledVocabulary::MS.const_param_ident("MS1 spectrum", 1000579);
@@ -249,7 +261,11 @@ impl<W: io::Write> InnerXMLWriter<W> {
 
     pub fn write_param<P: ParamLike>(&mut self, param: &P) -> WriterResult {
         let mut elt = if !param.is_controlled() {
-            bstart!("userParam")
+            let mut elt = bstart!("userParam");
+            if let Some(tp) = param_val_xsd(&param.value()) {
+                elt.push_attribute(("type".as_bytes(), tp));
+            }
+            elt
         } else {
             let mut elt = bstart!("cvParam");
             let accession_str = param.curie().unwrap().to_string();
@@ -1021,6 +1037,51 @@ where
         Ok(())
     }
 
+    pub fn write_param<P: ParamLike>(&mut self, param: &P) -> WriterResult {
+        self.handle.write_param(param)
+    }
+
+    pub fn write_param_list<'a, P: ParamLike + 'a, T: Iterator<Item = &'a P>>(
+        &mut self,
+        params: T,
+    ) -> WriterResult {
+        self.handle.write_param_list(params)
+    }
+
+    pub fn write_param_list_with_refs<'a, T: Iterator<Item = &'a Param>>(
+        &mut self,
+        params: T,
+    ) -> WriterResult {
+        let mut params: Vec<_> = params.collect();
+        let mut ref_tags = Vec::new();
+        for param_group in self.param_groups.iter() {
+            if param_group.covers(params.as_ref()) {
+                param_group.filter(&mut params);
+                ref_tags.push(param_group);
+            }
+        }
+
+        for p in params {
+            self.handle.write_param(p)?;
+        }
+
+        for pg in ref_tags {
+            self.handle.write_reference_group(pg)?;
+        }
+        Ok(())
+    }
+
+    pub fn get_ms_cv(&self) -> &ControlledVocabulary {
+        &self.ms_cv
+    }
+}
+
+impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+    MzMLWriterType<W, C, D>
+where
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
+{
     pub fn start_spectrum_list(&mut self) -> WriterResult {
         match self.state {
             MzMLWriterState::SpectrumList => {}
@@ -1156,7 +1217,14 @@ where
             Ok(())
         }
     }
+}
 
+impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+    MzMLWriterType<W, C, D>
+where
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
+{
     pub fn write_scan_list(&mut self, acq: &Acquisition) -> WriterResult {
         let mut scan_list_tag = bstart!("scanList");
         let count = acq.scans.len().to_string();
@@ -1333,6 +1401,78 @@ where
         Ok(())
     }
 
+    fn write_ms_level<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
+        let ms_level = spectrum.ms_level();
+        if ms_level == 1 {
+            self.handle.write_param(&MS1_SPECTRUM)?;
+        } else {
+            self.handle.write_param(&MSN_SPECTRUM)?;
+        }
+        self.handle.write_param(&self.ms_cv.param_val(
+            "MS:1000511",
+            "ms level",
+            ms_level.to_string(),
+        ))?;
+        Ok(())
+    }
+
+    fn write_polarity<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
+        match spectrum.polarity() {
+            ScanPolarity::Negative => self.handle.write_param(&NEGATIVE_SCAN),
+            ScanPolarity::Positive => self.handle.write_param(&POSITIVE_SCAN),
+            ScanPolarity::Unknown => {
+                warn!(
+                    "Could not determine scan polarity for {}, assuming positive",
+                    spectrum.id()
+                );
+                self.handle.write_param(&POSITIVE_SCAN)
+            }
+        }
+    }
+
+    fn write_continuity<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
+        match spectrum.signal_continuity() {
+            SignalContinuity::Profile => self.handle.write_param(&PROFILE_SPECTRUM),
+            SignalContinuity::Unknown => {
+                warn!(
+                    "Could not determine scan polarity for {}, assuming centroid",
+                    spectrum.id()
+                );
+                self.handle.write_param(&CENTROID_SPECTRUM)
+            }
+            _ => self.handle.write_param(&CENTROID_SPECTRUM),
+        }
+    }
+
+    fn write_signal_properties<S: SpectrumLike<C, D> + 'static>(
+        &mut self,
+        spectrum: &S,
+    ) -> WriterResult {
+        self.handle.write_param_list(spectrum.params().iter())?;
+        Ok(())
+    }
+}
+
+impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+    MzMLWriterType<W, C, D>
+where
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
+{
+    /// Write a `binaryDataArray` from a [`DataArray`] whose contents have been translated into a base64
+    /// encoded string.
+    ///
+    /// Unless the `array` has already been encoded, use [`Self::write_binary_data_array`] instead.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `array.dtype()` is [`BinaryDataArrayType::Unknown`] as these cannot be
+    /// encoded correctly, or if `array.name` cannot be converted to a `cvParam` or `userParam`.
+    ///
+    /// # Errors
+    /// This function will return an error if a [`MzMLWriterError`] error occurs during
+    /// writing any underlying data occurs.
+    /// .
     pub fn write_binary_data_array_pre_encoded(
         &mut self,
         array: &DataArray,
@@ -1416,6 +1556,12 @@ where
         Ok(())
     }
 
+    /// Write a `binaryDataArray` from a [`DataArray`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if a [`MzMLWriterError`] error occurs during
+    /// writing any underlying data occurs.
     pub fn write_binary_data_array(
         &mut self,
         array: &DataArray,
@@ -1473,6 +1619,19 @@ where
         Ok(())
     }
 
+    /// Write the opening tag for a `spectrum` tag and write it out.
+    ///
+    /// *NOTE*: This function isn't useful unless you are modifying the writing of
+    /// the spectrum content but not the index management and tag level
+    /// information. Instead use [`Self::write_spectrum`].
+    ///
+    /// # See also
+    /// [`Self::write_spectrum`]
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if a [`MzMLWriterError`] error occurs during
+    /// writing any underlying data occurs.
     pub fn start_spectrum<S: SpectrumLike<C, D> + 'static>(
         &mut self,
         spectrum: &S,
@@ -1492,49 +1651,8 @@ where
         Ok(default_array_len_u)
     }
 
-    fn write_ms_level<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
-        let ms_level = spectrum.ms_level();
-        if ms_level == 1 {
-            self.handle.write_param(&MS1_SPECTRUM)?;
-        } else {
-            self.handle.write_param(&MSN_SPECTRUM)?;
-        }
-        self.handle.write_param(&self.ms_cv.param_val(
-            "MS:1000511",
-            "ms level",
-            ms_level.to_string(),
-        ))?;
-        Ok(())
-    }
-
-    fn write_polarity<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
-        match spectrum.polarity() {
-            ScanPolarity::Negative => self.handle.write_param(&NEGATIVE_SCAN),
-            ScanPolarity::Positive => self.handle.write_param(&POSITIVE_SCAN),
-            ScanPolarity::Unknown => {
-                warn!(
-                    "Could not determine scan polarity for {}, assuming positive",
-                    spectrum.id()
-                );
-                self.handle.write_param(&POSITIVE_SCAN)
-            }
-        }
-    }
-
-    fn write_continuity<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
-        match spectrum.signal_continuity() {
-            SignalContinuity::Profile => self.handle.write_param(&PROFILE_SPECTRUM),
-            SignalContinuity::Unknown => {
-                warn!(
-                    "Could not determine scan polarity for {}, assuming centroid",
-                    spectrum.id()
-                );
-                self.handle.write_param(&CENTROID_SPECTRUM)
-            }
-            _ => self.handle.write_param(&CENTROID_SPECTRUM),
-        }
-    }
-
+    /// Checks if spectrum-level summaries are already calculated for
+    /// `spectrum`.
     pub fn spectrum_has_summaries<S: SpectrumLike<C, D> + 'static>(
         &self,
         spectrum: &S,
@@ -1542,9 +1660,15 @@ where
         let peaks = spectrum.peaks();
         let peak_count = match peaks {
             RefPeakDataLevel::RawData(arrays) => {
-                let arr = arrays.get(&ArrayType::MZArray).unwrap();
-                let count = arr.data_len().unwrap();
-                count
+                if let Some(arr) = arrays.get(&ArrayType::MZArray) {
+                    if let Ok(count) = arr.data_len() {
+                        count
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                }
             }
             _ => peaks.len(),
         };
@@ -1564,14 +1688,8 @@ where
         summary
     }
 
-    fn write_signal_properties<S: SpectrumLike<C, D> + 'static>(
-        &mut self,
-        spectrum: &S,
-    ) -> WriterResult {
-        self.handle.write_param_list(spectrum.params().iter())?;
-        Ok(())
-    }
-
+    /// Write spectrum-level descriptive metadata, acquisition scan metadata,
+    /// and precursors if any are present.
     pub fn write_spectrum_descriptors<S: SpectrumLike<C, D> + 'static>(
         &mut self,
         spectrum: &S,
@@ -1594,9 +1712,13 @@ where
 
     ## Side-Effects
     If the writer has not already started writing the spectra, this will cause all the metadata
-    to be written out and the `<spectrumList>` element will be opened, preventing no new metadata
+    to be written out and the `<spectrumList>` element will be opened, preventing new metadata
     from being written to this stream. Furthermore, this writes the spectrum count out, so the value
     may no longer be changed.
+
+    # Errors
+    This function will return an error if a [`MzMLWriterError`] error occurs during
+    writing any underlying data occurs.
     */
     pub fn write_spectrum<S: SpectrumLike<C, D> + 'static>(
         &mut self,
@@ -1625,12 +1747,22 @@ where
 
         self.write_spectrum_descriptors(spectrum, &summary_metrics)?;
 
-        self.tic_collector
-            .add(spectrum.start_time(), spectrum.peaks().tic());
-        self.bic_collector.add(
-            spectrum.start_time(),
-            spectrum.peaks().base_peak().intensity,
-        );
+        let tic = spectrum
+            .params()
+            .get_param_by_curie(&curie!(MS:1000285))
+            .map(|p| p.to_f32().unwrap())
+            .unwrap_or_else(|| spectrum.peaks().tic());
+
+        let bpi = spectrum
+            .params()
+            .get_param_by_curie(&curie!(MS:1000505))
+            .map(|p| p.to_f32().unwrap())
+            .unwrap_or_else(|| spectrum.peaks().base_peak().intensity);
+
+        let time = spectrum.start_time();
+
+        self.tic_collector.add(time, tic);
+        self.bic_collector.add(time, bpi);
 
         match spectrum.peaks() {
             RefPeakDataLevel::RawData(arrays) => {
@@ -1649,6 +1781,19 @@ where
         Ok(())
     }
 
+    /// Write the opening tag for a `chromatogram` tag and write it out.
+    ///
+    /// *NOTE*: This function isn't useful unless you are modifying the writing of
+    /// the chromatogram content but not the index management and tag level
+    /// information. Instead use [`Self::write_chromatogram`].
+    ///
+    /// # See also
+    /// [`Self::write_chromatogram`]
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if a [`MzMLWriterError`] error occurs during
+    /// writing any underlying data occurs.
     pub fn start_chromatogram(
         &mut self,
         chromatogram: &Chromatogram,
@@ -1671,6 +1816,19 @@ where
         Ok(default_array_len_u)
     }
 
+    /**
+    Write a chromatogram  out to the mzML file.
+
+    ## Side-Effects
+    If the writer has not already started writing the spectra, this will cause all the metadata
+    to be written out and the `<chromatogramList>` element will be opened, preventing new metadata
+    or spectra from being written to this stream. Furthermore, this writes the chromatogram count out,
+    so the value may no longer be changed.
+
+    # Errors
+    This function will return an error if a [`MzMLWriterError`] error occurs during
+    writing any underlying data occurs.
+    */
     pub fn write_chromatogram(&mut self, chromatogram: &Chromatogram) -> WriterResult {
         match self.state {
             MzMLWriterState::ChromatogramList => {}
@@ -1779,44 +1937,6 @@ where
 
     pub fn write_event(&mut self, event: Event) -> WriterResult {
         self.handle.write_event(event)
-    }
-
-    pub fn write_param<P: ParamLike>(&mut self, param: &P) -> WriterResult {
-        self.handle.write_param(param)
-    }
-
-    pub fn write_param_list<'a, P: ParamLike + 'a, T: Iterator<Item = &'a P>>(
-        &mut self,
-        params: T,
-    ) -> WriterResult {
-        self.handle.write_param_list(params)
-    }
-
-    pub fn write_param_list_with_refs<'a, T: Iterator<Item = &'a Param>>(
-        &mut self,
-        params: T,
-    ) -> WriterResult {
-        let mut params: Vec<_> = params.collect();
-        let mut ref_tags = Vec::new();
-        for param_group in self.param_groups.iter() {
-            if param_group.covers(params.as_ref()) {
-                param_group.filter(&mut params);
-                ref_tags.push(param_group);
-            }
-        }
-
-        for p in params {
-            self.handle.write_param(p)?;
-        }
-
-        for pg in ref_tags {
-            self.handle.write_reference_group(pg)?;
-        }
-        Ok(())
-    }
-
-    pub fn get_ms_cv(&self) -> &ControlledVocabulary {
-        &self.ms_cv
     }
 }
 

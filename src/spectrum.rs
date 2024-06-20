@@ -57,6 +57,7 @@ pub(crate) mod chromatogram;
 pub(crate) mod group;
 pub(crate) mod scan_properties;
 pub(crate) mod spectrum_types;
+pub(crate) mod frame;
 pub mod utils;
 
 pub use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray};
@@ -68,6 +69,8 @@ pub use crate::spectrum::spectrum_types::{
     SpectrumLike, SpectrumProcessingError, PeakDataLevel, CentroidPeakAdapting,
     DeconvolutedPeakAdapting
 };
+
+pub use frame::{IonMobilityFrameDescription, MultiLayerIonMobilityFrame, IonMobilityFrameLike};
 
 pub use group::{
     SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter, SpectrumGroupingIterator

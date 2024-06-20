@@ -1,5 +1,7 @@
 use log::warn;
+use mzpeaks::feature::{ChargedFeature, Feature, FeatureLike};
 use std::collections::{HashMap, VecDeque};
+use std::convert::TryFrom;
 use std::fs;
 use std::io;
 use std::marker::PhantomData;
@@ -10,7 +12,10 @@ use std::sync::mpsc::Receiver;
 
 use thiserror::Error;
 
-use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
+use mzpeaks::{
+    CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, IonMobility,
+    KnownCharge, Mass, MZ,
+};
 
 use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software,
@@ -18,6 +23,10 @@ use crate::meta::{
 use crate::prelude::MSDataFileMetadata;
 use crate::spectrum::group::{SpectrumGroup, SpectrumGroupingIterator};
 use crate::spectrum::spectrum_types::{MultiLayerSpectrum, SpectrumLike};
+use crate::spectrum::{
+    CentroidPeakAdapting, DeconvolutedPeakAdapting, IonMobilityFrameLike,
+    MultiLayerIonMobilityFrame,
+};
 
 use super::utils::FileSource;
 use super::OffsetIndex;
@@ -497,15 +506,18 @@ pub trait SpectrumSourceWithMetadata<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
->: SpectrumSource<C, D, S> + MSDataFileMetadata {}
+>: SpectrumSource<C, D, S> + MSDataFileMetadata
+{
+}
 
 impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D>,
         T: SpectrumSource<C, D, S> + MSDataFileMetadata,
-    > SpectrumSourceWithMetadata<C, D, S> for T {}
-
+    > SpectrumSourceWithMetadata<C, D, S> for T
+{
+}
 
 /// An alternative implementation of [`SpectrumSource`] for non-rewindable underlying streams
 pub struct StreamingSpectrumIterator<
@@ -555,12 +567,18 @@ impl<
         panic!("Cannot reset StreamingSpectrumIterator")
     }
 
+    fn iter(&mut self) -> SpectrumIterator<C, D, S, Self>
+        where
+            Self: Sized, {
+        panic!("Cannot create a wrapping iterator for StreamingSpectrumIterator, just use it directly")
+    }
+
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<S> {
-        self.by_ref().iter().find(|s| s.id() == id)
+        self.find(|s| s.id() == id)
     }
 
     fn get_spectrum_by_index(&mut self, index: usize) -> Option<S> {
-        self.by_ref().iter().find(|s| s.index() == index)
+        self.find(|s| s.index() == index)
     }
 
     fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {
@@ -1129,6 +1147,526 @@ pub trait SpectrumWriter<
     /// Completes the data file format, preventing new data from being able incorporate additional
     /// data. Does not formally close the underlying writing stream.
     fn close(&mut self) -> io::Result<()>;
+}
+
+/// An analog of [`SpectrumSource`] for [`IonMobilityFrameLike`] producing types
+pub trait IonMobilityFrameSource<
+    C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
+    S: IonMobilityFrameLike<C, D> = MultiLayerIonMobilityFrame<C, D>,
+>: Iterator<Item = S>
+{
+    fn reset(&mut self);
+
+    /// Retrieve a frame by it's native ID
+    fn get_frame_by_id(&mut self, id: &str) -> Option<S>;
+
+    /// Retrieve a frame by it's integer index
+    fn get_frame_by_index(&mut self, index: usize) -> Option<S>;
+
+    /// Retrieve a frame by its scan start time
+    /// Considerably more complex than seeking by ID or index, this involves
+    /// a binary search over the frame index and assumes that frames are stored
+    /// in chronological order.
+    fn get_frame_by_time(&mut self, time: f64) -> Option<S> {
+        let n = self.len();
+        let mut lo: usize = 0;
+        let mut hi: usize = n;
+
+        let mut best_error: f64 = f64::INFINITY;
+        let mut best_match: Option<S> = None;
+
+        if lo == hi {
+            return None;
+        }
+        while hi != lo {
+            let mid = (hi + lo) / 2;
+            let scan = self.get_frame_by_index(mid)?;
+            let scan_time = scan.start_time();
+            let err = (scan_time - time).abs();
+
+            if err < best_error {
+                best_error = err;
+                best_match = Some(scan);
+            } else if (scan_time - time).abs() < 1e-3 {
+                return Some(scan);
+            } else if scan_time > time {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        best_match
+    }
+
+    /// Retrieve the number of frames in source file
+    fn len(&self) -> usize {
+        self.get_index().len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Access the frame offset index to enumerate all frames by ID
+    fn get_index(&self) -> &OffsetIndex;
+
+    /// Set the frame offset index. This method shouldn't be needed if not writing
+    /// a new adapter
+    fn set_index(&mut self, index: OffsetIndex);
+
+    /// Helper method to support seeking to an ID
+    fn _offset_of_id(&self, id: &str) -> Option<u64> {
+        self.get_index().get(id)
+    }
+
+    /// Helper method to support seeking to an index
+    fn _offset_of_index(&self, index: usize) -> Option<u64> {
+        self.get_index()
+            .get_index(index)
+            .map(|(_id, offset)| offset)
+    }
+
+    /// Helper method to support seeking to a specific time.
+    /// Considerably more complex than seeking by ID or index.
+    fn _offset_of_time(&mut self, time: f64) -> Option<u64> {
+        match self.get_frame_by_time(time) {
+            Some(scan) => self._offset_of_index(scan.index()),
+            None => None,
+        }
+    }
+
+    fn iter(&mut self) -> IonMobilityFrameIterator<C, D, S, Self>
+    where
+        Self: Sized,
+    {
+        IonMobilityFrameIterator::new(self)
+    }
+}
+
+/// A generic iterator over a [`IonMobilityFrameSource`] implementer that assumes the
+/// source has already been indexed. Otherwise, the source's own iterator
+/// behavior should be used.
+pub struct IonMobilityFrameIterator<
+    'lifespan,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D>,
+    R: IonMobilityFrameSource<C, D, S>,
+> {
+    source: &'lifespan mut R,
+    frame_type: PhantomData<S>,
+    centroid_type: PhantomData<C>,
+    deconvoluted_type: PhantomData<D>,
+    index: usize,
+    back_index: usize,
+}
+
+impl<
+        'lifespan,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D>,
+        R: IonMobilityFrameSource<C, D, S>,
+    > IonMobilityFrameIterator<'lifespan, C, D, S, R>
+{
+    pub fn new(source: &mut R) -> IonMobilityFrameIterator<C, D, S, R> {
+        IonMobilityFrameIterator::<C, D, S, R> {
+            source,
+            index: 0,
+            back_index: 0,
+            frame_type: PhantomData,
+            centroid_type: PhantomData,
+            deconvoluted_type: PhantomData,
+        }
+    }
+}
+
+impl<
+        'lifespan,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D>,
+        R: IonMobilityFrameSource<C, D, S>,
+    > Iterator for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+{
+    type Item = S;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index + self.back_index >= self.len() {
+            return None;
+        }
+        let result = self.source.get_frame_by_index(self.index);
+        self.index += 1;
+        result
+    }
+}
+
+impl<
+        'lifespan,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D>,
+        R: IonMobilityFrameSource<C, D, S>,
+    > ExactSizeIterator for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+{
+    fn len(&self) -> usize {
+        self.source.len()
+    }
+}
+
+impl<
+        'lifespan,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D>,
+        R: IonMobilityFrameSource<C, D, S>,
+    > DoubleEndedIterator for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.index + self.back_index >= self.len() {
+            return None;
+        };
+        let i = self.len() - (self.back_index + 1);
+        let result = self.source.get_frame_by_index(i);
+        self.back_index += 1;
+        result
+    }
+}
+
+impl<
+        'lifespan,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D>,
+        R: IonMobilityFrameSource<C, D, S>,
+    > IonMobilityFrameSource<C, D, S> for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+{
+    fn reset(&mut self) {
+        self.index = 0;
+        self.back_index = 0;
+    }
+
+    fn get_frame_by_id(&mut self, id: &str) -> Option<S> {
+        self.source.get_frame_by_id(id)
+    }
+
+    fn get_frame_by_index(&mut self, index: usize) -> Option<S> {
+        self.source.get_frame_by_index(index)
+    }
+
+    fn get_frame_by_time(&mut self, time: f64) -> Option<S> {
+        self.source.get_frame_by_time(time)
+    }
+
+    fn get_index(&self) -> &OffsetIndex {
+        self.source.get_index()
+    }
+
+    fn set_index(&mut self, index: OffsetIndex) {
+        self.source.set_index(index);
+    }
+}
+
+/// If the underlying iterator implements [`MSDataFileMetadata`] then [`SpectrumIterator`] will
+/// forward that implementation, assuming it is available.
+impl<
+        'lifespan,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D>,
+        R: IonMobilityFrameSource<C, D, S>,
+    > MSDataFileMetadata for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+where
+    R: MSDataFileMetadata,
+{
+    crate::delegate_impl_metadata_trait!(source);
+}
+
+#[derive(Debug)]
+pub struct Generic3DIonMobilityFrameSource<
+    CP: CentroidPeakAdapting,
+    DP: DeconvolutedPeakAdapting,
+    R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+    C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
+> {
+    source: R,
+    _cp: PhantomData<CP>,
+    _dp: PhantomData<DP>,
+    _c: PhantomData<C>,
+    _d: PhantomData<D>,
+}
+
+impl<
+        CP: CentroidPeakAdapting,
+        DP: DeconvolutedPeakAdapting,
+        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    > MSDataFileMetadata for Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
+where
+    R: MSDataFileMetadata,
+{
+    crate::delegate_impl_metadata_trait!(source);
+}
+
+impl<
+        CP: CentroidPeakAdapting,
+        DP: DeconvolutedPeakAdapting,
+        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    > IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>>
+    for Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
+{
+    fn reset(&mut self) {
+        self.source.reset()
+    }
+
+    fn get_frame_by_id(&mut self, id: &str) -> Option<MultiLayerIonMobilityFrame<C, D>> {
+        self.source.get_spectrum_by_id(id).and_then(|s| {
+            MultiLayerIonMobilityFrame::try_from(s).map_or_else(
+                |err| {
+                    warn!("Failed to convert {id} to MultiLayerIonMobilityFrame: {err}");
+                    None
+                },
+                |val| Some(val),
+            )
+        })
+    }
+
+    fn get_frame_by_index(&mut self, index: usize) -> Option<MultiLayerIonMobilityFrame<C, D>> {
+        self.source.get_spectrum_by_index(index).and_then(|s| {
+            MultiLayerIonMobilityFrame::try_from(s).map_or_else(
+                |err| {
+                    warn!("Failed to convert {index} to MultiLayerIonMobilityFrame: {err}");
+                    None
+                },
+                |val| Some(val),
+            )
+        })
+    }
+
+    fn get_frame_by_time(&mut self, time: f64) -> Option<MultiLayerIonMobilityFrame<C, D>> {
+        self.source.get_spectrum_by_time(time).and_then(|s| {
+            MultiLayerIonMobilityFrame::try_from(s).map_or_else(
+                |err| {
+                    warn!("Failed to convert {time} to MultiLayerIonMobilityFrame: {err}");
+                    None
+                },
+                |val| Some(val),
+            )
+        })
+    }
+
+    fn get_index(&self) -> &OffsetIndex {
+        self.source.get_index()
+    }
+
+    fn set_index(&mut self, index: OffsetIndex) {
+        self.source.set_index(index)
+    }
+}
+
+impl<
+        CP: CentroidPeakAdapting,
+        DP: DeconvolutedPeakAdapting,
+        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    > Iterator for Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
+{
+    type Item = MultiLayerIonMobilityFrame<C, D>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(s) = self.source.next() {
+            Some(
+                MultiLayerIonMobilityFrame::try_from(s)
+                    .expect("Failed to convert spectrum into frame"),
+            )
+        } else {
+            None
+        }
+    }
+}
+
+impl<
+        CP: CentroidPeakAdapting,
+        DP: DeconvolutedPeakAdapting,
+        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    > Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
+{
+    pub fn new(source: R) -> Self {
+        Self {
+            source,
+            _cp: PhantomData,
+            _dp: PhantomData,
+            _c: PhantomData,
+            _d: PhantomData,
+        }
+    }
+}
+
+/// Errors that may occur when reading a spectrum from a [`RandomAccessSpectrumIterator`]
+#[derive(Debug, Error)]
+pub enum IonMobilityFrameAccessError {
+    /// An undetermined error failing to locate the requested frame
+    #[error("The requested frame was not found")]
+    FrameNotFound,
+
+    /// An error resolving a frame by it's native ID
+    #[error("The requested frame native ID {0} was not found")]
+    FrameIdNotFound(String),
+
+    /// An error resolving a frame by it's index
+    #[error("The requested frame index {0} was not found")]
+    FrameIndexNotFound(usize),
+
+    /// An I/O error prevented reading the frame, even if it could be found.
+    #[error("I/O error occurred while reading: {0:?}")]
+    IOError(#[source] Option<io::Error>),
+}
+
+impl From<IonMobilityFrameAccessError> for io::Error {
+    fn from(value: IonMobilityFrameAccessError) -> Self {
+        let s = value.to_string();
+        match value {
+            IonMobilityFrameAccessError::FrameNotFound => {
+                io::Error::new(io::ErrorKind::NotFound, s)
+            }
+            IonMobilityFrameAccessError::FrameIdNotFound(_) => {
+                io::Error::new(io::ErrorKind::NotFound, s)
+            }
+            IonMobilityFrameAccessError::FrameIndexNotFound(_) => {
+                io::Error::new(io::ErrorKind::NotFound, s)
+            }
+            IonMobilityFrameAccessError::IOError(e) => match e {
+                Some(e) => e,
+                None => io::Error::new(io::ErrorKind::Other, s),
+            },
+        }
+    }
+}
+
+/// An extension of [`IonMobilityFrameSource`] that supports relocatable iteration relative to a
+/// specific spectrum coordinate or identifier.
+pub trait RandomAccessIonMobilityFrameIterator<
+    C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
+    S: IonMobilityFrameLike<C, D> = MultiLayerIonMobilityFrame<C, D>,
+>: IonMobilityFrameSource<C, D, S>
+{
+    /// Start iterating from the frame whose native ID matches `id`
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError>;
+
+    /// Start iterating from the frame whose index is `index`
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, IonMobilityFrameAccessError>;
+
+    /// Start iterating from the frame starting closest to `time`
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, IonMobilityFrameAccessError>;
+}
+
+impl<
+        CP: CentroidPeakAdapting,
+        DP: DeconvolutedPeakAdapting,
+        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    > RandomAccessIonMobilityFrameIterator<C, D, MultiLayerIonMobilityFrame<C, D>>
+    for Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
+where
+    R: RandomAccessSpectrumIterator<CP, DP, MultiLayerSpectrum<CP, DP>>,
+{
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError> {
+        match self.source.start_from_id(id) {
+            Ok(_) => Ok(self),
+            Err(e) => Err(match e {
+                SpectrumAccessError::SpectrumIdNotFound(id) => {
+                    IonMobilityFrameAccessError::FrameIdNotFound(id)
+                }
+                SpectrumAccessError::SpectrumNotFound => IonMobilityFrameAccessError::FrameNotFound,
+                SpectrumAccessError::IOError(e) => IonMobilityFrameAccessError::IOError(e),
+                _ => todo!(),
+            }),
+        }
+    }
+
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, IonMobilityFrameAccessError> {
+        match self.source.start_from_index(index) {
+            Ok(_) => Ok(self),
+            Err(e) => Err(match e {
+                SpectrumAccessError::SpectrumIndexNotFound(i) => {
+                    IonMobilityFrameAccessError::FrameIndexNotFound(i)
+                }
+                SpectrumAccessError::SpectrumNotFound => IonMobilityFrameAccessError::FrameNotFound,
+                SpectrumAccessError::IOError(e) => IonMobilityFrameAccessError::IOError(e),
+                _ => todo!(),
+            }),
+        }
+    }
+
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, IonMobilityFrameAccessError> {
+        match self.source.start_from_time(time) {
+            Ok(_) => Ok(self),
+            Err(e) => Err(match e {
+                SpectrumAccessError::SpectrumNotFound => IonMobilityFrameAccessError::FrameNotFound,
+                SpectrumAccessError::IOError(e) => IonMobilityFrameAccessError::IOError(e),
+                _ => todo!(),
+            }),
+        }
+    }
+}
+
+impl<
+        'lifespan,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D>,
+        R: IonMobilityFrameSource<C, D, S>,
+    > RandomAccessIonMobilityFrameIterator<C, D, S> for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+{
+    /// Start iterating from the spectrum whose native ID matches `id`
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError> {
+        if let Some(scan) = self.get_frame_by_id(id) {
+            self.index = scan.index();
+            self.back_index = 0;
+            Ok(self)
+        } else if self.get_index().contains_key(id) {
+            Err(IonMobilityFrameAccessError::IOError(None))
+        } else {
+            Err(IonMobilityFrameAccessError::FrameIdNotFound(id.to_string()))
+        }
+    }
+
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, IonMobilityFrameAccessError> {
+        if index < self.len() {
+            self.index = index;
+            self.back_index = 0;
+            Ok(self)
+        } else {
+            Err(IonMobilityFrameAccessError::FrameIndexNotFound(index))
+        }
+    }
+
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, IonMobilityFrameAccessError> {
+        if let Some(scan) = self.get_frame_by_time(time) {
+            self.index = scan.index();
+            self.back_index = 0;
+            Ok(self)
+        } else if self
+            .get_frame_by_index(self.len() - 1)
+            .expect("Failed to fetch spectrum for boundary testing")
+            .start_time()
+            < time
+        {
+            Err(IonMobilityFrameAccessError::FrameNotFound)
+        } else {
+            Err(IonMobilityFrameAccessError::IOError(None))
+        }
+    }
 }
 
 #[cfg(test)]

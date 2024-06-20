@@ -11,5 +11,5 @@ pub use encodings::{
     linear_prediction_encoding, to_bytes, vec_as_bytes, ArrayRetrievalError, ArrayType,
     BinaryCompressionType, BinaryDataArrayType, Bytes,
 };
-pub use map::BinaryArrayMap;
+pub use map::{BinaryArrayMap, BinaryArrayMap3D};
 pub use traits::{ByteArrayView, ByteArrayViewMut};

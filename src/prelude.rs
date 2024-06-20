@@ -2,7 +2,7 @@
 pub use crate::io::traits::{
     MZFileReader, RandomAccessSpectrumGroupingIterator, RandomAccessSpectrumIterator,
     RandomAccessSpectrumSource as _, SpectrumSourceWithMetadata as _, SpectrumSource,
-    SpectrumWriter, SeekRead, SpectrumAccessError, SpectrumGrouping,
+    SpectrumWriter, SeekRead, SpectrumAccessError, SpectrumGrouping, IonMobilityFrameSource
 };
 
 pub use crate::meta::MSDataFileMetadata;
@@ -10,7 +10,7 @@ pub use crate::params::{ParamDescribed, ParamLike, ParamValue};
 pub use crate::spectrum::bindata::{
     BuildArrayMapFrom, BuildFromArrayMap, ByteArrayView, ByteArrayViewMut,
 };
-pub use crate::spectrum::{IonProperties, PrecursorSelection, SpectrumLike, IonMobilityMeasure};
+pub use crate::spectrum::{IonProperties, PrecursorSelection, SpectrumLike, IonMobilityMeasure, IonMobilityFrameLike};
 
 #[cfg(feature = "mzsignal")]
 pub use crate::spectrum::group::SpectrumGroupAveraging;

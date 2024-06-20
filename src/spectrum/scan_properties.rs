@@ -135,7 +135,7 @@ pub struct ScanEvent {
     pub params: Option<Box<ParamList>>,
 }
 
-const ION_MOBILITY_SCAN_TERMS: [CURIE; 4] = [
+pub(crate) const ION_MOBILITY_SCAN_TERMS: [CURIE; 4] = [
     // ion mobility drift time
     curie!(MS:1002476),
     // inverse reduced ion mobility drift time
@@ -164,10 +164,10 @@ pub trait IonMobilityMeasure: ParamDescribed {
     }
 }
 
-const PRESET_SCAN_CONFIGURATION: CURIE = curie!(MS:1000616);
-const MASS_RESOLUTION: CURIE = curie!(MS:1000011);
-const FILTER_STRING: CURIE = curie!(MS:1000512);
-const SCAN_TITLE: CURIE = curie!(MS:1000499);
+pub(crate) const PRESET_SCAN_CONFIGURATION: CURIE = curie!(MS:1000616);
+pub(crate) const MASS_RESOLUTION: CURIE = curie!(MS:1000011);
+pub(crate) const FILTER_STRING: CURIE = curie!(MS:1000512);
+pub(crate) const SCAN_TITLE: CURIE = curie!(MS:1000499);
 
 impl ScanEvent {
     pub fn new(

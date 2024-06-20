@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::collections::hash_map::{Iter, IterMut};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -11,6 +12,7 @@ use mzpeaks::Tolerance;
 use super::array::DataArray;
 use super::encodings::{ArrayRetrievalError, ArrayType, BinaryCompressionType};
 use super::traits::{ByteArrayView, ByteArrayViewMut};
+use super::BinaryDataArrayType;
 
 #[derive(Debug, Default, Clone)]
 pub struct BinaryArrayMap {
@@ -60,14 +62,17 @@ impl BinaryArrayMap {
         self.byte_buffer_map.par_iter_mut()
     }
 
-
     /// Compress a specific [`DataArray`] with the `compression` scheme provided, if it is present.
     ///
     /// This method may fail if the compression fails or if the array type is missing.
     ///
     /// ## See Also
     /// [`DataArray::store_compressed`]
-    pub fn encode_array(&mut self, array_type: &ArrayType, compression: BinaryCompressionType) -> Result<(), ArrayRetrievalError> {
+    pub fn encode_array(
+        &mut self,
+        array_type: &ArrayType,
+        compression: BinaryCompressionType,
+    ) -> Result<(), ArrayRetrievalError> {
         if let Some(arr) = self.get_mut(array_type) {
             arr.store_compressed(compression)?;
             Ok(())
@@ -203,7 +208,7 @@ impl BinaryArrayMap {
     pub fn mzs_mut(&mut self) -> Result<&mut [f64], ArrayRetrievalError> {
         if let Some(mz_array) = self.get_mut(&ArrayType::MZArray) {
             mz_array.decode_and_store()?;
-            mz_array.store_as(super::BinaryDataArrayType::Float64)?;
+            mz_array.store_as(BinaryDataArrayType::Float64)?;
             mz_array.coerce_mut()
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::MZArray))
@@ -223,7 +228,7 @@ impl BinaryArrayMap {
     pub fn intensities_mut(&mut self) -> Result<&mut [f32], ArrayRetrievalError> {
         if let Some(mz_array) = self.get_mut(&ArrayType::IntensityArray) {
             mz_array.decode_and_store()?;
-            mz_array.store_as(super::BinaryDataArrayType::Float32)?;
+            mz_array.store_as(BinaryDataArrayType::Float32)?;
             mz_array.coerce_mut()
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::IntensityArray))
@@ -242,7 +247,7 @@ impl BinaryArrayMap {
     pub fn charge_mut(&mut self) -> Result<&mut [i32], ArrayRetrievalError> {
         if let Some(mz_array) = self.get_mut(&ArrayType::ChargeArray) {
             mz_array.decode_and_store()?;
-            mz_array.store_as(super::BinaryDataArrayType::Int32)?;
+            mz_array.store_as(BinaryDataArrayType::Int32)?;
             mz_array.coerce_mut()
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::ChargeArray))
@@ -270,7 +275,7 @@ impl BinaryArrayMap {
             .find(|(a, _)| a.is_ion_mobility())
         {
             data_array.decode_and_store()?;
-            data_array.store_as(super::BinaryDataArrayType::Float32)?;
+            data_array.store_as(BinaryDataArrayType::Float32)?;
             Ok((data_array.coerce_mut()?, array_type.clone()))
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::IonMobilityArray))
@@ -295,31 +300,23 @@ impl IntoIterator for BinaryArrayMap {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct BinaryArrayMap3D {
-    pub ion_mobility_dimension: Vec<f32>,
-    pub ion_mobility_type: ArrayType,
-    pub arrays: Vec<BinaryArrayMap>,
-    ion_mobility_index: HashMap<OrderedF32, usize>,
-}
-
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-struct OrderedF32(f32);
+struct NonNaNF32(f32);
 
-impl std::hash::Hash for OrderedF32 {
+impl std::hash::Hash for NonNaNF32 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         ((self.0 * 10000.0) as i32).hash(state);
     }
 }
 
-impl From<f32> for OrderedF32 {
+impl From<f32> for NonNaNF32 {
     fn from(value: f32) -> Self {
         Self::wrap(value)
             .unwrap_or_else(|| panic!("Expected an order-able f32 value, but found {}", value))
     }
 }
 
-impl OrderedF32 {
+impl NonNaNF32 {
     fn wrap(value: f32) -> Option<Self> {
         if value.is_nan() {
             None
@@ -329,16 +326,16 @@ impl OrderedF32 {
     }
 }
 
-impl PartialOrd for OrderedF32 {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+impl PartialOrd for NonNaNF32 {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Eq for OrderedF32 {}
+impl Eq for NonNaNF32 {}
 
-impl Ord for OrderedF32 {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+impl Ord for NonNaNF32 {
+    fn cmp(&self, other: &Self) -> Ordering {
         self.0.total_cmp(&other.0)
     }
 }
@@ -347,7 +344,7 @@ macro_rules! _populate_stacked_array_from {
     ($im_dim:ident, $view:ident, $index_map:ident, $array_bins:ident, $array_type:ident, $array:ident) => {
         for (i_im, im) in $im_dim.iter() {
             let v = $view[*i_im];
-            let i_axis = $index_map[&OrderedF32(*im)];
+            let i_axis = $index_map[&NonNaNF32(*im)];
             let bin = &mut $array_bins[i_axis];
             if let Some(bin_array) = bin.get_mut($array_type) {
                 bin_array.push(v)?;
@@ -360,10 +357,18 @@ macro_rules! _populate_stacked_array_from {
     };
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct BinaryArrayMap3D {
+    pub ion_mobility_dimension: Vec<f32>,
+    pub ion_mobility_type: ArrayType,
+    pub arrays: Vec<BinaryArrayMap>,
+    ion_mobility_index: HashMap<NonNaNF32, usize>,
+}
+
 #[allow(unused)]
 impl BinaryArrayMap3D {
     pub fn get_ion_mobility(&self, ion_mobility: f32) -> Option<&BinaryArrayMap> {
-        if let Some(i) = OrderedF32::wrap(ion_mobility) {
+        if let Some(i) = NonNaNF32::wrap(ion_mobility) {
             if let Some(i) = self.ion_mobility_index.get(&i) {
                 self.arrays.get(*i)
             } else {
@@ -379,6 +384,91 @@ impl BinaryArrayMap3D {
             .iter()
             .copied()
             .zip(self.arrays.iter())
+    }
+
+    pub fn unstack(&self) -> Result<BinaryArrayMap, ArrayRetrievalError> {
+        let mut destination = BinaryArrayMap::new();
+
+        destination.add(DataArray::from_name_and_type(
+            &self.ion_mobility_type,
+            BinaryDataArrayType::Float32,
+        ));
+
+        let mut current_mz = f64::INFINITY;
+        let mut max_mz = f64::NEG_INFINITY;
+        let mut mz_axes = Vec::new();
+        let mut indices = Vec::new();
+
+        // Prepare the destination to have a waiting array of all types in the layers of this
+        // array stack.
+        for layer in self.arrays.iter() {
+            for (key, array) in layer.iter() {
+                if !destination.has_array(key) {
+                    let mut new_array = DataArray::from_name_and_type(key, array.dtype);
+                    new_array.unit = array.unit;
+                    new_array.params = array.params.clone();
+                    new_array.compression = BinaryCompressionType::Decoded;
+                    destination.add(new_array);
+                }
+            }
+            let mzs = layer.mzs()?;
+            if let Some(mz) = mzs.first() {
+                current_mz = mz.min(current_mz);
+            }
+            if let Some(mz) = mzs.last() {
+                max_mz = mz.max(max_mz);
+            }
+            mz_axes.push(mzs);
+            indices.push(0usize);
+        }
+
+        while current_mz <= max_mz {
+            let mut next_mz = f64::INFINITY;
+            for (bin_i, (im, layer)) in self.iter().enumerate() {
+                if let Some(i) = indices.get(bin_i).copied() {
+                    if let Some(mz) = mz_axes[bin_i].get(i).copied() {
+                        if (mz - current_mz).abs() < 1e-3 {
+                            destination.get_mut(&ArrayType::MZArray).as_mut().unwrap().push(mz);
+                            destination.get_mut(&self.ion_mobility_type).as_mut().unwrap().push(im);
+                            for (key, array) in layer.iter() {
+                                if *key == ArrayType::MZArray {
+                                    continue;
+                                }
+                                match array.dtype() {
+                                    BinaryDataArrayType::Unknown => panic!("Cannot re-sort opaque or unknown dimension data types"),
+                                    BinaryDataArrayType::ASCII => {
+                                        let val = array.decode()?[i];
+                                        destination.get_mut(key).as_mut().unwrap().push(val);
+                                    },
+                                    BinaryDataArrayType::Float64 => {
+                                        let val = array.to_f64()?[i];
+                                        destination.get_mut(key).as_mut().unwrap().push(val);
+                                    },
+                                    BinaryDataArrayType::Float32 => {
+                                        let val = array.to_f32()?[i];
+                                        destination.get_mut(key).as_mut().unwrap().push(val);
+                                    },
+                                    BinaryDataArrayType::Int64 => {
+                                        let val = array.to_i64()?[i];
+                                        destination.get_mut(key).as_mut().unwrap().push(val);
+                                    },
+                                    BinaryDataArrayType::Int32 => {
+                                        let val = array.to_i32()?[i];
+                                        destination.get_mut(key).as_mut().unwrap().push(val);
+                                    },
+                                }
+                            }
+                            indices[bin_i] += 1;
+                        } else if mz > current_mz {
+                            next_mz = mz.min(next_mz);
+                        }
+                    }
+                }
+            }
+            current_mz = next_mz;
+        }
+
+        Ok(destination)
     }
 
     pub fn stack(source: &BinaryArrayMap) -> Result<Self, ArrayRetrievalError> {
@@ -400,7 +490,7 @@ impl BinaryArrayMap3D {
         for (_, v) in im_dim.iter() {
             if v.total_cmp(&last_v).is_gt() {
                 last_v = *v;
-                index_map.insert(OrderedF32::from(*v), im_axis.len());
+                index_map.insert(NonNaNF32::from(*v), im_axis.len());
                 im_axis.push(*v);
             }
         }
@@ -412,34 +502,34 @@ impl BinaryArrayMap3D {
                 continue;
             }
             match array.dtype() {
-                super::BinaryDataArrayType::Unknown => {
+                BinaryDataArrayType::Unknown => {
                     panic!("Cannot re-sort opaque or unknown dimension data types")
                 }
-                super::BinaryDataArrayType::Float64 => {
+                BinaryDataArrayType::Float64 => {
                     let view = array.to_f64()?;
                     _populate_stacked_array_from!(
                         im_dim, view, index_map, array_bins, array_type, array
                     );
                 }
-                super::BinaryDataArrayType::Float32 => {
+                BinaryDataArrayType::Float32 => {
                     let view = array.to_f32()?;
                     _populate_stacked_array_from!(
                         im_dim, view, index_map, array_bins, array_type, array
                     );
                 }
-                super::BinaryDataArrayType::Int64 => {
+                BinaryDataArrayType::Int64 => {
                     let view = array.to_i64()?;
                     _populate_stacked_array_from!(
                         im_dim, view, index_map, array_bins, array_type, array
                     );
                 }
-                super::BinaryDataArrayType::Int32 => {
+                BinaryDataArrayType::Int32 => {
                     let view = array.to_i32()?;
                     _populate_stacked_array_from!(
                         im_dim, view, index_map, array_bins, array_type, array
                     );
                 }
-                super::BinaryDataArrayType::ASCII => {
+                BinaryDataArrayType::ASCII => {
                     let view = array.decode()?;
                     _populate_stacked_array_from!(
                         im_dim, view, index_map, array_bins, array_type, array
@@ -458,6 +548,14 @@ impl TryFrom<BinaryArrayMap> for BinaryArrayMap3D {
     type Error = ArrayRetrievalError;
 
     fn try_from(value: BinaryArrayMap) -> Result<Self, Self::Error> {
+        Self::stack(&value)
+    }
+}
+
+impl TryFrom<&BinaryArrayMap> for BinaryArrayMap3D {
+    type Error = ArrayRetrievalError;
+
+    fn try_from(value: &BinaryArrayMap) -> Result<Self, Self::Error> {
         Self::stack(&value)
     }
 }

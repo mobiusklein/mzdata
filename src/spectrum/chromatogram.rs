@@ -14,8 +14,6 @@ pub struct Chromatogram {
     pub arrays: BinaryArrayMap,
 }
 
-const EMPTY: &[f64] = &[0.0];
-
 macro_rules! as_feature_view {
     ($chromatogram:ident, $view:ident => $then:tt) => {
         if let Ok(t) = $chromatogram.time() {
@@ -74,12 +72,11 @@ impl TimeInterval<Time> for Chromatogram {
     }
 
     fn iter_time(&self) -> impl Iterator<Item = f64> {
-        if let Ok(t) = self.time() {
-            // Not ideal, but we cannot know if the time array is materialized at this point.
-            Vec::from(t).into_iter()
-        } else {
-            Vec::from(EMPTY).into_iter()
-        }
+        self.arrays
+            .get(&ArrayType::TimeArray)
+            .map(|a| a.iter_f64().unwrap())
+            .into_iter()
+            .flatten()
     }
 }
 

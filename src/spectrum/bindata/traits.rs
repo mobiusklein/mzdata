@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::slice;
 use std::mem;
 use std::borrow::Cow;
@@ -151,6 +152,30 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         let n = view.len();
         Ok(n / self.dtype().size_of())
     }
+
+    fn iter_type<T: Pod>(&'lifespan self) -> Result<DataSliceIter<'lifespan, T>, ArrayRetrievalError> {
+        Ok(DataSliceIter::new(self.view()?))
+    }
+
+    fn iter_u8(&'lifespan self) -> Result<DataSliceIter<'lifespan, u8>, ArrayRetrievalError> {
+        Ok(DataSliceIter::new(self.view()?))
+    }
+
+    fn iter_f32(&'lifespan self) -> Result<DataSliceIter<'lifespan, f32>, ArrayRetrievalError> {
+        Ok(DataSliceIter::new(self.view()?))
+    }
+
+    fn iter_f64(&'lifespan self) -> Result<DataSliceIter<'lifespan, f64>, ArrayRetrievalError> {
+        Ok(DataSliceIter::new(self.view()?))
+    }
+
+    fn iter_i32(&'lifespan self) -> Result<DataSliceIter<'lifespan, i32>, ArrayRetrievalError> {
+        Ok(DataSliceIter::new(self.view()?))
+    }
+
+    fn iter_i64(&'lifespan self) -> Result<DataSliceIter<'lifespan, i64>, ArrayRetrievalError> {
+        Ok(DataSliceIter::new(self.view()?))
+    }
 }
 
 pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
@@ -181,5 +206,45 @@ pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
             Err(err) => return Err(err),
         };
         Self::coerce_from_mut(view)
+    }
+}
+
+#[derive(Debug)]
+pub struct DataSliceIter<'a, T: Pod> {
+    buffer: Cow<'a, [u8]>,
+    i: usize,
+    _t: PhantomData<T>
+}
+
+impl<'a, T: Pod> ExactSizeIterator for DataSliceIter<'a, T> {
+    fn len(&self) -> usize {
+        let z = mem::size_of::<T>();
+        (self.buffer.len() / z) as usize
+    }
+}
+
+impl<'a, T: Pod> DataSliceIter<'a, T> {
+    pub fn new(buffer: Cow<'a, [u8]>) -> Self {
+        Self { buffer, i: 0, _t: PhantomData }
+    }
+
+    pub fn next_value(&mut self) -> Option<T> {
+        let z = mem::size_of::<T>();
+        let offset = z * self.i;
+        if (offset + z) > self.buffer.len() {
+            None
+        } else {
+            let val = bytemuck::from_bytes(&self.buffer[offset..offset + z]);
+            self.i += 1;
+            Some(*val)
+        }
+    }
+}
+
+impl<'a, T: Pod> Iterator for DataSliceIter<'a, T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_value()
     }
 }
