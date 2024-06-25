@@ -265,7 +265,10 @@ impl Value {
         Ok(())
     }
 
-    fn parse<T: FromStr>(&self) -> Result<T, T::Err> {
+    /// Convert the value to a text string and then try to parse it into [`T`].
+    /// If the type is one of the common numeric types, prefer one of the provided
+    /// methods with a `to_` prefix as they avoid the string conversions.
+    pub fn parse<T: FromStr>(&self) -> Result<T, T::Err> {
         match self {
             Value::String(s) => s.parse(),
             Value::Float(v) => v.to_string().parse(),
@@ -1372,10 +1375,14 @@ impl Param {
         inst
     }
 
+    /// Attempt to parse the value of this parameter into [`T`].
+    ///
+    /// See [`Value::parse`]
     pub fn parse<T: str::FromStr>(&self) -> Result<T, T::Err> {
         self.value.parse::<T>()
     }
 
+    /// Check if this parameter is defined in a controlled vocabulary
     pub fn is_controlled(&self) -> bool {
         self.accession.is_some()
     }

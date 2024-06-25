@@ -302,7 +302,7 @@ pub trait MZFileReader<
 
     /// Re-construct an offset index from this readable object, assuming
     /// it is a JSON stream over the serialized index.
-    fn read_index(&mut self, reader: Box<dyn io::Read>) -> Result<&Self, serde_json::Error> {
+    fn read_index(&mut self, reader: Box<dyn io::Read>) -> Result<&mut Self, serde_json::Error> {
         match OffsetIndex::from_reader(reader) {
             Ok(index) => {
                 self.set_index(index);
@@ -1383,6 +1383,8 @@ where
     crate::delegate_impl_metadata_trait!(source);
 }
 
+/// Adapt a [`SpectrumSource`] that contains spectra with a non-scalar ion mobility
+/// dimension to a [`IonMobilityFrameSource`].
 #[derive(Debug)]
 pub struct Generic3DIonMobilityFrameSource<
     CP: CentroidPeakAdapting,

@@ -24,9 +24,9 @@ impl Display for ComponentType {
 
 /// A description of a combination of parts that are described as part of an [`InstrumentConfiguration`].
 /// There may be more than one component of the same type in a singel configuration, e.g. a triple-quad instrument
-/// can have three separate [`ComponentType::MassAnalyzer`] components.
+/// can have three separate [`ComponentType::Analyzer`] components.
 ///
-/// A component may also be described by more than one [`Param`], such as the
+/// A component may also be described by more than one [`Param`](crate::params::Param), such as the
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Component {
     /// The kind of component this describes

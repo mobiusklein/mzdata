@@ -78,10 +78,15 @@ pub struct ThermoRawReaderType<
 impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
     MZFileReader<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
 {
+    /// The format is always indexed and requires no formal build step.
     fn construct_index_from_stream(&mut self) -> u64 {
         self.len() as u64
     }
 
+    /// The underlying Thermo library requires an explicit file system path to open
+    /// the file, and as such this method always fails.
+    ///
+    /// [`open_path`](Self::open_path) works as normal.
     #[allow(unused)]
     fn open_file(source: std::fs::File) -> io::Result<Self> {
         Err(io::Error::new(
