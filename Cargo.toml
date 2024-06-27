@@ -69,6 +69,7 @@ parallelism = ["rayon", "mzsignal/parallelism"]
 # (de)compression.
 zlib = ["flate2/zlib"]
 zlib-ng-compat = ["flate2/zlib-ng-compat"]
+zlib-ng = ["flate2/zlib-ng"]
 miniz_oxide = ["flate2/rust_backend"]
 
 plotting = ["mzsignal", "mzsignal/plotting"]

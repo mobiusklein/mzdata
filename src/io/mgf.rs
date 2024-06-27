@@ -324,7 +324,7 @@ impl<
                 &_ => {
                     builder.description.add_param(Param::new_key_value(
                         key.to_lowercase(),
-                        String::from(value),
+                        value,
                     ));
                 }
             };

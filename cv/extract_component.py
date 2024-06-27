@@ -26,6 +26,7 @@ class ValueType(IntFlag):
     NonNegativeInteger = 0b00010000
     PositiveInteger = 0b00100000
     DateTime = 0b01000000
+    Boolean = 0b10000000
 
     ListOf = 0b1000000000000000
 
@@ -39,6 +40,7 @@ xsd_to_type = {
     "xsd:nonNegativeInteger": ValueType.NonNegativeInteger,
     "xsd:positiveInteger": ValueType.PositiveInteger,
     "xsd:dateTime": ValueType.DateTime,
+    "xsd:boolean": ValueType.Boolean,
 }
 
 

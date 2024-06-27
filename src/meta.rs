@@ -169,6 +169,7 @@ bitflags::bitflags! {
         const NonNegativeInteger = 0b00010000;
         const PositiveInteger = 0b00100000;
         const DateTime = 0b01000000;
+        const Boolean = 0b10000000;
 
         const ListOf = 0b1000000000000000;
     }

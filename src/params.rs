@@ -6,7 +6,7 @@ use std::convert::TryFrom;
 use std::fmt::Display;
 use std::hash::Hash;
 use std::str::{self, FromStr};
-use std::{io, num};
+use std::{io, mem, num};
 
 use thiserror::Error;
 
@@ -24,6 +24,8 @@ pub enum Value {
     Int(i64),
     /// Arbitrary binary data
     Buffer(Box<[u8]>),
+    /// true/false value
+    Boolean(bool),
     /// No value specified
     #[default]
     Empty,
@@ -75,6 +77,9 @@ pub trait ParamValue {
         self.is_i64() | self.is_f64()
     }
 
+    /// Check if the value is a boolean
+    fn is_boolean(&self) -> bool;
+
     /// Get the value as an `f64`, if possible
     fn to_f64(&self) -> Result<f64, ParamValueParseError>;
 
@@ -83,6 +88,9 @@ pub trait ParamValue {
         let v = self.to_f64()?;
         Ok(v as f32)
     }
+
+    /// Get the value as a `bool`, if possible
+    fn to_bool(&self) -> Result<bool, ParamValueParseError>;
 
     /// Get the value as an `i64`, if possible
     fn to_i64(&self) -> Result<i64, ParamValueParseError>;
@@ -151,6 +159,9 @@ impl FromStr for Value {
             Ok(Self::Int(value))
         } else if let Ok(value) = s.parse::<f64>() {
             Ok(Self::Float(value))
+        }
+        else if let Ok(value) = s.parse::<bool>() {
+            Ok(Self::Boolean(value))
         } else {
             Ok(Self::String(s.to_string()))
         }
@@ -165,6 +176,7 @@ impl Display for Value {
             Value::Int(v) => v.fmt(f),
             Value::Buffer(v) => f.write_str(&String::from_utf8_lossy(v)),
             Value::Empty => f.write_str(""),
+            Value::Boolean(v) => v.fmt(f),
         }
     }
 }
@@ -189,6 +201,8 @@ impl Value {
             Self::Int(value)
         } else if let Ok(value) = s.parse::<f64>() {
             Self::Float(value)
+        } else if let Ok(value) = s.parse::<bool>() {
+            Self::Boolean(value)
         } else {
             Self::String(s)
         }
@@ -265,6 +279,12 @@ impl Value {
         Ok(())
     }
 
+    pub fn coerce_bool(&mut self) -> Result<(), ParamValueParseError> {
+        let value = self.to_bool()?;
+        *self = Self::Boolean(value);
+        Ok(())
+    }
+
     /// Convert the value to a text string and then try to parse it into [`T`].
     /// If the type is one of the common numeric types, prefer one of the provided
     /// methods with a `to_` prefix as they avoid the string conversions.
@@ -275,6 +295,21 @@ impl Value {
             Value::Int(i) => i.to_string().parse(),
             Value::Buffer(b) => String::from_utf8_lossy(b).parse(),
             Value::Empty => "".parse(),
+            Value::Boolean(b) => b.to_string().parse(),
+        }
+    }
+
+    fn to_bool(&self) -> Result<bool, ParamValueParseError> {
+        if let Self::Boolean(val) = self {
+            Ok(*val)
+        } else if self.is_numeric() {
+            Ok(self.to_i64()? != 0)
+        } else if let Self::Empty = self {
+            Ok(false)
+        } else if let Ok(v) = self.parse() {
+            Ok(v)
+        } else {
+            Err(ParamValueParseError::FailedToExtractInt(Some(self.to_string())))
         }
     }
 
@@ -379,6 +414,7 @@ impl ParamValue for Value {
             Self::Float(v) => Cow::Owned(v.to_string().into_bytes()),
             Self::Int(v) => Cow::Owned(v.to_string().into_bytes()),
             Self::Empty => Cow::Borrowed(b""),
+            Self::Boolean(v) => Cow::Owned(v.to_string().into_bytes()),
         }
     }
 
@@ -393,7 +429,16 @@ impl ParamValue for Value {
             Self::Float(_) => 8,
             Self::Int(_) => 8,
             Self::Empty => 0,
+            Self::Boolean(_) => mem::size_of::<bool>()
         }
+    }
+
+    fn is_boolean(&self) -> bool {
+        matches!(self, Self::Boolean(_))
+    }
+
+    fn to_bool(&self) -> Result<bool, ParamValueParseError> {
+        self.to_bool()
     }
 }
 
@@ -439,11 +484,12 @@ impl Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         core::mem::discriminant(self).hash(state);
         match self {
-            Value::String(s) => s.hash(state),
-            Value::Float(v) => v.to_bits().hash(state),
-            Value::Int(v) => (*v).hash(state),
-            Value::Buffer(v) => v.hash(state),
-            Value::Empty => ().hash(state),
+            Self::String(s) => s.hash(state),
+            Self::Float(v) => v.to_bits().hash(state),
+            Self::Int(v) => (*v).hash(state),
+            Self::Buffer(v) => v.hash(state),
+            Self::Empty => ().hash(state),
+            Self::Boolean(v) => v.hash(state),
         }
     }
 }
@@ -531,6 +577,8 @@ pub enum ValueRef<'a> {
     /// No value specified
     #[default]
     Empty,
+    /// A true/false value
+    Boolean(bool),
 }
 
 impl<'a> Eq for ValueRef<'a> {}
@@ -601,10 +649,12 @@ impl FromStr for ValueRef<'_> {
         if s.is_empty() {
             return Ok(Self::Empty);
         }
-        if let Ok(value) = s.parse::<i64>() {
+        if let Ok(value) = s.parse() {
             Ok(Self::Int(value))
-        } else if let Ok(value) = s.parse::<f64>() {
+        } else if let Ok(value) = s.parse() {
             Ok(Self::Float(value))
+        } else if let Ok(value) = s.parse() {
+            Ok(Self::Boolean(value))
         } else {
             Ok(Self::String(Cow::Owned(s.to_string())))
         }
@@ -619,6 +669,7 @@ impl<'a> Display for ValueRef<'a> {
             Self::Int(v) => v.fmt(f),
             Self::Buffer(v) => f.write_str(&String::from_utf8_lossy(v)),
             Self::Empty => f.write_str(""),
+            Self::Boolean(v) => v.fmt(f),
         }
     }
 }
@@ -635,6 +686,8 @@ impl<'a> ValueRef<'a> {
             Self::Int(value)
         } else if let Ok(value) = s.parse::<f64>() {
             Self::Float(value)
+        } else if let Ok(value) = s.parse() {
+            Self::Boolean(value)
         } else {
             Self::String(Cow::Borrowed(s))
         }
@@ -663,6 +716,26 @@ impl<'a> ValueRef<'a> {
 
     fn is_str(&self) -> bool {
         matches!(self, Self::String(_))
+    }
+
+    fn to_bool(&self) -> Result<bool, ParamValueParseError> {
+        if let Self::Boolean(val) = self {
+            Ok(*val)
+        } else if self.is_numeric() {
+            Ok(self.to_i64()? != 0)
+        } else if let Self::Empty = self {
+            Ok(false)
+        } else if let Ok(v) = self.parse() {
+            Ok(v)
+        } else {
+            Err(ParamValueParseError::FailedToExtractInt(Some(self.to_string())))
+        }
+    }
+
+    pub fn coerce_bool(&mut self) -> Result<(), ParamValueParseError> {
+        let value = self.to_bool()?;
+        *self = Self::Boolean(value);
+        Ok(())
     }
 
     /// Store the value as a floating point number
@@ -712,6 +785,7 @@ impl<'a> ValueRef<'a> {
             Self::Int(i) => i.to_string().parse(),
             Self::Buffer(b) => String::from_utf8_lossy(b).parse(),
             Self::Empty => "".parse(),
+            Self::Boolean(v) => v.to_string().parse(),
         }
     }
 
@@ -788,6 +862,14 @@ impl<'a> ParamValue for ValueRef<'a> {
         self.is_str()
     }
 
+    fn is_boolean(&self) -> bool {
+        matches!(self, Self::Boolean(_))
+    }
+
+    fn to_bool(&self) -> Result<bool, ParamValueParseError> {
+        self.to_bool()
+    }
+
     fn to_f64(&self) -> Result<f64, ParamValueParseError> {
         self.to_f64()
     }
@@ -815,6 +897,7 @@ impl<'a> ParamValue for ValueRef<'a> {
             Self::Float(v) => Cow::Owned(v.to_string().into_bytes()),
             Self::Int(v) => Cow::Owned(v.to_string().into_bytes()),
             Self::Empty => Cow::Borrowed(b""),
+            Self::Boolean(v) => Cow::Owned(v.to_string().into_bytes()),
         }
     }
 
@@ -829,6 +912,7 @@ impl<'a> ParamValue for ValueRef<'a> {
             Self::Float(_) => 8,
             Self::Int(_) => 8,
             Self::Empty => 0,
+            Self::Boolean(_) => mem::size_of::<bool>(),
         }
     }
 }
@@ -841,6 +925,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Int(v) => Self::Int(*v),
             Value::Buffer(v) => Self::Buffer(Cow::Borrowed(v)),
             Value::Empty => Self::Empty,
+            Value::Boolean(v) => Self::Boolean(*v)
         }
     }
 }
@@ -856,6 +941,7 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Int(v) => Self::Int(v),
             ValueRef::Buffer(v) => Self::Buffer(v.to_vec().into_boxed_slice()),
             ValueRef::Empty => Self::Empty,
+            ValueRef::Boolean(v) => Self::Boolean(v)
         }
     }
 }
@@ -869,6 +955,7 @@ impl<'a> Hash for ValueRef<'a> {
             Self::Int(v) => (*v).hash(state),
             Self::Buffer(v) => v.hash(state),
             Self::Empty => ().hash(state),
+            Self::Boolean(v) => (*v).hash(state)
         }
     }
 }
@@ -922,6 +1009,18 @@ macro_rules! param_value_ref_float {
             }
         }
     };
+}
+
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Self::Boolean(value)
+    }
+}
+
+impl From<bool> for ValueRef<'_> {
+    fn from(value: bool) -> Self {
+        Self::Boolean(value)
+    }
 }
 
 param_value_ref_int!(i8);
@@ -1179,6 +1278,14 @@ impl<'a> ParamValue for ParamCow<'a> {
     fn data_len(&self) -> usize {
         <ValueRef<'a> as ParamValue>::data_len(&self.value)
     }
+
+    fn is_boolean(&self) -> bool {
+        <ValueRef<'a> as ParamValue>::is_boolean(&self.value)
+    }
+
+    fn to_bool(&self) -> Result<bool, ParamValueParseError> {
+        <ValueRef<'a> as ParamValue>::to_bool(&self.value)
+    }
 }
 
 impl ParamCow<'static> {
@@ -1339,6 +1446,14 @@ impl ParamValue for Param {
     fn data_len(&self) -> usize {
         <Value as ParamValue>::data_len(&self.value)
     }
+
+    fn is_boolean(&self) -> bool {
+        <Value as ParamValue>::is_boolean(&self.value)
+    }
+
+    fn to_bool(&self) -> Result<bool, ParamValueParseError> {
+        <Value as ParamValue>::to_bool(&self.value)
+    }
 }
 
 impl Display for Param {
@@ -1368,10 +1483,10 @@ impl Param {
         }
     }
 
-    pub fn new_key_value<K: Into<String>, V: Into<String>>(name: K, value: V) -> Param {
+    pub fn new_key_value<K: Into<String>, V: Into<Value>>(name: K, value: V) -> Param {
         let mut inst = Self::new();
         inst.name = name.into();
-        inst.value = value.into().into();
+        inst.value = value.into();
         inst
     }
 
