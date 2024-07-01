@@ -86,6 +86,8 @@ fn param_val_xsd<V: ParamValue>(param: &V) -> Option<&[u8]> {
         Some(b"xsd:integer")
     } else if param.is_str() {
         Some(b"xsd:string")
+    } else if param.is_boolean() {
+        Some(b"xsd:boolean")
     } else {
         None
     }

@@ -1315,10 +1315,10 @@ impl<
                 self.state = MzMLParserState::Resume;
             }
             MzMLParserState::ParserError => {
-                eprintln!("Starting parsing from error: {:?}", self.error);
+                log::error!("Starting parsing from error: {:?}", self.error);
             }
             state if state > MzMLParserState::SpectrumDone => {
-                eprintln!(
+                log::error!(
                     "Attempting to start parsing a spectrum in state {}",
                     self.state
                 );
@@ -1343,7 +1343,7 @@ impl<
         match self.read_into(&mut spectrum) {
             Ok(_sz) => Some(spectrum),
             Err(err) => {
-                debug!("Failed to read next spectrum: {err}");
+                trace!("Failed to read next spectrum: {err}");
                 None
             }
         }
