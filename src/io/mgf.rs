@@ -70,7 +70,7 @@ pub enum MGFError {
     #[error("Encountered a malformed header line")]
     MalformedHeaderLine,
     #[error("Too many columns for peak line encountered")]
-    TooManyColumnsForPeakLine,
+    NotEnoughColumnsForPeakLine,
     #[error("Encountered an IO error: {0}")]
     IOError(
         #[from]
@@ -90,8 +90,15 @@ struct SpectrumBuilder<
     pub charge_array: Vec<i32>,
     pub has_charge: u32,
     pub detail_level: DetailLevel,
+    empty_metadata: bool,
     centroided_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
+}
+
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> SpectrumBuilder<C, D> {
+    pub fn is_empty(&self) -> bool {
+        self.empty_metadata && self.mz_array.is_empty()
+    }
 }
 
 impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Default for SpectrumBuilder<C, D> {
@@ -101,6 +108,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Default for SpectrumB
         description.ms_level = 2;
         Self {
             description,
+            empty_metadata: true,
             mz_array: Default::default(),
             intensity_array: Default::default(),
             charge_array: Default::default(),
@@ -250,21 +258,35 @@ impl<
         let mut chars = line.chars();
         let first = chars.next().unwrap();
         if first.is_numeric() {
-            let parts: Vec<&str> = line.split_ascii_whitespace().collect();
-            let nparts = parts.len();
-            if !(2..=3).contains(&nparts) {
+            let mut it = line.split_ascii_whitespace();
+            let mz_token = it.next().unwrap();
+            let mut intensity_token = "";
+            let mut charge_token_opt = None;
+            let nparts = if let Some(i) = it.next() {
+                intensity_token = i;
+                charge_token_opt = it.next();
+                if charge_token_opt.is_some() {
+                    3
+                } else {
+                    2
+                }
+            } else {
+                1
+            };
+
+            if nparts < 2 {
                 self.state = MGFParserState::Error;
-                self.error = Some(MGFError::TooManyColumnsForPeakLine);
+                self.error = Some(MGFError::NotEnoughColumnsForPeakLine);
                 return None;
             }
             if !matches!(builder.detail_level, DetailLevel::MetadataOnly) {
-                let mz: f64 = parts[0].parse().unwrap();
-                let intensity: f32 = parts[1].parse().unwrap();
+                let mz: f64 = mz_token.parse().unwrap();
+                let intensity: f32 = intensity_token.parse().unwrap();
                 builder.mz_array.push(mz);
                 builder.intensity_array.push(intensity);
 
                 if nparts == 3 {
-                    let charge = parts[2].parse().unwrap();
+                    let charge = charge_token_opt.unwrap().parse().unwrap();
                     builder.charge_array.push(charge);
                     builder.has_charge += 1;
                 } else {
@@ -294,7 +316,7 @@ impl<
             true
         } else if line.contains('=') {
             let (key, value) = line.split_once('=').unwrap();
-
+            builder.empty_metadata = false;
             match key {
                 "TITLE" => builder.description.id = value.to_string(),
                 "RTINSECONDS" => {
@@ -355,10 +377,22 @@ impl<
 
     fn handle_start(&mut self, line: &str) -> bool {
         if line.contains('=') {
+            match self.state {
+                MGFParserState::Start => {
+                    self.state = MGFParserState::FileHeader;
+                    true
+                },
+                MGFParserState::FileHeader => {
+                    true
+                },
+                _ => false
+            }
         } else if line == "BEGIN IONS" {
             self.state = MGFParserState::ScanHeaders;
+            true
+        } else {
+            false
         }
-        true
     }
 
     fn handle_between(&mut self, line: &str) -> bool {
@@ -376,28 +410,29 @@ impl<
     pub fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
         let mut builder = SpectrumBuilder::<C, D>::default();
         match self._parse_into(&mut builder) {
-            Ok(offset) => {
-                if offset > 0 {
+            Ok((_, started_spectrum)) => {
+                if started_spectrum && !builder.is_empty() {
                     Some(builder.into())
                 } else {
                     None
                 }
             }
-            Err(err) => {
-                eprintln!("An error was encountered: {err:?}");
+            Err(_err) => {
                 None
             }
         }
     }
 
-    /// Read the next spectrum's contents directly into the passed struct.
+    /// Read the next spectrum's contents directly into the passed [`SpectrumBuilder`].
     fn _parse_into(
         &mut self,
         builder: &mut SpectrumBuilder<C, D>,
-    ) -> Result<usize, MGFError> {
+    ) -> Result<(usize, bool), MGFError> {
         let mut buffer = String::new();
         let mut work = true;
         let mut offset: usize = 0;
+        let mut had_begin_ions = false;
+
         while work {
             buffer.clear();
             let b = match self.read_line(&mut buffer) {
@@ -412,33 +447,40 @@ impl<
                     return Err(MGFError::IOError(err));
                 }
             };
+
+            // Count how many bytes we've read from the source
             offset += b;
             if b == 0 {
                 self.state = MGFParserState::Done;
                 break;
             }
+
             let line = buffer.trim();
             let n = line.len();
+
+            // Skip empty lines
             if n == 0 {
                 continue;
             }
-            if self.state == MGFParserState::Start {
-                work = self.handle_start(line);
-            } else if self.state == MGFParserState::Between {
-                work = self.handle_between(line);
-            } else if self.state == MGFParserState::ScanHeaders {
-                work = self.handle_scan_header(line, builder)
-            } else if self.state == MGFParserState::Peaks {
-                work = self.handle_peak(line, builder);
-            }
-            if matches!(self.state, MGFParserState::Error) {
-                let mut err = None;
-                mem::swap(&mut self.error, &mut err);
-                self.error = None;
-                return Err(err.unwrap());
-            }
+
+            work = match self.state {
+                MGFParserState::Start | MGFParserState::FileHeader => self.handle_start(line),
+                MGFParserState::ScanHeaders => {
+                    had_begin_ions = true;
+                    self.handle_scan_header(line, builder)
+                },
+                MGFParserState::Peaks => self.handle_peak(line, builder),
+                MGFParserState::Between => self.handle_between(line),
+                MGFParserState::Done => false,
+                MGFParserState::Error => {
+                    let mut err = None;
+                    mem::swap(&mut self.error, &mut err);
+                    self.error = None;
+                    return Err(err.unwrap());
+                },
+            };
         }
-        Ok(offset)
+        Ok((offset, had_begin_ions))
     }
 
     pub fn read_into(
@@ -447,9 +489,13 @@ impl<
     ) -> Result<usize, MGFError> {
         let mut accumulator = SpectrumBuilder::default();
         match self._parse_into(&mut accumulator) {
-            Ok(sz) => {
-                accumulator.into_spectrum(spectrum);
-                Ok(sz)
+            Ok((sz, started_spectrum)) => {
+                if !started_spectrum {
+                    Err(MGFError::IOError(io::Error::new(io::ErrorKind::UnexpectedEof, "EOF found before spectrum started")))
+                } else {
+                    accumulator.into_spectrum(spectrum);
+                    Ok(sz)
+                }
             }
             Err(err) => Err(err),
         }
