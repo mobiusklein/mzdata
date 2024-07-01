@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.21.0] - 2024-07-01
+
+### Added
+
+- Add Dimensionless to `Unit` for arrays without units
+- Add ion mobility stacked spectra support, initial build out of trait system.
+- Add Boolean variant to `ParamValue` types
+
+### Fixed
+
+- Fixed #3 empty spectrum from trailing newlines in MGF
+
 ## [0.20.0] - 2024-05-30
 
 ### Fixed
@@ -267,7 +279,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.20.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/mobiusklein/mzdata/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/mobiusklein/mzdata/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/mobiusklein/mzdata/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/mobiusklein/mzdata/compare/v0.17.0...v0.18.0
