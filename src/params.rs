@@ -285,7 +285,7 @@ impl Value {
         Ok(())
     }
 
-    /// Convert the value to a text string and then try to parse it into [`T`].
+    /// Convert the value to a text string and then try to parse it into `T`.
     /// If the type is one of the common numeric types, prefer one of the provided
     /// methods with a `to_` prefix as they avoid the string conversions.
     pub fn parse<T: FromStr>(&self) -> Result<T, T::Err> {
@@ -1490,7 +1490,7 @@ impl Param {
         inst
     }
 
-    /// Attempt to parse the value of this parameter into [`T`].
+    /// Attempt to parse the value of this parameter into `T`.
     ///
     /// See [`Value::parse`]
     pub fn parse<T: str::FromStr>(&self) -> Result<T, T::Err> {

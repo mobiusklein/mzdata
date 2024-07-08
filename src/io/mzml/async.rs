@@ -824,8 +824,6 @@ mod test {
                 .unwrap();
             let configs = spec.acquisition().instrument_configuration_ids();
             let conf = configs[0];
-            println!("Processing scan {}", spec.index());
-            dbg!(configs, &filter_string.value);
             if filter_string.value.to_str().contains("ITMS") {
                 assert_eq!(conf, 1);
             } else {

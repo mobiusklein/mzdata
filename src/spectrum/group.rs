@@ -62,7 +62,7 @@ where
 }
 
 #[derive(Debug, Default)]
-enum SpectrumGroupIterState {
+enum GroupIterState {
     #[default]
     Precursor,
     Product(usize),
@@ -76,7 +76,7 @@ pub struct SpectrumGroupIntoIter<
     G: SpectrumGrouping<C, D, S> = SpectrumGroup<C, D, S>,
 > {
     group: G,
-    state: SpectrumGroupIterState,
+    state: GroupIterState,
     _c: PhantomData<C>,
     _d: PhantomData<D>,
     _s: PhantomData<S>,
@@ -95,39 +95,39 @@ impl<
         {
             let n = self.n_products();
             let emission = match self.state {
-                SpectrumGroupIterState::Precursor => match self.group.precursor_mut() {
+                GroupIterState::Precursor => match self.group.precursor_mut() {
                     Some(prec) => {
                         if n > 0 {
-                            self.state = SpectrumGroupIterState::Product(0);
+                            self.state = GroupIterState::Product(0);
                         } else {
-                            self.state = SpectrumGroupIterState::Done;
+                            self.state = GroupIterState::Done;
                         }
                         Some(mem::take(prec))
                     }
                     None => {
                         if n > 0 {
                             self.state = if n > 1 {
-                                SpectrumGroupIterState::Product(1)
+                                GroupIterState::Product(1)
                             } else {
-                                SpectrumGroupIterState::Done
+                                GroupIterState::Done
                             };
                             Some(mem::take(&mut self.group.products_mut()[0]))
                         } else {
-                            self.state = SpectrumGroupIterState::Done;
+                            self.state = GroupIterState::Done;
                             None
                         }
                     }
                 },
-                SpectrumGroupIterState::Product(i) => {
+                GroupIterState::Product(i) => {
                     if i < n.saturating_sub(1) {
-                        self.state = SpectrumGroupIterState::Product(i + 1);
+                        self.state = GroupIterState::Product(i + 1);
                         Some(mem::take(&mut self.group.products_mut()[i]))
                     } else {
-                        self.state = SpectrumGroupIterState::Done;
+                        self.state = GroupIterState::Done;
                         Some(mem::take(&mut self.group.products_mut()[i]))
                     }
                 }
-                SpectrumGroupIterState::Done => None,
+                GroupIterState::Done => None,
             };
             emission
         }
@@ -144,7 +144,7 @@ impl<
     pub fn new(group: G) -> Self {
         Self {
             group,
-            state: SpectrumGroupIterState::Precursor,
+            state: GroupIterState::Precursor,
             _c: PhantomData,
             _d: PhantomData,
             _s: PhantomData,
@@ -165,7 +165,7 @@ pub struct SpectrumGroupIter<
     G: SpectrumGrouping<C, D, S> = SpectrumGroup<C, D, S>,
 > {
     group: &'a G,
-    state: SpectrumGroupIterState,
+    state: GroupIterState,
     _c: PhantomData<C>,
     _d: PhantomData<D>,
     _s: PhantomData<S>,
@@ -185,39 +185,39 @@ impl<
         {
             let n = self.n_products();
             let emission = match self.state {
-                SpectrumGroupIterState::Precursor => match self.group.precursor() {
+                GroupIterState::Precursor => match self.group.precursor() {
                     Some(prec) => {
                         if n > 0 {
-                            self.state = SpectrumGroupIterState::Product(0);
+                            self.state = GroupIterState::Product(0);
                         } else {
-                            self.state = SpectrumGroupIterState::Done;
+                            self.state = GroupIterState::Done;
                         }
                         Some(prec)
                     }
                     None => {
                         if n > 0 {
                             self.state = if n > 1 {
-                                SpectrumGroupIterState::Product(1)
+                                GroupIterState::Product(1)
                             } else {
-                                SpectrumGroupIterState::Done
+                                GroupIterState::Done
                             };
                             Some(&self.group.products()[0])
                         } else {
-                            self.state = SpectrumGroupIterState::Done;
+                            self.state = GroupIterState::Done;
                             None
                         }
                     }
                 },
-                SpectrumGroupIterState::Product(i) => {
+                GroupIterState::Product(i) => {
                     if i < n.saturating_sub(1) {
-                        self.state = SpectrumGroupIterState::Product(i + 1);
+                        self.state = GroupIterState::Product(i + 1);
                         Some(&self.group.products()[i])
                     } else {
-                        self.state = SpectrumGroupIterState::Done;
+                        self.state = GroupIterState::Done;
                         Some(&self.group.products()[i])
                     }
                 }
-                SpectrumGroupIterState::Done => None,
+                GroupIterState::Done => None,
             };
             emission
         }
@@ -235,7 +235,7 @@ impl<
     pub fn new(group: &'a G) -> Self {
         Self {
             group,
-            state: SpectrumGroupIterState::Precursor,
+            state: GroupIterState::Precursor,
             _c: PhantomData,
             _d: PhantomData,
             _s: PhantomData,

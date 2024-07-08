@@ -80,6 +80,9 @@ impl TimeInterval<Time> for Chromatogram {
     }
 }
 
+
+/// Analog of [`SpectrumLike`](crate::spectrum::SpectrumLike) for chromatograms or
+/// other measures over time.
 pub trait ChromatogramLike {
     /// The method to access the spectrum description itself, which supplies
     /// the data for most other methods on this trait.

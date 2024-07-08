@@ -81,9 +81,9 @@ impl BinaryArrayMap {
         }
     }
 
-    /// Decode all [`DataArray`] in this map. If there are many arrays and the
-    /// `parallelism` feature is enabled, each array will be decoded on a separate
-    /// thread.
+    /// Decode all [`DataArray`] in this map if they have not been decoded already so
+    /// that they are ready for use. If there are many arrays and the `parallelism` feature
+    /// is enabled, arrays may be decoded in parallel.
     pub fn decode_all_arrays(&mut self) -> Result<(), ArrayRetrievalError> {
         #[cfg(not(feature = "parallelism"))]
         {

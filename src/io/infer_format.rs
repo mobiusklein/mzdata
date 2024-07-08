@@ -134,6 +134,43 @@ impl<R: io::Read + io::Seek,
             MZReaderType::MzMLb(_) => MassSpectrometryFormat::MzMLb,
         }
     }
+
+    pub fn open_read_seek(mut stream: R) -> io::Result<Self> {
+        let (fmt, gzipped) = infer_from_stream(&mut stream)?;
+        if gzipped {
+            return Err(io::Error::new(io::ErrorKind::Unsupported, "This method does not support gzipped streams"))
+        }
+        match fmt {
+            MassSpectrometryFormat::MGF => Ok(Self::MGF(MGFReaderType::new_indexed(stream))),
+            MassSpectrometryFormat::MzML => Ok(Self::MzML(MzMLReaderType::new_indexed(stream))),
+            _ => {
+                Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
+            }
+        }
+    }
+}
+
+impl<R: io::Read,
+     C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> MZReaderType<PreBufferedStream<R>, C, D> {
+
+    pub fn open_read(stream: R) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, Self>> {
+        let mut stream = PreBufferedStream::new(stream)?;
+        let (fmt, gzipped) = infer_from_stream(&mut stream)?;
+
+        if gzipped {
+            return Err(io::Error::new(io::ErrorKind::Unsupported, "This method does not support gzipped streams"))
+        }
+
+        let reader = match fmt {
+            MassSpectrometryFormat::MGF => Self::MGF(MGFReaderType::new(stream)),
+            MassSpectrometryFormat::MzML => Self::MzML(MzMLReaderType::new(stream)),
+            _ => {
+                return Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
+            }
+        };
+        Ok(StreamingSpectrumIterator::new(reader))
+    }
 }
 
 /// A specialization of [`MZReaderType`] for the default peak types, for common use. The preferred means

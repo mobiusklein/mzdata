@@ -57,6 +57,12 @@ pub trait SpectrumSource<
     /// in chronological order.
     fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {
         let n = self.len();
+        if n == 0 {
+            if !self.get_index().init {
+                warn!("Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized.");
+                return None
+            }
+        }
         let mut lo: usize = 0;
         let mut hi: usize = n;
 
@@ -86,7 +92,9 @@ pub trait SpectrumSource<
         best_match
     }
 
-    /// Retrieve the number of spectra in source file
+    /// Retrieve the number of spectra in source file, usually by getting
+    /// the length of the index. If the index isn't initialized, this will
+    /// be 0.
     fn len(&self) -> usize {
         self.get_index().len()
     }
@@ -519,7 +527,14 @@ impl<
 {
 }
 
-/// An alternative implementation of [`SpectrumSource`] for non-rewindable underlying streams
+/// An alternative implementation of [`SpectrumSource`] for non-rewindable underlying iterators.
+///
+/// When the source doesn't support [`io::Seek`](std::io::Seek), most reader types don't
+/// even implement [`SpectrumSource`], although they still implement
+/// [`Iterator`]. The [`StreamingSpectrumIterator`]
+/// wrapper does implement parts of [`SpectrumSource`] using less efficient
+/// mechanism, but in situations where it cannot satisfy the request, it will `panic` instead. It also,
+/// naturally doesn't support reading spectra that have already been seen as the stream cannot be reversed.
 pub struct StreamingSpectrumIterator<
     C: CentroidLike + Default,
     D: DeconvolutedCentroidLike + Default,

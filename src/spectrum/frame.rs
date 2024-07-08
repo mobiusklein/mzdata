@@ -1,5 +1,5 @@
 #![allow(unused)]
-use std::{borrow::Cow, convert::TryFrom};
+use std::{borrow::Cow, convert::TryFrom, marker::PhantomData};
 
 use mzpeaks::{
     coordinate::{IonMobility, Mass, MZ},
@@ -273,8 +273,7 @@ mod mzsignal_impl {
         > MultiLayerIonMobilityFrame<C, D>
     {
         pub fn extract_features_with<
-            M: FeatureGraphBuilder<MZ, IonMobility, C>,
-            E: MapState<CentroidPeak, MZ, IonMobility, FeatureType = C, FeatureMergerType = M>
+            E: MapState<CentroidPeak, MZ, IonMobility, FeatureType = C>
                 + Default,
         >(
             &mut self,
@@ -354,12 +353,7 @@ mod mzsignal_impl {
             peak_picker: Option<PeakPicker>,
         ) -> Result<(), ArrayRetrievalError> {
             self.extract_features_with::<
-            <PeakMapState<CentroidPeak, MZ> as MapState<
-                CentroidPeak,
-                MZ,
-                IonMobility,
-            >>::FeatureMergerType,
-            PeakMapState<CentroidPeak, MZ>
+                PeakMapState<CentroidPeak, MZ>
             >(
                 error_tolerance,
                 min_length,
@@ -369,6 +363,26 @@ mod mzsignal_impl {
         }
     }
 }
+
+/**
+A pairing of an optional MS1 spectrum with all its associated MSn spectra.
+*/
+#[derive(Debug, Clone)]
+pub struct FrameGroup<C, D, S>
+where
+    C: CentroidLike + Default,
+    D: DeconvolutedCentroidLike + Default,
+    S: SpectrumLike<C, D>,
+{
+    /// The MS1 spectrum of a group. This may be absent when the source does not contain any MS1 spectra
+    pub precursor: Option<S>,
+    /// The collection of related MSn spectra. If MSn for n > 2 is used, all levels are present in this
+    /// collection, though there is no ordering guarantee.
+    pub products: Vec<S>,
+    centroid_type: PhantomData<C>,
+    deconvoluted_type: PhantomData<D>,
+}
+
 
 #[cfg(test)]
 mod test {

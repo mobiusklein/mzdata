@@ -1836,7 +1836,7 @@ impl<
     > MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<fs::File, C, D>
 {
     fn open_file(source: fs::File) -> io::Result<Self> {
-        Ok(Self::new(source))
+        Ok(Self::new_indexed(source))
     }
 
     fn construct_index_from_stream(&mut self) -> u64 {
@@ -2037,7 +2037,6 @@ mod test {
                 .unwrap();
             let configs = scan.acquisition().instrument_configuration_ids();
             let conf = configs[0];
-            println!("Processing scan {}", scan.index());
             if filter_string.value.to_string().contains("ITMS") {
                 assert_eq!(conf, 1);
             } else {

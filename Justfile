@@ -8,6 +8,9 @@ alias t := test-units
 test-units-more:
     cargo test --lib --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,thermo,async
 
+quick-docs:
+    cargo doc --no-deps -p mzdata
+
 docs:
     cargo doc --no-deps --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,thermo,async -p mzdata
 

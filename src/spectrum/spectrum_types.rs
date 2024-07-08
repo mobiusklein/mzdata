@@ -1,11 +1,13 @@
-use std::borrow::Cow;
 use std::convert::TryFrom;
+use std::{borrow::Cow, ops::Index};
 
+use mzpeaks::Mass;
 use thiserror::Error;
 
 use mzpeaks::{
     peak_set::PeakSetVec, prelude::*, CentroidLike, CentroidPeak, DeconvolutedCentroidLike,
-    DeconvolutedPeak, IndexType, MZPeakSetType, MassPeakSetType, PeakSet, Tolerance,
+    DeconvolutedPeak, IndexType, MZPeakSetType, MassPeakSetType, PeakCollection, PeakSet,
+    Tolerance, MZ,
 };
 
 #[cfg(feature = "mzsignal")]
@@ -42,8 +44,16 @@ impl<D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak>> Deconvolute
 {
 }
 
+/// Represent an owned representation of one the kinds of peak data that a [`SpectrumLike`] instance
+/// might otherwise carry.
+///
+/// # See also
+/// [`RefPeakDataLevel`] for borrowed version.
 #[derive(Debug)]
-pub enum PeakDataLevel<C: CentroidLike, D: DeconvolutedCentroidLike> {
+pub enum PeakDataLevel<
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
+> {
     Missing,
     RawData(BinaryArrayMap),
     Centroid(MZPeakSetType<C>),
@@ -646,7 +656,8 @@ pub trait SpectrumLike<
 
 #[derive(Default, Debug, Clone)]
 /// Represents a spectrum that hasn't been processed yet, with only
-/// data arrays, potentially no discrete peaks.
+/// data arrays, potentially no discrete peaks. A raw spectrum may still
+/// be centroided, but the peaks still need to be decoded.
 pub struct RawSpectrum {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
@@ -665,7 +676,7 @@ impl ParamDescribed for RawSpectrum {
     }
 }
 
-/// Errors that may arise when converting between different SpectrumBehavior-like types
+/// Errors that may arise when converting between different [`SpectrumLike`] types
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum SpectrumConversionError {
     #[error("m/z array does not match size of intensity array")]
@@ -726,7 +737,14 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         }
     }
 
-    /// Convert a spectrum into a [`CentroidSpectrumType`]
+    /// Convert a spectrum into a [`CentroidSpectrumType`].
+    ///
+    /// # Errors
+    /// This operation returns [`SpectrumConversionError::NotCentroided`] if the
+    /// [`SpectrumLike::signal_continuity`] != [`SignalContinuity::Centroid`].
+    ///
+    /// # See also
+    /// To pick peaks from profile data, see [`RawSpectrum::pick_peaks_into`]
     pub fn into_centroid<C: CentroidLike + Default>(
         self,
     ) -> Result<CentroidSpectrumType<C>, SpectrumConversionError>
@@ -753,10 +771,20 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         Ok(centroid)
     }
 
+    /// Access the m/z array.
+    ///
+    /// # Panics
+    /// This function will panic if [`ArrayType::MZArray`] is not
+    /// present in [`RawSpectrum::arrays`]
     pub fn mzs(&'lifespan self) -> Cow<'transient, [f64]> {
         self.arrays.mzs().unwrap()
     }
 
+    /// Access the intensity array.
+    ///
+    /// # Panics
+    /// This function will panic if [`ArrayType::IntensityArray`] is not
+    /// present in [`RawSpectrum::arrays`]
     pub fn intensities(&'lifespan self) -> Cow<'transient, [f32]> {
         self.arrays.intensities().unwrap()
     }
@@ -769,11 +797,16 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         self.arrays.intensities_mut()
     }
 
+    /// Explicitly decode any [`DataArray`] that is encoded or compressed still
+    /// so that they are ready for use.
+    ///
+    /// # See also
+    /// [`BinaryArrayMap::decode_all_arrays`]
     pub fn decode_all_arrays(&mut self) -> Result<(), ArrayRetrievalError> {
         self.arrays.decode_all_arrays()
     }
 
-    /// Convert a spectrum into a [`Spectrum`]
+    /// Convert a spectrum into a [`MultiLayerSpectrum`].
     pub fn into_spectrum<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>(
         self,
     ) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
@@ -787,6 +820,8 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         })
     }
 
+    /// Apply a local denoising algorithm to the signal that is suitable for profile mode
+    /// data.
     #[cfg(feature = "mzsignal")]
     pub fn denoise(&mut self, scale: f32) -> Result<(), SpectrumProcessingError> {
         let mut intensities_copy = self.arrays.intensities()?.into_owned();
@@ -804,11 +839,19 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         }
     }
 
+    /// pick peaks with `peak_picker` and convert this spectrum into a [`MultiLayerSpectrum`] with a centroid peak list
+    /// as well as raw data arrays.
+    ///
+    /// # See also
+    /// [`MultiLayerSpectrum::pick_peaks_with`]
     #[cfg(feature = "mzsignal")]
-    pub fn pick_peaks_with_into(
+    pub fn pick_peaks_with_into<
+        C: CentroidPeakAdapting + BuildFromArrayMap + From<FittedPeak>,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    >(
         self,
         peak_picker: &PeakPicker,
-    ) -> Result<MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>, SpectrumProcessingError> {
+    ) -> Result<MultiLayerSpectrum<C, D>, SpectrumProcessingError> {
         let mut result = self.into_spectrum()?;
         match result.pick_peaks_with(peak_picker) {
             Ok(_) => Ok(result),
@@ -816,11 +859,19 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         }
     }
 
+    /// Pick peaks with a minimum signal-to-noise threshold and convert this spectrum into a [`MultiLayerSpectrum`] with
+    /// a centroid peak list as well as raw data arrays.
+    ///
+    /// # See also
+    /// [`RawSpectrum::pick_peaks_with_into`]
     #[cfg(feature = "mzsignal")]
-    pub fn pick_peaks_into(
+    pub fn pick_peaks_into<
+        C: CentroidPeakAdapting + BuildFromArrayMap + From<FittedPeak>,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    >(
         self,
         signal_to_noise_threshold: f32,
-    ) -> Result<MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>, SpectrumProcessingError> {
+    ) -> Result<MultiLayerSpectrum<C, D>, SpectrumProcessingError> {
         let peak_picker = PeakPicker {
             fit_type: PeakFitType::Quadratic,
             signal_to_noise_threshold,
@@ -829,12 +880,20 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         self.pick_peaks_with_into(&peak_picker)
     }
 
+    /// Pick peaks in the specified m/z ranges with a minimum signal-to-noise threshold and convert
+    /// this spectrum into a [`MultiLayerSpectrum`] with a centroid peak list as well as raw data arrays.
+    ///
+    /// # See also
+    /// [`MultiLayerSpectrum::pick_peaks_in_intervals_into`]
     #[cfg(feature = "mzsignal")]
-    pub fn pick_peaks_in_intervals_into(
+    pub fn pick_peaks_in_intervals_into<
+        C: CentroidPeakAdapting + BuildFromArrayMap + From<FittedPeak>,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    >(
         self,
         signal_to_noise_threshold: f32,
         intervals: &[(f64, f64)],
-    ) -> Result<MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>, SpectrumProcessingError> {
+    ) -> Result<MultiLayerSpectrum<C, D>, SpectrumProcessingError> {
         let mut result = self.into_spectrum()?;
         match result.pick_peaks_in_intervals(signal_to_noise_threshold, intervals) {
             Ok(_) => Ok(result),
@@ -872,11 +931,11 @@ impl SpectrumLike for RawSpectrum {
 }
 
 #[derive(Default, Debug, Clone)]
-/// Represents a spectrum that has been centroided
+/// Represents a spectrum that has been centroided into discrete m/z points, a process also called "peak picking".
 pub struct CentroidSpectrumType<C: CentroidLike + Default> {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
-    /// The picked centroid peaks
+    /// The picked centroid peaks, sorted by m/z in a fast searchable structure.
     pub peaks: MZPeakSetType<C>,
 }
 
@@ -956,6 +1015,43 @@ impl<C: CentroidLike + Default> CentroidSpectrumType<C> {
 
 pub type CentroidSpectrum = CentroidSpectrumType<CentroidPeak>;
 
+impl<C: CentroidPeakAdapting> Index<usize> for CentroidSpectrumType<C> {
+    type Output = <MZPeakSetType<C> as Index<usize>>::Output;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.peaks.index(index)
+    }
+}
+
+impl<C: CentroidPeakAdapting> PeakCollection<C, MZ> for CentroidSpectrumType<C>
+where
+    MZPeakSetType<C>: PeakCollection<C, MZ>,
+    <MZPeakSetType<C> as Index<usize>>::Output: CoordinateLike<MZ>,
+{
+    fn len(&self) -> usize {
+        self.peaks.len()
+    }
+
+    fn get_item(&self, i: usize) -> &C {
+        self.peaks.get_item(i)
+    }
+
+    fn get_slice(&self, i: std::ops::Range<usize>) -> &[C] {
+        self.peaks.get_slice(i)
+    }
+
+    fn search_by(&self, query: f64) -> Result<usize, usize> {
+        self.peaks.search_by(query)
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &C>
+    where
+        C: 'static,
+    {
+        self.peaks.iter()
+    }
+}
+
 /// Represents a spectrum that has been centroided, deisotoped, and charge state deconvolved
 #[derive(Default, Debug, Clone)]
 pub struct DeconvolutedSpectrumType<D: DeconvolutedCentroidLike + Default> {
@@ -1026,6 +1122,44 @@ impl<D: DeconvolutedCentroidLike + Default> SpectrumLike<CentroidPeak, D>
 }
 
 pub type DeconvolutedSpectrum = DeconvolutedSpectrumType<DeconvolutedPeak>;
+
+impl<D: DeconvolutedPeakAdapting> Index<usize> for DeconvolutedSpectrumType<D> {
+    type Output = <MassPeakSetType<D> as Index<usize>>::Output;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.deconvoluted_peaks.index(index)
+    }
+}
+
+impl<D: DeconvolutedPeakAdapting> PeakCollection<D, Mass> for DeconvolutedSpectrumType<D>
+where
+    MassPeakSetType<D>: PeakCollection<D, Mass>,
+    <MassPeakSetType<D> as Index<usize>>::Output: CoordinateLike<Mass>,
+{
+    fn len(&self) -> usize {
+        self.deconvoluted_peaks.len()
+    }
+
+    fn get_item(&self, i: usize) -> &D {
+        self.deconvoluted_peaks.get_item(i)
+    }
+
+    fn get_slice(&self, i: std::ops::Range<usize>) -> &[D] {
+        self.deconvoluted_peaks.get_slice(i)
+    }
+
+    fn search_by(&self, query: f64) -> Result<usize, usize> {
+        self.deconvoluted_peaks.search_by(query)
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &D>
+    where
+        D: 'static,
+    {
+        self.deconvoluted_peaks.iter()
+    }
+}
+
 
 #[derive(Default, Debug, Clone)]
 /// Represent a spectrum with multiple layers of representation of the
@@ -1119,42 +1253,6 @@ where
             arrays,
             peaks,
             deconvoluted_peaks,
-        }
-    }
-
-    pub fn try_build_centroids(&mut self) -> Result<&MZPeakSetType<C>, SpectrumConversionError> {
-        if self.peaks.is_some() {
-            Ok(self.peaks.as_ref().unwrap())
-        } else if let Some(arrays) = self.arrays.as_ref() {
-            match self.signal_continuity() {
-                SignalContinuity::Centroid => {
-                    let peaks = C::try_from_arrays(arrays)?.into();
-                    self.peaks = Some(peaks);
-                    Ok(self.peaks.as_ref().unwrap())
-                }
-                _ => Err(SpectrumConversionError::NotCentroided),
-            }
-        } else {
-            Err(SpectrumConversionError::NoPeakData)
-        }
-    }
-
-    pub fn try_build_deconvoluted_centroids(
-        &mut self,
-    ) -> Result<&MassPeakSetType<D>, SpectrumConversionError> {
-        if let Some(ref peaks) = self.deconvoluted_peaks {
-            Ok(peaks)
-        } else if let Some(ref arrays) = self.arrays {
-            match self.signal_continuity() {
-                SignalContinuity::Centroid => {
-                    let peaks = D::try_from_arrays(arrays)?.into();
-                    self.deconvoluted_peaks = Some(peaks);
-                    Ok(self.deconvoluted_peaks.as_ref().unwrap())
-                }
-                _ => Err(SpectrumConversionError::NotCentroided),
-            }
-        } else {
-            Err(SpectrumConversionError::NoPeakData)
         }
     }
 
@@ -1333,12 +1431,90 @@ where
     }
 }
 
+impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> MultiLayerSpectrum<C, D>
+where
+    C: BuildFromArrayMap,
+    D: BuildFromArrayMap,
+{
+    pub fn try_build_peaks(&mut self) -> Result<(bool, bool), SpectrumConversionError> {
+        if matches!(self.signal_continuity(), SignalContinuity::Centroid) {
+            if let Some(arrays) = self.arrays.as_ref() {
+                let dpeaks_loaded = match D::has_arrays_for(arrays) {
+                    super::bindata::ArraysAvailable::Ok => {
+                        let peaks = D::try_from_arrays(arrays)?.into();
+                        self.deconvoluted_peaks = Some(peaks);
+                        true
+                    }
+                    _ => false,
+                };
+
+                let cpeaks_loaded = if !dpeaks_loaded {
+                    match C::has_arrays_for(arrays) {
+                        super::bindata::ArraysAvailable::Ok => {
+                            let peaks = C::try_from_arrays(arrays)?.into();
+                            self.peaks = Some(peaks);
+                            true
+                        }
+                        _ => false,
+                    }
+                } else {
+                    false
+                };
+                Ok((cpeaks_loaded, dpeaks_loaded))
+            } else {
+                Ok((false, false))
+            }
+        } else {
+            Ok((false, false))
+        }
+    }
+
+    pub fn try_build_centroids(&mut self) -> Result<&MZPeakSetType<C>, SpectrumConversionError> {
+        if self.peaks.is_some() {
+            Ok(self.peaks.as_ref().unwrap())
+        } else if let Some(arrays) = self.arrays.as_ref() {
+            match self.signal_continuity() {
+                SignalContinuity::Centroid => {
+                    let peaks = C::try_from_arrays(arrays)?.into();
+                    self.peaks = Some(peaks);
+                    Ok(self.peaks.as_ref().unwrap())
+                }
+                _ => Err(SpectrumConversionError::NotCentroided),
+            }
+        } else {
+            Err(SpectrumConversionError::NoPeakData)
+        }
+    }
+
+    pub fn try_build_deconvoluted_centroids(
+        &mut self,
+    ) -> Result<&MassPeakSetType<D>, SpectrumConversionError> {
+        if let Some(ref peaks) = self.deconvoluted_peaks {
+            Ok(peaks)
+        } else if let Some(ref arrays) = self.arrays {
+            match self.signal_continuity() {
+                SignalContinuity::Centroid => {
+                    let peaks = D::try_from_arrays(arrays)?.into();
+                    self.deconvoluted_peaks = Some(peaks);
+                    Ok(self.deconvoluted_peaks.as_ref().unwrap())
+                }
+                _ => Err(SpectrumConversionError::NotCentroided),
+            }
+        } else {
+            Err(SpectrumConversionError::NoPeakData)
+        }
+    }
+}
+
 #[cfg(feature = "mzsignal")]
 impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike + Default>
     MultiLayerSpectrum<C, D>
 {
     /// Using a pre-configured [`mzsignal::PeakPicker`](mzsignal::peak_picker::PeakPicker) to pick peaks
     /// from `arrays`'s signal, populating the `peaks` field.
+    ///
+    /// If [`SpectrumLike::signal_continuity`] returns [`SignalContinuity::Centroid`], then no filtering is
+    /// performed and all points are directly converted into picked peaks.
     pub fn pick_peaks_with(
         &mut self,
         peak_picker: &PeakPicker,
@@ -1374,6 +1550,11 @@ impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike +
         }
     }
 
+    /// Pick peaks with a minimum signal-to-noise threshold, populating [`MultiLayerSpectrum::peaks`] with
+    /// an [`mzpeaks::MZPeakSetType`] over `C`.
+    ///
+    /// # See also
+    /// [`MultiLayerSpectrum::pick_peaks_with`]
     pub fn pick_peaks(
         &mut self,
         signal_to_noise_threshold: f32,
@@ -1386,6 +1567,13 @@ impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike +
         self.pick_peaks_with(&peak_picker)
     }
 
+    /// Pick peaks in the specified m/z intervals with a minimum signal-to-noise threshold,
+    /// populating [`MultiLayerSpectrum::peaks`] with an [`mzpeaks::MZPeakSetType`] over `C`
+    /// from those intervals.
+    ///
+    /// If [`SpectrumLike::signal_continuity`] returns [`SignalContinuity::Centroid`], then
+    /// array data is converted to peaks as in [`MultiLayerSpectrum::pick_peaks`] and then
+    /// only those peaks in the requested intervals are kept.
     pub fn pick_peaks_in_intervals(
         &mut self,
         signal_to_noise_threshold: f32,
@@ -1396,7 +1584,22 @@ impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike +
             signal_to_noise_threshold,
             ..Default::default()
         };
-        if let Some(arrays) = &self.arrays {
+
+        if matches!(self.signal_continuity(), SignalContinuity::Centroid) {
+            self.pick_peaks_with(&peak_picker)?;
+            let peaks = self
+                .peaks
+                .take()
+                .unwrap()
+                .into_iter()
+                .filter(|p| {
+                    let mz = p.mz();
+                    intervals.iter().any(|(lo, hi)| *lo <= mz && mz < *hi)
+                })
+                .collect();
+            self.peaks = Some(peaks);
+            Ok(())
+        } else if let Some(arrays) = &self.arrays {
             let mz_array = arrays.mzs()?;
             let intensity_array = arrays.intensities()?;
             let mut acc = Vec::new();

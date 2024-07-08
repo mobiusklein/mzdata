@@ -1,6 +1,8 @@
 //! `mzdata` provides basic access to raw and processed mass spectrometry data formats in
 //! Rust.
 //!
+//! For a guide, see the [tutorial] section.
+//!
 //! The library currently supports reading:
 //!   1. MGF files using [`MGFReader`] in [`mzdata::io::mgf`](crate::io::mgf)
 //!   2. mzML & indexedmzML files using [`MzMLReader`] in [`mzdata::io::mzml`](crate::io::mzml)
@@ -76,3 +78,6 @@ pub use crate::io::thermo::ThermoRawReader;
 pub use crate::params::{Param, ParamList};
 
 pub use crate::spectrum::{CentroidSpectrum, RawSpectrum, Spectrum};
+
+#[cfg(doc)]
+pub mod tutorial;
