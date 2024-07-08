@@ -1094,7 +1094,7 @@ pub trait SpectrumWriter<
     /// As [`std::io::Write::flush`]
     fn flush(&mut self) -> io::Result<()>;
 
-    /// Consume an [`Iterator`] over [`Spectrum`](crate::spectrum::MultiLayerSpectrum) references
+    /// Consume an [`Iterator`] over [`MultiLayerSpectrum`] references
     fn write_all<'b, S: SpectrumLike<C, D> + 'static, T: Iterator<Item = &'b S>>(
         &mut self,
         iterator: T,
@@ -1106,7 +1106,19 @@ pub trait SpectrumWriter<
         Ok(n)
     }
 
-    /// Write a [`SpectrumGroup`](crate::spectrum::SpectrumGroup) out in order
+    /// Consume an [`Iterator`] over [`MultiLayerSpectrum`]
+    fn write_all_owned<'b, S: SpectrumLike<C, D> + 'static, T: Iterator<Item =S>>(
+        &mut self,
+        iterator: T,
+    ) -> io::Result<usize> {
+        let mut n = 0;
+        for spectrum in iterator {
+            n += self.write_owned(spectrum)?;
+        }
+        Ok(n)
+    }
+
+    /// Write a [`SpectrumGroup`] out in order
     fn write_group<S: SpectrumLike<C, D> + 'static, G: SpectrumGrouping<C, D, S> + 'static>(
         &mut self,
         group: &G,
@@ -1121,7 +1133,7 @@ pub trait SpectrumWriter<
         Ok(n)
     }
 
-    /// Write an owned [`SpectrumGroup`](crate::spectrum::SpectrumGroup) out in order
+    /// Write an owned [`SpectrumGroup`] out in order
     ///
     /// This may produce fewer copies for some implementations.
     fn write_group_owned<
@@ -1142,7 +1154,7 @@ pub trait SpectrumWriter<
         Ok(n)
     }
 
-    /// Consume an [`Iterator`] over [`SpectrumGroup`](crate::spectrum::SpectrumGroup) references
+    /// Consume an [`Iterator`] over [`SpectrumGroup`] references
     fn write_all_groups<
         'b,
         S: SpectrumLike<C, D> + 'static,
@@ -1155,6 +1167,23 @@ pub trait SpectrumWriter<
         let mut n = 0;
         for group in iterator {
             n += self.write_group(group)?;
+        }
+        Ok(n)
+    }
+
+    /// Consume an [`Iterator`] over [`SpectrumGroup`]
+    fn write_all_groups_owned<
+        'b,
+        S: SpectrumLike<C, D> + 'static,
+        G: SpectrumGrouping<C, D, S> + 'static,
+        T: Iterator<Item = G>,
+    >(
+        &mut self,
+        iterator: T,
+    ) -> io::Result<usize> {
+        let mut n = 0;
+        for group in iterator {
+            n += self.write_group_owned(group)?;
         }
         Ok(n)
     }

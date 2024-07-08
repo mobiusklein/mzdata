@@ -18,7 +18,6 @@ implementation, though not all implementations are.
 ```rust
 use std::{io, fs};
 
-use mzdata;
 use mzdata::io::MzMLWriter;
 use mzdata::prelude::*;
 
@@ -38,7 +37,6 @@ source file to your output file, preserving the trace of information about where
 ```rust
 use std::{io, fs};
 
-use mzdata;
 use mzdata::io::MzMLWriter;
 use mzdata::prelude::*;
 
@@ -65,7 +63,6 @@ fn main() -> io::Result<()> {
 
 ```rust
 # use std::{io, fs};
-# use mzdata;
 # use mzdata::io::MzMLWriter;
 # use mzdata::prelude::*;
 #
@@ -85,7 +82,7 @@ fn main() -> io::Result<()> {
 #         writer.set_spectrum_count(reader.len() as u64)
 #     }
 #
-    // Write spectra out one at a time
+    // Write spectra out one at a time, by reference
     for spec in reader {
         writer.write(&spec)?;
     }
@@ -95,7 +92,6 @@ fn main() -> io::Result<()> {
 
 ```rust
 # use std::{io, fs};
-# use mzdata;
 # use mzdata::io::MzMLWriter;
 # use mzdata::prelude::*;
 #
@@ -115,8 +111,10 @@ fn main() -> io::Result<()> {
 #         writer.set_spectrum_count(reader.len() as u64)
 #     }
 #
-    // Write out an iterator over spectra
-    writer.write_all(reader)?;
+    // Write out an iterator over spectra, in this case
+    // using the owning variant for an iterator over owned
+    // instances.
+    writer.write_all_owned(reader)?;
 #    Ok(())
 # }
 ```

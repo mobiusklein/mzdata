@@ -49,7 +49,7 @@ When reading a file from disk, `mzdata` can make certain assumptions like that t
 the [`io::Seek`](std::io::Seek) trait and can read or build indices over the file quickly and guarantee
 that the file supports full random access, like [`RandomAccessSpectrumIterator`](crate::io::traits::RandomAccessSpectrumIterator).
 
-Additionally, some binary formats like `ThermoRaw` or `MzMLb` _require_ that there be a file on disk that
+Additionally, some binary formats like [`ThermoRawReader`] or [`MzMLbReader`] _require_ that there be a file on disk that
 exists outside of the Rust model of the file system in order to read it.
 
 ### From an `io::Read`

@@ -57,16 +57,16 @@ split_commits = false
 # regex for parsing and grouping commits
 commit_parsers = [
   { message = "^chore:", skip = true },
-  { message = "^.*: add", group = "Added" },
-  { message = "^.*: support", group = "Added" },
-  { message = "^.*: remove", group = "Removed" },
-  { message = "^.*: delete", group = "Removed" },
+  { message = "^.*: a|Add", group = "Added" },
+  { message = "^.*: S|support", group = "Added" },
+  { message = "^.*: R|remove", group = "Removed" },
+  { message = "^.*: D|delete", group = "Removed" },
   { message = "^test", group = "Fixed" },
   { message = "^fix", group = "Fixed" },
   { message = "^.*: fix", group = "Fixed" },
   { message = "^doc", group = "Documentation" },
-  { message = "^.*: change(d?)*", group = "Changed" },
-  { message = "^.*: upgrade(d?)*", group = "Changed" },
+  { message = "^.*: C|change(d?)*", group = "Changed" },
+  { message = "^.*: U|upgrade(d?)*", group = "Changed" },
 ]
 # protect breaking changes from being skipped due to matching a skipping commit_parser
 protect_breaking_commits = false
