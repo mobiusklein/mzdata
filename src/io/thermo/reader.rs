@@ -4,7 +4,7 @@ use chrono::DateTime;
 use log::{debug, warn};
 
 use crate::{
-    io::{utils::checksum_file, DetailLevel, OffsetIndex},
+    io::{traits::ChromatogramSource, utils::checksum_file, DetailLevel, OffsetIndex},
     meta::{
         Component, ComponentType, DataProcessing, DetectorTypeTerm, FileDescription,
         InstrumentConfiguration, IonizationTypeTerm, MassAnalyzerTerm, MassSpectrometryRun,
@@ -13,9 +13,7 @@ use crate::{
     params::{ControlledVocabulary, Unit},
     prelude::*,
     spectrum::{
-        ActivationMethod, ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray,
-        MultiLayerSpectrum, Precursor, ScanEvent, ScanPolarity, ScanWindow, SelectedIon,
-        SignalContinuity,
+        ActivationMethod, ArrayType, BinaryArrayMap, BinaryDataArrayType, CentroidPeakAdapting, Chromatogram, ChromatogramDescription, ChromatogramType, DataArray, DeconvolutedPeakAdapting, MultiLayerSpectrum, Precursor, ScanEvent, ScanPolarity, ScanWindow, SelectedIon, SignalContinuity
     },
     Param,
 };
@@ -709,6 +707,100 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
     pub fn set_centroiding(&mut self, value: bool) {
         self.handle.set_centroid_spectra(value)
     }
+
+    pub fn get_tic(&mut self) -> Chromatogram {
+        let tic = self.handle.tic();
+
+        let mut array_map = BinaryArrayMap::default();
+        if let Some(data) = tic.data() {
+            let time_array = data.time();
+            let intensity_array = data.intensity();
+
+            let mut time_array_in = DataArray::from_name_type_size(
+                &ArrayType::TimeArray,
+                BinaryDataArrayType::Float64,
+                time_array.len() * BinaryDataArrayType::Float64.size_of(),
+            );
+            time_array_in.unit = Unit::Minute;
+            time_array_in.extend(&time_array).unwrap();
+            array_map.add(time_array_in);
+
+            let mut intensity_array_in = DataArray::from_name_type_size(
+                &ArrayType::IntensityArray,
+                BinaryDataArrayType::Float32,
+                time_array.len() * BinaryDataArrayType::Float32.size_of(),
+            );
+            intensity_array_in.unit = Unit::DetectorCounts;
+            intensity_array_in.extend(&intensity_array).unwrap();
+            array_map.add(intensity_array_in);
+        } else {
+            let mut time_array_in = DataArray::from_name_and_type(
+                &ArrayType::TimeArray,
+                BinaryDataArrayType::Float64,
+            );
+            time_array_in.unit = Unit::Minute;
+            array_map.add(time_array_in);
+
+            let mut intensity_array_in = DataArray::from_name_and_type(
+                &ArrayType::IntensityArray,
+                BinaryDataArrayType::Float32,
+            );
+            intensity_array_in.unit = Unit::DetectorCounts;
+            array_map.add(intensity_array_in);
+        }
+
+        let mut descr = ChromatogramDescription::default();
+        descr.chromatogram_type = ChromatogramType::TotalIonCurrentChromatogram;
+        descr.id = "TIC".to_string();
+        Chromatogram::new(descr, array_map)
+    }
+
+    pub fn get_bpc(&mut self) -> Chromatogram {
+        let bpc = self.handle.bpc();
+
+        let mut array_map = BinaryArrayMap::default();
+        if let Some(data) = bpc.data() {
+            let time_array = data.time();
+            let intensity_array = data.intensity();
+
+            let mut time_array_in = DataArray::from_name_type_size(
+                &ArrayType::TimeArray,
+                BinaryDataArrayType::Float64,
+                time_array.len() * BinaryDataArrayType::Float64.size_of(),
+            );
+            time_array_in.unit = Unit::Minute;
+            time_array_in.extend(&time_array).unwrap();
+            array_map.add(time_array_in);
+
+            let mut intensity_array_in = DataArray::from_name_type_size(
+                &ArrayType::IntensityArray,
+                BinaryDataArrayType::Float32,
+                time_array.len() * BinaryDataArrayType::Float32.size_of(),
+            );
+            intensity_array_in.unit = Unit::DetectorCounts;
+            intensity_array_in.extend(&intensity_array).unwrap();
+            array_map.add(intensity_array_in);
+        } else {
+            let mut time_array_in = DataArray::from_name_and_type(
+                &ArrayType::TimeArray,
+                BinaryDataArrayType::Float64,
+            );
+            time_array_in.unit = Unit::Minute;
+            array_map.add(time_array_in);
+
+            let mut intensity_array_in = DataArray::from_name_and_type(
+                &ArrayType::IntensityArray,
+                BinaryDataArrayType::Float32,
+            );
+            intensity_array_in.unit = Unit::DetectorCounts;
+            array_map.add(intensity_array_in);
+        }
+
+        let mut descr = ChromatogramDescription::default();
+        descr.chromatogram_type = ChromatogramType::BasePeakChromatogram;
+        descr.id = "BPC".to_string();
+        Chromatogram::new(descr, array_map)
+    }
 }
 
 impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default> Iterator
@@ -851,6 +943,32 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 
     fn source_file_name(&self) -> Option<&str> {
         self.path.file_name().and_then(|s| s.to_str())
+    }
+}
+
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ChromatogramSource for ThermoRawReaderType<C, D> {
+    fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
+        match id {
+            "TIC" => {
+                Some(self.get_tic())
+            },
+            "BPC" => {
+                Some(self.get_bpc())
+            },
+            _ => None
+        }
+    }
+
+    fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
+        match index {
+            0 => {
+                Some(self.get_tic())
+            },
+            1 => {
+                Some(self.get_bpc())
+            },
+            _ => None
+        }
     }
 }
 

@@ -18,6 +18,7 @@ use crate::prelude::*;
 use super::super::offset_index::OffsetIndex;
 use super::super::traits::{
     MZFileReader, RandomAccessSpectrumIterator, SpectrumSource, SeekRead, SpectrumAccessError,
+    ChromatogramSource,
 };
 use super::reading_shared::EntryType;
 
@@ -1506,6 +1507,21 @@ impl<
 
     pub fn iter_chromatograms(&mut self) -> ChromatogramIter<R, C, D> {
         ChromatogramIter::new(self)
+    }
+}
+
+impl<
+    R: SeekRead,
+    C: CentroidPeakAdapting + BuildFromArrayMap,
+    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > ChromatogramSource for MzMLReaderType<R, C, D> {
+
+    fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
+        self.get_chromatogram_by_id(id)
+    }
+
+    fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
+        self.get_chromatogram_by_index(index)
     }
 }
 

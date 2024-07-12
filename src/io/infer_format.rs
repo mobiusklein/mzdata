@@ -26,7 +26,7 @@ use crate::Param;
 #[cfg(feature = "thermorawfilereader")]
 use super::thermo::{ThermoRawReaderType, is_thermo_raw_prefix};
 
-use super::traits::{SeekRead, SpectrumReceiver, StreamingSpectrumIterator};
+use super::traits::{ChromatogramSource, SeekRead, SpectrumReceiver, StreamingSpectrumIterator};
 
 /// Mass spectrometry file formats that [`mzdata`](crate)
 /// supports
@@ -146,6 +146,33 @@ impl<R: io::Read + io::Seek,
             _ => {
                 Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
             }
+        }
+    }
+}
+
+impl<R: io::Read + io::Seek,
+     C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> ChromatogramSource for MZReaderType<R, C, D> {
+
+    fn get_chromatogram_by_id(&mut self, id: &str) -> Option<crate::spectrum::Chromatogram> {
+        match self {
+            MZReaderType::MzML(r) => r.get_chromatogram_by_id(id),
+            MZReaderType::MGF(r) => r.get_chromatogram_by_id(id),
+            #[cfg(feature = "thermorawfilereader")]
+            MZReaderType::ThermoRaw(r) => r.get_chromatogram_by_id(id),
+            #[cfg(feature = "mzmlb")]
+            MZReaderType::MzMLb(r) => r.get_chromatogram_by_id(id),
+        }
+    }
+
+    fn get_chromatogram_by_index(&mut self, index: usize) -> Option<crate::spectrum::Chromatogram> {
+        match self {
+            MZReaderType::MzML(r) => r.get_chromatogram_by_index(index),
+            MZReaderType::MGF(r) => r.get_chromatogram_by_index(index),
+            #[cfg(feature = "thermorawfilereader")]
+            MZReaderType::ThermoRaw(r) => r.get_chromatogram_by_index(index),
+            #[cfg(feature = "mzmlb")]
+            MZReaderType::MzMLb(r) => r.get_chromatogram_by_index(index),
         }
     }
 }

@@ -4,6 +4,7 @@ use std::collections::{HashMap, VecDeque};
 use std::convert::TryFrom;
 use std::fs;
 use std::io;
+use std::iter::FusedIterator;
 use std::marker::PhantomData;
 use std::ops::Index;
 use std::path::{self, PathBuf};
@@ -24,7 +25,7 @@ use crate::prelude::MSDataFileMetadata;
 use crate::spectrum::group::{SpectrumGroup, SpectrumGroupingIterator};
 use crate::spectrum::spectrum_types::{MultiLayerSpectrum, SpectrumLike};
 use crate::spectrum::{
-    CentroidPeakAdapting, DeconvolutedPeakAdapting, IonMobilityFrameLike,
+    CentroidPeakAdapting, Chromatogram, DeconvolutedPeakAdapting, IonMobilityFrameLike,
     MultiLayerIonMobilityFrame,
 };
 
@@ -60,7 +61,7 @@ pub trait SpectrumSource<
         if n == 0 {
             if !self.get_index().init {
                 warn!("Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized.");
-                return None
+                return None;
             }
         }
         let mut lo: usize = 0;
@@ -583,9 +584,12 @@ impl<
     }
 
     fn iter(&mut self) -> SpectrumIterator<C, D, S, Self>
-        where
-            Self: Sized, {
-        panic!("Cannot create a wrapping iterator for StreamingSpectrumIterator, just use it directly")
+    where
+        Self: Sized,
+    {
+        panic!(
+            "Cannot create a wrapping iterator for StreamingSpectrumIterator, just use it directly"
+        )
     }
 
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<S> {
@@ -1107,7 +1111,7 @@ pub trait SpectrumWriter<
     }
 
     /// Consume an [`Iterator`] over [`MultiLayerSpectrum`]
-    fn write_all_owned<'b, S: SpectrumLike<C, D> + 'static, T: Iterator<Item =S>>(
+    fn write_all_owned<'b, S: SpectrumLike<C, D> + 'static, T: Iterator<Item = S>>(
         &mut self,
         iterator: T,
     ) -> io::Result<usize> {
@@ -1672,7 +1676,8 @@ impl<
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
         S: IonMobilityFrameLike<C, D>,
         R: IonMobilityFrameSource<C, D, S>,
-    > RandomAccessIonMobilityFrameIterator<C, D, S> for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+    > RandomAccessIonMobilityFrameIterator<C, D, S>
+    for IonMobilityFrameIterator<'lifespan, C, D, S, R>
 {
     /// Start iterating from the spectrum whose native ID matches `id`
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError> {
@@ -1714,6 +1719,50 @@ impl<
         }
     }
 }
+
+/// A trait that for retrieving [`Chromatogram`]s from a source.
+pub trait ChromatogramSource {
+    /// Get a [`Chromatogram`] by its identifier, if it exists.
+    fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram>;
+
+    /// Get a [`Chromatogram`] by its index, if it exists.
+    fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram>;
+
+    /// Iterate over [`Chromatogram`]s with a [`ChromatogramIter`]
+    fn iter_chromatograms(&mut self) -> ChromatogramIterator<'_, Self>
+    where
+        Self: Sized,
+    {
+        ChromatogramIterator::new(self)
+    }
+}
+
+#[derive(Debug)]
+pub struct ChromatogramIterator<'a, R: ChromatogramSource> {
+    source: &'a mut R,
+    index: usize,
+}
+
+impl<'a, R: ChromatogramSource> ChromatogramIterator<'a, R> {
+    pub fn new(source: &'a mut R) -> Self {
+        Self { source, index: 0 }
+    }
+}
+
+impl<'a, R: ChromatogramSource> Iterator for ChromatogramIterator<'a, R> {
+    type Item = Chromatogram;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(chrom) = self.source.get_chromatogram_by_index(self.index) {
+            self.index += 1;
+            Some(chrom)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a, R: ChromatogramSource> FusedIterator for ChromatogramIterator<'a, R> {}
 
 #[cfg(test)]
 mod test {

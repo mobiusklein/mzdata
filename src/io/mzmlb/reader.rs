@@ -18,7 +18,7 @@ use crate::io::mzml::{
     CVParamParse, EntryType, IncrementingIdMap, MzMLParserError, MzMLParserState, MzMLReaderType,
     MzMLSAX, MzMLSpectrumBuilder, ParserResult, SpectrumBuilding,
 };
-use crate::io::traits::MZFileReader;
+use crate::io::traits::{ChromatogramSource, MZFileReader};
 use crate::io::utils::DetailLevel;
 use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, SpectrumSource, SpectrumAccessError};
 use crate::prelude::{MSDataFileMetadata, ParamLike};
@@ -1266,6 +1266,20 @@ impl<
         } else {
             None
         }
+    }
+}
+
+impl<
+    C: CentroidPeakAdapting + BuildFromArrayMap,
+    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > ChromatogramSource for MzMLbReaderType<C, D> {
+
+    fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
+        self.get_chromatogram_by_id(id)
+    }
+
+    fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
+        self.get_chromatogram_by_index(index)
     }
 }
 

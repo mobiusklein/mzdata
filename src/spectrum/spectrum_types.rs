@@ -26,7 +26,7 @@ use crate::spectrum::scan_properties::{
 };
 use crate::utils::mass_charge_ratio;
 
-use super::bindata::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
+use super::bindata::{ArrayRetrievalError, ArraysAvailable, BuildArrayMapFrom, BuildFromArrayMap};
 #[allow(unused)]
 use super::DataArray;
 
@@ -931,7 +931,10 @@ impl SpectrumLike for RawSpectrum {
 }
 
 #[derive(Default, Debug, Clone)]
-/// Represents a spectrum that has been centroided into discrete m/z points, a process also called "peak picking".
+/// Represents a spectrum that has been centroided into discrete m/z points, a
+/// process also called "peak picking".
+///
+/// This type of spectrum represents data in exactly one format.
 pub struct CentroidSpectrumType<C: CentroidLike + Default> {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
@@ -1052,12 +1055,15 @@ where
     }
 }
 
-/// Represents a spectrum that has been centroided, deisotoped, and charge state deconvolved
+/// Represents a spectrum that has been centroided, deisotoped, and charge state deconvolved.
+///
+/// This type of spectrum represents data in exactly one format.
 #[derive(Default, Debug, Clone)]
 pub struct DeconvolutedSpectrumType<D: DeconvolutedCentroidLike + Default> {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
-    /// The deisotoped and charge state deconvolved peaks
+    /// The deisotoped and charge state deconvolved peaks, sorted by neutral mass
+    /// in a fast searchable structure.
     pub deconvoluted_peaks: MassPeakSetType<D>,
 }
 
@@ -1436,36 +1442,32 @@ where
     C: BuildFromArrayMap,
     D: BuildFromArrayMap,
 {
-    pub fn try_build_peaks(&mut self) -> Result<(bool, bool), SpectrumConversionError> {
+    /// Attempt to reconstruct one of the peak layers based upon the available data arrays
+    /// if this spectrum is in centroid mode.
+    ///
+    /// # Errors
+    /// If constructing the peak list encounters an error, or if data array access/decoding fails,
+    /// a [`SpectrumConversionError`] is returned.
+    pub fn try_build_peaks(&mut self) -> Result<RefPeakDataLevel<'_, C, D>, SpectrumConversionError> {
         if matches!(self.signal_continuity(), SignalContinuity::Centroid) {
             if let Some(arrays) = self.arrays.as_ref() {
-                let dpeaks_loaded = match D::has_arrays_for(arrays) {
-                    super::bindata::ArraysAvailable::Ok => {
-                        let peaks = D::try_from_arrays(arrays)?.into();
-                        self.deconvoluted_peaks = Some(peaks);
-                        true
-                    }
-                    _ => false,
-                };
+                if let ArraysAvailable::Ok = D::has_arrays_for(arrays) {
+                    let peaks = D::try_from_arrays(arrays)?.into();
+                    self.deconvoluted_peaks = Some(peaks);
+                    return Ok(self.peaks())
+                }
 
-                let cpeaks_loaded = if !dpeaks_loaded {
-                    match C::has_arrays_for(arrays) {
-                        super::bindata::ArraysAvailable::Ok => {
-                            let peaks = C::try_from_arrays(arrays)?.into();
-                            self.peaks = Some(peaks);
-                            true
-                        }
-                        _ => false,
-                    }
-                } else {
-                    false
-                };
-                Ok((cpeaks_loaded, dpeaks_loaded))
+                if let ArraysAvailable::Ok = C::has_arrays_for(arrays) {
+                    let peaks = C::try_from_arrays(arrays)?.into();
+                    self.peaks = Some(peaks);
+                    return Ok(self.peaks())
+                }
+                return Ok(RefPeakDataLevel::Missing)
             } else {
-                Ok((false, false))
+                return Ok(self.peaks())
             }
         } else {
-            Ok((false, false))
+            return Ok(self.peaks())
         }
     }
 
