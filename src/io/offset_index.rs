@@ -22,7 +22,7 @@ pub struct OffsetIndex {
     /// The mapping from ID to byte offset, ordered by occurrence
     // If using serde_json to save this, use
     #[serde(with = "indexmap::map::serde_seq")]
-    pub offsets: IndexMap<String, u64>,
+    pub offsets: IndexMap<Box<str>, u64>,
 
     /// Whether the index has been initalized explicitly or not, as
     /// it may be initially empty or read as empty.
@@ -45,7 +45,7 @@ impl OffsetIndex {
 
     /// Get the associated key and offset for the specified index position
     #[inline]
-    pub fn get_index(&self, index: usize) -> Option<(&String, u64)> {
+    pub fn get_index(&self, index: usize) -> Option<(&str, u64)> {
         if let Some((key, offset)) = self.offsets.get_index(index) {
             Some((key, *offset))
         } else {
@@ -61,8 +61,8 @@ impl OffsetIndex {
 
     /// Insert `key` into the index with an offset value
     #[inline]
-    pub fn insert(&mut self, key: String, offset: u64) -> Option<u64> {
-        self.offsets.insert(key, offset)
+    pub fn insert<T: Into<Box<str>>>(&mut self, key: T, offset: u64) -> Option<u64> {
+        self.offsets.insert(key.into(), offset)
     }
 
     #[inline]
@@ -74,12 +74,12 @@ impl OffsetIndex {
         self.offsets.is_empty()
     }
 
-    pub fn keys(&self) -> Keys<String, u64> {
+    pub fn keys(&self) -> Keys<Box<str>, u64> {
         self.offsets.keys()
     }
 
     /// Iterate over the keys and indices
-    pub fn iter(&self) -> Iter<String, u64> {
+    pub fn iter(&self) -> Iter<Box<str>, u64> {
         self.offsets.iter()
     }
 
