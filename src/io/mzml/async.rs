@@ -724,8 +724,9 @@ impl<
             if err < best_error {
                 best_error = err;
                 best_match = Some(scan);
-            } else if (scan_time - time).abs() < 1e-3 {
-                return Some(scan);
+            }
+            if hi.saturating_sub(1) == lo {
+                return best_match;
             } else if scan_time > time {
                 hi = mid;
             } else {

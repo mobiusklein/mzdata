@@ -5,7 +5,10 @@ use std::borrow::Cow;
 
 use bytemuck::Pod;
 use num_traits::{AsPrimitive, Num};
+use crate::params::Unit;
+
 use super::encodings::{ArrayRetrievalError, BinaryDataArrayType, Bytes};
+use super::ArrayType;
 
 
 pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
@@ -46,6 +49,7 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         }
     }
 
+    /// Decode the array, then copy it to a new array, converting each element from type `D` to to type `S`
     fn convert<S: Num + Clone + AsPrimitive<D> + Pod, D: Num + Clone + Copy + 'static>(
         &'lifespan self,
     ) -> Result<Cow<'transient, [D]>, ArrayRetrievalError> {
@@ -65,7 +69,14 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         }
     }
 
+    /// The kind of array this is
+    fn name(&self) -> &ArrayType;
+
+    /// The real data type encoded in bytes
     fn dtype(&self) -> BinaryDataArrayType;
+
+    /// The unit of measurement each data point is in
+    fn unit(&self) -> Unit;
 
     fn to_f32(&'lifespan self) -> Result<Cow<'transient, [f32]>, ArrayRetrievalError> {
         type D = f32;
@@ -147,6 +158,7 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         }
     }
 
+    /// The size of encoded array in terms of # of elements of the [`BinaryDataArrayType`] given by [`ByteArrayView::dtype`]
     fn data_len(&'lifespan self) -> Result<usize, ArrayRetrievalError> {
         let view = self.view()?;
         let n = view.len();

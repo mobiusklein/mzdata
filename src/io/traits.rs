@@ -1,5 +1,3 @@
-use log::warn;
-use mzpeaks::feature::{ChargedFeature, Feature, FeatureLike};
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryFrom;
 use std::fs;
@@ -8,14 +6,15 @@ use std::iter::FusedIterator;
 use std::marker::PhantomData;
 use std::ops::Index;
 use std::path::{self, PathBuf};
-
 use std::sync::mpsc::Receiver;
 
 use thiserror::Error;
+use log::warn;
 
 use mzpeaks::{
     CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, IonMobility,
     KnownCharge, Mass, MZ,
+    feature::{ChargedFeature, Feature, FeatureLike}
 };
 
 use crate::meta::{
@@ -82,9 +81,11 @@ pub trait SpectrumSource<
             if err < best_error {
                 best_error = err;
                 best_match = Some(scan);
-            } else if (scan_time - time).abs() < 1e-3 {
-                return Some(scan);
-            } else if scan_time > time {
+            }
+            if hi.saturating_sub(1) == lo {
+                return best_match
+            }
+            else if scan_time > time {
                 hi = mid;
             } else {
                 lo = mid;
@@ -1236,8 +1237,9 @@ pub trait IonMobilityFrameSource<
             if err < best_error {
                 best_error = err;
                 best_match = Some(scan);
-            } else if (scan_time - time).abs() < 1e-3 {
-                return Some(scan);
+            }
+            if hi.saturating_sub(1) == lo {
+                return best_match;
             } else if scan_time > time {
                 hi = mid;
             } else {
