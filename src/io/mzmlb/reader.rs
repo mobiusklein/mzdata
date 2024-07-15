@@ -77,8 +77,16 @@ impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan> for
         <DataArray as ByteArrayView<'transient, 'lifespan>>::view(&self.data)
     }
 
+    fn unit(&self) -> crate::params::Unit {
+        self.data.unit
+    }
+
     fn dtype(&self) -> BinaryDataArrayType {
         <DataArray as ByteArrayView<'transient, 'lifespan>>::dtype(&self.data)
+    }
+
+    fn name(&self) -> &crate::spectrum::ArrayType {
+        self.data.name()
     }
 }
 

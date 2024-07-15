@@ -443,6 +443,14 @@ impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan> for
             Ok(n / self.dtype().size_of())
         }
     }
+
+    fn unit(&self) -> Unit {
+        self.unit
+    }
+
+    fn name(&self) -> &ArrayType {
+        &self.name
+    }
 }
 
 impl<'transient, 'lifespan: 'transient> ByteArrayViewMut<'transient, 'lifespan> for DataArray {
@@ -486,6 +494,14 @@ impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan>
 
     fn dtype(&self) -> BinaryDataArrayType {
         self.source.dtype()
+    }
+
+    fn unit(&self) -> Unit {
+        self.source.unit
+    }
+
+    fn name(&self) -> &ArrayType {
+        self.source.name()
     }
 }
 
