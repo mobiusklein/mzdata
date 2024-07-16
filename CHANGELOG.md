@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.22.0] - 2024-07-16
+
+### Added
+
+- Add owning variants for `write_all` `SpectrumWriter`
+- Add `ChromatogramSource` trait for producing `Chromatogram`s
+- Add `name` and `unit` to `ByteArrayView`
+
+### Changed
+
+- Change `OffsetIndex` key to `Box<str>`
+	This reduces memory consumption.
+- Upgraded `mzsignal` minimum version
+
+### Fixed
+
+- Fix error in search-by-time methods
+
 ## [0.21.0] - 2024-07-01
 
 ### Added
@@ -279,7 +297,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.21.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/mobiusklein/mzdata/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/mobiusklein/mzdata/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/mobiusklein/mzdata/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/mobiusklein/mzdata/compare/v0.18.0...v0.19.0
