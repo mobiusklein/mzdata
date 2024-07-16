@@ -159,8 +159,7 @@ impl FromStr for Value {
             Ok(Self::Int(value))
         } else if let Ok(value) = s.parse::<f64>() {
             Ok(Self::Float(value))
-        }
-        else if let Ok(value) = s.parse::<bool>() {
+        } else if let Ok(value) = s.parse::<bool>() {
             Ok(Self::Boolean(value))
         } else {
             Ok(Self::String(s.to_string()))
@@ -309,7 +308,9 @@ impl Value {
         } else if let Ok(v) = self.parse() {
             Ok(v)
         } else {
-            Err(ParamValueParseError::FailedToExtractInt(Some(self.to_string())))
+            Err(ParamValueParseError::FailedToExtractInt(Some(
+                self.to_string(),
+            )))
         }
     }
 
@@ -429,7 +430,7 @@ impl ParamValue for Value {
             Self::Float(_) => 8,
             Self::Int(_) => 8,
             Self::Empty => 0,
-            Self::Boolean(_) => mem::size_of::<bool>()
+            Self::Boolean(_) => mem::size_of::<bool>(),
         }
     }
 
@@ -728,7 +729,9 @@ impl<'a> ValueRef<'a> {
         } else if let Ok(v) = self.parse() {
             Ok(v)
         } else {
-            Err(ParamValueParseError::FailedToExtractInt(Some(self.to_string())))
+            Err(ParamValueParseError::FailedToExtractInt(Some(
+                self.to_string(),
+            )))
         }
     }
 
@@ -925,8 +928,20 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Int(v) => Self::Int(*v),
             Value::Buffer(v) => Self::Buffer(Cow::Borrowed(v)),
             Value::Empty => Self::Empty,
-            Value::Boolean(v) => Self::Boolean(*v)
+            Value::Boolean(v) => Self::Boolean(*v),
         }
+    }
+}
+
+impl<'a> PartialEq<Value> for ValueRef<'a> {
+    fn eq(&self, other: &Value) -> bool {
+        *self == other.as_ref()
+    }
+}
+
+impl<'a> PartialEq<ValueRef<'a>> for Value {
+    fn eq(&self, other: &ValueRef<'a>) -> bool {
+        self.as_ref() == *other
     }
 }
 
@@ -941,7 +956,7 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Int(v) => Self::Int(v),
             ValueRef::Buffer(v) => Self::Buffer(v.to_vec().into_boxed_slice()),
             ValueRef::Empty => Self::Empty,
-            ValueRef::Boolean(v) => Self::Boolean(v)
+            ValueRef::Boolean(v) => Self::Boolean(v),
         }
     }
 }
@@ -955,7 +970,7 @@ impl<'a> Hash for ValueRef<'a> {
             Self::Int(v) => (*v).hash(state),
             Self::Buffer(v) => v.hash(state),
             Self::Empty => ().hash(state),
-            Self::Boolean(v) => (*v).hash(state)
+            Self::Boolean(v) => (*v).hash(state),
         }
     }
 }
@@ -1327,8 +1342,15 @@ impl<'a> ParamCow<'a> {
         self.value.parse::<T>()
     }
 
-    pub fn is_controlled(&self) -> bool {
+    pub const fn is_controlled(&self) -> bool {
         self.accession.is_some()
+    }
+
+    pub const fn curie(&self) -> Option<CURIE> {
+        match (self.controlled_vocabulary, self.accession) {
+            (Some(cv), Some(acc)) => Some(CURIE::new(cv, acc)),
+            _ => None,
+        }
     }
 }
 
@@ -1498,14 +1520,14 @@ impl Param {
     }
 
     /// Check if this parameter is defined in a controlled vocabulary
-    pub fn is_controlled(&self) -> bool {
+    pub const fn is_controlled(&self) -> bool {
         self.accession.is_some()
     }
 
-    pub fn curie(&self) -> Option<CURIE> {
-        match (self.controlled_vocabulary(), self.accession()) {
+    pub const fn curie(&self) -> Option<CURIE> {
+        match (self.controlled_vocabulary, self.accession) {
             (Some(cv), Some(acc)) => Some(CURIE::new(cv, acc)),
-            _ => None
+            _ => None,
         }
     }
 
@@ -1562,6 +1584,26 @@ impl PartialEq<CURIE> for Param {
     }
 }
 
+impl<'a> PartialEq<ParamCow<'a>> for Param {
+    fn eq(&self, other: &ParamCow<'a>) -> bool {
+        self.controlled_vocabulary == other.controlled_vocabulary
+            && self.accession == other.accession
+            && self.name == other.name
+            && self.value == other.value
+            && self.unit == other.unit
+    }
+}
+
+impl<'a> PartialEq<Param> for ParamCow<'a> {
+    fn eq(&self, other: &Param) -> bool {
+        self.controlled_vocabulary == other.controlled_vocabulary
+            && self.accession == other.accession
+            && self.name == other.name
+            && self.value == other.value
+            && self.unit == other.unit
+    }
+}
+
 impl Hash for Param {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
@@ -1592,7 +1634,7 @@ const UO_CV_BYTES: &[u8] = UO_CV.as_bytes();
 pub enum AccessionLike<'a> {
     Text(Cow<'a, str>),
     Number(u32),
-    CURIE(CURIE)
+    CURIE(CURIE),
 }
 
 impl<'a> From<u32> for AccessionLike<'a> {
@@ -1669,9 +1711,7 @@ impl<'a> ControlledVocabulary {
                 }
             }
             AccessionLike::Number(n) => param.accession = Some(n),
-            AccessionLike::CURIE(c) => {
-                param.accession = Some(c.accession)
-            }
+            AccessionLike::CURIE(c) => param.accession = Some(c.accession),
         }
         param
     }
@@ -1786,7 +1826,7 @@ pub trait ParamDescribed {
     }
 
     /// Add all parameters from an iterator of [`Param`] to the entity
-    fn extend_params(&mut self, it: impl IntoIterator<Item=Param>) {
+    fn extend_params(&mut self, it: impl IntoIterator<Item = Param>) {
         self.params_mut().extend(it)
     }
 
@@ -2104,7 +2144,7 @@ impl Unit {
 
             Self::Dimensionless => Some(CURIE {
                 controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 186
+                accession: 186,
             }),
             _ => None,
         }
@@ -2126,4 +2166,3 @@ impl Display for Unit {
         f.write_str(format!("{:?}", self).as_str())
     }
 }
-

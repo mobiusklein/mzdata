@@ -1450,7 +1450,12 @@ where
         &mut self,
         spectrum: &S,
     ) -> WriterResult {
-        self.handle.write_param_list(spectrum.params().iter())?;
+        self.handle.write_param_list(
+            spectrum
+                .params()
+                .iter()
+                .filter(|p| **p != MS1_SPECTRUM && **p != MSN_SPECTRUM),
+        )?;
         Ok(())
     }
 }
