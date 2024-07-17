@@ -677,7 +677,7 @@ where
             write_index,
             spectrum_count: 0,
             spectrum_counter: 0,
-            chromatogram_count: 0,
+            chromatogram_count: 2,
             chromatogram_counter: 0,
             tic_collector: ChromatogramCollector::of(ChromatogramType::TotalIonCurrentChromatogram),
             bic_collector: ChromatogramCollector::of(ChromatogramType::BasePeakChromatogram),
@@ -1142,6 +1142,7 @@ where
             _ => {}
         }
         let mut list = bstart!("chromatogramList");
+
         let count = self.chromatogram_count.to_string();
         attrib!("count", count, list);
         if let Some(dp) = self.data_processings.first() {
@@ -1407,13 +1408,13 @@ where
         let ms_level = spectrum.ms_level();
         if ms_level == 1 {
             self.handle.write_param(&MS1_SPECTRUM)?;
-        } else {
+        } else if ms_level > 1 {
             self.handle.write_param(&MSN_SPECTRUM)?;
         }
         self.handle.write_param(&self.ms_cv.param_val(
             "MS:1000511",
             "ms level",
-            ms_level.to_string(),
+            ms_level,
         ))?;
         Ok(())
     }
@@ -1450,12 +1451,16 @@ where
         &mut self,
         spectrum: &S,
     ) -> WriterResult {
-        self.handle.write_param_list(
-            spectrum
-                .params()
-                .iter()
-                .filter(|p| **p != MS1_SPECTRUM && **p != MSN_SPECTRUM),
-        )?;
+        if spectrum.ms_level() > 0 {
+            self.handle.write_param_list(
+                spectrum
+                    .params()
+                    .iter()
+                    .filter(|p| **p != MS1_SPECTRUM && **p != MSN_SPECTRUM),
+            )?
+        } else {
+            self.handle.write_param_list(spectrum.params().iter())?
+        }
         Ok(())
     }
 }
@@ -1807,7 +1812,7 @@ where
         outer: &mut BytesStart,
     ) -> Result<usize, MzMLWriterError> {
         attrib!("id", chromatogram.id(), outer);
-        let count = self.chromatogram_count.to_string();
+        let count = self.chromatogram_counter.to_string();
         attrib!("index", count, outer);
         let default_array_len_u = chromatogram
             .arrays
@@ -1819,7 +1824,7 @@ where
         attrib!("defaultArrayLength", default_array_len, outer);
 
         self.handle.write_event(Event::Start(outer.borrow()))?;
-        self.chromatogram_count += 1;
+        self.chromatogram_counter += 1;
         Ok(default_array_len_u)
     }
 
