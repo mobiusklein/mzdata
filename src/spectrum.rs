@@ -23,12 +23,14 @@ to unify access:
        peaks yet, but whose data may be continuous or discrete.
 2. [`CentroidSpectrum`] for representing spectra from sources which are guaranteed to
        be pre-centroided, like those from MGF files or other simple text representations.
-3. [`Spectrum`] for representing a multi-layer representation of a spectrum where both
+3. [`MultiLayerSpectrum`] for representing a multi-layer representation of a spectrum where both
        raw data and a distinct peak list are available.
+4. [`DeconvolutedSpectrum`] for representing spectra from sources which are guaranteed to be
+    pre-centroided, deisotoped and charge state deconvoluted.
 
-These structures all implement the [`SpectrumDescription`] trait
+These structures all implement the [`SpectrumLike`] trait
 
-The [`SpectrumDescription`] trait is included in the crate prelude, and gives the caller
+The [`SpectrumLike`] trait is included in the crate prelude, and gives the caller
 read-only access to components that describe a spectrum's metadata.
 
 ```rust
