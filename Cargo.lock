@@ -1706,9 +1706,9 @@ dependencies = [
 
 [[package]]
 name = "mzsignal"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4446136defa14cca0076d417f88d883cbc7af1e9fe431f4ad4637c3280a606cf"
+checksum = "945233ad2901542db3e6d8ca7108c28070c4a8585053cd82083853a0bdcddf7a"
 dependencies = [
  "cfg-if",
  "log",

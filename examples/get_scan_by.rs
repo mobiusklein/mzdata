@@ -1,7 +1,7 @@
 use std::{env, io, path};
 
 use log::info;
-use mzdata::io::mzml;
+use mzdata::io::MZReader;
 use mzdata::prelude::*;
 
 
@@ -18,7 +18,7 @@ fn main() -> io::Result<()> {
     let key_value = args.next().expect("Please provide a key value matching the key type");
 
     info!("Opening {}", path.display());
-    let mut reader = mzml::MzMLReader::open_path(path)?;
+    let mut reader = MZReader::open_path(path)?;
 
     let spectrum = match key.as_str() {
         "id" => {
