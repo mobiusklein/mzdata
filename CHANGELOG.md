@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.24.0] - 2024-07-18
+
+### Changed
+
+- Upgrade `mzsignal` to v0.18.0
+
 ## [0.23.0] - 2024-07-17
 
 ### Changed
@@ -309,7 +315,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.23.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/mobiusklein/mzdata/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/mobiusklein/mzdata/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/mobiusklein/mzdata/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/mobiusklein/mzdata/compare/v0.20.0...v0.21.0
