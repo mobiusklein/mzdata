@@ -56,3 +56,9 @@ changelog version:
     open('CHANGELOG.md', 'wt').write(buffer)
     print(buffer)
 
+
+release tag: (changelog tag)
+    git add CHANGELOG.md
+    git commit -m "chore: update changelog"
+    git tag {{tag}}
+    cargo publish
