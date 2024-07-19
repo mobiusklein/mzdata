@@ -17,7 +17,7 @@ pub use data_processing::{
 };
 pub use software::{custom_software_name, Software};
 
-pub use file_description::{FileDescription, SourceFile};
+pub use file_description::{FileDescription, SourceFile, NativeSpectrumIdentifierFormatTerm, MassSpectrometerFileFormatTerm};
 
 pub use instrument::{Component, ComponentType, InstrumentConfiguration, DetectorTypeTerm, MassAnalyzerTerm, InletTypeTerm, IonizationTypeTerm};
 

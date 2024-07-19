@@ -23,7 +23,7 @@ update-cv:
      https://github.com/HUPO-PSI/psi-ms-CV/releases/latest/download/psi-ms.obo | gzip -c > cv/psi-ms.obo.gz
 
 update-cv-terms:
-    cog -c -r -U src/meta/software.rs src/meta/instrument.rs
+    cog -c -r -U src/meta/software.rs src/meta/instrument.rs src/meta/file_description.rs
 
 changelog version:
     #!/usr/bin/env python

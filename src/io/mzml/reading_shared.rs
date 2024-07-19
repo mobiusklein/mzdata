@@ -15,7 +15,8 @@ use crate::io::traits::SeekRead;
 use crate::io::OffsetIndex;
 use crate::meta::{
     Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration,
-    ProcessingMethod, Software, SourceFile,
+    ProcessingMethod, Software, SourceFile, NativeSpectrumIdentifierFormatTerm,
+    MassSpectrometerFileFormatTerm
 };
 use crate::params::{curie_to_num, ControlledVocabulary, Param, ParamCow, Unit};
 
@@ -889,7 +890,17 @@ impl<'a> FileMetadataBuilder<'a> {
         match state {
             MzMLParserState::SourceFile => {
                 let sf = self.file_description.source_files.last_mut().unwrap();
-                sf.add_param(param)
+                if let Some(curie) = param.curie() {
+                    if let Some(_) = NativeSpectrumIdentifierFormatTerm::from_curie(&curie) {
+                        sf.id_format = Some(param);
+                    } else if let Some(_) = MassSpectrometerFileFormatTerm::from_curie(&curie) {
+                        sf.file_format = Some(param);
+                    } else {
+                        sf.add_param(param)
+                    }
+                } else {
+                    sf.add_param(param)
+                }
             }
             MzMLParserState::FileContents => {
                 self.file_description.add_param(param);

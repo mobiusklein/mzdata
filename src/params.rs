@@ -132,6 +132,7 @@ pub trait ParamValue {
     /// Get a reference to the stored value
     fn as_ref(&self) -> ValueRef<'_>;
 
+    /// Get the size of the stored data type
     fn data_len(&self) -> usize;
 }
 
