@@ -32,9 +32,10 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
             Cow::Owned(v) => {
                 let size_type = n / z;
                 let mut buf = Vec::with_capacity(size_type);
-                v.chunks_exact(z).for_each(|c| {
-                    buf.extend(bytemuck::cast_slice(c));
-                });
+                v.chunks_exact(z).try_for_each(|c| {
+                    buf.extend(bytemuck::try_cast_slice(c)?);
+                    Ok::<(), bytemuck::PodCastError>(())
+                })?;
                 Ok(Cow::Owned(buf))
             },
         };

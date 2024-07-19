@@ -75,7 +75,9 @@ pub use crate::spectrum::spectrum_types::{
 pub use frame::{IonMobilityFrameDescription, MultiLayerIonMobilityFrame, IonMobilityFrameLike};
 
 pub use group::{
-    SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter, SpectrumGroupingIterator
+    SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter, SpectrumGroupingIterator,
+    IonMobilityFrameGroup, IonMobilityFrameGroupIntoIter, IonMobilityFrameGroupIter,
+    IonMobilityFrameGroupingIterator,
 };
 
 #[cfg(feature = "mzsignal")]

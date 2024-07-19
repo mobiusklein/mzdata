@@ -1,5 +1,5 @@
 #![allow(unused)]
-use std::{borrow::Cow, convert::TryFrom, marker::PhantomData};
+use std::{borrow::Cow, convert::TryFrom, marker::PhantomData, mem};
 
 use mzpeaks::{
     coordinate::{IonMobility, Mass, MZ},
@@ -13,8 +13,11 @@ use super::{
     ScanPolarity, SignalContinuity, SpectrumDescription,
 };
 use super::{scan_properties::SCAN_TITLE, MultiLayerSpectrum};
-use crate::params::{ParamDescribed, ParamList};
 use crate::prelude::*;
+use crate::{
+    io::IonMobilityFrameGrouping,
+    params::{ParamDescribed, ParamList},
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct IonMobilityFrameDescription {
@@ -273,8 +276,7 @@ mod mzsignal_impl {
         > MultiLayerIonMobilityFrame<C, D>
     {
         pub fn extract_features_with<
-            E: MapState<CentroidPeak, MZ, IonMobility, FeatureType = C>
-                + Default,
+            E: MapState<CentroidPeak, MZ, IonMobility, FeatureType = C> + Default,
         >(
             &mut self,
             error_tolerance: Tolerance,
@@ -352,9 +354,7 @@ mod mzsignal_impl {
             maximum_gap_size: f64,
             peak_picker: Option<PeakPicker>,
         ) -> Result<(), ArrayRetrievalError> {
-            self.extract_features_with::<
-                PeakMapState<CentroidPeak, MZ>
-            >(
+            self.extract_features_with::<PeakMapState<CentroidPeak, MZ>>(
                 error_tolerance,
                 min_length,
                 maximum_gap_size,
@@ -362,25 +362,6 @@ mod mzsignal_impl {
             )
         }
     }
-}
-
-/**
-A pairing of an optional MS1 spectrum with all its associated MSn spectra.
-*/
-#[derive(Debug, Clone)]
-pub struct FrameGroup<C, D, S>
-where
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
-    S: SpectrumLike<C, D>,
-{
-    /// The MS1 spectrum of a group. This may be absent when the source does not contain any MS1 spectra
-    pub precursor: Option<S>,
-    /// The collection of related MSn spectra. If MSn for n > 2 is used, all levels are present in this
-    /// collection, though there is no ordering guarantee.
-    pub products: Vec<S>,
-    centroid_type: PhantomData<C>,
-    deconvoluted_type: PhantomData<D>,
 }
 
 

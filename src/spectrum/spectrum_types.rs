@@ -666,6 +666,7 @@ pub struct RawSpectrum {
     pub arrays: BinaryArrayMap,
 }
 
+
 impl ParamDescribed for RawSpectrum {
     fn params(&self) -> &[crate::params::Param] {
         <SpectrumDescription as ParamDescribed>::params(&self.description)

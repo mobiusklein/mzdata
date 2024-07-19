@@ -21,7 +21,7 @@ use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software,
 };
 use crate::prelude::MSDataFileMetadata;
-use crate::spectrum::group::{SpectrumGroup, SpectrumGroupingIterator};
+use crate::spectrum::group::{IonMobilityFrameGroupingIterator, SpectrumGroup, SpectrumGroupingIterator};
 use crate::spectrum::spectrum_types::{MultiLayerSpectrum, SpectrumLike};
 use crate::spectrum::{
     CentroidPeakAdapting, Chromatogram, DeconvolutedPeakAdapting, IonMobilityFrameLike,
@@ -1292,6 +1292,23 @@ pub trait IonMobilityFrameSource<
     {
         IonMobilityFrameIterator::new(self)
     }
+
+    /// Create a new `SpectrumIterator` over `self` and use that state to drive a `SpectrumGroupIterator`
+    fn groups(&mut self) -> IonMobilityFrameGroupingIterator<IonMobilityFrameIterator<'_, C, D, S, Self>, C, D, S>
+    where
+        Self: Sized,
+    {
+        IonMobilityFrameGroupingIterator::new(self.iter())
+    }
+
+    /// Consume `self` to create a `SpectrumGroupIterator`. This is ideal for non-rewindable streams
+    /// like [`io::stdin`] which don't implement [`io::Seek`]
+    fn into_groups(self) -> IonMobilityFrameGroupingIterator<Self, C, D, S>
+    where
+        Self: Sized,
+    {
+        IonMobilityFrameGroupingIterator::new(self)
+    }
 }
 
 /// A generic iterator over a [`IonMobilityFrameSource`] implementer that assumes the
@@ -1720,6 +1737,88 @@ impl<
             Err(IonMobilityFrameAccessError::IOError(None))
         }
     }
+}
+
+/// An abstraction over [`IonMobilityFrameGroup`](crate::spectrum::IonMobilityFrameGroup)'s interface.
+pub trait IonMobilityFrameGrouping<
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D> = MultiLayerIonMobilityFrame<C, D>,
+>: Default
+{
+    /// Get the precursor spectrum, which may be absent
+    fn precursor(&self) -> Option<&S>;
+    /// Get a mutable reference to the precursor spectrum, which may be absent
+    fn precursor_mut(&mut self) -> Option<&mut S>;
+    /// Explicitly set the precursor spectrum directly.
+    fn set_precursor(&mut self, prec: S);
+
+    /// Get a reference to the collection of product frames
+    fn products(&self) -> &[S];
+
+    /// Get a mutable reference to the collection of product frames
+    fn products_mut(&mut self) -> &mut Vec<S>;
+
+    /// The total number of frames in the group
+    fn total_frames(&self) -> usize {
+        self.precursor().is_some() as usize + self.products().len()
+    }
+
+    /// The frame that occurred first chronologically
+    fn earliest_frame(&self) -> Option<&S> {
+        self.precursor().or_else(|| {
+            self.products().iter().min_by(|a, b| {
+                a.acquisition()
+                    .start_time()
+                    .total_cmp(&b.acquisition().start_time())
+            })
+        })
+    }
+
+    /// The frame that occurred last chronologically
+    fn latest_frame(&self) -> Option<&S> {
+        self.precursor().or_else(|| {
+            self.products().iter().max_by(|a, b| {
+                a.acquisition()
+                    .start_time()
+                    .total_cmp(&b.acquisition().start_time())
+            })
+        })
+    }
+
+    /// The lowest MS level in the group
+    fn lowest_ms_level(&self) -> Option<u8> {
+        let prec_level = self.precursor().map(|p| p.ms_level()).unwrap_or(u8::MAX);
+        let val = self
+            .products()
+            .iter()
+            .fold(prec_level, |state, s| state.min(s.ms_level()));
+        if val > 0 {
+            Some(val)
+        } else {
+            None
+        }
+    }
+
+    /// The highest MS level in the group
+    fn highest_ms_level(&self) -> Option<u8> {
+        let prec_level = self
+            .precursor()
+            .map(|p| p.ms_level())
+            .unwrap_or_else(|| u8::MIN);
+        let val = self
+            .products()
+            .iter()
+            .fold(prec_level, |state, s| state.max(s.ms_level()));
+        if val > 0 {
+            Some(val)
+        } else {
+            None
+        }
+    }
+
+    /// Decompose the group into its components, discarding any additional metrics
+    fn into_parts(self) -> (Option<S>, Vec<S>);
 }
 
 /// A trait that for retrieving [`Chromatogram`]s from a source.

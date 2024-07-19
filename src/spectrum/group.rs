@@ -1,383 +1,30 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     marker::PhantomData,
-    mem,
 };
 
-use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
+use mzpeaks::{
+    feature::FeatureLike, CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak,
+    IonMobility, KnownCharge, Mass, MZ,
+};
 
 use crate::{
     io::{
         traits::{RandomAccessSpectrumGroupingIterator, SpectrumGrouping},
-        RandomAccessSpectrumIterator, SpectrumAccessError,
+        IonMobilityFrameGrouping, RandomAccessSpectrumIterator, SpectrumAccessError,
     },
     prelude::{MSDataFileMetadata, SpectrumLike},
 };
 
-use super::MultiLayerSpectrum;
+use super::{IonMobilityFrameLike, MultiLayerIonMobilityFrame, MultiLayerSpectrum};
 
-/**
-A pairing of an optional MS1 spectrum with all its associated MSn spectra.
-*/
-#[derive(Debug, Clone)]
-pub struct SpectrumGroup<C = CentroidPeak, D = DeconvolutedPeak, S = MultiLayerSpectrum<C, D>>
-where
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
-    S: SpectrumLike<C, D>,
-{
-    /// The MS1 spectrum of a group. This may be absent when the source does not contain any MS1 spectra
-    pub precursor: Option<S>,
-    /// The collection of related MSn spectra. If MSn for n > 2 is used, all levels are present in this
-    /// collection, though there is no ordering guarantee.
-    pub products: Vec<S>,
-    centroid_type: PhantomData<C>,
-    deconvoluted_type: PhantomData<D>,
-}
+mod frame;
+mod spectrum;
+mod util;
 
-impl<C, D, S> IntoIterator for SpectrumGroup<C, D, S>
-where
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
-    S: SpectrumLike<C, D> + Default,
-{
-    type Item = S;
-
-    type IntoIter = SpectrumGroupIntoIter<C, D, S, Self>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        SpectrumGroupIntoIter::new(self)
-    }
-}
-
-impl<'a, C, D, S> SpectrumGroup<C, D, S>
-where
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
-    S: SpectrumLike<C, D>,
-{
-    pub fn iter(&'a self) -> SpectrumGroupIter<'a, C, D, S> {
-        SpectrumGroupIter::new(self)
-    }
-}
-
-#[derive(Debug, Default)]
-enum GroupIterState {
-    #[default]
-    Precursor,
-    Product(usize),
-    Done,
-}
-
-pub struct SpectrumGroupIntoIter<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
-    S: SpectrumLike<C, D> + Default = MultiLayerSpectrum<C, D>,
-    G: SpectrumGrouping<C, D, S> = SpectrumGroup<C, D, S>,
-> {
-    group: G,
-    state: GroupIterState,
-    _c: PhantomData<C>,
-    _d: PhantomData<D>,
-    _s: PhantomData<S>,
-}
-
-impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
-        S: SpectrumLike<C, D> + Default,
-        G: SpectrumGrouping<C, D, S>,
-    > Iterator for SpectrumGroupIntoIter<C, D, S, G>
-{
-    type Item = S;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        {
-            let n = self.n_products();
-            let emission = match self.state {
-                GroupIterState::Precursor => match self.group.precursor_mut() {
-                    Some(prec) => {
-                        if n > 0 {
-                            self.state = GroupIterState::Product(0);
-                        } else {
-                            self.state = GroupIterState::Done;
-                        }
-                        Some(mem::take(prec))
-                    }
-                    None => {
-                        if n > 0 {
-                            self.state = if n > 1 {
-                                GroupIterState::Product(1)
-                            } else {
-                                GroupIterState::Done
-                            };
-                            Some(mem::take(&mut self.group.products_mut()[0]))
-                        } else {
-                            self.state = GroupIterState::Done;
-                            None
-                        }
-                    }
-                },
-                GroupIterState::Product(i) => {
-                    if i < n.saturating_sub(1) {
-                        self.state = GroupIterState::Product(i + 1);
-                        Some(mem::take(&mut self.group.products_mut()[i]))
-                    } else {
-                        self.state = GroupIterState::Done;
-                        Some(mem::take(&mut self.group.products_mut()[i]))
-                    }
-                }
-                GroupIterState::Done => None,
-            };
-            emission
-        }
-    }
-}
-
-impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
-        S: SpectrumLike<C, D> + Default,
-        G: SpectrumGrouping<C, D, S>,
-    > SpectrumGroupIntoIter<C, D, S, G>
-{
-    pub fn new(group: G) -> Self {
-        Self {
-            group,
-            state: GroupIterState::Precursor,
-            _c: PhantomData,
-            _d: PhantomData,
-            _s: PhantomData,
-        }
-    }
-
-    fn n_products(&self) -> usize {
-        self.group.products().len()
-    }
-}
-
-/// Iterate over the spectra in [`SpectrumGroup`]
-pub struct SpectrumGroupIter<
-    'a,
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
-    S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
-    G: SpectrumGrouping<C, D, S> = SpectrumGroup<C, D, S>,
-> {
-    group: &'a G,
-    state: GroupIterState,
-    _c: PhantomData<C>,
-    _d: PhantomData<D>,
-    _s: PhantomData<S>,
-}
-
-impl<
-        'a,
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
-        S: SpectrumLike<C, D> + 'a,
-        G: SpectrumGrouping<C, D, S>,
-    > Iterator for SpectrumGroupIter<'a, C, D, S, G>
-{
-    type Item = &'a S;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        {
-            let n = self.n_products();
-            let emission = match self.state {
-                GroupIterState::Precursor => match self.group.precursor() {
-                    Some(prec) => {
-                        if n > 0 {
-                            self.state = GroupIterState::Product(0);
-                        } else {
-                            self.state = GroupIterState::Done;
-                        }
-                        Some(prec)
-                    }
-                    None => {
-                        if n > 0 {
-                            self.state = if n > 1 {
-                                GroupIterState::Product(1)
-                            } else {
-                                GroupIterState::Done
-                            };
-                            Some(&self.group.products()[0])
-                        } else {
-                            self.state = GroupIterState::Done;
-                            None
-                        }
-                    }
-                },
-                GroupIterState::Product(i) => {
-                    if i < n.saturating_sub(1) {
-                        self.state = GroupIterState::Product(i + 1);
-                        Some(&self.group.products()[i])
-                    } else {
-                        self.state = GroupIterState::Done;
-                        Some(&self.group.products()[i])
-                    }
-                }
-                GroupIterState::Done => None,
-            };
-            emission
-        }
-    }
-}
-
-impl<
-        'a,
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
-        S: SpectrumLike<C, D>,
-        G: SpectrumGrouping<C, D, S>,
-    > SpectrumGroupIter<'a, C, D, S, G>
-{
-    pub fn new(group: &'a G) -> Self {
-        Self {
-            group,
-            state: GroupIterState::Precursor,
-            _c: PhantomData,
-            _d: PhantomData,
-            _s: PhantomData,
-        }
-    }
-
-    fn n_products(&self) -> usize {
-        self.group.products().len()
-    }
-}
-
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default, S: SpectrumLike<C, D>>
-    Default for SpectrumGroup<C, D, S>
-{
-    fn default() -> Self {
-        Self {
-            precursor: None,
-            products: Vec::new(),
-            centroid_type: PhantomData,
-            deconvoluted_type: PhantomData,
-        }
-    }
-}
-
-impl<C, D, S> SpectrumGrouping<C, D, S> for SpectrumGroup<C, D, S>
-where
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
-    S: SpectrumLike<C, D>,
-{
-    fn precursor(&self) -> Option<&S> {
-        match &self.precursor {
-            Some(prec) => Some(prec),
-            None => None,
-        }
-    }
-
-    fn precursor_mut(&mut self) -> Option<&mut S> {
-        match &mut self.precursor {
-            Some(prec) => Some(prec),
-            None => None,
-        }
-    }
-
-    fn set_precursor(&mut self, prec: S) {
-        self.precursor = Some(prec)
-    }
-
-    fn products(&self) -> &[S] {
-        &self.products
-    }
-
-    fn products_mut(&mut self) -> &mut Vec<S> {
-        &mut self.products
-    }
-
-    fn into_parts(self) -> (Option<S>, Vec<S>) {
-        (self.precursor, self.products)
-    }
-}
-
-#[derive(Default, Debug)]
-pub(crate) struct GenerationTracker {
-    generation_to_id: HashMap<usize, HashSet<String>>,
-    id_to_generation: HashMap<String, usize>,
-    generations: VecDeque<usize>,
-}
-
-impl GenerationTracker {
-    fn add_generation(&mut self, generation: usize) {
-        match self.generations.binary_search(&generation) {
-            Ok(i) => {
-                self.generations.insert(i, generation);
-            }
-            Err(i) => {
-                self.generations.insert(i, generation);
-            }
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.generation_to_id.clear();
-        self.id_to_generation.clear();
-        self.generations.clear();
-    }
-
-    pub fn add(&mut self, identifier: String, generation: usize) {
-        if !self.generation_to_id.contains_key(&generation) {
-            self.add_generation(generation);
-        }
-        self.generation_to_id
-            .entry(generation)
-            .or_default()
-            .insert(identifier.clone());
-        match self.id_to_generation.entry(identifier) {
-            Entry::Occupied(mut e) => {
-                e.insert(generation);
-            }
-            Entry::Vacant(e) => {
-                e.insert(generation);
-            }
-        }
-    }
-
-    #[allow(unused)]
-    pub fn remove(&mut self, identifier: String) -> bool {
-        match self.id_to_generation.entry(identifier.clone()) {
-            Entry::Occupied(ent) => {
-                let generation = ent.get();
-                let id_set = self
-                    .generation_to_id
-                    .get_mut(generation)
-                    .unwrap_or_else(|| {
-                        panic!("Generation {} did not contain {}", generation, identifier)
-                    });
-                id_set.remove(&identifier);
-                if id_set.is_empty() {
-                    self.generations.remove(*generation);
-                }
-                true
-            }
-            Entry::Vacant(_ent) => false,
-        }
-    }
-
-    pub fn older_than(&mut self, generation: usize) -> Vec<String> {
-        let mut result = Vec::new();
-        for gen in self.generations.iter() {
-            if *gen < generation {
-                if let Some(members) = self.generation_to_id.remove(gen) {
-                    result.extend(members);
-                }
-            } else {
-                break;
-            }
-        }
-        for r in result.iter() {
-            self.id_to_generation.remove(r);
-        }
-        result
-    }
-}
+pub use frame::{IonMobilityFrameGroup, IonMobilityFrameGroupIntoIter, IonMobilityFrameGroupIter};
+pub use spectrum::{SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter};
+pub(crate) use util::GenerationTracker;
 
 const MAX_GROUP_DEPTH: u32 = 512u32;
 
@@ -638,7 +285,7 @@ impl<
                         } else {
                             None
                         }
-                    },
+                    }
                 };
             }
         }
@@ -735,6 +382,275 @@ where
     R: MSDataFileMetadata,
 {
     crate::delegate_impl_metadata_trait!(source);
+}
+
+#[derive(Debug)]
+pub struct IonMobilityFrameGroupingIterator<
+    R: Iterator<Item = S>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D> = MultiLayerIonMobilityFrame<C, D>,
+    G: IonMobilityFrameGrouping<C, D, S> = IonMobilityFrameGroup<C, D, S>,
+> {
+    pub source: R,
+    pub queue: VecDeque<S>,
+    pub product_frame_mapping: HashMap<String, Vec<S>>,
+    generation_tracker: GenerationTracker,
+    buffering: usize,
+    highest_ms_level: u8,
+    generation: usize,
+    depth: u32,
+    passed_first_ms1: bool,
+    phantom: PhantomData<S>,
+    centroid_type: PhantomData<C>,
+    deconvoluted_type: PhantomData<D>,
+    grouping_type: PhantomData<G>,
+}
+
+impl<
+        R: Iterator<Item = S>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D>,
+        G: IonMobilityFrameGrouping<C, D, S>,
+    > Iterator for IonMobilityFrameGroupingIterator<R, C, D, S, G>
+{
+    type Item = G;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_group()
+    }
+}
+
+impl<
+        R: Iterator<Item = S>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D>,
+        G: IonMobilityFrameGrouping<C, D, S>,
+    > IonMobilityFrameGroupingIterator<R, C, D, S, G>
+{
+    /// Construct a new [`IonMobilityFrameGroupingIterator`] around a [`Iterator`] with a default
+    /// buffering level of 3.
+    pub fn new(source: R) -> Self {
+        Self {
+            source,
+            generation_tracker: GenerationTracker::default(),
+            phantom: PhantomData,
+            centroid_type: PhantomData,
+            deconvoluted_type: PhantomData,
+            grouping_type: PhantomData,
+            buffering: 3,
+            product_frame_mapping: HashMap::new(),
+            queue: VecDeque::new(),
+            highest_ms_level: 0,
+            generation: 0,
+            depth: 0,
+            passed_first_ms1: false,
+        }
+    }
+
+    fn add_product(&mut self, scan: S) {
+        self.depth += 1;
+        if let Some(precursor) = scan.precursor() {
+            match precursor.precursor_id.as_ref() {
+                Some(prec_id) => {
+                    let ent = self.product_frame_mapping.entry(prec_id.clone());
+                    self.generation_tracker
+                        .add(prec_id.clone(), self.generation);
+                    ent.or_default().push(scan);
+                }
+                None => {
+                    let buffer = self
+                        .product_frame_mapping
+                        .entry(MISSING_SCAN_ID.to_owned())
+                        .or_default();
+                    buffer.push(scan);
+                    if buffer.len() % 1000 == 0 && !buffer.is_empty() {
+                        log::warn!("Unassociated MSn frame buffer size is {}", buffer.len());
+                    }
+                }
+            }
+        } else if !self.queue.is_empty() {
+            // Consider replacing with normal get_mut to avoid re-copying
+            let last = self.queue.back().unwrap();
+            self.generation_tracker
+                .add(last.id().to_owned(), self.generation);
+            self.product_frame_mapping
+                .entry(last.id().to_owned())
+                .or_default()
+                .push(scan);
+        } else {
+            let ent = self.product_frame_mapping.entry(MISSING_SCAN_ID.to_owned());
+            let buffer = ent.or_default();
+            buffer.push(scan);
+            if buffer.len() % 1000 == 0 && !buffer.is_empty() {
+                log::warn!("Unassociated MSn frame buffer size is {}", buffer.len());
+            }
+        }
+    }
+
+    fn add_precursor(&mut self, scan: S) -> bool {
+        self.queue.push_back(scan);
+        self.queue.len() >= self.buffering
+    }
+
+    fn pop_precursor(&mut self, precursor_id: &str) -> Vec<S> {
+        match self.product_frame_mapping.remove(precursor_id) {
+            Some(v) => v,
+            None => Vec::new(),
+        }
+    }
+
+    fn flush_first_ms1(&mut self, group: &mut G) {
+        let current_ms1_time = group.precursor().unwrap().start_time();
+        let mut ids_to_remove = Vec::new();
+        for (prec_id, prods) in self.product_frame_mapping.iter_mut() {
+            let mut hold = vec![];
+            for prod in prods.drain(..) {
+                if prod.start_time() <= current_ms1_time {
+                    group.products_mut().push(prod);
+                } else {
+                    hold.push(prod);
+                }
+            }
+            if hold.is_empty() {
+                ids_to_remove.push(prec_id.clone());
+            } else {
+                prods.extend(hold);
+            }
+        }
+        for prec_id in ids_to_remove {
+            self.product_frame_mapping.remove(&prec_id);
+        }
+    }
+
+    fn flush_all_products(&mut self, group: &mut G) {
+        for (_prec_id, prods) in self.product_frame_mapping.drain() {
+            group.products_mut().extend(prods);
+        }
+    }
+
+    fn include_higher_msn(&mut self, group: &mut G) {
+        let mut blocks = Vec::new();
+        let mut new_block = Vec::new();
+        for msn_spec in group.products() {
+            new_block.extend(self.pop_precursor(msn_spec.id()));
+        }
+        blocks.push(new_block);
+        for _ in 0..self.highest_ms_level - 2 {
+            if let Some(last_block) = blocks.last() {
+                let mut new_block = Vec::new();
+                for msn_spec in last_block {
+                    new_block.extend(self.pop_precursor(msn_spec.id()));
+                }
+                blocks.push(new_block);
+            }
+        }
+        if !blocks.is_empty() {
+            for block in blocks {
+                group.products_mut().extend(block);
+            }
+        }
+    }
+
+    fn flush_generations(&mut self, group: &mut G) {
+        if self.buffering > self.generation {
+            return;
+        }
+        for prec_id in self
+            .generation_tracker
+            .older_than(self.generation - self.buffering)
+        {
+            if let Some(prods) = self.product_frame_mapping.remove(&prec_id) {
+                group.products_mut().extend(prods);
+            }
+        }
+    }
+
+    fn deque_group_without_precursor(&mut self) -> G {
+        let mut group = G::default();
+        self.flush_all_products(&mut group);
+        self.generation += 1;
+        self.depth = 0;
+        group
+    }
+
+    fn deque_group(&mut self, flush_all: bool) -> Option<G> {
+        let mut group = G::default();
+        if let Some(precursor) = self.queue.pop_front() {
+            group.set_precursor(precursor);
+            let mut products = self.pop_precursor(group.precursor().unwrap().id());
+            if self.product_frame_mapping.contains_key(MISSING_SCAN_ID) {
+                products.extend(self.pop_precursor(MISSING_SCAN_ID));
+            }
+            group.products_mut().extend(products);
+
+            self.flush_generations(&mut group);
+
+            // Handle interleaving MS3 and up
+            if self.highest_ms_level > 2 {
+                self.include_higher_msn(&mut group);
+            }
+
+            if !self.passed_first_ms1 && !self.queue.is_empty() {
+                self.flush_first_ms1(&mut group);
+            }
+            self.generation += 1;
+            if flush_all {
+                self.flush_all_products(&mut group);
+            }
+            self.depth = 0;
+            Some(group)
+        } else {
+            None
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.product_frame_mapping.clear();
+        self.queue.clear();
+        self.generation_tracker.clear();
+        self.generation = 0;
+        self.depth = 0;
+        self.passed_first_ms1 = false;
+    }
+
+    /**
+    Retrieve the next group of spectra from the iterator, buffering all intermediate and
+    interleaved spectra until the next complete group is available or the MS1 buffer is
+    full.
+    */
+    pub fn next_group(&mut self) -> Option<G> {
+        loop {
+            if let Some(spectrum) = self.source.next() {
+                let level = spectrum.ms_level();
+                if level > self.highest_ms_level {
+                    self.highest_ms_level = level;
+                }
+                if level > 1 {
+                    self.add_product(spectrum);
+                    if self.depth > MAX_GROUP_DEPTH {
+                        return Some(self.deque_group_without_precursor());
+                    }
+                } else if self.add_precursor(spectrum) {
+                    return self.deque_group(false);
+                }
+            } else {
+                return match self.queue.len() {
+                    d if d > 1 => self.deque_group(false),
+                    1 => self.deque_group(true),
+                    _ => {
+                        if !self.product_frame_mapping.is_empty() {
+                            Some(self.deque_group_without_precursor())
+                        } else {
+                            None
+                        }
+                    }
+                };
+            }
+        }
+    }
 }
 
 #[cfg(feature = "mzsignal")]
@@ -1014,7 +930,12 @@ mod mzsignal_impl {
             self.group.products_mut()
         }
 
-        fn into_parts(self) -> (Option<MultiLayerSpectrum<C, D>>, Vec<MultiLayerSpectrum<C, D>>) {
+        fn into_parts(
+            self,
+        ) -> (
+            Option<MultiLayerSpectrum<C, D>>,
+            Vec<MultiLayerSpectrum<C, D>>,
+        ) {
             self.group.into_parts()
         }
     }
@@ -1221,7 +1142,6 @@ mod mzsignal_impl {
         _c: PhantomData<C>,
         _d: PhantomData<D>,
     }
-
 
     /// If the underlying iterator implements [`MSDataFileMetadata`] then [`SpectrumAveragingIterator`] will
     /// forward that implementation, assuming it is available.
@@ -1608,11 +1528,7 @@ mod test {
             CentroidPeak,
             DeconvolutedPeak,
             MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>,
-        > = SpectrumGroup {
-            precursor: None,
-            products: vec![],
-            ..Default::default()
-        };
+        > = SpectrumGroup::default();
         let entries: Vec<_> = group.iter().collect();
         assert_eq!(entries.len(), 0);
     }

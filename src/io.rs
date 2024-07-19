@@ -31,7 +31,7 @@ pub use crate::io::traits::{
     SpectrumGrouping, SpectrumIterator, StreamingSpectrumIterator, SpectrumReceiver, RandomAccessSpectrumSource,
     SpectrumSourceWithMetadata, MemorySpectrumSource, RandomAccessSpectrumGroupingIterator,
     Generic3DIonMobilityFrameSource, IonMobilityFrameIterator, IonMobilityFrameSource,
-    ChromatogramIterator, ChromatogramSource
+    IonMobilityFrameGrouping, ChromatogramIterator, ChromatogramSource
 };
 pub use crate::io::utils::{DetailLevel, PreBufferedStream, checksum_file};
 pub use compression::RestartableGzDecoder;
