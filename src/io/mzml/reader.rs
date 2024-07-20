@@ -1704,8 +1704,31 @@ impl<
         self.handle.seek(pos)
     }
 
-    pub fn stream_position(&mut self) -> Result<u64, io::Error> {
+    pub fn stream_position(&mut self) -> io::Result<u64> {
         self.handle.stream_position()
+    }
+
+    /// Read the checksum from the end of an `indexedmzML` document
+    pub fn read_checksum(&mut self) -> io::Result<Option<String>> {
+        let current_position = match self.handle.stream_position() {
+            Ok(position) => position,
+            Err(err) => return Err(err),
+        };
+
+        self.handle.seek(SeekFrom::End(-200))?;
+        let mut buf = Bytes::new();
+        self.handle.read_to_end(&mut buf)?;
+
+        let pattern = regex::Regex::new("<fileChecksum>([0-9a-zA-Z]+)</fileChecksum>").unwrap();
+        if let Some(captures) = pattern.captures(&String::from_utf8_lossy(&buf)) {
+            if let Some(hit) = captures.get(1) {
+                self.handle.seek(SeekFrom::Start(current_position))?;
+                return Ok(Some(hit.as_str().to_string()))
+            }
+        }
+
+        self.handle.seek(SeekFrom::Start(current_position))?;
+        Ok(None)
     }
 
     /// Read the offset index at the end of an `<indexedmzML>` document,
