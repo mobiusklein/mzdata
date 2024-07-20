@@ -255,20 +255,20 @@ impl BinaryArrayMap {
     }
 
     /// Get a reference to the ion mobility array if it is present
-    pub fn ion_mobility(&self) -> Result<(Cow<'_, [f32]>, ArrayType), ArrayRetrievalError> {
+    pub fn ion_mobility(&self) -> Result<(Cow<'_, [f64]>, ArrayType), ArrayRetrievalError> {
         if let Some((array_type, data_array)) = self
             .byte_buffer_map
             .iter()
             .find(|(a, _)| a.is_ion_mobility())
         {
-            Ok((data_array.to_f32()?, array_type.clone()))
+            Ok((data_array.to_f64()?, array_type.clone()))
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::IonMobilityArray))
         }
     }
 
     /// Get a mutable reference to the ion mobility array if it is present
-    pub fn ion_mobility_mut(&mut self) -> Result<(&mut [f32], ArrayType), ArrayRetrievalError> {
+    pub fn ion_mobility_mut(&mut self) -> Result<(&mut [f64], ArrayType), ArrayRetrievalError> {
         if let Some((array_type, data_array)) = self
             .byte_buffer_map
             .iter_mut()
@@ -301,23 +301,23 @@ impl IntoIterator for BinaryArrayMap {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-struct NonNaNF32(f32);
+struct NonNaNF64(f64);
 
-impl std::hash::Hash for NonNaNF32 {
+impl std::hash::Hash for NonNaNF64 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        ((self.0 * 10000.0) as i32).hash(state);
+        ((self.0 * 10000.0) as i64).hash(state);
     }
 }
 
-impl From<f32> for NonNaNF32 {
-    fn from(value: f32) -> Self {
+impl From<f64> for NonNaNF64 {
+    fn from(value: f64) -> Self {
         Self::wrap(value)
-            .unwrap_or_else(|| panic!("Expected an order-able f32 value, but found {}", value))
+            .unwrap_or_else(|| panic!("Expected an order-able f64 value, but found {}", value))
     }
 }
 
-impl NonNaNF32 {
-    fn wrap(value: f32) -> Option<Self> {
+impl NonNaNF64 {
+    fn wrap(value: f64) -> Option<Self> {
         if value.is_nan() {
             None
         } else {
@@ -326,15 +326,15 @@ impl NonNaNF32 {
     }
 }
 
-impl PartialOrd for NonNaNF32 {
+impl PartialOrd for NonNaNF64 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Eq for NonNaNF32 {}
+impl Eq for NonNaNF64 {}
 
-impl Ord for NonNaNF32 {
+impl Ord for NonNaNF64 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0.total_cmp(&other.0)
     }
@@ -344,7 +344,7 @@ macro_rules! _populate_stacked_array_from {
     ($im_dim:ident, $view:ident, $index_map:ident, $array_bins:ident, $array_type:ident, $array:ident) => {
         for (i_im, im) in $im_dim.iter() {
             let v = $view[*i_im];
-            let i_axis = $index_map[&NonNaNF32(*im)];
+            let i_axis = $index_map[&NonNaNF64(*im)];
             let bin = &mut $array_bins[i_axis];
             if let Some(bin_array) = bin.get_mut($array_type) {
                 bin_array.push(v)?;
@@ -359,16 +359,16 @@ macro_rules! _populate_stacked_array_from {
 
 #[derive(Debug, Default, Clone)]
 pub struct BinaryArrayMap3D {
-    pub ion_mobility_dimension: Vec<f32>,
+    pub ion_mobility_dimension: Vec<f64>,
     pub ion_mobility_type: ArrayType,
     pub arrays: Vec<BinaryArrayMap>,
-    ion_mobility_index: HashMap<NonNaNF32, usize>,
+    ion_mobility_index: HashMap<NonNaNF64, usize>,
 }
 
 #[allow(unused)]
 impl BinaryArrayMap3D {
-    pub fn get_ion_mobility(&self, ion_mobility: f32) -> Option<&BinaryArrayMap> {
-        if let Some(i) = NonNaNF32::wrap(ion_mobility) {
+    pub fn get_ion_mobility(&self, ion_mobility: f64) -> Option<&BinaryArrayMap> {
+        if let Some(i) = NonNaNF64::wrap(ion_mobility) {
             if let Some(i) = self.ion_mobility_index.get(&i) {
                 self.arrays.get(*i)
             } else {
@@ -379,7 +379,7 @@ impl BinaryArrayMap3D {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (f32, &BinaryArrayMap)> {
+    pub fn iter(&self) -> impl Iterator<Item = (f64, &BinaryArrayMap)> {
         self.ion_mobility_dimension
             .iter()
             .copied()
@@ -481,7 +481,7 @@ impl BinaryArrayMap3D {
         if im_dim.is_empty() {
             return Ok(this);
         }
-        let mut im_dim: Vec<(usize, f32)> = im_dim.iter().copied().enumerate().collect();
+        let mut im_dim: Vec<(usize, f64)> = im_dim.iter().copied().enumerate().collect();
         im_dim.sort_by(|(_, va), (_, vb)| va.total_cmp(vb));
 
         let mut im_axis = Vec::with_capacity(200);
@@ -490,7 +490,7 @@ impl BinaryArrayMap3D {
         for (_, v) in im_dim.iter() {
             if v.total_cmp(&last_v).is_gt() {
                 last_v = *v;
-                index_map.insert(NonNaNF32::from(*v), im_axis.len());
+                index_map.insert(NonNaNF64::from(*v), im_axis.len());
                 im_axis.push(*v);
             }
         }

@@ -57,6 +57,10 @@ impl ArrayType {
         }
     }
 
+    pub fn nonstandard<S: ToString>(name: S) -> ArrayType {
+        ArrayType::NonStandardDataArray { name: name.to_string().into() }
+    }
+
     pub const fn as_param_const(&self) -> ParamCow<'static> {
         const CV: ControlledVocabulary = ControlledVocabulary::MS;
         match self {
