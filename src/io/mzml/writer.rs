@@ -1240,20 +1240,19 @@ where
             let id = instrument_id(&scan.instrument_configuration_id);
             attrib!("instrumentConfigurationRef", id, scan_tag);
             self.handle.write_event(Event::Start(scan_tag.borrow()))?;
+            self.handle.write_param(&self.ms_cv.const_param(
+                "scan start time",
+                ValueRef::Float(scan.start_time),
+                1000016,
+                Unit::Minute,
+            ))?;
 
-            self.handle.write_param(
-                &self
-                    .ms_cv
-                    .param_val("MS:1000016", "scan start time", scan.start_time)
-                    .with_unit("UO:0000031", "minute"),
-            )?;
-
-            self.handle.write_param(
-                &self
-                    .ms_cv
-                    .param_val("MS:1000927", "ion injection time", scan.injection_time)
-                    .with_unit("UO:0000028", "millisecond"),
-            )?;
+            self.handle.write_param(&self.ms_cv.const_param(
+                "ion injection time",
+                ValueRef::Float(scan.injection_time as f64),
+                1000927,
+                Unit::Millisecond,
+            ))?;
 
             for param in scan.params() {
                 self.handle.write_param(param)?
@@ -1268,26 +1267,21 @@ where
             for window in scan.scan_windows.iter() {
                 let window_tag = bstart!("scanWindow");
                 self.handle.write_event(Event::Start(window_tag.borrow()))?;
-                self.handle.write_param(
-                    &self
-                        .ms_cv
-                        .param_val(
-                            "MS:1000501",
-                            "scan window lower limit",
-                            window.lower_bound.to_string(),
-                        )
-                        .with_unit("MS:1000040", "m/z"),
-                )?;
-                self.handle.write_param(
-                    &self
-                        .ms_cv
-                        .param_val(
-                            "MS:1000500",
-                            "scan window upper limit",
-                            window.upper_bound.to_string(),
-                        )
-                        .with_unit("MS:1000040", "m/z"),
-                )?;
+
+                self.handle.write_param(&self.ms_cv.const_param(
+                    "scan window lower limit",
+                    ValueRef::Float(window.lower_bound as f64),
+                    1000501,
+                    Unit::MZ,
+                ))?;
+
+                self.handle.write_param(&self.ms_cv.const_param(
+                    "scan window upper limit",
+                    ValueRef::Float(window.upper_bound as f64),
+                    1000500,
+                    Unit::MZ,
+                ))?;
+
                 self.handle.write_event(Event::End(window_tag.to_end()))?;
             }
             self.handle
@@ -1411,10 +1405,11 @@ where
         } else if ms_level > 1 {
             self.handle.write_param(&MSN_SPECTRUM)?;
         }
-        self.handle.write_param(&self.ms_cv.param_val(
-            "MS:1000511",
+        self.write_param(&self.ms_cv.const_param(
             "ms level",
-            ms_level,
+            ValueRef::Int(ms_level as i64),
+            1000511,
+            Unit::Unknown,
         ))?;
         Ok(())
     }
