@@ -2,7 +2,9 @@
 pub use crate::io::traits::{
     MZFileReader, RandomAccessSpectrumGroupingIterator, RandomAccessSpectrumIterator,
     RandomAccessSpectrumSource as _, SpectrumSourceWithMetadata as _, SpectrumSource,
-    SpectrumWriter, SeekRead, SpectrumAccessError, SpectrumGrouping, IonMobilityFrameSource
+    SpectrumWriter, SeekRead, SpectrumAccessError, SpectrumGrouping, IonMobilityFrameSource,
+    IonMobilityFrameGrouping, RandomAccessIonMobilityFrameIterator, ChromatogramSource,
+    IonMobilityFrameWriter,
 };
 
 pub use crate::meta::MSDataFileMetadata;

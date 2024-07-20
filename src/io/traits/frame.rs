@@ -645,3 +645,122 @@ pub trait IonMobilityFrameGrouping<
     /// Decompose the group into its components, discarding any additional metrics
     fn into_parts(self) -> (Option<S>, Vec<S>);
 }
+
+
+/// Common interface for ion mobility frame writing
+pub trait IonMobilityFrameWriter<
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+>
+{
+    /// Write out a single frame
+    fn write<S: IonMobilityFrameLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize>;
+
+    /// Write out a single owned frame.
+    ///
+    /// This may produce fewer copies for some implementations.
+    fn write_owned<S: IonMobilityFrameLike<C, D> + 'static>(&mut self, spectrum: S) -> io::Result<usize> {
+        self.write(&spectrum)
+    }
+
+    /// As [`std::io::Write::flush`]
+    fn flush(&mut self) -> io::Result<()>;
+
+    /// Consume an [`Iterator`] over [`IonMobilityFrameLike`] references
+    fn write_all<'b, S: IonMobilityFrameLike<C, D> + 'static, T: Iterator<Item = &'b S>>(
+        &mut self,
+        iterator: T,
+    ) -> io::Result<usize> {
+        let mut n = 0;
+        for spectrum in iterator {
+            n += self.write(spectrum)?;
+        }
+        Ok(n)
+    }
+
+    /// Consume an [`Iterator`] over [`IonMobilityFrameLike`]
+    fn write_all_owned<'b, S: IonMobilityFrameLike<C, D> + 'static, T: Iterator<Item = S>>(
+        &mut self,
+        iterator: T,
+    ) -> io::Result<usize> {
+        let mut n = 0;
+        for spectrum in iterator {
+            n += self.write_owned(spectrum)?;
+        }
+        Ok(n)
+    }
+
+    /// Write a [`IonMobilityFrameGrouping`] out in order
+    fn write_group<S: IonMobilityFrameLike<C, D> + 'static, G: IonMobilityFrameGrouping<C, D, S> + 'static>(
+        &mut self,
+        group: &G,
+    ) -> io::Result<usize> {
+        let mut n = 0;
+        if let Some(precursor) = group.precursor() {
+            n += self.write(precursor)?;
+        }
+        for product in group.products() {
+            n += self.write(product)?;
+        }
+        Ok(n)
+    }
+
+    /// Write an owned [`IonMobilityFrameGrouping`] out in order
+    ///
+    /// This may produce fewer copies for some implementations.
+    fn write_group_owned<
+        S: IonMobilityFrameLike<C, D> + 'static,
+        G: IonMobilityFrameGrouping<C, D, S> + 'static,
+    >(
+        &mut self,
+        group: G,
+    ) -> io::Result<usize> {
+        let (precursor, products) = group.into_parts();
+        let mut n = 0;
+        if let Some(precursor) = precursor {
+            n += self.write_owned(precursor)?;
+        }
+        for product in products {
+            n += self.write_owned(product)?;
+        }
+        Ok(n)
+    }
+
+    /// Consume an [`Iterator`] over [`IonMobilityFrameGrouping`] references
+    fn write_all_groups<
+        'b,
+        S: IonMobilityFrameLike<C, D> + 'static,
+        G: IonMobilityFrameGrouping<C, D, S> + 'static,
+        T: Iterator<Item = &'b G>,
+    >(
+        &mut self,
+        iterator: T,
+    ) -> io::Result<usize> {
+        let mut n = 0;
+        for group in iterator {
+            n += self.write_group(group)?;
+        }
+        Ok(n)
+    }
+
+    /// Consume an [`Iterator`] over [`IonMobilityFrameGrouping`]
+    fn write_all_groups_owned<
+        'b,
+        S: IonMobilityFrameLike<C, D> + 'static,
+        G: IonMobilityFrameGrouping<C, D, S> + 'static,
+        T: Iterator<Item = G>,
+    >(
+        &mut self,
+        iterator: T,
+    ) -> io::Result<usize> {
+        let mut n = 0;
+        for group in iterator {
+            n += self.write_group_owned(group)?;
+        }
+        Ok(n)
+    }
+
+    /// Completes the data file format, preventing new data from being able incorporate additional
+    /// data. Does not formally close the underlying writing stream.
+    fn close(&mut self) -> io::Result<()>;
+}

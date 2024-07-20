@@ -14,6 +14,7 @@ pub use util::SeekRead;
 pub use frame::{
     Generic3DIonMobilityFrameSource, IonMobilityFrameAccessError, IonMobilityFrameGrouping,
     IonMobilityFrameIterator, IonMobilityFrameSource, RandomAccessIonMobilityFrameIterator,
+    IonMobilityFrameWriter,
 };
 
 pub use chromatogram::{ChromatogramIterator, ChromatogramSource};
