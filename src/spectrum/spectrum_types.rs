@@ -630,13 +630,13 @@ pub trait SpectrumLike<
             params.push(p);
         }
 
-        let lowest_mz_curie = curie!(MS:1000527);
-        if let Some(p) = params.iter_mut().find(|p| **p == lowest_mz_curie) {
+        let highest_mz_curie = curie!(MS:1000527);
+        if let Some(p) = params.iter_mut().find(|p| **p == highest_mz_curie) {
             p.value = Value::Float(mz_range.0);
         } else {
-            let mut p = lowest_mz_curie.as_param();
+            let mut p = highest_mz_curie.as_param();
             p.name = "highest observed m/z".to_string();
-            p.value = Value::Float(mz_range.0);
+            p.value = Value::Float(mz_range.1);
             p.unit = Unit::MZ;
             params.push(p);
         }
