@@ -903,7 +903,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
     }
 }
 
-impl SpectrumLike for RawSpectrum {
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> SpectrumLike<C, D> for RawSpectrum {
     #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
@@ -913,7 +913,7 @@ impl SpectrumLike for RawSpectrum {
         &mut self.description
     }
 
-    fn peaks(&'_ self) -> RefPeakDataLevel<'_, CentroidPeak, DeconvolutedPeak> {
+    fn peaks(&'_ self) -> RefPeakDataLevel<'_, C, D> {
         RefPeakDataLevel::RawData(&self.arrays)
     }
 
@@ -924,7 +924,7 @@ impl SpectrumLike for RawSpectrum {
     fn into_peaks_and_description(
         self,
     ) -> (
-        PeakDataLevel<CentroidPeak, DeconvolutedPeak>,
+        PeakDataLevel<C, D>,
         SpectrumDescription,
     ) {
         (PeakDataLevel::RawData(self.arrays), self.description)
