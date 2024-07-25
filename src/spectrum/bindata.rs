@@ -5,7 +5,9 @@ mod map;
 mod traits;
 
 pub use array::{DataArray, DataArraySlice};
-pub use conversion::{ArraysAvailable, BuildArrayMapFrom, BuildFromArrayMap};
+pub use conversion::{
+    ArraysAvailable, BuildArrayMap3DFrom, BuildArrayMapFrom, BuildFromArrayMap, BuildFromArrayMap3D,
+};
 pub use encodings::{
     as_bytes, delta_decoding, delta_encoding, linear_prediction_decoding,
     linear_prediction_encoding, to_bytes, vec_as_bytes, ArrayRetrievalError, ArrayType,
