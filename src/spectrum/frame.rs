@@ -8,16 +8,38 @@ use mzpeaks::{
 };
 
 use super::{
-    bindata::{ArrayRetrievalError, BinaryArrayMap3D, BinaryCompressionType, BinaryDataArrayType},
-    Acquisition, ArrayType, CentroidPeakAdapting, DeconvolutedPeakAdapting, Precursor,
-    ScanPolarity, SignalContinuity, SpectrumDescription,
+    bindata::{ArrayRetrievalError, BinaryArrayMap3D, BinaryCompressionType, BinaryDataArrayType, BuildArrayMap3DFrom}, Acquisition, ArrayType, BinaryArrayMap, CentroidPeakAdapting, DeconvolutedPeakAdapting, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription
 };
 use super::{scan_properties::SCAN_TITLE, MultiLayerSpectrum};
-use crate::prelude::*;
+use crate::{prelude::*, RawSpectrum};
 use crate::{
     io::IonMobilityFrameGrouping,
     params::{ParamDescribed, ParamList},
 };
+
+#[derive(Debug)]
+pub enum FeatureDataLevel<
+    C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
+> {
+    Missing,
+    RawData(BinaryArrayMap3D),
+    Centroid(FeatureMap<MZ, IonMobility, C>),
+    Deconvoluted(FeatureMap<Mass, IonMobility, D>),
+}
+
+#[derive(Debug)]
+pub enum RefFeatureDataLevel<
+    'a,
+    C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
+> {
+    Missing,
+    RawData(&'a BinaryArrayMap3D),
+    Centroid(&'a FeatureMap<MZ, IonMobility, C>),
+    Deconvoluted(&'a FeatureMap<Mass, IonMobility, D>),
+}
+
 
 #[derive(Debug, Default, Clone)]
 pub struct IonMobilityFrameDescription {
@@ -81,6 +103,21 @@ impl IonMobilityFrameDescription {
 
 impl From<SpectrumDescription> for IonMobilityFrameDescription {
     fn from(value: SpectrumDescription) -> Self {
+        Self::new(
+            value.id,
+            value.index,
+            value.ms_level,
+            value.polarity,
+            value.signal_continuity,
+            value.params,
+            value.acquisition,
+            value.precursor,
+        )
+    }
+}
+
+impl From<IonMobilityFrameDescription> for SpectrumDescription {
+    fn from(value: IonMobilityFrameDescription) -> Self {
         Self::new(
             value.id,
             value.index,
@@ -190,6 +227,12 @@ pub trait IonMobilityFrameLike<
     fn params(&self) -> &ParamList {
         &self.description().params
     }
+
+    fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap3D>;
+
+    fn features(&self) -> RefFeatureDataLevel<C, D>;
+
+    fn into_features_and_parts(self) -> (FeatureDataLevel<C, D>, IonMobilityFrameDescription);
 }
 
 #[derive(Debug, Default, Clone)]
@@ -231,6 +274,56 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     fn description_mut(&mut self) -> &mut IonMobilityFrameDescription {
         &mut self.description
     }
+
+    fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap3D> {
+        self.arrays.as_ref()
+    }
+
+    fn features(&self) -> RefFeatureDataLevel<C, D> {
+        let state = if let Some(d) = self.deconvoluted_features.as_ref() {
+            RefFeatureDataLevel::Deconvoluted(d)
+        } else if let Some(c) = self.features.as_ref() {
+            RefFeatureDataLevel::Centroid(c)
+        } else if let Some(arrays) = self.arrays.as_ref() {
+            RefFeatureDataLevel::RawData(arrays)
+        } else {
+            RefFeatureDataLevel::Missing
+        };
+        state
+    }
+
+    fn into_features_and_parts(self) -> (FeatureDataLevel<C, D>, IonMobilityFrameDescription) {
+        let state = if let Some(d) = self.deconvoluted_features {
+            FeatureDataLevel::Deconvoluted(d)
+        } else if let Some(c) = self.features {
+            FeatureDataLevel::Centroid(c)
+        } else if let Some(arrays) = self.arrays {
+            FeatureDataLevel::RawData(arrays)
+        } else {
+            FeatureDataLevel::Missing
+        };
+
+        (state, self.description)
+    }
+}
+
+impl<
+    CFeat: FeatureLike<MZ, IonMobility>,
+    DFeat: FeatureLike<Mass, IonMobility> + KnownCharge,
+> TryFrom<RawSpectrum> for MultiLayerIonMobilityFrame<CFeat, DFeat> {
+    type Error = ArrayRetrievalError;
+
+    fn try_from(value: RawSpectrum) -> Result<Self, Self::Error> {
+        let arrays = BinaryArrayMap3D::try_from(value.arrays)?;
+        let descr = IonMobilityFrameDescription::from(value.description);
+
+        Ok(MultiLayerIonMobilityFrame::new(
+            Some(arrays),
+            None,
+            None,
+            descr,
+        ))
+    }
 }
 
 impl<
@@ -256,6 +349,41 @@ impl<
             None,
             descr,
         ))
+    }
+}
+
+
+impl<
+        C: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
+> From<MultiLayerIonMobilityFrame<C, D>> for RawSpectrum {
+    fn from(value: MultiLayerIonMobilityFrame<C, D>) -> Self {
+        let arrays = if let Some(d) = value.deconvoluted_features {
+            BuildArrayMap3DFrom::as_arrays_3d(&d[..]).unstack().unwrap()
+        } else if let Some(c) = value.features {
+            BuildArrayMap3DFrom::as_arrays_3d(&c[..]).unstack().unwrap()
+        } else if let Some(arrays) = value.arrays {
+            arrays.unstack().unwrap()
+        } else {
+            BinaryArrayMap::default()
+        };
+
+        let descr = value.description.into();
+
+        RawSpectrum::new(descr, arrays)
+    }
+}
+
+impl<
+        CFeat: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
+        DFeat: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
+        CPeak: CentroidPeakAdapting + BuildFromArrayMap,
+        DPeak: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > From<MultiLayerIonMobilityFrame<CFeat, DFeat>> for MultiLayerSpectrum<CPeak, DPeak> {
+
+    fn from(value: MultiLayerIonMobilityFrame<CFeat, DFeat>) -> Self {
+        let raw: RawSpectrum = value.into();
+        raw.into()
     }
 }
 

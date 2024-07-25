@@ -17,24 +17,26 @@ use hdf5_sys;
 use hdf5_sys::h5i::hid_t;
 use hdf5_sys::h5t::{H5T_cset_t, H5T_str_t, H5Tcopy, H5Tset_cset, H5Tset_size, H5Tset_strpad};
 
+use mzpeaks::feature::FeatureLike;
 use ndarray::Array1;
 
-use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
+use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, IonMobility, KnownCharge, Mass, MZ};
 use quick_xml::events::{BytesStart, Event};
 use thiserror::Error;
 
-use crate::io::traits::SpectrumWriter;
+use crate::io::traits::{IonMobilityFrameWriter, SpectrumWriter};
 use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software,
 };
 use crate::params::{ControlledVocabulary, ParamDescribed};
 use crate::prelude::{MSDataFileMetadata, SpectrumLike};
 use crate::spectrum::bindata::{
-    ArrayRetrievalError, BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
+    ArrayRetrievalError, BinaryDataArrayType, BuildArrayMap3DFrom, BuildArrayMapFrom, ByteArrayView, DataArray
 };
 use crate::spectrum::{ArrayType, BinaryArrayMap, Chromatogram, ChromatogramLike, RefPeakDataLevel};
 
 use crate::io::mzml::{MzMLWriterError, MzMLWriterState, MzMLWriterType};
+use crate::RawSpectrum;
 
 macro_rules! bstart {
     ($e:tt) => {
@@ -280,8 +282,8 @@ impl BinaryDataArrayBuffer {
                 }
             };
             self.buffer.set_position(0);
-            if log::log_enabled!(log::Level::Debug) {
-                log::debug!(
+            if log::log_enabled!(log::Level::Trace) {
+                log::trace!(
                     "Flush {}:{}:{} {}/{} {:0.3}",
                     self.dataset.name(),
                     self.dtype,
@@ -338,8 +340,8 @@ impl ByteWriter {
         self.dataset.resize((end,))?;
         self.dataset.as_writer().write_slice(chunk, start..end)?;
         self.offset = end;
-        if log::log_enabled!(log::Level::Debug) {
-            log::debug!(
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!(
                 "Flush {}:{} {}/{} {:0.3}",
                 self.dataset.name(),
                 self.offset,
@@ -532,7 +534,7 @@ where
         Self::new_with_chunk_size_and_filters(path, chunk_size, filters)
     }
 
-    fn get_ms_cv(&self) -> &ControlledVocabulary {
+    pub const fn get_ms_cv(&self) -> &ControlledVocabulary {
         self.mzml_writer.get_ms_cv()
     }
 
@@ -946,6 +948,50 @@ impl<
 {
     fn drop(&mut self) {
         MzMLbWriterType::close(self).unwrap();
+    }
+}
+
+impl<
+        C: CentroidLike + Default + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        CF: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
+        DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
+    > IonMobilityFrameWriter<CF, DF> for MzMLbWriterType<C, D>
+{
+    fn write_frame<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(&mut self, frame: &S) -> io::Result<usize> {
+        let state = frame.description().clone().into();
+        let peak_data = match frame.features() {
+            crate::spectrum::frame::RefFeatureDataLevel::Missing => BinaryArrayMap::default(),
+            crate::spectrum::frame::RefFeatureDataLevel::RawData(a) => a.unstack()?,
+            crate::spectrum::frame::RefFeatureDataLevel::Centroid(c) => CF::as_arrays(&c[..]),
+            crate::spectrum::frame::RefFeatureDataLevel::Deconvoluted(d) => DF::as_arrays(&d[..]),
+        };
+        let spectrum = RawSpectrum::new(state, peak_data);
+        self.write_owned(spectrum)
+    }
+
+    fn write_frame_owned<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(&mut self, frame: S) -> io::Result<usize> {
+        let (features, state) = frame.into_features_and_parts();
+        let peak_data = match features {
+            crate::spectrum::frame::FeatureDataLevel::Missing => BinaryArrayMap::default(),
+            crate::spectrum::frame::FeatureDataLevel::RawData(a) => a.unstack()?,
+            crate::spectrum::frame::FeatureDataLevel::Centroid(c) => CF::as_arrays(&c[..]),
+            crate::spectrum::frame::FeatureDataLevel::Deconvoluted(d) => DF::as_arrays(&d[..]),
+        };
+        let spectrum = RawSpectrum::new(state.into(), peak_data);
+        self.write_owned(spectrum)
+    }
+
+    fn flush_frame(&mut self) -> io::Result<()> {
+        self.flush()
+    }
+
+    fn close_frames(&mut self) -> io::Result<()> {
+        if let Err(e) = self.close() {
+            return Err(e.into())
+        } else {
+            Ok(())
+        }
     }
 }
 

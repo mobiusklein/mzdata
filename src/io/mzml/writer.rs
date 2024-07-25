@@ -5,11 +5,12 @@ use std::marker::PhantomData;
 use std::{borrow::Cow, io, mem};
 
 use log::warn;
+use mzpeaks::feature::FeatureLike;
 #[cfg(feature = "parallelism")]
 use rayon::prelude::*;
 use thiserror::Error;
 
-use mzpeaks::{CentroidLike, DeconvolutedCentroidLike};
+use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, IonMobility, KnownCharge, Mass, MZ};
 use quick_xml::escape;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::{Error as XMLError, Writer};
@@ -20,6 +21,7 @@ use super::super::utils::MD5HashingStream;
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
+use crate::io::traits::IonMobilityFrameWriter;
 use crate::meta::{
     ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
     MassSpectrometryRun, Software,
@@ -28,12 +30,11 @@ use crate::params::{
     ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef,
 };
 use crate::spectrum::bindata::{
-    to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType,
-    BinaryDataArrayType, BuildArrayMapFrom, ByteArrayView, DataArray,
+    to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, BuildArrayMap3DFrom, BuildArrayMapFrom, ByteArrayView, DataArray
 };
 use crate::spectrum::spectrum_types::SpectrumLike;
 use crate::spectrum::{scan_properties::*, Chromatogram, ChromatogramLike, RefPeakDataLevel};
-use crate::{curie, impl_param_described};
+use crate::{curie, impl_param_described, RawSpectrum};
 
 const BUFFER_SIZE: usize = 10000;
 
@@ -544,6 +545,51 @@ impl<
         W: Write,
         C: CentroidLike + Default + BuildArrayMapFrom,
         D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        CF: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
+        DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
+    > IonMobilityFrameWriter<CF, DF> for MzMLWriterType<W, C, D>
+{
+    fn write_frame<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(&mut self, frame: &S) -> io::Result<usize> {
+        let state = frame.description().clone().into();
+        let peak_data = match frame.features() {
+            crate::spectrum::frame::RefFeatureDataLevel::Missing => BinaryArrayMap::default(),
+            crate::spectrum::frame::RefFeatureDataLevel::RawData(a) => a.unstack()?,
+            crate::spectrum::frame::RefFeatureDataLevel::Centroid(c) => CF::as_arrays(&c[..]),
+            crate::spectrum::frame::RefFeatureDataLevel::Deconvoluted(d) => DF::as_arrays(&d[..]),
+        };
+        let spectrum = RawSpectrum::new(state, peak_data);
+        self.write_owned(spectrum)
+    }
+
+    fn write_frame_owned<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(&mut self, frame: S) -> io::Result<usize> {
+        let (features, state) = frame.into_features_and_parts();
+        let peak_data = match features {
+            crate::spectrum::frame::FeatureDataLevel::Missing => BinaryArrayMap::default(),
+            crate::spectrum::frame::FeatureDataLevel::RawData(a) => a.unstack()?,
+            crate::spectrum::frame::FeatureDataLevel::Centroid(c) => CF::as_arrays(&c[..]),
+            crate::spectrum::frame::FeatureDataLevel::Deconvoluted(d) => DF::as_arrays(&d[..]),
+        };
+        let spectrum = RawSpectrum::new(state.into(), peak_data);
+        self.write_owned(spectrum)
+    }
+
+    fn flush_frame(&mut self) -> io::Result<()> {
+        self.flush()
+    }
+
+    fn close_frames(&mut self) -> io::Result<()> {
+        if let Err(e) = self.close() {
+            return Err(e.into())
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl<
+        W: Write,
+        C: CentroidLike + Default + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
     > MSDataFileMetadata for MzMLWriterType<W, C, D>
 {
     crate::impl_metadata_trait!();
@@ -591,7 +637,6 @@ pub struct ParamGroup {
     pub params: Vec<Param>,
 }
 
-#[allow(unused)]
 impl ParamGroup {
     pub fn new(id: String, params: Vec<Param>) -> Self {
         Self { id, params }
@@ -601,6 +646,7 @@ impl ParamGroup {
         self.params.iter()
     }
 
+    #[allow(unused)]
     pub fn contains(&self, item: &Param) -> bool {
         self.params.contains(item)
     }
@@ -642,7 +688,14 @@ where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
 {
-    const PSIMS_VERSION: &'static str = "4.1.142";
+    /*[[[cog
+    import cog
+    import subprocess
+    buf = subprocess.check_output(['python', 'cv/extract_cv_metadata.py', 'data-version']).decode('utf8').strip()
+    cog.outl(f'const PSIMS_VERSION: &\'static str = "{buf}";')
+    ]]]*/
+    const PSIMS_VERSION: &'static str = "4.1.162";
+    //[[[end]]] (checksum: e0bccb0a2d32dac54c25684cd6c3b148)
     const UNIT_VERSION: &'static str = "releases/2020-03-10";
 
     pub const fn get_indent_size() -> u64 {
@@ -1073,7 +1126,7 @@ where
         Ok(())
     }
 
-    pub fn get_ms_cv(&self) -> &ControlledVocabulary {
+    pub const fn get_ms_cv(&self) -> &ControlledVocabulary {
         &self.ms_cv
     }
 }
@@ -1328,7 +1381,7 @@ where
         self.handle.write_event(Event::End(iw_tag.to_end()))
     }
 
-    pub fn write_selected_ions(&mut self, precursor: &Precursor) -> WriterResult {
+    pub fn write_selected_ions(&mut self, precursor: &impl PrecursorSelection) -> WriterResult {
         let mut outer = bstart!("selectedIonList");
         attrib!("count", "1", outer);
         start_event!(self, outer);
@@ -1358,7 +1411,7 @@ where
         Ok(())
     }
 
-    pub fn write_activation(&mut self, precursor: &Precursor) -> WriterResult {
+    pub fn write_activation(&mut self, precursor: &impl PrecursorSelection) -> WriterResult {
         let act = precursor.activation();
         let tag = bstart!("activation");
         start_event!(self, tag);
@@ -1377,7 +1430,7 @@ where
         Ok(())
     }
 
-    pub fn write_precursor(&mut self, precursor: &Precursor) -> WriterResult {
+    pub fn write_precursor(&mut self, precursor: &impl PrecursorSelection) -> WriterResult {
         let mut precursor_list_tag = bstart!("precursorList");
         attrib!("count", "1", precursor_list_tag);
         start_event!(self, precursor_list_tag);
@@ -1708,9 +1761,9 @@ where
         self.write_signal_properties(spectrum)?;
 
         self.write_scan_list(spectrum.acquisition())?;
-        if let Some(precursor) = spectrum.precursor() {
+        for precursor in spectrum.precursor_iter() {
             self.write_precursor(precursor)?;
-        };
+        }
         Ok(())
     }
 
@@ -1781,7 +1834,9 @@ where
             RefPeakDataLevel::Deconvoluted(arrays) => {
                 self.write_binary_data_arrays(&D::as_arrays(&arrays[0..]), default_array_len)?
             }
-            RefPeakDataLevel::Missing => todo!(),
+            RefPeakDataLevel::Missing => {
+                self.write_binary_data_arrays(&BinaryArrayMap::new(), default_array_len)?
+            }
         }
 
         end_event!(self, outer);
