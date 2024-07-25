@@ -352,7 +352,7 @@ crate::cvmap! {
         OMSSA,
         #[term(cv=MS, accession=1001476, name="X!Tandem", flags={1}, parents={["MS:1001456"]})]
         XTandem,
-        #[term(cv=MS, accession=1001477, name="SpectraST", flags={1}, parents={["MS:1001456", "MS:1003207"]})]
+        #[term(cv=MS, accession=1001477, name="SpectraST", flags={1}, parents={["MS:1001456", "MS:1003207", "MS:1003406"]})]
         SpectraST,
         #[term(cv=MS, accession=1001478, name="Mascot Parser", flags={1}, parents={["MS:1001456"]})]
         MascotParser,
@@ -836,10 +836,14 @@ crate::cvmap! {
         Pymzqc,
         #[term(cv=MS, accession=1003405, name="mzRecal", flags={2}, parents={["MS:1001457"]})]
         MzRecal,
+        #[term(cv=MS, accession=1003406, name="spectrum clustering software", flags={0}, parents={["MS:1000531"]})]
+        SpectrumClusteringSoftware,
+        #[term(cv=MS, accession=1003407, name="Scout", flags={1}, parents={["MS:1001456"]})]
+        Scout,
         #[term(cv=MS, accession=4000151, name="MsQuality", flags={1}, parents={["MS:1001456"]})]
         MsQuality,
     }
-    //[[[end]]] (checksum: 803f852827324b545051151c5d2c0076)
+    //[[[end]]] (checksum: d489393ae10116422bbe72ad6eebfee7)
 }
 
 #[cfg(test)]
