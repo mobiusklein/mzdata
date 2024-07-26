@@ -260,7 +260,7 @@ impl<
     }
 }
 
-/// If the underlying iterator implements [`MSDataFileMetadata`] then [`SpectrumIterator`] will
+/// If the underlying iterator implements [`MSDataFileMetadata`] then [`IonMobilityFrameIterator`] will
 /// forward that implementation, assuming it is available.
 impl<
         'lifespan,

@@ -885,7 +885,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
     /// this spectrum into a [`MultiLayerSpectrum`] with a centroid peak list as well as raw data arrays.
     ///
     /// # See also
-    /// [`MultiLayerSpectrum::pick_peaks_in_intervals_into`]
+    /// [`MultiLayerSpectrum::pick_peaks_in_intervals`]
     #[cfg(feature = "mzsignal")]
     pub fn pick_peaks_in_intervals_into<
         C: CentroidPeakAdapting + BuildFromArrayMap + From<FittedPeak>,

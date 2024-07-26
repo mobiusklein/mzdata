@@ -11,7 +11,7 @@ pub trait ChromatogramSource {
     /// Get a [`Chromatogram`] by its index, if it exists.
     fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram>;
 
-    /// Iterate over [`Chromatogram`]s with a [`ChromatogramIter`]
+    /// Iterate over [`Chromatogram`]s with a [`ChromatogramIterator`]
     fn iter_chromatograms(&mut self) -> ChromatogramIterator<'_, Self>
     where
         Self: Sized,

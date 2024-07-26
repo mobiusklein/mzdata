@@ -94,88 +94,88 @@ crate::cvmap! {
     ]]]*/
     pub enum NativeSpectrumIdentifierFormatTerm {
         #[term(cv=MS, accession=1000767, name="native spectrum identifier format", flags={r"(.+)"}, parents={[]})]
-        #[doc = r"native spectrum identifier format - (.+)"]
+        #[doc = r"native spectrum identifier format - `(.+)`"]
         NativeSpectrumIdentifierFormat,
         #[term(cv=MS, accession=1000768, name="Thermo nativeID format", flags={r"controllerType=(?<controllerType>\d+) controllerNumber=(?<controllerNumber>\d+) scan=(?<scan>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Thermo nativeID format - controllerType=(?<controllerType>\d+) controllerNumber=(?<controllerNumber>\d+) scan=(?<scan>\d+)"]
+        #[doc = r"Thermo nativeID format - `controllerType=(?<controllerType>\d+) controllerNumber=(?<controllerNumber>\d+) scan=(?<scan>\d+)`"]
         ThermoNativeIDFormat,
         #[term(cv=MS, accession=1000769, name="Waters nativeID format", flags={r"function=(?<function>\d+) process=(?<process>\d+) scan=(?<scan>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Waters nativeID format - function=(?<function>\d+) process=(?<process>\d+) scan=(?<scan>\d+)"]
+        #[doc = r"Waters nativeID format - `function=(?<function>\d+) process=(?<process>\d+) scan=(?<scan>\d+)`"]
         WatersNativeIDFormat,
         #[term(cv=MS, accession=1000770, name="WIFF nativeID format", flags={r"sample=(?<sample>\d+) period=(?<period>\d+) cycle=(?<cycle>\d+) experiment=(?<experiment>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"WIFF nativeID format - sample=(?<sample>\d+) period=(?<period>\d+) cycle=(?<cycle>\d+) experiment=(?<experiment>\d+)"]
+        #[doc = r"WIFF nativeID format - `sample=(?<sample>\d+) period=(?<period>\d+) cycle=(?<cycle>\d+) experiment=(?<experiment>\d+)`"]
         WIFFNativeIDFormat,
         #[term(cv=MS, accession=1000771, name="Bruker/Agilent YEP nativeID format", flags={r"scan=(?<scan>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Bruker/Agilent YEP nativeID format - scan=(?<scan>\d+)"]
+        #[doc = r"Bruker/Agilent YEP nativeID format - `scan=(?<scan>\d+)`"]
         BrukerAgilentYEPNativeIDFormat,
         #[term(cv=MS, accession=1000772, name="Bruker BAF nativeID format", flags={r"scan=(?<scan>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Bruker BAF nativeID format - scan=(?<scan>\d+)"]
+        #[doc = r"Bruker BAF nativeID format - `scan=(?<scan>\d+)`"]
         BrukerBAFNativeIDFormat,
         #[term(cv=MS, accession=1000773, name="Bruker FID nativeID format", flags={r"file=(?<file>\S+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Bruker FID nativeID format - file=(?<file>\S+)"]
+        #[doc = r"Bruker FID nativeID format - `file=(?<file>\S+)`"]
         BrukerFIDNativeIDFormat,
         #[term(cv=MS, accession=1000774, name="multiple peak list nativeID format", flags={r"index=(?<index>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"multiple peak list nativeID format - index=(?<index>\d+)"]
+        #[doc = r"multiple peak list nativeID format - `index=(?<index>\d+)`"]
         MultiplePeakListNativeIDFormat,
         #[term(cv=MS, accession=1000775, name="single peak list nativeID format", flags={r"file=(?<file>\S+)"}, parents={["MS:1000767"]})]
-        #[doc = r"single peak list nativeID format - file=(?<file>\S+)"]
+        #[doc = r"single peak list nativeID format - `file=(?<file>\S+)`"]
         SinglePeakListNativeIDFormat,
         #[term(cv=MS, accession=1000776, name="scan number only nativeID format", flags={r"scan=(?<scan>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"scan number only nativeID format - scan=(?<scan>\d+)"]
+        #[doc = r"scan number only nativeID format - `scan=(?<scan>\d+)`"]
         ScanNumberOnlyNativeIDFormat,
         #[term(cv=MS, accession=1000777, name="spectrum identifier nativeID format", flags={r"spectrum=(?<spectrum>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"spectrum identifier nativeID format - spectrum=(?<spectrum>\d+)"]
+        #[doc = r"spectrum identifier nativeID format - `spectrum=(?<spectrum>\d+)`"]
         SpectrumIdentifierNativeIDFormat,
         #[term(cv=MS, accession=1000823, name="Bruker U2 nativeID format", flags={r"declaration=(?<declaration>\d+) collection=(?<collection>\d+) scan=(?<scan>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Bruker U2 nativeID format - declaration=(?<declaration>\d+) collection=(?<collection>\d+) scan=(?<scan>\d+)"]
+        #[doc = r"Bruker U2 nativeID format - `declaration=(?<declaration>\d+) collection=(?<collection>\d+) scan=(?<scan>\d+)`"]
         BrukerU2NativeIDFormat,
         #[term(cv=MS, accession=1000824, name="no nativeID format", flags={r"(.+)"}, parents={["MS:1000767"]})]
-        #[doc = r"no nativeID format - (.+)"]
+        #[doc = r"no nativeID format - `(.+)`"]
         NoNativeIDFormat,
         #[term(cv=MS, accession=1000929, name="Shimadzu Biotech nativeID format", flags={r"source=(?<source>\S+) start=(?<start>\d+) end=(?<end>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Shimadzu Biotech nativeID format - source=(?<source>\S+) start=(?<start>\d+) end=(?<end>\d+)"]
+        #[doc = r"Shimadzu Biotech nativeID format - `source=(?<source>\S+) start=(?<start>\d+) end=(?<end>\d+)`"]
         ShimadzuBiotechNativeIDFormat,
         #[term(cv=MS, accession=1001480, name="SCIEX TOF/TOF nativeID format", flags={r"jobRun=(?<jobRun>\d+) spotLabel=(?<spotLabel>\S+) spectrum=(?<spectrum>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"SCIEX TOF/TOF nativeID format - jobRun=(?<jobRun>\d+) spotLabel=(?<spotLabel>\S+) spectrum=(?<spectrum>\d+)"]
+        #[doc = r"SCIEX TOF/TOF nativeID format - `jobRun=(?<jobRun>\d+) spotLabel=(?<spotLabel>\S+) spectrum=(?<spectrum>\d+)`"]
         SCIEXTOFTOFNativeIDFormat,
         #[term(cv=MS, accession=1001508, name="Agilent MassHunter nativeID format", flags={r"scanId=(?<scanId>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Agilent MassHunter nativeID format - scanId=(?<scanId>\d+)"]
+        #[doc = r"Agilent MassHunter nativeID format - `scanId=(?<scanId>\d+)`"]
         AgilentMassHunterNativeIDFormat,
         #[term(cv=MS, accession=1001526, name="spectrum from database integer nativeID format", flags={r"databasekey=(?<databasekey>-?\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"spectrum from database integer nativeID format - databasekey=(?<databasekey>-?\d+)"]
+        #[doc = r"spectrum from database integer nativeID format - `databasekey=(?<databasekey>-?\d+)`"]
         SpectrumFromDatabaseIntegerNativeIDFormat,
         #[term(cv=MS, accession=1001528, name="Mascot query number", flags={r"query=(?<query>\d+)"}, parents={["MS:1000767", "MS:1001405"]})]
-        #[doc = r"Mascot query number - query=(?<query>\d+)"]
+        #[doc = r"Mascot query number - `query=(?<query>\d+)`"]
         MascotQueryNumber,
         #[term(cv=MS, accession=1001531, name="spectrum from ProteinScape database nativeID format", flags={r"databasekey=(?<databasekey>-?\d+)"}, parents={["MS:1000767", "MS:1001529"]})]
-        #[doc = r"spectrum from ProteinScape database nativeID format - databasekey=(?<databasekey>-?\d+)"]
+        #[doc = r"spectrum from ProteinScape database nativeID format - `databasekey=(?<databasekey>-?\d+)`"]
         SpectrumFromProteinScapeDatabaseNativeIDFormat,
         #[term(cv=MS, accession=1001532, name="spectrum from database string nativeID format", flags={r"databasekey=(?<databasekey>\S+)"}, parents={["MS:1000767", "MS:1001529"]})]
-        #[doc = r"spectrum from database string nativeID format - databasekey=(?<databasekey>\S+)"]
+        #[doc = r"spectrum from database string nativeID format - `databasekey=(?<databasekey>\S+)`"]
         SpectrumFromDatabaseStringNativeIDFormat,
         #[term(cv=MS, accession=1001559, name="SCIEX TOF/TOF T2D nativeID format", flags={r"file=(?<file>\S+)"}, parents={["MS:1000767"]})]
-        #[doc = r"SCIEX TOF/TOF T2D nativeID format - file=(?<file>\S+)"]
+        #[doc = r"SCIEX TOF/TOF T2D nativeID format - `file=(?<file>\S+)`"]
         SCIEXTOFTOFT2DNativeIDFormat,
         #[term(cv=MS, accession=1001562, name="Scaffold nativeID format", flags={r"(.+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Scaffold nativeID format - (.+)"]
+        #[doc = r"Scaffold nativeID format - `(.+)`"]
         ScaffoldNativeIDFormat,
         #[term(cv=MS, accession=1002303, name="Bruker Container nativeID format", flags={r"(.+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Bruker Container nativeID format - (.+)"]
+        #[doc = r"Bruker Container nativeID format - `(.+)`"]
         BrukerContainerNativeIDFormat,
         #[term(cv=MS, accession=1002532, name="UIMF nativeID format", flags={r"frame=(?<frame>\d+) scan=(?<scan>\d+) frameType=(?<frameType>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"UIMF nativeID format - frame=(?<frame>\d+) scan=(?<scan>\d+) frameType=(?<frameType>\d+)"]
+        #[doc = r"UIMF nativeID format - `frame=(?<frame>\d+) scan=(?<scan>\d+) frameType=(?<frameType>\d+)`"]
         UIMFNativeIDFormat,
         #[term(cv=MS, accession=1002818, name="Bruker TDF nativeID format", flags={r"frame=(?<frame>\d+) scan=(?<scan>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Bruker TDF nativeID format - frame=(?<frame>\d+) scan=(?<scan>\d+)"]
+        #[doc = r"Bruker TDF nativeID format - `frame=(?<frame>\d+) scan=(?<scan>\d+)`"]
         BrukerTDFNativeIDFormat,
         #[term(cv=MS, accession=1002898, name="Shimadzu Biotech QTOF nativeID format", flags={r"scan=(?<scan>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Shimadzu Biotech QTOF nativeID format - scan=(?<scan>\d+)"]
+        #[doc = r"Shimadzu Biotech QTOF nativeID format - `scan=(?<scan>\d+)`"]
         ShimadzuBiotechQTOFNativeIDFormat,
         #[term(cv=MS, accession=1003283, name="Bruker TSF nativeID format", flags={r"frame=(?<frame>\d+)"}, parents={["MS:1000767"]})]
-        #[doc = r"Bruker TSF nativeID format - frame=(?<frame>\d+)"]
+        #[doc = r"Bruker TSF nativeID format - `frame=(?<frame>\d+)`"]
         BrukerTSFNativeIDFormat,
     }
-    //[[[end]]] (checksum: aca810e431eecd69ba4646d16433397c)
+    //[[[end]]] (checksum: 09215365fe33b7f82c1ce9ac64aab99a)
 }
 
 
@@ -290,7 +290,7 @@ crate::cvmap! {
         #[doc = "Bruker XML format - Bruker data exchange XML format."]
         BrukerXML,
         #[term(cv=MS, accession=1001369, name="text format", flags={0}, parents={["MS:1000560"]})]
-        #[doc = "text format - Simple text file format of 'm/z [intensity]' values for a PMF (or single MS2) search."]
+        #[doc = "text format - Simple text file format of 'm/z \\[intensity\\]' values for a PMF (or single MS2) search."]
         Text,
         #[term(cv=MS, accession=1001463, name="Phenyx XML format", flags={0}, parents={["MS:1000560", "MS:1001040"]})]
         #[doc = "Phenyx XML format - Phenyx open XML file format."]
@@ -356,7 +356,7 @@ crate::cvmap! {
         #[doc = "Open Chromatography Binary OCB format - ChemClipse/OpenChrom file format."]
         OpenChromatographyBinaryOCB,
     }
-    //[[[end]]] (checksum: 560fc9a8b288849deae918ad2cf73bc2)
+    //[[[end]]] (checksum: 05a2b3a28a60b4f6990463fb98e5afe4)
 }
 
 impl MassSpectrometerFileFormatTerm {

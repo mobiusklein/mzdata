@@ -62,7 +62,7 @@ def make_entry_for(term: TermFrame):
         if isinstance(clause, IsAClause):
             parents.append(str(clause.term))
         if isinstance(clause, DefClause):
-            descr = str(clause.definition).replace('"', '\'')
+            descr = re.sub(r"(\[|\])", lambda m: '\\\\' + m.group(1), str(clause.definition).replace('"', '\''))
 
     vname = name
     if "-" in vname:

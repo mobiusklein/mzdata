@@ -104,7 +104,7 @@ def make_entry_for(term: TermFrame):
 
     return f"""
     #[term(cv=MS, accession={term.id.local}, name="{name}", flags={{r"{descr}"}}, parents={{{json.dumps(parents)}}})]
-    #[doc = r"{name} - {descr}"]
+    #[doc = r"{name} - `{descr}`"]
     {vname},"""
 
 
