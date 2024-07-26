@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.25.0] - 2024-07-26
+
+### Added
+
+- Add `NativeSpectrumIdentifierFormatTerm` and `MassSpectrometerFileFormatTerm` enums for CV subsets
+	- `NativeSpectrumIdentifierFormatTerm` corresponds to "native spectrum identifier format" and
+	  includes a regular expression from the controlled vocabulary
+	  for parsing ids.
+	- `MassSpectrometerFileFormatTerm` corresponds to "mass spectrometer file format". No extra
+	  behavior.
+- Add `IonMobilityFrameGroup` plus associated iterators and traits.
+- Add `BuildArrayMap3DFrom` and `BuildFromArrayMap3D` traits
+- Add `IonMobilityFrameWriter` trait
+- Add `read_checksum` to `MzMLReaderType`
+- Add `BuildArrayMap3DFrom` and `BuildFromArrayMap3D` to the public API
+- Add `IonMobilityFrameWriter` implementation for mzML and mzMLb
+    - `FeatureDataLevel` and `RefFeatureDataLevel` to mirror the peak set equivalents for `IonMobilityFrameLike`
+    - Implement `From<MultiLayerIonMobilityFrame>` for `RawSpectrum` to let `IonMobilityFrameWriter` re-use most of `SpectrumWriter`.
+
+### Changed
+
+- Change `RawSpectrum` to be `SpectrumLike` over all peak types.
+- Upgrade controlled vocabulary
+- Rename methods of `IonMobilityFrameWriter` to not clash with `SpectrumWriter`
+
+### Fixed
+
+- Fixed error in setting highest observed m/z in `SpectrumLike::update_summaries`
+
 ## [0.24.0] - 2024-07-18
 
 ### Changed
@@ -315,7 +344,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.24.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/mobiusklein/mzdata/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/mobiusklein/mzdata/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/mobiusklein/mzdata/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/mobiusklein/mzdata/compare/v0.21.0...v0.22.0
