@@ -1967,6 +1967,7 @@ impl Unit {
             Self::Millisecond => ("UO:0000028", "millisecond"),
             Self::Second => ("UO:0000010", "second"),
             Self::Minute => ("UO:0000031", "minute"),
+            Self::VoltSecondPerSquareCentimeter => ("MS:1002814", "volt-second per square centimeter"),
 
             Self::MZ => ("MS:1000040", "m/z"),
             Self::Mass => ("UO:000221", "dalton"),
@@ -2006,6 +2007,7 @@ impl Unit {
             b"percent" => Self::PercentElectronVolt,
 
             b"dimensionless unit" => Self::Dimensionless,
+            b"volt-second per square centimeter" => Self::VoltSecondPerSquareCentimeter,
 
             _ => Unit::Unknown,
         }
@@ -2031,6 +2033,8 @@ impl Unit {
             b"UO:0000187" => Self::PercentElectronVolt,
 
             b"UO:0000186" => Self::Dimensionless,
+
+            b"MS:1002814" => Self::VoltSecondPerSquareCentimeter,
 
             _ => Unit::Unknown,
         }
@@ -2089,6 +2093,10 @@ impl Unit {
                 controlled_vocabulary: ControlledVocabulary::UO,
                 accession: 186,
             } => Self::Dimensionless,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1002814
+            } => Self::VoltSecondPerSquareCentimeter,
             _ => Unit::Unknown,
         }
     }
@@ -2146,6 +2154,11 @@ impl Unit {
             Self::Dimensionless => Some(CURIE {
                 controlled_vocabulary: ControlledVocabulary::UO,
                 accession: 186,
+            }),
+
+            Self::VoltSecondPerSquareCentimeter => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1002814
             }),
             _ => None,
         }
