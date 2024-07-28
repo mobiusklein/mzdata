@@ -9,6 +9,8 @@ use rayon::prelude::*;
 
 use mzpeaks::Tolerance;
 
+use crate::params::Unit;
+
 use super::array::DataArray;
 use super::encodings::{ArrayRetrievalError, ArrayType, BinaryCompressionType};
 use super::traits::{ByteArrayView, ByteArrayViewMut};
@@ -357,15 +359,18 @@ macro_rules! _populate_stacked_array_from {
     };
 }
 
+/// Represent a set of [`BinaryArrayMap`] that has been split across the
+/// ion mobility dimension.
 #[derive(Debug, Default, Clone)]
 pub struct BinaryArrayMap3D {
     pub ion_mobility_dimension: Vec<f64>,
     pub ion_mobility_type: ArrayType,
+    pub ion_mobility_unit: Unit,
     pub arrays: Vec<BinaryArrayMap>,
+    pub additional_arrays: BinaryArrayMap,
     ion_mobility_index: HashMap<NonNaNF64, usize>,
 }
 
-#[allow(unused)]
 impl BinaryArrayMap3D {
     pub fn get_ion_mobility(&self, ion_mobility: f64) -> Option<&BinaryArrayMap> {
         if let Some(i) = NonNaNF64::wrap(ion_mobility) {
@@ -379,6 +384,34 @@ impl BinaryArrayMap3D {
         }
     }
 
+    pub fn search_ion_mobility(&self, ion_mobility: f64, error_tolerance: f64) -> Option<(&BinaryArrayMap, f64)> {
+        match self.ion_mobility_dimension.binary_search_by(|x: &f64| {
+            x.total_cmp(&ion_mobility)
+        }) {
+            Ok(i) => {
+                let delta = ion_mobility - self.ion_mobility_dimension[i];
+                if delta.abs() <= error_tolerance {
+                    self.arrays.get(i).map(|a| (a, delta))
+                } else {
+                    None
+                }
+            },
+            Err(i) => {
+                if self.arrays.is_empty() {
+                    return None
+                }
+                let delta = ion_mobility - self.ion_mobility_dimension[i];
+                if delta.abs() <= error_tolerance {
+                    self.arrays.get(i).map(|a| (a, delta))
+                } else {
+                    None
+                }
+            },
+        }
+    }
+
+    /// Iterate over the ion mobility dimension and associated arrays
+    /// at each point.
     pub fn iter(&self) -> impl Iterator<Item = (f64, &BinaryArrayMap)> {
         self.ion_mobility_dimension
             .iter()
@@ -386,13 +419,21 @@ impl BinaryArrayMap3D {
             .zip(self.arrays.iter())
     }
 
+    /// Flatten this array into a single [`BinaryArrayMap`].
+    ///
+    /// # Errors
+    /// [`ArrayRetrievalError`] errors related to array decoding occur if
+    /// any [`DataArray`] cannot be decoded, or if an expected array is absent.
     pub fn unstack(&self) -> Result<BinaryArrayMap, ArrayRetrievalError> {
-        let mut destination = BinaryArrayMap::new();
+        let mut destination = self.additional_arrays.clone();
 
-        destination.add(DataArray::from_name_and_type(
+        let mut im_dim = DataArray::from_name_and_type(
             &self.ion_mobility_type,
             BinaryDataArrayType::Float32,
-        ));
+        );
+        im_dim.unit = self.ion_mobility_unit;
+
+        destination.add(im_dim);
 
         let mut current_mz = f64::INFINITY;
         let mut max_mz = f64::NEG_INFINITY;
@@ -428,8 +469,8 @@ impl BinaryArrayMap3D {
                 if let Some(i) = indices.get(bin_i).copied() {
                     if let Some(mz) = mz_axes[bin_i].get(i).copied() {
                         if (mz - current_mz).abs() < 1e-3 {
-                            destination.get_mut(&ArrayType::MZArray).as_mut().unwrap().push(mz);
-                            destination.get_mut(&self.ion_mobility_type).as_mut().unwrap().push(im);
+                            destination.get_mut(&ArrayType::MZArray).as_mut().unwrap().push(mz)?;
+                            destination.get_mut(&self.ion_mobility_type).as_mut().unwrap().push(im)?;
                             for (key, array) in layer.iter() {
                                 if *key == ArrayType::MZArray {
                                     continue;
@@ -438,23 +479,23 @@ impl BinaryArrayMap3D {
                                     BinaryDataArrayType::Unknown => panic!("Cannot re-sort opaque or unknown dimension data types"),
                                     BinaryDataArrayType::ASCII => {
                                         let val = array.decode()?[i];
-                                        destination.get_mut(key).as_mut().unwrap().push(val);
+                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
                                     },
                                     BinaryDataArrayType::Float64 => {
                                         let val = array.to_f64()?[i];
-                                        destination.get_mut(key).as_mut().unwrap().push(val);
+                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
                                     },
                                     BinaryDataArrayType::Float32 => {
                                         let val = array.to_f32()?[i];
-                                        destination.get_mut(key).as_mut().unwrap().push(val);
+                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
                                     },
                                     BinaryDataArrayType::Int64 => {
                                         let val = array.to_i64()?[i];
-                                        destination.get_mut(key).as_mut().unwrap().push(val);
+                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
                                     },
                                     BinaryDataArrayType::Int32 => {
                                         let val = array.to_i32()?[i];
-                                        destination.get_mut(key).as_mut().unwrap().push(val);
+                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
                                     },
                                 }
                             }
@@ -471,6 +512,14 @@ impl BinaryArrayMap3D {
         Ok(destination)
     }
 
+    /// Convert a [`BinaryArrayMap`] into a [`BinaryArrayMap3D`] if it has an ion mobility dimension.
+    ///
+    /// Any arrays that aren't the same length as the ion mobility dimension will be in
+    /// [`BinaryArrayMap3D::additional_arrays`].
+    ///
+    /// # Errors
+    /// [`ArrayRetrievalError`] errors related to array decoding occur if any [`DataArray`]
+    /// cannot be decoded, or if an expected array is absent.
     pub fn stack(source: &BinaryArrayMap) -> Result<Self, ArrayRetrievalError> {
         let mut this = Self::default();
         if !source.has_ion_mobility() {
@@ -500,6 +549,10 @@ impl BinaryArrayMap3D {
         for (array_type, array) in source.iter() {
             if array_type.is_ion_mobility() {
                 continue;
+            }
+            if array.data_len()? != im_dim.len() {
+                this.additional_arrays.add(array.clone());
+                continue
             }
             match array.dtype() {
                 BinaryDataArrayType::Unknown => {
@@ -556,7 +609,7 @@ impl TryFrom<&BinaryArrayMap> for BinaryArrayMap3D {
     type Error = ArrayRetrievalError;
 
     fn try_from(value: &BinaryArrayMap) -> Result<Self, Self::Error> {
-        Self::stack(&value)
+        Self::stack(value)
     }
 }
 
