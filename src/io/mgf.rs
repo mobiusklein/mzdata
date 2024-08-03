@@ -1008,7 +1008,12 @@ impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting, Y: MGFH
                     description.id
                 )
             }
-            RefPeakDataLevel::RawData(arrays) => self.write_arrays(description, arrays)?,
+            RefPeakDataLevel::RawData(arrays) => {
+                if description.signal_continuity == SignalContinuity::Profile {
+                    return Err(io::Error::new(io::ErrorKind::Unsupported, "Cannot write profile spectrum to MGF"))
+                }
+                self.write_arrays(description, arrays)?
+            },
             RefPeakDataLevel::Centroid(centroids) => {
                 self.write_centroids(&centroids[0..centroids.len()])?
             }

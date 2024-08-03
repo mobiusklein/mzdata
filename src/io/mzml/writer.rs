@@ -30,7 +30,8 @@ use crate::params::{
     ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef,
 };
 use crate::spectrum::bindata::{
-    to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, BuildArrayMap3DFrom, BuildArrayMapFrom, ByteArrayView, DataArray
+    to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType,
+    BinaryDataArrayType, BuildArrayMap3DFrom, BuildArrayMapFrom, ByteArrayView, DataArray,
 };
 use crate::spectrum::spectrum_types::SpectrumLike;
 use crate::spectrum::{scan_properties::*, Chromatogram, ChromatogramLike, RefPeakDataLevel};
@@ -549,7 +550,10 @@ impl<
         DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
     > IonMobilityFrameWriter<CF, DF> for MzMLWriterType<W, C, D>
 {
-    fn write_frame<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(&mut self, frame: &S) -> io::Result<usize> {
+    fn write_frame<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(
+        &mut self,
+        frame: &S,
+    ) -> io::Result<usize> {
         let state = frame.description().clone().into();
         let peak_data = match frame.features() {
             crate::spectrum::frame::RefFeatureDataLevel::Missing => BinaryArrayMap::default(),
@@ -561,7 +565,10 @@ impl<
         self.write_owned(spectrum)
     }
 
-    fn write_frame_owned<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(&mut self, frame: S) -> io::Result<usize> {
+    fn write_frame_owned<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(
+        &mut self,
+        frame: S,
+    ) -> io::Result<usize> {
         let (features, state) = frame.into_features_and_parts();
         let peak_data = match features {
             crate::spectrum::frame::FeatureDataLevel::Missing => BinaryArrayMap::default(),
@@ -579,7 +586,7 @@ impl<
 
     fn close_frames(&mut self) -> io::Result<()> {
         if let Err(e) = self.close() {
-            return Err(e.into())
+            return Err(e.into());
         } else {
             Ok(())
         }
@@ -1451,7 +1458,11 @@ where
         Ok(())
     }
 
-    fn write_ms_level<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
+    fn write_ms_level<
+        C1: CentroidLike + Default + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        S: SpectrumLike<C1, D1> + 'static
+    >(&mut self, spectrum: &S) -> WriterResult {
         let ms_level = spectrum.ms_level();
         if ms_level == 1 {
             self.handle.write_param(&MS1_SPECTRUM)?;
@@ -1467,7 +1478,11 @@ where
         Ok(())
     }
 
-    fn write_polarity<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
+    fn write_polarity<
+        C1: CentroidLike + Default + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        S: SpectrumLike<C1, D1> + 'static
+    >(&mut self, spectrum: &S) -> WriterResult {
         match spectrum.polarity() {
             ScanPolarity::Negative => self.handle.write_param(&NEGATIVE_SCAN),
             ScanPolarity::Positive => self.handle.write_param(&POSITIVE_SCAN),
@@ -1481,7 +1496,11 @@ where
         }
     }
 
-    fn write_continuity<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> WriterResult {
+    fn write_continuity<
+        C1: CentroidLike + Default + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        S: SpectrumLike<C1, D1> + 'static
+    >(&mut self, spectrum: &S) -> WriterResult {
         match spectrum.signal_continuity() {
             SignalContinuity::Profile => self.handle.write_param(&PROFILE_SPECTRUM),
             SignalContinuity::Unknown => {
@@ -1495,7 +1514,11 @@ where
         }
     }
 
-    fn write_signal_properties<S: SpectrumLike<C, D> + 'static>(
+    fn write_signal_properties<
+        C1: CentroidLike + Default + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        S: SpectrumLike<C1, D1> + 'static
+    >(
         &mut self,
         spectrum: &S,
     ) -> WriterResult {
@@ -1692,7 +1715,11 @@ where
     ///
     /// This function will return an error if a [`MzMLWriterError`] error occurs during
     /// writing any underlying data occurs.
-    pub fn start_spectrum<S: SpectrumLike<C, D> + 'static>(
+    pub fn start_spectrum<
+        C1: CentroidLike + Default + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        S: SpectrumLike<C1, D1> + 'static,
+    >(
         &mut self,
         spectrum: &S,
         outer: &mut BytesStart,
@@ -1713,7 +1740,11 @@ where
 
     /// Checks if spectrum-level summaries are already calculated for
     /// `spectrum`.
-    pub fn spectrum_has_summaries<S: SpectrumLike<C, D> + 'static>(
+    pub fn spectrum_has_summaries<
+        C1: CentroidLike + Default + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        S: SpectrumLike<C1, D1> + 'static
+    >(
         &self,
         spectrum: &S,
     ) -> SpectrumHasSummary {
@@ -1750,7 +1781,11 @@ where
 
     /// Write spectrum-level descriptive metadata, acquisition scan metadata,
     /// and precursors if any are present.
-    pub fn write_spectrum_descriptors<S: SpectrumLike<C, D> + 'static>(
+    pub fn write_spectrum_descriptors<
+        C1: CentroidLike + Default + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        S: SpectrumLike<C1, D1> + 'static
+    >(
         &mut self,
         spectrum: &S,
         _summary_metrics: &SpectrumHasSummary,
@@ -1780,7 +1815,11 @@ where
     This function will return an error if a [`MzMLWriterError`] error occurs during
     writing any underlying data occurs.
     */
-    pub fn write_spectrum<S: SpectrumLike<C, D> + 'static>(
+    pub fn write_spectrum<
+        C1: CentroidLike + Default + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        S: SpectrumLike<C1, D1> + 'static
+    >(
         &mut self,
         spectrum: &S,
     ) -> WriterResult {
@@ -1829,10 +1868,10 @@ where
                 self.write_binary_data_arrays(arrays, default_array_len)?;
             }
             RefPeakDataLevel::Centroid(arrays) => {
-                self.write_binary_data_arrays(&C::as_arrays(&arrays[0..]), default_array_len)?
+                self.write_binary_data_arrays(&C1::as_arrays(&arrays[0..]), default_array_len)?
             }
             RefPeakDataLevel::Deconvoluted(arrays) => {
-                self.write_binary_data_arrays(&D::as_arrays(&arrays[0..]), default_array_len)?
+                self.write_binary_data_arrays(&D1::as_arrays(&arrays[0..]), default_array_len)?
             }
             RefPeakDataLevel::Missing => {
                 self.write_binary_data_arrays(&BinaryArrayMap::new(), default_array_len)?
@@ -2046,10 +2085,10 @@ mod test {
                         arr.store_compressed(BinaryCompressionType::Zlib).unwrap();
                     });
                 }
-                writer.write_spectrum(prec)?
+                writer.write(prec)?;
             }
             for prod in group.products.iter() {
-                writer.write_spectrum(prod)?
+                writer.write(prod)?;
             }
         }
         writer.close()?;

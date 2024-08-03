@@ -12,9 +12,9 @@ pub use spectrum::{
 pub use util::SeekRead;
 
 pub use frame::{
-    Generic3DIonMobilityFrameSource, IonMobilityFrameAccessError, IonMobilityFrameGrouping,
-    IonMobilityFrameIterator, IonMobilityFrameSource, RandomAccessIonMobilityFrameIterator,
-    IonMobilityFrameWriter,
+    BorrowedGeneric3DIonMobilityFrameSource, Generic3DIonMobilityFrameSource,
+    IonMobilityFrameAccessError, IonMobilityFrameGrouping, IonMobilityFrameIterator,
+    IonMobilityFrameSource, IonMobilityFrameWriter, RandomAccessIonMobilityFrameIterator,
 };
 
 pub use chromatogram::{ChromatogramIterator, ChromatogramSource};

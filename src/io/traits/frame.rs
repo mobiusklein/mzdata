@@ -764,3 +764,195 @@ pub trait IonMobilityFrameWriter<
     /// data. Does not formally close the underlying writing stream.
     fn close_frames(&mut self) -> io::Result<()>;
 }
+
+
+/// Adapt a [`SpectrumSource`] that contains spectra with a non-scalar ion mobility
+/// dimension to a [`IonMobilityFrameSource`].
+#[derive(Debug)]
+pub struct BorrowedGeneric3DIonMobilityFrameSource<
+    'a,
+    CP: CentroidPeakAdapting,
+    DP: DeconvolutedPeakAdapting,
+    R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+    C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
+> {
+    source: &'a mut R,
+    _cp: PhantomData<CP>,
+    _dp: PhantomData<DP>,
+    _c: PhantomData<C>,
+    _d: PhantomData<D>,
+}
+
+impl<
+        'a,
+        CP: CentroidPeakAdapting,
+        DP: DeconvolutedPeakAdapting,
+        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    > MSDataFileMetadata for BorrowedGeneric3DIonMobilityFrameSource<'a, CP, DP, R, C, D>
+where
+    R: MSDataFileMetadata,
+{
+    crate::delegate_impl_metadata_trait!(source);
+}
+
+impl<
+        'a,
+        CP: CentroidPeakAdapting,
+        DP: DeconvolutedPeakAdapting,
+        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    > IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>>
+    for BorrowedGeneric3DIonMobilityFrameSource<'a, CP, DP, R, C, D>
+{
+    fn reset(&mut self) {
+        self.source.reset()
+    }
+
+    fn get_frame_by_id(&mut self, id: &str) -> Option<MultiLayerIonMobilityFrame<C, D>> {
+        self.source.get_spectrum_by_id(id).and_then(|s| {
+            MultiLayerIonMobilityFrame::try_from(s).map_or_else(
+                |err| {
+                    warn!("Failed to convert {id} to MultiLayerIonMobilityFrame: {err}");
+                    None
+                },
+                |val| Some(val),
+            )
+        })
+    }
+
+    fn get_frame_by_index(&mut self, index: usize) -> Option<MultiLayerIonMobilityFrame<C, D>> {
+        self.source.get_spectrum_by_index(index).and_then(|s| {
+            MultiLayerIonMobilityFrame::try_from(s).map_or_else(
+                |err| {
+                    warn!("Failed to convert {index} to MultiLayerIonMobilityFrame: {err}");
+                    None
+                },
+                |val| Some(val),
+            )
+        })
+    }
+
+    fn get_frame_by_time(&mut self, time: f64) -> Option<MultiLayerIonMobilityFrame<C, D>> {
+        self.source.get_spectrum_by_time(time).and_then(|s| {
+            MultiLayerIonMobilityFrame::try_from(s).map_or_else(
+                |err| {
+                    warn!("Failed to convert {time} to MultiLayerIonMobilityFrame: {err}");
+                    None
+                },
+                |val| Some(val),
+            )
+        })
+    }
+
+    fn get_index(&self) -> &OffsetIndex {
+        self.source.get_index()
+    }
+
+    fn set_index(&mut self, index: OffsetIndex) {
+        self.source.set_index(index)
+    }
+}
+
+
+impl<
+        'a,
+        CP: CentroidPeakAdapting,
+        DP: DeconvolutedPeakAdapting,
+        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    > Iterator for BorrowedGeneric3DIonMobilityFrameSource<'a, CP, DP, R, C, D>
+{
+    type Item = MultiLayerIonMobilityFrame<C, D>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(s) = self.source.next() {
+            Some(
+                MultiLayerIonMobilityFrame::try_from(s)
+                    .expect("Failed to convert spectrum into frame"),
+            )
+        } else {
+            None
+        }
+    }
+}
+
+impl<
+        'a,
+        CP: CentroidPeakAdapting,
+        DP: DeconvolutedPeakAdapting,
+        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    > BorrowedGeneric3DIonMobilityFrameSource<'a, CP, DP, R, C, D>
+{
+    #[allow(unused)]
+    pub fn new(source: &'a mut R) -> Self {
+        Self {
+            source,
+            _cp: PhantomData,
+            _dp: PhantomData,
+            _c: PhantomData,
+            _d: PhantomData,
+        }
+    }
+}
+
+
+impl<
+        'a,
+        CP: CentroidPeakAdapting,
+        DP: DeconvolutedPeakAdapting,
+        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    > RandomAccessIonMobilityFrameIterator<C, D, MultiLayerIonMobilityFrame<C, D>>
+    for BorrowedGeneric3DIonMobilityFrameSource<'a, CP, DP, R, C, D>
+where
+    R: RandomAccessSpectrumIterator<CP, DP, MultiLayerSpectrum<CP, DP>>,
+{
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError> {
+        match self.source.start_from_id(id) {
+            Ok(_) => Ok(self),
+            Err(e) => Err(match e {
+                SpectrumAccessError::SpectrumIdNotFound(id) => {
+                    IonMobilityFrameAccessError::FrameIdNotFound(id)
+                }
+                SpectrumAccessError::SpectrumNotFound => IonMobilityFrameAccessError::FrameNotFound,
+                SpectrumAccessError::IOError(e) => IonMobilityFrameAccessError::IOError(e),
+                _ => todo!(),
+            }),
+        }
+    }
+
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, IonMobilityFrameAccessError> {
+        match self.source.start_from_index(index) {
+            Ok(_) => Ok(self),
+            Err(e) => Err(match e {
+                SpectrumAccessError::SpectrumIndexNotFound(i) => {
+                    IonMobilityFrameAccessError::FrameIndexNotFound(i)
+                }
+                SpectrumAccessError::SpectrumNotFound => IonMobilityFrameAccessError::FrameNotFound,
+                SpectrumAccessError::IOError(e) => IonMobilityFrameAccessError::IOError(e),
+                _ => todo!(),
+            }),
+        }
+    }
+
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, IonMobilityFrameAccessError> {
+        match self.source.start_from_time(time) {
+            Ok(_) => Ok(self),
+            Err(e) => Err(match e {
+                SpectrumAccessError::SpectrumNotFound => IonMobilityFrameAccessError::FrameNotFound,
+                SpectrumAccessError::IOError(e) => IonMobilityFrameAccessError::IOError(e),
+                _ => todo!(),
+            }),
+        }
+    }
+}
+
+
