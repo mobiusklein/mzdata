@@ -56,28 +56,32 @@ for spectrum in reader {
 
 pub mod bindata;
 pub(crate) mod chromatogram;
+pub(crate) mod frame;
 pub(crate) mod group;
+pub(crate) mod peaks;
 pub(crate) mod scan_properties;
 pub(crate) mod spectrum_types;
-pub(crate) mod frame;
 pub mod utils;
 
 pub use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray};
 pub use crate::spectrum::chromatogram::{Chromatogram, ChromatogramLike};
 pub use crate::spectrum::scan_properties::*;
 pub use crate::spectrum::spectrum_types::{
-    CentroidSpectrum, CentroidSpectrumType, DeconvolutedSpectrum, DeconvolutedSpectrumType,
-    MultiLayerSpectrum, RefPeakDataLevel, RawSpectrum, Spectrum, SpectrumConversionError,
-    SpectrumLike, SpectrumProcessingError, PeakDataLevel, CentroidPeakAdapting,
-    DeconvolutedPeakAdapting
+    CentroidPeakAdapting, CentroidSpectrum, CentroidSpectrumType, DeconvolutedPeakAdapting,
+    DeconvolutedSpectrum, DeconvolutedSpectrumType, MultiLayerSpectrum, RawSpectrum, Spectrum,
+    SpectrumConversionError, SpectrumLike, SpectrumProcessingError,
 };
 
-pub use frame::{IonMobilityFrameDescription, MultiLayerIonMobilityFrame, IonMobilityFrameLike};
+pub use crate::spectrum::peaks::{
+    PeakDataIter, PeakDataLevel, RefPeakDataIter, RefPeakDataLevel, SpectrumSummary,
+};
+
+pub use frame::{IonMobilityFrameDescription, IonMobilityFrameLike, MultiLayerIonMobilityFrame};
 
 pub use group::{
-    SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter, SpectrumGroupingIterator,
     IonMobilityFrameGroup, IonMobilityFrameGroupIntoIter, IonMobilityFrameGroupIter,
-    IonMobilityFrameGroupingIterator,
+    IonMobilityFrameGroupingIterator, SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter,
+    SpectrumGroupingIterator,
 };
 
 #[cfg(feature = "mzsignal")]
