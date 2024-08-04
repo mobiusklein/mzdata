@@ -234,7 +234,10 @@ if let Some(spec) = reader.get_spectrum_by_index(48) {
 
 ### By scan start time
 
-A spectrum's "scan start time" is the point in time when the spectrum was acquired
+A spectrum's "scan start time" is the point in time when the spectrum was acquired. This assumes
+that the source MS run is stored in chronological order, which should be true for most files from
+raw MS runs, but not all, nor for programmatically generated files, especially if they are merged
+across multiple MS runs.
 
 ```rust
 # use std::{io, fs};
@@ -272,3 +275,5 @@ of them when transforming from one to the other ([`MultiLayerSpectrum`]).
 Because a single mass spectrometry data file may contain spectra in different states, `mzdata` always reads [`MultiLayerSpectrum`] instances,
 but it is possible to convert between these four types. With the [`mzsignal`](https://crates.io/crates/mzsignal) library `mzdata` can also
 perform peak picking to centroid profile spectra when dealing with raw signal [`MultiLayerSpectrum::pick_peaks`] and [`RawSpectrum::pick_peaks_into`].
+
+For more details, see the [spectrum tutorial](crate::tutorial::spectrum).
