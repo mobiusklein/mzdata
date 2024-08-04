@@ -18,7 +18,24 @@ use super::traits::{ByteArrayView, ByteArrayViewMut};
 #[allow(unused)]
 use super::vec_as_bytes;
 
-/// Represents a data array
+/// Represents a data array that holds a byte buffer that may be compressed, base64 encoded,
+/// or raw little endian bytes, and provides views of those bytes as a small range of supported
+/// types.
+///
+/// This type is modeled after the `<binaryDataArray>` element in mzML.
+///
+/// # Note
+/// This type tries to walk a fine line between convenience and performance and as such is easy
+/// to misuse. All operations that view the byte buffer as arbitrary data need that data to be
+/// decoded and decompressed in order to borrow it. If the byte buffer is not already stored
+/// decoded, the operation will copy and decode the buffer in its entirety before performing any
+/// other operation, so repeated method calls may incur excessive overhead. If this is happening,
+/// please use [`DataArray::decode_and_store`] to store the decoded representation explicitly.
+///
+/// Normally, [`SpectrumSource`](crate::io::SpectrumSource)-implementing file readers will eagerly decode all arrays
+/// as soon as they are ready. If they are operating in lazy mode, the buffers will need to be decoded
+/// explicitly, again using [`DataArray::decode_and_store`] or operations should make as much use of the
+/// copied arrays as possible instead.
 #[derive(Default, Clone)]
 pub struct DataArray {
     pub data: Bytes,
@@ -461,6 +478,8 @@ impl<'transient, 'lifespan: 'transient> ByteArrayViewMut<'transient, 'lifespan> 
 
 impl_param_described_deferred!(DataArray);
 
+
+/// Represent a slice of a [`DataArray`] that manages offsets and decoding automatically.
 #[derive(Clone, Debug)]
 pub struct DataArraySlice<'a> {
     source: &'a DataArray,

@@ -31,8 +31,6 @@ trait SummaryOps {
     /// **NOTE**: There is no guarantee that values are stored in m/z order.
     fn get(&self, i: usize) -> Option<MZPoint>;
 
-    /// Iterate over [`MZPoint`](mzpeaks::peaks::MZPoint) data encoded in the peak data.
-
     /// Compute summary information about the peak data's m/z range, base peak, total ion current,
     /// and number of data points
     fn fetch_summaries(&self) -> SpectrumSummary;
@@ -282,7 +280,7 @@ impl<D: DeconvolutedCentroidLike> SummaryOps for MassPeakSetType<D> {
     }
 }
 
-/// Represent an owned representation of one the kinds of peak data that a [`SpectrumLike`] instance
+/// Represent an owned representation of one the kinds of peak data that a [`SpectrumLike`](crate::spectrum::SpectrumLike) instance
 /// might otherwise carry.
 ///
 /// # See also
@@ -299,6 +297,8 @@ pub enum PeakDataLevel<
 }
 
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
+    /// Iterate over [`MZPoint`](mzpeaks::peak::MZPoint) data encoded in the peak data.
+    ///
     /// **NOTE**: Values are produced in the order they are stored, so the data are not guaranteed
     /// to be ordered by m/z.
     pub fn iter(&self) -> PeakDataIter<'_, C, D> {
@@ -306,9 +306,9 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
     }
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike> SummaryOps for PeakDataLevel<C, D> {
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
     /// Compute the base peak of a spectrum
-    fn base_peak(&self) -> CentroidPeak {
+    pub fn base_peak(&self) -> CentroidPeak {
         match self {
             Self::Missing => CentroidPeak::new(0.0, 0.0, 0),
             Self::RawData(arrays) => arrays.base_peak(),
@@ -318,7 +318,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> SummaryOps for PeakDataLevel<
     }
 
     /// Find the minimum and maximum m/z values of a spectrum
-    fn mz_range(&self) -> (f64, f64) {
+    pub fn mz_range(&self) -> (f64, f64) {
         match self {
             Self::Missing => (0.0, 0.0),
             Self::RawData(arrays) => arrays.mz_range(),
@@ -328,7 +328,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> SummaryOps for PeakDataLevel<
     }
 
     /// Compute the total ion current for a spectrum
-    fn tic(&self) -> f32 {
+    pub fn tic(&self) -> f32 {
         match self {
             Self::Missing => 0.0,
             Self::RawData(arrays) => arrays.tic(),
@@ -337,7 +337,13 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> SummaryOps for PeakDataLevel<
         }
     }
 
-    fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize> {
+
+    /// Iterate over [`MZPoint`](mzpeaks::peak::MZPoint) data encoded in the peak data.
+    ///
+    /// **NOTE**: Values are produced in the order they are stored, so the data are not guaranteed
+    /// to be ordered by m/z.
+
+    pub fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize> {
         match self {
             Self::Missing => None,
             Self::RawData(arrays) => arrays.search(query, error_tolerance),
@@ -348,7 +354,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> SummaryOps for PeakDataLevel<
 
     /// Find the number of points in a profile spectrum, or the number of peaks
     /// for a centroid spectrum
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         match self {
             Self::Missing => 0,
             Self::RawData(arrays) => SummaryOps::len(arrays),
@@ -360,7 +366,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> SummaryOps for PeakDataLevel<
     /// Get the `i`th point in the peak data.
     ///
     /// **NOTE**: There is no guarantee that values are stored in m/z order.
-    fn get(&self, i: usize) -> Option<MZPoint> {
+    pub fn get(&self, i: usize) -> Option<MZPoint> {
         match self {
             PeakDataLevel::Missing => None,
             PeakDataLevel::RawData(arr) => SummaryOps::get(arr, i),
@@ -371,7 +377,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> SummaryOps for PeakDataLevel<
 
     /// Compute summary information about the peak data's m/z range, base peak, total ion current,
     /// and number of data points
-    fn fetch_summaries(&self) -> SpectrumSummary {
+    pub fn fetch_summaries(&self) -> SpectrumSummary {
         match self {
             Self::Missing => SpectrumSummary::new(0.0, CentroidPeak::default(), (0.0, 0.0), 0),
             Self::RawData(arrays) => arrays.fetch_summaries(),
@@ -381,9 +387,11 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> SummaryOps for PeakDataLevel<
     }
 
     /// Check if the collection is empty
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+
 }
 
 pub struct PeakDataIter<'a, C: CentroidLike, D: DeconvolutedCentroidLike> {
@@ -540,7 +548,7 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D
         self.len() == 0
     }
 
-    /// Iterate over [`MZPoint`](mzpeaks::peaks::MZPoint) data encoded in the peak data.
+    /// Iterate over [`MZPoint`](mzpeaks::peak::MZPoint) data encoded in the peak data.
     ///
     /// **NOTE**: Values are produced in the order they are stored, so the data are not guaranteed
     /// to be ordered by m/z.

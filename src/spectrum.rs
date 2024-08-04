@@ -52,6 +52,7 @@ for spectrum in reader {
 }
 ```
 
+More examples can be found in the [spectrum tutorial](crate::tutorial::spectrum).
 */
 
 pub mod bindata;

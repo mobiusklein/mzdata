@@ -16,6 +16,8 @@ use super::encodings::{ArrayRetrievalError, ArrayType, BinaryCompressionType};
 use super::traits::{ByteArrayView, ByteArrayViewMut};
 use super::BinaryDataArrayType;
 
+
+/// A collection of [`DataArray`]s that are identified by name.
 #[derive(Debug, Default, Clone)]
 pub struct BinaryArrayMap {
     pub byte_buffer_map: HashMap<ArrayType, DataArray>,
