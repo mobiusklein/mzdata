@@ -110,6 +110,10 @@ where
         self.mzml_writer.softwares()
     }
 
+    fn samples(&self) -> &Vec<crate::meta::Sample> {
+        self.mzml_writer.samples()
+    }
+
     fn data_processings_mut(&mut self) -> &mut Vec<DataProcessing> {
         self.mzml_writer.data_processings_mut()
     }
@@ -124,6 +128,10 @@ where
 
     fn softwares_mut(&mut self) -> &mut Vec<Software> {
         self.mzml_writer.softwares_mut()
+    }
+
+    fn samples_mut(&mut self) -> &mut Vec<crate::meta::Sample> {
+        self.mzml_writer.samples_mut()
     }
 
     fn copy_metadata_from(&mut self, source: &impl MSDataFileMetadata) {

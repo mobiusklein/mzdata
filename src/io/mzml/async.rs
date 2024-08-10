@@ -22,7 +22,7 @@ use quick_xml::Reader;
 use crate::prelude::*;
 
 use crate::io::utils::DetailLevel;
-use crate::meta::{FileDescription, InstrumentConfiguration, DataProcessing, MSDataFileMetadata, Software, MassSpectrometryRun};
+use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, Software};
 use crate::params::Param;
 use crate::spectrum::bindata::BuildFromArrayMap;
 use crate::spectrum::spectrum_types::{
@@ -67,6 +67,7 @@ pub struct MzMLReaderType<
     /// The different software components that were involved in the processing and creation of this
     /// file.
     pub(crate) softwares: Vec<Software>,
+    pub(crate) samples: Vec<Sample>,
     /// The data processing and signal transformation operations performed on the raw data in previous
     /// source files to produce this file's contents.
     pub(crate) data_processings: Vec<DataProcessing>,
@@ -116,6 +117,7 @@ impl<
             file_description: FileDescription::default(),
             instrument_configurations: HashMap::new(),
             softwares: Vec::new(),
+            samples: Vec::new(),
             data_processings: Vec::new(),
             reference_param_groups: HashMap::new(),
             detail_level,
@@ -235,6 +237,7 @@ impl<
             .map(|ic| (ic.id.clone(), ic))
             .collect();
         self.softwares = accumulator.softwares;
+        self.samples = accumulator.samples;
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
 

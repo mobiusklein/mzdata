@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::{
-    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software,
+    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software
 };
 
 /// Mass spectrometry data files have several facets of descriptive metadata
@@ -19,6 +19,10 @@ pub trait MSDataFileMetadata {
     /// [`DataProcessing`] methods.
     fn softwares(&self) -> &Vec<Software>;
 
+    /// A list of sample descriptions that were measured in this data file if
+    /// available.
+    fn samples(&self) -> &Vec<Sample>;
+
     /// Mutably access the [`DataProcessing`] list for this data file
     fn data_processings_mut(&mut self) -> &mut Vec<DataProcessing>;
     /// Mutably access the [`InstrumentConfiguration`] mapping for this data file
@@ -28,6 +32,7 @@ pub trait MSDataFileMetadata {
     fn file_description_mut(&mut self) -> &mut FileDescription;
     /// Mutably access the list of [`Software`] of this data file.
     fn softwares_mut(&mut self) -> &mut Vec<Software>;
+    fn samples_mut(&mut self) -> &mut Vec<Sample>;
 
     /// Copy the metadata from another [`MSDataFileMetadata`] implementation into
     /// this one.
@@ -36,6 +41,7 @@ pub trait MSDataFileMetadata {
         *self.instrument_configurations_mut() = source.instrument_configurations().clone();
         *self.file_description_mut() = source.file_description().clone();
         *self.softwares_mut() = source.softwares().clone();
+        *self.samples_mut() = source.samples().clone();
 
         match source.run_description() {
             Some(run) => {
@@ -123,6 +129,14 @@ macro_rules! impl_metadata_trait {
         fn softwares_mut(&mut self) -> &mut Vec<$crate::meta::Software> {
             &mut self.softwares
         }
+
+        fn samples(&self) -> &Vec<$crate::meta::Sample> {
+            &self.samples
+        }
+
+        fn samples_mut(&mut self) -> &mut Vec<$crate::meta::Sample> {
+            &mut self.samples
+        }
     };
 }
 
@@ -164,6 +178,10 @@ macro_rules! delegate_impl_metadata_trait {
             self.$src.softwares()
         }
 
+        fn samples(&self) -> &Vec<$crate::meta::Sample> {
+            &self.$src.samples()
+        }
+
         fn data_processings_mut(&mut self) -> &mut Vec<$crate::meta::DataProcessing> {
             self.$src.data_processings_mut()
         }
@@ -178,6 +196,10 @@ macro_rules! delegate_impl_metadata_trait {
 
         fn softwares_mut(&mut self) -> &mut Vec<$crate::meta::Software> {
             self.$src.softwares_mut()
+        }
+
+        fn samples_mut(&mut self) -> &mut Vec<$crate::meta::Sample> {
+            self.$src.samples_mut()
         }
 
         fn spectrum_count_hint(&self) -> Option<u64> {

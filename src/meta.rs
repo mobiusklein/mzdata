@@ -5,6 +5,7 @@ mod file_description;
 mod data_processing;
 mod instrument;
 mod run;
+mod sample;
 mod software;
 #[macro_use]
 mod traits;
@@ -23,6 +24,7 @@ pub use instrument::{Component, ComponentType, InstrumentConfiguration, Detector
 
 pub use run::MassSpectrometryRun;
 pub use traits::MSDataFileMetadata;
+pub use sample::Sample;
 
 use crate::params::{ParamValueParseError, Value, ValueRef};
 

@@ -14,7 +14,7 @@ use thiserror::Error;
 
 use crate::io::utils::FileSource;
 use crate::io::OffsetIndex;
-use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software};
+use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software};
 use crate::prelude::MSDataFileMetadata;
 use crate::spectrum::group::{SpectrumGroup, SpectrumGroupingIterator};
 use crate::spectrum::spectrum_types::{MultiLayerSpectrum, SpectrumLike};
@@ -731,6 +731,7 @@ pub struct SpectrumReceiver<
     /// The different software components that were involved in the processing and creation of this
     /// file.
     pub(crate) softwares: Vec<Software>,
+    pub(crate) samples: Vec<Sample>,
     /// The data processing and signal transformation operations performed on the raw data in previous
     /// source files to produce this file's contents.
     pub(crate) data_processings: Vec<DataProcessing>,
@@ -772,6 +773,7 @@ impl<
             file_description: Default::default(),
             instrument_configurations: Default::default(),
             softwares: Default::default(),
+            samples: Default::default(),
             data_processings: Default::default(),
             run: Default::default(),
             num_spectra: Default::default(),
@@ -814,6 +816,7 @@ impl<
         file_description: FileDescription,
         instrument_configurations: HashMap<u32, InstrumentConfiguration>,
         softwares: Vec<Software>,
+        samples: Vec<Sample>,
         data_processings: Vec<DataProcessing>,
         run: MassSpectrometryRun,
         num_spectra: Option<u64>,
@@ -823,6 +826,7 @@ impl<
             file_description,
             instrument_configurations,
             softwares,
+            samples,
             data_processings,
             run,
             num_spectra,

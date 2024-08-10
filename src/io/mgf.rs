@@ -32,8 +32,7 @@ use super::{
 };
 
 use crate::meta::{
-    DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
-    MassSpectrometryRun, Software,
+    DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, Software
 };
 use crate::params::{
     ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue as _, CURIE,
@@ -226,6 +225,7 @@ pub struct MGFReaderType<
     file_description: FileDescription,
     instrument_configurations: HashMap<u32, InstrumentConfiguration>,
     softwares: Vec<Software>,
+    samples: Vec<Sample>,
     data_processings: Vec<DataProcessing>,
     run: MassSpectrometryRun,
     pub detail_level: DetailLevel,
@@ -504,6 +504,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             instrument_configurations: HashMap::new(),
             data_processings: Vec::new(),
             softwares: Vec::new(),
+            samples: Vec::new(),
             file_description: Self::default_file_description(),
             detail_level: DetailLevel::Full,
             run: MassSpectrometryRun::default(),
@@ -820,6 +821,7 @@ pub struct MGFWriterType<
     file_description: FileDescription,
     instrument_configurations: HashMap<u32, InstrumentConfiguration>,
     softwares: Vec<Software>,
+    samples: Vec<Sample>,
     data_processings: Vec<DataProcessing>,
     style_type: PhantomData<Y>,
     run: MassSpectrometryRun,
@@ -838,6 +840,7 @@ impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting, Y: MGFH
             file_description: Default::default(),
             instrument_configurations: Default::default(),
             softwares: Default::default(),
+            samples: Default::default(),
             data_processings: Default::default(),
             run: Default::default(),
             style_type: PhantomData,

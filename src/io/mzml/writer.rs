@@ -23,8 +23,7 @@ use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 use crate::io::traits::IonMobilityFrameWriter;
 use crate::meta::{
-    ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
-    MassSpectrometryRun, Software,
+    ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, Software
 };
 use crate::params::{
     ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef,
@@ -487,6 +486,7 @@ pub struct MzMLWriterType<
     /// The list of software components that were used to process the data into
     /// its current state
     pub softwares: Vec<Software>,
+    pub samples: Vec<Sample>,
     /// The types of data transformations applied to (parts of) the data
     pub data_processings: Vec<DataProcessing>,
     /// The different instrument configurations that were in use during the
@@ -727,6 +727,7 @@ where
             file_description: FileDescription::default(),
             instrument_configurations: HashMap::new(),
             softwares: Vec::new(),
+            samples: Vec::new(),
             data_processings: Vec::new(),
             offset: 0,
             spectrum_offset_index: OffsetIndex::new("spectrum".into()),
@@ -916,6 +917,7 @@ where
         self.write_cv_list()?;
         self.write_file_description()?;
         self.write_referenceable_param_group_list()?;
+        self.write_sample_list()?;
         self.write_software_list()?;
         self.write_instrument_configuration()?;
         self.write_data_processing()?;
@@ -979,6 +981,30 @@ where
             }
             end_event!(self, list);
         }
+        Ok(())
+    }
+
+    fn write_sample_list(&mut self) -> WriterResult {
+        if self.samples.is_empty() {
+            return Ok(())
+        }
+        let mut outer = bstart!("sampleList");
+        let count = self.samples.len().to_string();
+        attrib!("count", count, outer);
+        self.handle.write_event(Event::Start(outer.borrow()))?;
+        for sample in self.samples.iter() {
+            let mut tag = bstart!("sample");
+            attrib!("id", sample.id, tag);
+            if let Some(name) = sample.name.as_ref() {
+                attrib!("name", name, tag);
+            }
+            self.handle.write_event(Event::Start(tag.borrow()))?;
+            for param in sample.params() {
+                self.handle.write_param(param)?
+            }
+            self.handle.write_event(Event::End(tag.to_end()))?;
+        }
+        self.handle.write_event(Event::End(outer.to_end()))?;
         Ok(())
     }
 

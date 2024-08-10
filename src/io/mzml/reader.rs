@@ -13,6 +13,7 @@ use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
 use quick_xml::Reader;
 
+use crate::meta::Sample;
 use crate::prelude::*;
 
 use super::super::offset_index::OffsetIndex;
@@ -966,6 +967,7 @@ pub struct MzMLReaderType<
     /// The different software components that were involved in the processing and creation of this
     /// file.
     pub(crate) softwares: Vec<Software>,
+    pub(crate) samples: Vec<Sample>,
     /// The data processing and signal transformation operations performed on the raw data in previous
     /// source files to produce this file's contents.
     pub(crate) data_processings: Vec<DataProcessing>,
@@ -1017,6 +1019,7 @@ impl<
             file_description: FileDescription::default(),
             instrument_configurations: HashMap::new(),
             softwares: Vec::new(),
+            samples: Vec::new(),
             data_processings: Vec::new(),
             reference_param_groups: HashMap::new(),
             detail_level,
@@ -1142,6 +1145,7 @@ impl<
             .map(|ic| (ic.id, ic))
             .collect();
         self.softwares = accumulator.softwares;
+        self.samples = accumulator.samples;
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
 

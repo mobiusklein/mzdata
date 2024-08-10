@@ -353,6 +353,10 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
         msfmt_dispatch!(self, reader, reader.softwares())
     }
 
+    fn samples(&self) -> &Vec<crate::meta::Sample> {
+        msfmt_dispatch!(self, reader, reader.samples())
+    }
+
     fn data_processings_mut(&mut self) -> &mut Vec<crate::meta::DataProcessing> {
         msfmt_dispatch!(self, reader, reader.data_processings_mut())
     }
@@ -367,6 +371,10 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
 
     fn softwares_mut(&mut self) -> &mut Vec<crate::meta::Software> {
         msfmt_dispatch!(self, reader, reader.softwares_mut())
+    }
+
+    fn samples_mut(&mut self) -> &mut Vec<crate::meta::Sample> {
+        msfmt_dispatch!(self, reader, reader.samples_mut())
     }
 }
 

@@ -14,9 +14,7 @@ use crate::prelude::*;
 use crate::io::traits::SeekRead;
 use crate::io::OffsetIndex;
 use crate::meta::{
-    Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration,
-    ProcessingMethod, Software, SourceFile, NativeSpectrumIdentifierFormatTerm,
-    MassSpectrometerFileFormatTerm
+    Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometerFileFormatTerm, NativeSpectrumIdentifierFormatTerm, ProcessingMethod, Sample, Software, SourceFile
 };
 use crate::params::{curie_to_num, ControlledVocabulary, Param, ParamCow, Unit};
 
@@ -42,6 +40,9 @@ pub enum MzMLParserState {
 
     ReferenceParamGroupList,
     ReferenceParamGroup,
+
+    Sample,
+    SampleList,
 
     SoftwareList,
     Software,
@@ -553,6 +554,7 @@ pub struct FileMetadataBuilder<'a> {
     pub file_description: FileDescription,
     pub instrument_configurations: Vec<InstrumentConfiguration>,
     pub softwares: Vec<Software>,
+    pub samples: Vec<Sample>,
     pub data_processings: Vec<DataProcessing>,
     pub reference_param_groups: HashMap<String, Vec<Param>>,
     pub last_group: String,
@@ -769,6 +771,32 @@ impl<'a> FileMetadataBuilder<'a> {
                     .push(detector);
                 return Ok(MzMLParserState::Detector);
             }
+            b"sampleList" => return Ok(MzMLParserState::SampleList),
+            b"sample" => {
+                let mut sample = Sample::default();
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key.as_ref() == b"id" {
+                                sample.id = attr
+                                    .unescape_value()
+                                    .expect("Error decoding id")
+                                    .to_string();
+                            } else if attr.key.as_ref() == b"name" {
+                                sample.name = Some(attr
+                                    .unescape_value()
+                                    .expect("Error decoding name")
+                                    .to_string());
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg.into(), state));
+                        }
+                    }
+                }
+                self.samples.push(sample);
+                return Ok(MzMLParserState::Sample);
+            }
             b"dataProcessingList" => return Ok(MzMLParserState::DataProcessingList),
             b"dataProcessing" => {
                 let mut dp = DataProcessing::default();
@@ -901,6 +929,10 @@ impl<'a> FileMetadataBuilder<'a> {
                 } else {
                     sf.add_param(param)
                 }
+            },
+            MzMLParserState::Sample => {
+                let sample = self.samples.last_mut().unwrap();
+                sample.add_param(param)
             }
             MzMLParserState::FileContents => {
                 self.file_description.add_param(param);
@@ -1014,6 +1046,8 @@ impl<'a> FileMetadataBuilder<'a> {
             b"sourceFile" => return Ok(MzMLParserState::SourceFileList),
             b"softwareList" => return Ok(MzMLParserState::SoftwareList),
             b"software" => return Ok(MzMLParserState::SoftwareList),
+            b"sample" => return Ok(MzMLParserState::SampleList),
+            b"sampleList" => return Ok(MzMLParserState::SampleList),
             b"referenceableParamGroupList" => {
                 return Ok(MzMLParserState::ReferenceParamGroupList);
             }

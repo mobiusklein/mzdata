@@ -24,7 +24,7 @@ use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, SpectrumSource, Spect
 use crate::prelude::{MSDataFileMetadata, ParamLike};
 
 use crate::meta::{
-    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software,
+    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software
 };
 use crate::params::{ControlledVocabulary, Param, ParamValue};
 use crate::spectrum::bindata::{
@@ -732,6 +732,7 @@ pub struct MzMLbReaderType<
     /// The different software components that were involved in the processing and creation of this
     /// file.
     pub softwares: Vec<Software>,
+    pub samples: Vec<Sample>,
     /// The data processing and signal transformation operations performed on the raw data in previous
     /// source files to produce this file's contents.
     pub data_processings: Vec<DataProcessing>,
@@ -788,6 +789,7 @@ impl<
             file_description: mzml_parser.file_description.clone(),
             instrument_configurations: mzml_parser.instrument_configurations.clone(),
             softwares: mzml_parser.softwares.clone(),
+            samples: mzml_parser.samples.clone(),
             data_processings: mzml_parser.data_processings.clone(),
             detail_level,
             mzml_parser,

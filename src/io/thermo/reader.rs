@@ -6,9 +6,7 @@ use log::{debug, warn};
 use crate::{
     io::{traits::ChromatogramSource, utils::checksum_file, DetailLevel, OffsetIndex},
     meta::{
-        Component, ComponentType, DataProcessing, DetectorTypeTerm, FileDescription,
-        InstrumentConfiguration, IonizationTypeTerm, MassAnalyzerTerm, MassSpectrometryRun,
-        Software, SourceFile,
+        Component, ComponentType, DataProcessing, DetectorTypeTerm, FileDescription, InstrumentConfiguration, IonizationTypeTerm, MassAnalyzerTerm, MassSpectrometryRun, Sample, Software, SourceFile
     },
     params::{ControlledVocabulary, Unit},
     prelude::*,
@@ -67,6 +65,7 @@ pub struct ThermoRawReaderType<
     instrument_configurations: HashMap<u32, InstrumentConfiguration>,
     components_to_instrument_id: HashMap<MassAnalyzer, u32>,
     softwares: Vec<Software>,
+    samples: Vec<Sample>,
     data_processings: Vec<DataProcessing>,
     ms_run: MassSpectrometryRun,
     _c: PhantomData<C>,
@@ -424,6 +423,14 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
         spectrum_index
     }
 
+    fn make_sample(thermo_file_description: &ThermoFileDescription) -> Option<Sample> {
+        if let Some(name) = thermo_file_description.sample_id() {
+            Some(Sample::new(name.to_string(), Some(name.to_string()), Vec::new()))
+        } else {
+            None
+        }
+    }
+
     /// Create a new [`ThermoRawReaderType`] from a path.
     /// This may trigger an expensive I/O operation to checksum the file
     pub fn new_with_detail_level_and_centroiding<P: Into<PathBuf>>(
@@ -453,6 +460,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             Self::make_instrument_configuration(&handle);
 
         let ms_run = Self::make_ms_run(&path, &thermo_file_description);
+        let samples = Self::make_sample(&thermo_file_description).into_iter().collect();
 
         Ok(Self {
             path,
@@ -462,6 +470,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             spectrum_index,
             file_description,
             instrument_configurations,
+            samples,
             components_to_instrument_id,
             softwares: vec![sw],
             data_processings: vec![],
@@ -935,6 +944,14 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 
     fn run_description(&self) -> Option<&MassSpectrometryRun> {
         Some(&self.ms_run)
+    }
+
+    fn samples(&self) -> &Vec<Sample> {
+        &self.samples
+    }
+
+    fn samples_mut(&mut self) -> &mut Vec<Sample> {
+        &mut self.samples
     }
 
     fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
