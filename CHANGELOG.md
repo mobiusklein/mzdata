@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.26.0] - 2024-08-10
+
+### Added
+
+- Added `Unit::VoltSecondPerSquareCentimeter`
+- Added `BinaryArrayMap3D::ion_mobility_unit`
+- Add `get` and `iter` methods for `PeakDataLevel` and `RefPeakDataLevel`
+- Add tutorial for spectrum types
+- Add `Sample` to the `MSDataFileMetadata`
+- Add basic `usi` parsing.
+
+### Changed
+
+- Change `MzMLWriterType` methods to be generic to peaks.
+  All the writing methods are generic over peak types
+  so long as they satisfy the `BuildArrayMapFrom` constraint.
+  The type still needs type parameters for default behavior.
+  This may cause parameter inference issues for `RawSpectrum`
+  in which case use `SpectrumWriter::write`.
+
+### Documentation
+
+- More docs
+
+### Fixed
+
+- Fix mzpeaks API breakage
+
 ## [0.25.0] - 2024-07-26
 
 ### Added
@@ -344,7 +372,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.25.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/mobiusklein/mzdata/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/mobiusklein/mzdata/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/mobiusklein/mzdata/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/mobiusklein/mzdata/compare/v0.22.0...v0.23.0
