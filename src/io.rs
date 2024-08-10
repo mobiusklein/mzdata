@@ -42,3 +42,5 @@ pub use compression::RestartableGzDecoder;
 pub mod thermo;
 #[cfg(feature = "thermorawfilereader")]
 pub use thermo::ThermoRawReader;
+
+pub mod usi;
