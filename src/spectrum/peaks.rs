@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::iter::FusedIterator;
 
 use mzpeaks::prelude::*;
@@ -7,6 +8,7 @@ use mzpeaks::{
     IndexType, MZPeakSetType, MassPeakSetType,
 };
 
+use super::bindata::ArrayRetrievalError;
 use super::BinaryArrayMap;
 use crate::utils::mass_charge_ratio;
 
@@ -301,8 +303,13 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
     ///
     /// **NOTE**: Values are produced in the order they are stored, so the data are not guaranteed
     /// to be ordered by m/z.
-    pub fn iter(&self) -> PeakDataIter<'_, C, D> {
-        PeakDataIter::new(self)
+    pub fn iter(&self) -> PeakDataIterDispatch<'_, C, D> {
+        match self {
+            PeakDataLevel::Missing => PeakDataIterDispatch::PeakData(PeakDataIter::new(self)),
+            PeakDataLevel::RawData(a) => PeakDataIterDispatch::RawData(RawIter::from_binary_array_map(a).unwrap()),
+            PeakDataLevel::Centroid(_) => PeakDataIterDispatch::PeakData(PeakDataIter::new(self)),
+            PeakDataLevel::Deconvoluted(_) => PeakDataIterDispatch::PeakData(PeakDataIter::new(self)),
+        }
     }
 }
 
@@ -394,6 +401,51 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
 
 }
 
+
+pub struct RawIter<'a> {
+    mz_array: Cow<'a, [f64]>,
+    intensity_array: Cow<'a, [f32]>,
+    n: usize,
+    i: usize,
+}
+
+impl<'a> RawIter<'a> {
+    fn new(mz_array: Cow<'a, [f64]>, intensity_array: Cow<'a, [f32]>) -> Self {
+        let n = mz_array.len();
+        let i = 0;
+        Self {
+            mz_array,
+            intensity_array,
+            n,
+            i
+        }
+    }
+
+    fn from_binary_array_map(arrays: &'a BinaryArrayMap) -> Result<Self, ArrayRetrievalError> {
+        let mz_array = arrays.mzs()?;
+        let intensity_array = arrays.intensities()?;
+
+        Ok(Self::new(mz_array, intensity_array))
+    }
+}
+
+impl<'a> Iterator for RawIter<'a> {
+    type Item = MZPoint;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.i >= self.n {
+            None
+        } else {
+            let i = self.i;
+            let mz = self.mz_array[i];
+            let intens = self.intensity_array[i];
+            self.i += 1;
+            Some(MZPoint::new(mz, intens))
+        }
+    }
+}
+
+
 pub struct PeakDataIter<'a, C: CentroidLike, D: DeconvolutedCentroidLike> {
     peaks: &'a PeakDataLevel<C, D>,
     i: usize,
@@ -449,6 +501,27 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataIter<'a, C, D> {
         self.peaks.get(i)
     }
 }
+
+
+pub enum PeakDataIterDispatch<'a, C: CentroidLike, D: DeconvolutedCentroidLike> {
+    PeakData(PeakDataIter<'a, C, D>),
+    RawData(RawIter<'a>),
+    RefPeakData(RefPeakDataIter<'a, C, D>),
+}
+
+
+impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for PeakDataIterDispatch<'a, C, D> {
+    type Item = MZPoint;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            PeakDataIterDispatch::PeakData(a) => a.next(),
+            PeakDataIterDispatch::RawData(a) => a.next(),
+            PeakDataIterDispatch::RefPeakData(a) => a.next()
+        }
+    }
+}
+
 
 #[derive(Debug)]
 /// An variant for dispatching to different strategies of computing
@@ -552,8 +625,13 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D
     ///
     /// **NOTE**: Values are produced in the order they are stored, so the data are not guaranteed
     /// to be ordered by m/z.
-    pub fn iter(&self) -> RefPeakDataIter<'_, C, D> {
-        RefPeakDataIter::new(self)
+    pub fn iter(&self) -> PeakDataIterDispatch<'_, C, D> {
+        match self {
+            RefPeakDataLevel::Missing => PeakDataIterDispatch::RefPeakData(RefPeakDataIter::new(self)),
+            RefPeakDataLevel::RawData(a) => PeakDataIterDispatch::RawData(RawIter::from_binary_array_map(a).unwrap()),
+            RefPeakDataLevel::Centroid(_) => PeakDataIterDispatch::RefPeakData(RefPeakDataIter::new(self)),
+            RefPeakDataLevel::Deconvoluted(_) => PeakDataIterDispatch::RefPeakData(RefPeakDataIter::new(self)),
+        }
     }
 
     /// Get the `i`th point in the peak data.

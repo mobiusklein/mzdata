@@ -1324,13 +1324,59 @@ where
 
 #[cfg(test)]
 mod test {
+    use std::io;
+
+    use super::*;
+    use crate::io::mzml::MzMLReader;
+    use crate::io::DetailLevel;
+    use crate::prelude::*;
+
+    #[test_log::test]
+    fn test_peakdata_lazy() -> io::Result<()> {
+        let mut reader = MzMLReader::open_path("./test/data/small.mzML")?;
+        reader.detail_level = DetailLevel::Lazy;
+        let spec = reader.get_spectrum_by_index(0).unwrap();
+
+        let peaks = spec.peaks();
+        let n = peaks.len();
+        assert_eq!(n, 19913);
+
+        let iter = peaks.iter();
+        let data: Vec<_> = iter.collect();
+
+        let n2 = data.len();
+        assert_eq!(n2, 19913);
+
+        let p1 = peaks.get(5000);
+        let p2 = data.get(5000).cloned();
+        assert_eq!(p1, p2);
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn test_peakdata() -> io::Result<()> {
+        let mut reader = MzMLReader::open_path("./test/data/small.mzML")?;
+        let spec = reader.get_spectrum_by_index(0).unwrap();
+
+        let peaks = spec.peaks();
+        let n = peaks.len();
+        assert_eq!(n, 19913);
+
+        let iter = peaks.iter();
+        let data: Vec<_> = iter.collect();
+
+        let n2 = data.len();
+        assert_eq!(n2, 19913);
+
+        let p1 = peaks.get(5000);
+        let p2 = data.get(5000).cloned();
+        assert_eq!(p1, p2);
+        Ok(())
+    }
 
     #[cfg(feature = "mzsignal")]
     #[test_log::test]
     fn test_profile_read() {
-        use super::*;
-        use crate::io::mzml::MzMLReader;
-        use crate::prelude::*;
         let mut reader = MzMLReader::open_path("./test/data/three_test_scans.mzML")
             .expect("Failed to open test file");
         reader.reset();
