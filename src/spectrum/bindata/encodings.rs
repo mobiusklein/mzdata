@@ -1,12 +1,19 @@
-use std::{ops::{Mul, AddAssign}, io, fmt::Display};
 use bytemuck::{self, Pod};
+use std::{
+    fmt::Display,
+    io,
+    ops::{AddAssign, Mul},
+};
 use thiserror::{self, Error};
 
 use num_traits::Float;
 #[cfg(feature = "numpress")]
 use numpress;
 
-use crate::params::{ParamCow, ControlledVocabulary, Unit};
+use crate::{
+    params::{ControlledVocabulary, ParamCow, Unit},
+    Param,
+};
 
 pub type Bytes = Vec<u8>;
 
@@ -38,7 +45,9 @@ pub enum ArrayType {
     MeanIonMobilityArray,
     RawIonMobilityArray,
     DeconvolutedIonMobilityArray,
-    NonStandardDataArray { name: Box<String> },
+    NonStandardDataArray {
+        name: Box<String>,
+    },
 }
 
 impl Display for ArrayType {
@@ -57,24 +66,93 @@ impl ArrayType {
         }
     }
 
+    /// Create a [`ArrayType::NonStandardDataArray`] with the provided name.
     pub fn nonstandard<S: ToString>(name: S) -> ArrayType {
-        ArrayType::NonStandardDataArray { name: name.to_string().into() }
+        ArrayType::NonStandardDataArray {
+            name: name.to_string().into(),
+        }
+    }
+
+    /// Test if the the array describes an ion mobility quantity.
+    pub const fn is_ion_mobility(&self) -> bool {
+        matches!(
+            self,
+            Self::IonMobilityArray
+                | Self::MeanIonMobilityArray
+                | Self::RawIonMobilityArray
+                | Self::DeconvolutedIonMobilityArray
+        )
+    }
+
+    pub fn as_param(&self, unit: Option<Unit>) -> Param {
+        const CV: ControlledVocabulary = ControlledVocabulary::MS;
+        match self {
+            ArrayType::MZArray => CV
+                .const_param_ident_unit("m/z array", 1000514, unit.unwrap_or(Unit::MZ))
+                .into(),
+            ArrayType::IntensityArray => CV
+                .const_param_ident_unit(
+                    "intensity array",
+                    1000515,
+                    unit.unwrap_or(Unit::DetectorCounts),
+                )
+                .into(),
+            ArrayType::ChargeArray => CV.const_param_ident("charge array", 1000516).into(),
+            ArrayType::TimeArray => CV
+                .const_param_ident_unit("time array", 1000595, unit.unwrap_or(Unit::Minute))
+                .into(),
+            ArrayType::RawIonMobilityArray => CV
+                .const_param_ident_unit("raw ion mobility array", 1003007, unit.unwrap_or_default())
+                .into(),
+            ArrayType::MeanIonMobilityArray => CV
+                .const_param_ident_unit(
+                    "mean ion mobility array",
+                    1002816,
+                    unit.unwrap_or_default(),
+                )
+                .into(),
+            ArrayType::DeconvolutedIonMobilityArray => CV
+                .const_param_ident_unit(
+                    "deconvoluted ion mobility array",
+                    1003154,
+                    unit.unwrap_or_default(),
+                )
+                .into(),
+            ArrayType::NonStandardDataArray { name } => {
+                let mut p = CV.param_val(
+                    1000786,
+                    "non-standard data array",
+                    name.to_string(),
+                );
+                p.unit = unit.unwrap_or_default();
+                p
+            }
+            _ => {
+                panic!("Could not determine how to name for array {}", self);
+            }
+        }
     }
 
     pub const fn as_param_const(&self) -> ParamCow<'static> {
         const CV: ControlledVocabulary = ControlledVocabulary::MS;
         match self {
             ArrayType::MZArray => CV.const_param_ident_unit("m/z array", 1000514, Unit::MZ),
-            ArrayType::IntensityArray => CV.const_param_ident_unit("intensity array", 1000515, Unit::DetectorCounts),
+            ArrayType::IntensityArray => {
+                CV.const_param_ident_unit("intensity array", 1000515, Unit::DetectorCounts)
+            }
             ArrayType::ChargeArray => CV.const_param_ident("charge array", 1000516),
             ArrayType::TimeArray => CV.const_param_ident_unit("time array", 1000595, Unit::Minute),
-            ArrayType::RawIonMobilityArray => CV.const_param_ident("raw ion mobility array", 1003007),
-            ArrayType::MeanIonMobilityArray => CV.const_param_ident("mean ion mobility array", 1002816),
+            ArrayType::RawIonMobilityArray => {
+                CV.const_param_ident("raw ion mobility array", 1003007)
+            }
+            ArrayType::MeanIonMobilityArray => {
+                CV.const_param_ident("mean ion mobility array", 1002816)
+            }
             ArrayType::DeconvolutedIonMobilityArray => {
                 CV.const_param_ident("deconvoluted ion mobility array", 1003154)
             }
             ArrayType::NonStandardDataArray { name: _name } => {
-                panic!("Cannot format NonStandardDataArray in a const context");
+                panic!("Cannot format NonStandardDataArray in a const context, please use `as_param`");
             }
             _ => {
                 panic!("Could not determine how to name for array");
@@ -82,24 +160,26 @@ impl ArrayType {
         }
     }
 
-    pub const fn is_ion_mobility(&self) -> bool {
-        matches!(self, Self::IonMobilityArray | Self::MeanIonMobilityArray | Self::RawIonMobilityArray | Self::DeconvolutedIonMobilityArray)
-    }
-
     pub const fn as_param_with_unit_const(&self, unit: Unit) -> ParamCow<'static> {
         const CV: ControlledVocabulary = ControlledVocabulary::MS;
         match self {
             ArrayType::MZArray => CV.const_param_ident_unit("m/z array", 1000514, unit),
-            ArrayType::IntensityArray => CV.const_param_ident_unit("intensity array", 1000515, unit),
+            ArrayType::IntensityArray => {
+                CV.const_param_ident_unit("intensity array", 1000515, unit)
+            }
             ArrayType::ChargeArray => CV.const_param_ident_unit("charge array", 1000516, unit),
             ArrayType::TimeArray => CV.const_param_ident_unit("time array", 1000595, unit),
-            ArrayType::RawIonMobilityArray => CV.const_param_ident_unit("raw ion mobility array", 1003007, unit),
-            ArrayType::MeanIonMobilityArray => CV.const_param_ident_unit("mean ion mobility array", 1002816, unit),
+            ArrayType::RawIonMobilityArray => {
+                CV.const_param_ident_unit("raw ion mobility array", 1003007, unit)
+            }
+            ArrayType::MeanIonMobilityArray => {
+                CV.const_param_ident_unit("mean ion mobility array", 1002816, unit)
+            }
             ArrayType::DeconvolutedIonMobilityArray => {
                 CV.const_param_ident_unit("deconvoluted ion mobility array", 1003154, unit)
             }
             ArrayType::NonStandardDataArray { name: _name } => {
-                panic!("Cannot format NonStandardDataArray in a const context");
+                panic!("Cannot format NonStandardDataArray in a const context, please use `as_param`");
             }
             _ => {
                 panic!("Could not determine how to name for array");
@@ -107,7 +187,6 @@ impl ArrayType {
         }
     }
 }
-
 
 /// The canonical primitive data types found in MS data file formats
 /// supported by the PSI-MS controlled vocabulary
@@ -138,7 +217,6 @@ impl BinaryDataArrayType {
     }
 }
 
-
 /// The range of compression and encoding states that a raw byte buffer
 /// might be in during different stages of decoding. Other than `Decoded`,
 /// these states may or may not include intermediate base64 encoding.
@@ -163,7 +241,7 @@ impl BinaryCompressionType {
     pub fn unsupported_msg(&self, context: Option<&str>) -> String {
         match context {
             Some(ctx) => format!("Cannot decode array compressed with {:?} ({})", self, ctx),
-            None => format!("Cannot decode array compressed with {:?}", self)
+            None => format!("Cannot decode array compressed with {:?}", self),
         }
     }
 
@@ -171,12 +249,27 @@ impl BinaryCompressionType {
         let (name, accession) = match self {
             BinaryCompressionType::NoCompression => ("no compression", 1000576),
             BinaryCompressionType::Zlib => ("zlib compression", 1000574),
-            BinaryCompressionType::NumpressLinear => ("MS-Numpress linear prediction compression", 1002312),
-            BinaryCompressionType::NumpressSLOF => ("MS-Numpress positive integer compression", 1002313),
-            BinaryCompressionType::NumpressPIC => ("MS-Numpress short logged float compression", 1002314),
-            BinaryCompressionType::NumpressLinearZlib => ("MS-Numpress linear prediction compression followed by zlib compression", 1002746),
-            BinaryCompressionType::NumpressSLOFZlib => ("MS-Numpress positive integer compression followed by zlib compression", 1002477),
-            BinaryCompressionType::NumpressPICZlib => ("MS-Numpress short logged float compression followed by zlib compression", 1002478),
+            BinaryCompressionType::NumpressLinear => {
+                ("MS-Numpress linear prediction compression", 1002312)
+            }
+            BinaryCompressionType::NumpressSLOF => {
+                ("MS-Numpress positive integer compression", 1002313)
+            }
+            BinaryCompressionType::NumpressPIC => {
+                ("MS-Numpress short logged float compression", 1002314)
+            }
+            BinaryCompressionType::NumpressLinearZlib => (
+                "MS-Numpress linear prediction compression followed by zlib compression",
+                1002746,
+            ),
+            BinaryCompressionType::NumpressSLOFZlib => (
+                "MS-Numpress positive integer compression followed by zlib compression",
+                1002477,
+            ),
+            BinaryCompressionType::NumpressPICZlib => (
+                "MS-Numpress short logged float compression followed by zlib compression",
+                1002478,
+            ),
             BinaryCompressionType::LinearPrediction => todo!(),
             BinaryCompressionType::DeltaPrediction => todo!(),
             BinaryCompressionType::Decoded => return None,
@@ -190,7 +283,6 @@ impl Display for BinaryCompressionType {
         write!(f, "{:?}", self)
     }
 }
-
 
 /// A high level set of failure modes that an operation to retrieve a typed memory buffer
 /// from a `[BinaryArrayMap]` might encounter. May also be used to represented conversion
@@ -208,7 +300,9 @@ pub enum ArrayRetrievalError {
 impl From<bytemuck::PodCastError> for ArrayRetrievalError {
     fn from(value: bytemuck::PodCastError) -> Self {
         match value {
-            bytemuck::PodCastError::TargetAlignmentGreaterAndInputNotAligned => Self::DataTypeSizeMismatch,
+            bytemuck::PodCastError::TargetAlignmentGreaterAndInputNotAligned => {
+                Self::DataTypeSizeMismatch
+            }
             bytemuck::PodCastError::OutputSliceWouldHaveSlop => Self::DataTypeSizeMismatch,
             bytemuck::PodCastError::SizeMismatch => Self::DataTypeSizeMismatch,
             bytemuck::PodCastError::AlignmentMismatch => Self::DataTypeSizeMismatch,
@@ -220,8 +314,12 @@ impl From<ArrayRetrievalError> for io::Error {
     fn from(value: ArrayRetrievalError) -> Self {
         match value {
             ArrayRetrievalError::NotFound(_) => io::Error::new(io::ErrorKind::NotFound, value),
-            ArrayRetrievalError::DecompressionError(e) => io::Error::new(io::ErrorKind::InvalidData, e),
-            ArrayRetrievalError::DataTypeSizeMismatch => io::Error::new(io::ErrorKind::InvalidData, value),
+            ArrayRetrievalError::DecompressionError(e) => {
+                io::Error::new(io::ErrorKind::InvalidData, e)
+            }
+            ArrayRetrievalError::DataTypeSizeMismatch => {
+                io::Error::new(io::ErrorKind::InvalidData, value)
+            }
         }
     }
 }
@@ -233,10 +331,9 @@ impl From<numpress::Error> for ArrayRetrievalError {
     }
 }
 
-
 pub fn linear_prediction_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
     if values.len() < 2 {
-        return values
+        return values;
     }
     let two = F::from(2.0).unwrap();
 
@@ -244,13 +341,16 @@ pub fn linear_prediction_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) 
     let prev1 = values[2];
     let offset = values[1];
 
-    values.iter_mut().skip(2).fold((prev1, prev2), |(prev1, prev2), current| {
-        let tmp = *current + two * prev1 - prev2 - offset;
-        let prev1 = *current;
-        let prev2 = prev1;
-        *current = tmp;
-        (prev1, prev2)
-    });
+    values
+        .iter_mut()
+        .skip(2)
+        .fold((prev1, prev2), |(prev1, prev2), current| {
+            let tmp = *current + two * prev1 - prev2 - offset;
+            let prev1 = *current;
+            let prev2 = prev1;
+            *current = tmp;
+            (prev1, prev2)
+        });
 
     for i in 0..values.len() {
         if i < 2 {
@@ -262,31 +362,31 @@ pub fn linear_prediction_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) 
     values
 }
 
-
 pub fn linear_prediction_encoding<F: Float + Mul<F> + AddAssign>(values: &mut [F]) -> &mut [F] {
     let n = values.len();
     if n < 3 {
-        return values
+        return values;
     }
     let offset = values[1];
     let prev2 = values[0];
     let prev1 = values[1];
     let two = F::from(2.0).unwrap();
 
-    values.iter_mut().fold((prev1, prev2), |(prev1, prev2), val| {
-        *val += offset - two * prev1 + prev2;
-        let tmp = prev1;
-        let prev1 = *val + two * prev1 - prev2 - offset;
-        let prev2 = tmp;
-        (prev1, prev2)
-    });
+    values
+        .iter_mut()
+        .fold((prev1, prev2), |(prev1, prev2), val| {
+            *val += offset - two * prev1 + prev2;
+            let tmp = prev1;
+            let prev1 = *val + two * prev1 - prev2 - offset;
+            let prev2 = tmp;
+            (prev1, prev2)
+        });
     values
 }
 
-
 pub fn delta_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
     if values.len() < 2 {
-        return values
+        return values;
     }
 
     let offset = values[0];
@@ -299,11 +399,10 @@ pub fn delta_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] 
     values
 }
 
-
 pub fn delta_encoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
     let n = values.len();
     if n < 2 {
-        return values
+        return values;
     }
     let prev = values[0];
     let offset = values[0];

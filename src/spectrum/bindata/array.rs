@@ -219,8 +219,8 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         let mut decompressor = ZlibDecoder::new(result);
         decompressor
             .write_all(bytestring)
-            .expect("Error decompression");
-        decompressor.finish().expect("Error decompression")
+            .unwrap_or_else(|e| panic!("Decompression error: {}", e));
+        decompressor.finish().unwrap_or_else(|e| panic!("Decompression error: {}", e))
     }
 
     #[cfg(feature = "numpress")]
@@ -265,6 +265,10 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    /// Decompress and base64-decode encoded bytes, and return the data.
+    ///
+    /// If the data were already decoded, the existing bytes are returned. Otherwise one or
+    /// more buffers may be allocated to hold the decompressed and decoded bytes.
     pub fn decode(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError> {
         if self.data.is_empty() {
             return Ok(Cow::Borrowed(&EMPTY_BUFFER))
@@ -273,19 +277,19 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             BinaryCompressionType::Decoded => Ok(Cow::Borrowed(self.data.as_slice())),
             BinaryCompressionType::NoCompression => {
                 let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
-                    .expect("Failed to decode base64 array");
+                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                 Ok(Cow::Owned(bytestring))
             }
             BinaryCompressionType::Zlib => {
                 let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
-                    .expect("Failed to decode base64 array");
+                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                 Ok(Cow::Owned(Self::decompres_zlib(&bytestring)))
             }
             #[cfg(feature = "numpress")]
             BinaryCompressionType::NumpressLinear => match self.dtype {
                 BinaryDataArrayType::Float64 => {
                     let mut bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
-                        .expect("Failed to decode base64 array");
+                        .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                     let decoded = Self::decompres_numpress_linear(&mut bytestring)?;
                     let view = vec_as_bytes(decoded);
                     Ok(Cow::Owned(view))
@@ -315,12 +319,12 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             BinaryCompressionType::Decoded => Ok(Cow::Borrowed(&self.data.as_slice()[start..end])),
             BinaryCompressionType::NoCompression => {
                 let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
-                    .expect("Failed to decode base64 array");
+                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                 Ok(Cow::Owned(bytestring[start..end].to_vec()))
             }
             BinaryCompressionType::Zlib => {
                 let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
-                    .expect("Failed to decode base64 array");
+                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                 Ok(Cow::Owned(
                     Self::decompres_zlib(&bytestring)[start..end].to_vec(),
                 ))
@@ -340,14 +344,14 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             BinaryCompressionType::Decoded => Ok(&mut self.data),
             BinaryCompressionType::NoCompression => {
                 let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
-                    .expect("Failed to decode base64 array");
+                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                 self.data = bytestring;
                 self.compression = BinaryCompressionType::Decoded;
                 Ok(&mut self.data)
             }
             BinaryCompressionType::Zlib => {
                 let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
-                    .expect("Failed to decode base64 array");
+                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                 self.data = bytestring;
                 self.compression = BinaryCompressionType::Decoded;
                 Ok(&mut self.data)
@@ -356,7 +360,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             BinaryCompressionType::NumpressLinear => match self.dtype {
                 BinaryDataArrayType::Float64 => {
                     let mut bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
-                        .expect("Failed to decode base64 array");
+                        .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                     let decoded = Self::decompres_numpress_linear(&mut bytestring)?;
                     let view = vec_as_bytes(decoded);
                     self.data = view;
@@ -394,6 +398,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    /// Recode the stored data as the requested binary data type.
     pub fn store_as(&mut self, dtype: BinaryDataArrayType) -> Result<usize, ArrayRetrievalError> {
         if self.dtype == dtype {
             return Ok(self.data.len());
@@ -437,6 +442,10 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         result
     }
 
+    /// Test if the the array describes an ion mobility quantity.
+    ///
+    /// # See also
+    /// [`ArrayType::is_ion_mobility`]
     pub const fn is_ion_mobility(&self) -> bool {
         self.name.is_ion_mobility()
     }
