@@ -1462,8 +1462,7 @@ impl<
     }
 
     pub fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
-        let offset_ref = self.chromatogram_index.get(id);
-        let offset = offset_ref.expect("Failed to retrieve offset");
+        let offset = self.chromatogram_index.get(id)?;
         let start = self
             .handle
             .stream_position()
@@ -1486,8 +1485,7 @@ impl<
     }
 
     pub fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
-        let offset_ref = self.chromatogram_index.get_index(index);
-        let (_key, offset) = offset_ref.expect("Failed to retrieve offset");
+        let (_key, offset) = self.chromatogram_index.get_index(index)?;
         let start = self
             .handle
             .stream_position()

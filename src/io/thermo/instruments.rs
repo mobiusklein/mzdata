@@ -617,6 +617,7 @@ pub fn parse_instrument_model(instrument_model: &str) -> InstrumentModelType {
             return *model_enum;
         }
     }
+    log::debug!("Failed to infer instrument model from name string {instrument_model}");
     InstrumentModelType::Unknown
 }
 
