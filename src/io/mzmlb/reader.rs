@@ -1082,8 +1082,7 @@ impl<
 {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
-        let offset_ref = self.spectrum_index.get(id);
-        let offset = offset_ref.expect("Failed to retrieve offset");
+        let offset = self.spectrum_index.get(id)?;
         let start = self
             .mzml_parser
             .stream_position()
