@@ -594,9 +594,8 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
 {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
-        let offset_ref = self.index.get(id);
-        let offset = offset_ref.expect("Failed to retrieve offset");
-        let index = self.index.index_of(id).unwrap();
+        let offset = self.index.get(id)?;
+        let index = self.index.index_of(id)?;
         let start = self
             .handle
             .stream_position()
@@ -606,13 +605,10 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
         let result = self.read_next();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
-        match result {
-            Some(mut scan) => {
+        result.map(|mut scan| {
                 scan.description.index = index;
-                Some(scan)
-            }
-            None => None,
-        }
+            scan
+        })
     }
 
     /// Retrieve a spectrum by it's integer index
