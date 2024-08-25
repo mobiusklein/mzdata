@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.27.0] - 2024-08-25
+
+### Added
+
+- Add dispatching implementation to `PeakDataIter` and `RefPeakDataIter`
+- Add basic `USI` parsing
+
+### Fixed
+
+- Do not `panic` when requested MGF  ID not in the index (#5)
+- Port #5 to all other reader types
+
 ## [0.26.0] - 2024-08-10
 
 ### Added
@@ -372,7 +384,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.26.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/mobiusklein/mzdata/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/mobiusklein/mzdata/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/mobiusklein/mzdata/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/mobiusklein/mzdata/compare/v0.23.0...v0.24.0
