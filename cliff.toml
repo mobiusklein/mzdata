@@ -62,7 +62,7 @@ commit_parsers = [
   { message = "^.*: R|remove", group = "Removed" },
   { message = "^.*: D|delete", group = "Removed" },
   { message = "^test", group = "Fixed" },
-  { message = "^fix", group = "Fixed" },
+  { message = "^f|Fix", group = "Fixed" },
   { message = "^.*: fix", group = "Fixed" },
   { message = "^doc", group = "Documentation" },
   { message = "^.*: C|change(d?)*", group = "Changed" },
