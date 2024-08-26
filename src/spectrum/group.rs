@@ -692,25 +692,41 @@ mod mzsignal_impl {
         }
     }
 
-    /// Average a series of [`MultiLayerSpectrum`] together
-    pub fn average_spectra<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>(
-        spectra: &[MultiLayerSpectrum<C, D>],
+    /// Average a series of [`SpectrumLike`] together. The supplied dx will be used to [`reprofile`]
+    /// centroid spectra as well as be the dx used for any profile spectra. The resulting
+    /// [`ArrayPair`] can be made into a [`BinaryArrayMap`] using `.into()`. Which in turn can be
+    /// used to create a new [`MultiLayerSpectrum`] or [`RawSpectrum`](crate::spectrum::RawSpectrum).
+    ///
+    /// Note: only available with feature `mzsignal`.
+    pub fn average_spectra<
+        S: SpectrumLike<C, D>,
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+    >(
+        spectra: impl IntoIterator<Item = S>,
         dx: f64,
     ) -> ArrayPair<'_> {
         let arrays: Vec<_> = spectra
-            .iter()
+            .into_iter()
             .map(|scan| {
                 if scan.signal_continuity() == SignalContinuity::Profile {
                     if let Some(array_map) = scan.raw_arrays() {
-                        let mz = array_map.mzs().unwrap().to_vec();
-                        let inten = array_map.intensities().unwrap().to_vec();
-                        Some(ArrayPair::from((mz, inten)))
+                        let mzs = array_map.mzs().unwrap().to_vec();
+                        let intensities = array_map.intensities().unwrap().to_vec();
+                        if let Some(spectrum_dx) = mzs.first().and_then(|start| {
+                            mzs.last().map(|end| (*end - *start) / (mzs.len() as f64))
+                        }) {
+                            if spectrum_dx != dx {
+                                warn!("{} has a different dx", scan.id());
+                            }
+                        }
+                        Some(ArrayPair::from((mzs, intensities)))
                     } else {
                         warn!("{} did not have raw data arrays", scan.id());
                         None
                     }
                 } else {
-                    if let Some(peaks) = scan.peaks.as_ref() {
+                    if let Some(peaks) = scan.peaks().as_ref() {
                         let fpeaks: Vec<_> = peaks
                             .iter()
                             .map(|p| FittedPeak::from(p.as_centroid()))
