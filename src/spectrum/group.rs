@@ -698,57 +698,46 @@ mod mzsignal_impl {
     /// used to create a new [`MultiLayerSpectrum`] or [`RawSpectrum`](crate::spectrum::RawSpectrum).
     ///
     /// Note: only available with feature `mzsignal`.
-    pub fn average_spectra<
-        S: SpectrumLike<C, D>,
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
-    >(
+    ///
+    /// # Warns
+    /// Warns you when the spectrum has `SignalContinuity::Profile` but not raw data array or when
+    /// the raw data arrays differ in dx with the supplied value.
+    pub fn average_spectra<S: SpectrumLike<C, D>, C: CentroidLike, D: DeconvolutedCentroidLike>(
         spectra: impl IntoIterator<Item = S>,
         dx: f64,
-    ) -> ArrayPair<'_> {
-        let arrays: Vec<_> = spectra
-            .into_iter()
-            .map(|scan| {
-                if scan.signal_continuity() == SignalContinuity::Profile {
-                    if let Some(array_map) = scan.raw_arrays() {
-                        let mzs = array_map.mzs().unwrap().to_vec();
-                        let intensities = array_map.intensities().unwrap().to_vec();
-                        if let Some(spectrum_dx) = mzs.first().and_then(|start| {
-                            mzs.last().map(|end| (*end - *start) / (mzs.len() as f64))
-                        }) {
-                            if spectrum_dx != dx {
-                                warn!("{} has a different dx", scan.id());
+    ) -> ArrayPair<'static> {
+        average_signal(
+            &spectra
+                .into_iter()
+                .flat_map(|spectrum| {
+                    if spectrum.signal_continuity() == SignalContinuity::Profile {
+                        if let Some(array_map) = spectrum.raw_arrays() {
+                            let mzs = array_map.mzs().unwrap().to_vec();
+                            let intensities = array_map.intensities().unwrap().to_vec();
+                            if let Some(spectrum_dx) = mzs.first().and_then(|start| {
+                                mzs.last().map(|end| (*end - *start) / (mzs.len() as f64))
+                            }) {
+                                if spectrum_dx != dx {
+                                    warn!("{} has a different dx", spectrum.id());
+                                }
                             }
+                            Some(ArrayPair::from((mzs, intensities)))
+                        } else {
+                            warn!("{} did not have raw data arrays", spectrum.id());
+                            None
                         }
-                        Some(ArrayPair::from((mzs, intensities)))
                     } else {
-                        warn!("{} did not have raw data arrays", scan.id());
-                        None
-                    }
-                } else {
-                    if let Some(peaks) = scan.peaks().as_ref() {
-                        let fpeaks: Vec<_> = peaks
+                        let peaks = spectrum.peaks();
+                        let fitted_peaks: Vec<_> = peaks
                             .iter()
                             .map(|p| FittedPeak::from(p.as_centroid()))
                             .collect();
-                        let signal = reprofile(fpeaks.iter(), dx);
-                        Some(ArrayPair::from((
-                            signal.mz_array.to_vec(),
-                            signal.intensity_array.to_vec(),
-                        )))
-                    } else {
-                        warn!(
-                            "{} was not in profile mode but no centroids found",
-                            scan.id()
-                        );
-                        None
+                        Some(reprofile(fitted_peaks.iter(), dx))
                     }
-                }
-            })
-            .flatten()
-            .collect();
-        let arrays = average_signal(&arrays, dx);
-        arrays
+                })
+                .collect::<Vec<_>>(),
+            dx,
+        )
     }
 
     #[derive(Debug, Clone)]
