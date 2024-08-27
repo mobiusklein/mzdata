@@ -660,7 +660,8 @@ mod mzsignal_impl {
 
     use crate::spectrum::bindata::{to_bytes, BuildArrayMapFrom, BuildFromArrayMap};
     use crate::spectrum::{
-        ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, SignalContinuity,
+        ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, RefPeakDataLevel,
+        SignalContinuity,
     };
 
     use super::*;
@@ -693,41 +694,32 @@ mod mzsignal_impl {
     }
 
     /// Average a series of [`SpectrumLike`] together. The supplied dx will be used to [`reprofile`]
-    /// centroid spectra as well as be the dx used for any profile spectra. The resulting
-    /// [`ArrayPair`] can be made into a [`BinaryArrayMap`] using `.into()`. Which in turn can be
-    /// used to create a new [`MultiLayerSpectrum`] or [`RawSpectrum`](crate::spectrum::RawSpectrum).
+    /// centroid spectra. The resulting [`ArrayPair`] can be made into a [`BinaryArrayMap`] using
+    /// `.into()`. Which in turn can be used to create a new [`MultiLayerSpectrum`] or
+    /// [`RawSpectrum`](crate::spectrum::RawSpectrum). Internally it uses [`SpectrumLike::peaks`]
+    /// to retrieve the spectrum data. Any deconvoluted spectra will be skipped.
     ///
     /// Note: only available with feature `mzsignal`.
-    ///
-    /// # Warns
-    /// Warns you when the spectrum has `SignalContinuity::Profile` but not raw data array or when
-    /// the raw data arrays differ in dx with the supplied value.
-    pub fn average_spectra<S: SpectrumLike<C, D>, C: CentroidLike, D: DeconvolutedCentroidLike>(
-        spectra: impl IntoIterator<Item = S>,
+    pub fn average_spectra<
+        'lifetime,
+        S: SpectrumLike<C, D> + 'lifetime,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
+    >(
+        spectra: impl IntoIterator<Item = &'lifetime S>,
         dx: f64,
     ) -> ArrayPair<'static> {
         average_signal(
             &spectra
                 .into_iter()
-                .flat_map(|spectrum| {
-                    if spectrum.signal_continuity() == SignalContinuity::Profile {
-                        if let Some(array_map) = spectrum.raw_arrays() {
-                            let mzs = array_map.mzs().unwrap().to_vec();
-                            let intensities = array_map.intensities().unwrap().to_vec();
-                            if let Some(spectrum_dx) = mzs.first().and_then(|start| {
-                                mzs.last().map(|end| (*end - *start) / (mzs.len() as f64))
-                            }) {
-                                if spectrum_dx != dx {
-                                    warn!("{} has a different dx", spectrum.id());
-                                }
-                            }
-                            Some(ArrayPair::from((mzs, intensities)))
-                        } else {
-                            warn!("{} did not have raw data arrays", spectrum.id());
-                            None
-                        }
-                    } else {
-                        let peaks = spectrum.peaks();
+                .flat_map(|spectrum| match spectrum.peaks() {
+                    RefPeakDataLevel::Missing | RefPeakDataLevel::Deconvoluted(_) => None,
+                    RefPeakDataLevel::RawData(array_map) => {
+                        let mzs = array_map.mzs().unwrap().to_vec();
+                        let intensities = array_map.intensities().unwrap().to_vec();
+                        Some(ArrayPair::from((mzs, intensities)))
+                    }
+                    RefPeakDataLevel::Centroid(peaks) => {
                         let fitted_peaks: Vec<_> = peaks
                             .iter()
                             .map(|p| FittedPeak::from(p.as_centroid()))
