@@ -74,7 +74,8 @@ pub use crate::spectrum::spectrum_types::{
 };
 
 pub use crate::spectrum::peaks::{
-    PeakDataIter, PeakDataLevel, RefPeakDataIter, RefPeakDataLevel, SpectrumSummary,
+    PeakDataIter, PeakDataIterDispatch, PeakDataLevel, RawIter, RefPeakDataIter, RefPeakDataLevel,
+    SpectrumSummary,
 };
 
 pub use frame::{IonMobilityFrameDescription, IonMobilityFrameLike, MultiLayerIonMobilityFrame};
