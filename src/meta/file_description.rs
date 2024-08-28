@@ -8,11 +8,17 @@ use crate::params::{Param, ParamDescribed, ParamList, CURIE, ControlledVocabular
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SourceFile {
+    /// The name of the source file without any path or location information
     pub name: String,
+    /// The URI-formatted location where the file was retrieved.
     pub location: String,
+    /// A unique identifier for this source file
     pub id: String,
+    /// The [`MassSpectrometerFileFormatTerm`]-defined parameter for this file
     pub file_format: Option<Param>,
+    /// The [`NativeSpectrumIdentifierFormat`]-defined parameter for this file
     pub id_format: Option<Param>,
+    /// The rest of the parameters for this file.
     pub params: ParamList,
 }
 
@@ -84,6 +90,8 @@ impl ParamDescribed for FileDescription {
 crate::cvmap! {
     #[flag_type=&str]
     #[allow(unused)]
+    #[doc = "A text-based schema that defines how native spectrum identifiers are formatted.
+    These patterns are often found in mzML-compatible formats."]
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     /*[[[cog
     import cog
@@ -180,23 +188,37 @@ crate::cvmap! {
 
 
 impl NativeSpectrumIdentifierFormatTerm {
-    pub fn from_curie(curie: &CURIE) -> Option<Self> {
-        if curie.controlled_vocabulary == ControlledVocabulary::MS {
-            Self::from_accession(curie.accession)
-        } else {
-            None
-        }
-    }
+    // pub fn from_curie(curie: &CURIE) -> Option<Self> {
+    //     if curie.controlled_vocabulary == ControlledVocabulary::MS {
+    //         Self::from_accession(curie.accession)
+    //     } else {
+    //         None
+    //     }
+    // }
 
+    /// Create a new [`regex::Regex`] for this identifier format.
     pub fn parser(&self) -> regex::Regex {
         regex::Regex::new(self.flags()).unwrap()
     }
 
+    /// This parses the provided string, returning the captured groups of the ID pattern if they are present
+    /// in a [`regex::Captures`] structure that can be indexed by group number.
+    ///
+    /// # Note
+    /// This method creates a new regular expression on each invocation, making it expensive to invoke.
+    /// If you must call this repeatedly, instead use [`NativeSpectrumIdentifierFormatTerm::parser`] to create a
+    /// the regular expression once and re-use it directly.
     pub fn parse<'h>(&self, ident: &'h str) -> Option<regex::Captures<'h>> {
         let parser = self.parser();
         parser.captures(ident)
     }
 
+    /// This parses the provided string, returning the capture groups as (name, value) pairs they are present.
+    ///
+    /// # Note
+    /// This method creates a new regular expression on each invocation, making it expensive to invoke.
+    /// If you must call this repeatedly, instead use [`NativeSpectrumIdentifierFormatTerm::parser`] to create a
+    /// the regular expression once and re-use it directly.
     pub fn parse_named<'h>(&self, ident: &'h str) -> Vec<(Option<String>, &'h str)> {
         let parser = self.parser();
         if let Some(hits) = parser.captures(ident) {
@@ -359,15 +381,6 @@ crate::cvmap! {
     //[[[end]]] (checksum: 05a2b3a28a60b4f6990463fb98e5afe4)
 }
 
-impl MassSpectrometerFileFormatTerm {
-    pub fn from_curie(curie: &CURIE) -> Option<Self> {
-        if curie.controlled_vocabulary == ControlledVocabulary::MS {
-            Self::from_accession(curie.accession)
-        } else {
-            None
-        }
-    }
-}
 
 #[cfg(test)]
 mod test {
