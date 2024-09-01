@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.28.1] - 2024-09-01
+
+### Fixed
+
+- Revert `mzsignal` change to fix downstream crashes while averaging
+
 ## [0.28.0] - 2024-08-30
 
 ### Added
@@ -395,7 +401,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.28.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.28.1...HEAD
+[0.28.1]: https://github.com/mobiusklein/mzdata/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/mobiusklein/mzdata/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/mobiusklein/mzdata/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/mobiusklein/mzdata/compare/v0.25.0...v0.26.0
