@@ -90,7 +90,7 @@ pub struct MzMLReaderType<
 
 impl<
         'a,
-        R: AsyncReadType + Unpin + Sync,
+        R: AsyncReadType + Unpin,
         C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
     > MzMLReaderType<R, C, D>
@@ -597,7 +597,7 @@ impl IndexedMzMLIndexExtractor {
 /// in the library, this also re-creates the [`SpectrumSource`](crate::io::traits::SpectrumSource) API with
 /// asynchronous execution.
 impl<
-        R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Sync,
+        R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin,
         C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
     > MzMLReaderType<R, C, D>
