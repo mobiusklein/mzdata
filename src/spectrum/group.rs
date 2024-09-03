@@ -670,7 +670,7 @@ mod mzsignal_impl {
     use mzpeaks::{MZLocated, PeakCollection};
     use mzsignal::average::{average_signal, SignalAverager};
     use mzsignal::reprofile::{reprofile, PeakSetReprofiler, PeakShape, PeakShapeModel};
-    use mzsignal::{ArrayPair, FittedPeak};
+    use mzsignal::{ArrayPair, FittedPeak, MZGrid};
 
     impl From<ArrayPair<'_>> for BinaryArrayMap {
         fn from(value: ArrayPair<'_>) -> Self {
@@ -709,31 +709,59 @@ mod mzsignal_impl {
         spectra: impl IntoIterator<Item = &'lifetime S>,
         dx: f64,
     ) -> ArrayPair<'static> {
-        average_signal(
-            &spectra
-                .into_iter()
-                .flat_map(
-                    |spectrum| match (spectrum.signal_continuity(), spectrum.peaks()) {
-                        (_, RefPeakDataLevel::Missing | RefPeakDataLevel::Deconvoluted(_)) => None,
-                        (SignalContinuity::Centroid, RefPeakDataLevel::RawData(_))
-                        | (_, RefPeakDataLevel::Centroid(_)) => {
-                            let fitted_peaks: Vec<_> = spectrum
-                                .peaks()
-                                .iter()
-                                .map(|p| FittedPeak::from(p.as_centroid()))
-                                .collect();
-                            Some(reprofile(fitted_peaks.iter(), dx))
-                        }
-                        (_, RefPeakDataLevel::RawData(array_map)) => {
-                            let mzs = array_map.mzs().unwrap();
-                            let intensities = array_map.intensities().unwrap();
-                            Some(ArrayPair::from((mzs, intensities)))
-                        }
-                    },
-                )
-                .collect::<Vec<_>>(),
-            dx,
-        )
+        let mut to_be_reprofiled = Vec::new();
+        let mut profiles = Vec::new();
+
+        for spectrum in spectra {
+            match (spectrum.signal_continuity(), spectrum.peaks()) {
+                (_, RefPeakDataLevel::Missing | RefPeakDataLevel::Deconvoluted(_)) => (),
+                (SignalContinuity::Centroid, RefPeakDataLevel::RawData(_))
+                | (_, RefPeakDataLevel::Centroid(_)) => {
+                    to_be_reprofiled.push(
+                        spectrum
+                            .peaks()
+                            .iter()
+                            .map(|p| FittedPeak::from(p.as_centroid()))
+                            .collect::<Vec<_>>(),
+                    );
+                }
+                (_, RefPeakDataLevel::RawData(array_map)) => {
+                    let mzs = array_map.mzs().unwrap();
+                    let intensities = array_map.intensities().unwrap();
+                    profiles.push(ArrayPair::from((mzs, intensities)));
+                }
+            }
+        }
+
+        if !to_be_reprofiled.is_empty() {
+            let mz_start = to_be_reprofiled
+                .iter()
+                .map(|p| p.first().map_or(f64::MAX, |p| p.mz))
+                .min_by(f64::total_cmp)
+                .unwrap_or_default();
+            let mz_end = to_be_reprofiled
+                .iter()
+                .map(|p| p.last().map_or(f64::MIN, |p| p.mz))
+                .max_by(f64::total_cmp)
+                .unwrap_or_default();
+
+            let reprofiler = PeakSetReprofiler::new(mz_start, mz_end, dx);
+
+            for peaks in to_be_reprofiled {
+                let models: Vec<PeakShapeModel<'_>> = peaks.iter().map(|p| p.into()).collect();
+                if models.is_empty() {
+                    profiles.push(ArrayPair::from((Vec::new(), Vec::new())));
+                } else {
+                    let arrays = reprofiler.reprofile_from_models(&models);
+                    profiles.push(ArrayPair::from((
+                        reprofiler.copy_mz_array(),
+                        arrays.intensity_array.into_owned(),
+                    )))
+                }
+            }
+        }
+
+        average_signal(&profiles, dx)
     }
 
     #[derive(Debug, Clone)]
