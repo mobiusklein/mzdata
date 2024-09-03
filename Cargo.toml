@@ -2,27 +2,16 @@
 name = "mzdata"
 version = "0.27.0"
 edition = "2018"
-keywords = [
-    'mass-spectrometry',
-    'mzml',
-    'mgf'
-]
+keywords = ['mass-spectrometry', 'mzml', 'mgf']
 
-categories = [
-    "science",
-    "parser-implementations",
-    "data-structures"
-]
+categories = ["science", "parser-implementations", "data-structures"]
 
 description = "A library to read mass spectrometry data formats"
 license = "Apache-2.0"
 repository = "https://github.com/mobiusklein/mzdata"
 documentation = "https://docs.rs/mzdata"
 
-exclude = [
-    "tmp/*",
-    "test/data/*"
-]
+exclude = ["tmp/*", "test/data/*"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [[bin]]
@@ -54,8 +43,8 @@ lto = true
 debug = true
 
 [features]
-# default = ["nalgebra", "parallelism", "mzsignal", "mzmlb", "zlib-ng-compat", ]
-default = ["zlib-ng-compat", ]
+default = ["nalgebra", "parallelism", "mzsignal", "zlib-ng-compat"]
+# default = ["zlib-ng-compat"]
 
 openblas = ["mzsignal", "mzsignal/openblas"]
 netlib = ["mzsignal", "mzsignal/netlib"]
@@ -80,7 +69,11 @@ mzmlb = ["hdf5", "ndarray", "hdf5-sys"]
 # but not flate2/zlib
 hdf5_static = ["mzmlb", "hdf5-sys/static", "hdf5-sys/zlib", "libz-sys"]
 
-thermo = ["thermorawfilereader", "thermorawfilereader/net8_0", "thermorawfilereader/nethost-download"]
+thermo = [
+    "thermorawfilereader",
+    "thermorawfilereader/net8_0",
+    "thermorawfilereader/nethost-download",
+]
 
 doc-only = ["thermorawfilereader/doc-only"]
 
@@ -91,25 +84,32 @@ regex = "1"
 lazy_static = "1.4.0"
 serde = { version = "1.0.204", features = ["derive"] }
 serde_json = "1.0.120"
-quick-xml = { version = "0.30", features = [ "serialize" ] }
-flate2 = {version = "1.0.20"}
+quick-xml = { version = "0.30", features = ["serialize"] }
+flate2 = { version = "1.0.20" }
 num-traits = "0.2"
-indexmap = { version = "2.0.0", features = [ "serde" ] }
+indexmap = { version = "2.0.0", features = ["serde"] }
 log = "0.4.20"
 mzpeaks = { version = ">=0.19.0,<1.0.0" }
 rayon = { version = ">=1.8.0,<2.0", optional = true }
-mzsignal = { version = ">=0.20.0,<1.0.0", default-features = false, optional = true}
+mzsignal = { version = ">=0.20.0,<1.0.0", default-features = false, optional = true }
 md5 = "0.7.0"
-tokio = {version = "1.32.0", optional = true, features = ["macros", "rt", "fs", "rt-multi-thread"]}
+tokio = { version = "1.32.0", optional = true, features = [
+    "macros",
+    "rt",
+    "fs",
+    "rt-multi-thread",
+] }
 
-hdf5 = {version = "0.8.1", optional = true, features = ["blosc", "lzf",]}
+hdf5 = { version = "0.8.1", optional = true, features = ["blosc", "lzf"] }
 hdf5-sys = { version = "0.8.1", optional = true }
-libz-sys = { version = "1.1", default-features = false, features = ["static", ], optional = true }
+libz-sys = { version = "1.1", default-features = false, features = [
+    "static",
+], optional = true }
 ndarray = { version = "0.15.6", optional = true }
 filename = { version = "0.1.1", optional = true }
 
 numpress = { version = "1.1.0", optional = true }
-bytemuck = { version = "1.15.0", features = ["extern_crate_alloc"]}
+bytemuck = { version = "1.15.0", features = ["extern_crate_alloc"] }
 base64-simd = "0.8.0"
 thiserror = "1.0.50"
 
@@ -120,7 +120,7 @@ chrono = "0.4.37"
 bitflags = "2.5.0"
 
 [dev-dependencies]
-criterion = { version = "0.5.1", features = [ "html_reports" ] }
+criterion = { version = "0.5.1", features = ["html_reports"] }
 test-log = "0.2.12 "
 env_logger = "0.10.0"
 tempfile = "3.10"
@@ -132,5 +132,13 @@ harness = false
 
 
 [package.metadata.docs.rs]
-features = ["parallelism", "mzsignal", "nalgebra", "mzmlb", "async", "thermorawfilereader", "doc-only"]
+features = [
+    "parallelism",
+    "mzsignal",
+    "nalgebra",
+    "mzmlb",
+    "async",
+    "thermorawfilereader",
+    "doc-only",
+]
 no-default-features = true

@@ -712,21 +712,25 @@ mod mzsignal_impl {
         average_signal(
             &spectra
                 .into_iter()
-                .flat_map(|spectrum| match spectrum.peaks() {
-                    RefPeakDataLevel::Missing | RefPeakDataLevel::Deconvoluted(_) => None,
-                    RefPeakDataLevel::RawData(array_map) => {
-                        let mzs = array_map.mzs().unwrap().to_vec();
-                        let intensities = array_map.intensities().unwrap().to_vec();
-                        Some(ArrayPair::from((mzs, intensities)))
-                    }
-                    RefPeakDataLevel::Centroid(peaks) => {
-                        let fitted_peaks: Vec<_> = peaks
-                            .iter()
-                            .map(|p| FittedPeak::from(p.as_centroid()))
-                            .collect();
-                        Some(reprofile(fitted_peaks.iter(), dx))
-                    }
-                })
+                .flat_map(
+                    |spectrum| match (spectrum.signal_continuity(), spectrum.peaks()) {
+                        (_, RefPeakDataLevel::Missing | RefPeakDataLevel::Deconvoluted(_)) => None,
+                        (SignalContinuity::Centroid, RefPeakDataLevel::RawData(_))
+                        | (_, RefPeakDataLevel::Centroid(_)) => {
+                            let fitted_peaks: Vec<_> = spectrum
+                                .peaks()
+                                .iter()
+                                .map(|p| FittedPeak::from(p.as_centroid()))
+                                .collect();
+                            Some(reprofile(fitted_peaks.iter(), dx))
+                        }
+                        (_, RefPeakDataLevel::RawData(array_map)) => {
+                            let mzs = array_map.mzs().unwrap();
+                            let intensities = array_map.intensities().unwrap();
+                            Some(ArrayPair::from((mzs, intensities)))
+                        }
+                    },
+                )
                 .collect::<Vec<_>>(),
             dx,
         )
