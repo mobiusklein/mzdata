@@ -1,6 +1,6 @@
 [package]
 name = "mzdata"
-version = "0.27.0"
+version = "0.29.0"
 edition = "2018"
 keywords = ['mass-spectrometry', 'mzml', 'mgf']
 
@@ -89,9 +89,9 @@ flate2 = { version = "1.0.20" }
 num-traits = "0.2"
 indexmap = { version = "2.0.0", features = ["serde"] }
 log = "0.4.20"
-mzpeaks = { version = ">=0.19.0,<1.0.0" }
+mzpeaks = { version = ">=0.20.0,<1.0.0" }
 rayon = { version = ">=1.8.0,<2.0", optional = true }
-mzsignal = { version = ">=0.20.0,<1.0.0", default-features = false, optional = true }
+mzsignal = { version = ">=0.22.0,<1.0.0", default-features = false, optional = true}
 md5 = "0.7.0"
 tokio = { version = "1.32.0", optional = true, features = [
     "macros",
@@ -113,7 +113,7 @@ bytemuck = { version = "1.15.0", features = ["extern_crate_alloc"] }
 base64-simd = "0.8.0"
 thiserror = "1.0.50"
 
-thermorawfilereader = { version = "0.2.6", default-features = false, optional = true }
+thermorawfilereader = { version = "0.2.7", default-features = false, optional = true }
 sha1 = "0.10.6"
 base16ct = { version = "0.2.0", features = ["alloc"] }
 chrono = "0.4.37"

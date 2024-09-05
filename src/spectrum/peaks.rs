@@ -401,7 +401,10 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
 
 }
 
-
+/// An [`MZPoint`] iterator over paired, potentially borrowed, arrays of m/z and intensity data that may not have been
+/// extracted into discrete peaks.
+///
+/// This type should not need to be used directly in most cases. Instead see [`PeakDataIterDispatch`]
 pub struct RawIter<'a> {
     mz_array: Cow<'a, [f64]>,
     intensity_array: Cow<'a, [f32]>,
@@ -445,7 +448,9 @@ impl<'a> Iterator for RawIter<'a> {
     }
 }
 
-
+/// An [`MZPoint`] iterator over owned peak collections abstracted over by [`PeakDataLevel`]
+///
+/// This type should not need to be used directly in most cases. Instead see [`PeakDataIterDispatch`]
 pub struct PeakDataIter<'a, C: CentroidLike, D: DeconvolutedCentroidLike> {
     peaks: &'a PeakDataLevel<C, D>,
     i: usize,
@@ -503,6 +508,11 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataIter<'a, C, D> {
 }
 
 
+/// An [`MZPoint`] iterator over peak collections abstracted by source type and ownership status.
+///
+/// This iterator strategy has a slight amount of overhead on each operation as it dispatches to the
+/// appropriate underlying type. It is necessary to allow [`PeakDataLevel`] and [`RefPeakDataLevel`]
+/// to have a single type to return for an iterator.
 pub enum PeakDataIterDispatch<'a, C: CentroidLike, D: DeconvolutedCentroidLike> {
     PeakData(PeakDataIter<'a, C, D>),
     RawData(RawIter<'a>),
@@ -671,6 +681,9 @@ impl<'a, C: CentroidLike + Clone, D: DeconvolutedCentroidLike + Clone> RefPeakDa
     }
 }
 
+/// An [`MZPoint`] iterator over borrowed peak collections abstracted over by [`RefPeakDataLevel`]
+///
+/// This type should not need to be used directly in most cases. Instead see [`PeakDataIterDispatch`]
 pub struct RefPeakDataIter<'a, C: CentroidLike, D: DeconvolutedCentroidLike> {
     peaks: &'a RefPeakDataLevel<'a, C, D>,
     i: usize,
