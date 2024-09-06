@@ -44,3 +44,4 @@ pub mod thermo;
 pub use thermo::ThermoRawReader;
 
 pub mod usi;
+pub mod proxi;
