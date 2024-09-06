@@ -660,7 +660,8 @@ mod mzsignal_impl {
 
     use crate::spectrum::bindata::{to_bytes, BuildArrayMapFrom, BuildFromArrayMap};
     use crate::spectrum::{
-        ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, SignalContinuity,
+        ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, RefPeakDataLevel,
+        SignalContinuity,
     };
 
     use super::*;
@@ -669,7 +670,7 @@ mod mzsignal_impl {
     use mzpeaks::{MZLocated, PeakCollection};
     use mzsignal::average::{average_signal, SignalAverager};
     use mzsignal::reprofile::{reprofile, PeakSetReprofiler, PeakShape, PeakShapeModel};
-    use mzsignal::{ArrayPair, FittedPeak};
+    use mzsignal::{ArrayPair, FittedPeak, MZGrid};
 
     impl From<ArrayPair<'_>> for BinaryArrayMap {
         fn from(value: ArrayPair<'_>) -> Self {
@@ -692,47 +693,75 @@ mod mzsignal_impl {
         }
     }
 
-    /// Average a series of [`MultiLayerSpectrum`] together
-    pub fn average_spectra<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>(
-        spectra: &[MultiLayerSpectrum<C, D>],
+    /// Average a series of [`SpectrumLike`] together. The supplied dx will be used to [`reprofile`]
+    /// centroid spectra. The resulting [`ArrayPair`] can be made into a [`BinaryArrayMap`] using
+    /// `.into()`. Which in turn can be used to create a new [`MultiLayerSpectrum`] or
+    /// [`RawSpectrum`](crate::spectrum::RawSpectrum). Internally it uses [`SpectrumLike::peaks`]
+    /// to retrieve the spectrum data. Any deconvoluted spectra will be skipped.
+    ///
+    /// Note: only available with feature `mzsignal`.
+    pub fn average_spectra<
+        'lifetime,
+        S: SpectrumLike<C, D> + 'lifetime,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
+    >(
+        spectra: impl IntoIterator<Item = &'lifetime S>,
         dx: f64,
-    ) -> ArrayPair<'_> {
-        let arrays: Vec<_> = spectra
-            .iter()
-            .map(|scan| {
-                if scan.signal_continuity() == SignalContinuity::Profile {
-                    if let Some(array_map) = scan.raw_arrays() {
-                        let mz = array_map.mzs().unwrap().to_vec();
-                        let inten = array_map.intensities().unwrap().to_vec();
-                        Some(ArrayPair::from((mz, inten)))
-                    } else {
-                        warn!("{} did not have raw data arrays", scan.id());
-                        None
-                    }
-                } else {
-                    if let Some(peaks) = scan.peaks.as_ref() {
-                        let fpeaks: Vec<_> = peaks
+    ) -> ArrayPair<'static> {
+        let mut to_be_reprofiled = Vec::new();
+        let mut profiles = Vec::new();
+
+        for spectrum in spectra {
+            match (spectrum.signal_continuity(), spectrum.peaks()) {
+                (_, RefPeakDataLevel::Missing | RefPeakDataLevel::Deconvoluted(_)) => (),
+                (SignalContinuity::Centroid, RefPeakDataLevel::RawData(_))
+                | (_, RefPeakDataLevel::Centroid(_)) => {
+                    to_be_reprofiled.push(
+                        spectrum
+                            .peaks()
                             .iter()
                             .map(|p| FittedPeak::from(p.as_centroid()))
-                            .collect();
-                        let signal = reprofile(fpeaks.iter(), dx);
-                        Some(ArrayPair::from((
-                            signal.mz_array.to_vec(),
-                            signal.intensity_array.to_vec(),
-                        )))
-                    } else {
-                        warn!(
-                            "{} was not in profile mode but no centroids found",
-                            scan.id()
-                        );
-                        None
-                    }
+                            .collect::<Vec<_>>(),
+                    );
                 }
-            })
-            .flatten()
-            .collect();
-        let arrays = average_signal(&arrays, dx);
-        arrays
+                (_, RefPeakDataLevel::RawData(array_map)) => {
+                    let mzs = array_map.mzs().unwrap();
+                    let intensities = array_map.intensities().unwrap();
+                    profiles.push(ArrayPair::from((mzs, intensities)));
+                }
+            }
+        }
+
+        if !to_be_reprofiled.is_empty() {
+            let mz_start = to_be_reprofiled
+                .iter()
+                .map(|p| p.first().map_or(f64::MAX, |p| p.mz))
+                .min_by(f64::total_cmp)
+                .unwrap_or_default();
+            let mz_end = to_be_reprofiled
+                .iter()
+                .map(|p| p.last().map_or(f64::MIN, |p| p.mz))
+                .max_by(f64::total_cmp)
+                .unwrap_or_default();
+
+            let reprofiler = PeakSetReprofiler::new(mz_start, mz_end, dx);
+
+            for peaks in to_be_reprofiled {
+                let models: Vec<PeakShapeModel<'_>> = peaks.iter().map(|p| p.into()).collect();
+                if models.is_empty() {
+                    profiles.push(ArrayPair::from((Vec::new(), Vec::new())));
+                } else {
+                    let arrays = reprofiler.reprofile_from_models(&models);
+                    profiles.push(ArrayPair::from((
+                        reprofiler.copy_mz_array(),
+                        arrays.intensity_array.into_owned(),
+                    )))
+                }
+            }
+        }
+
+        average_signal(&profiles, dx)
     }
 
     #[derive(Debug, Clone)]
