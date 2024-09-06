@@ -43,8 +43,8 @@ lto = true
 debug = true
 
 [features]
-default = ["nalgebra", "parallelism", "mzsignal", "zlib-ng-compat"]
-# default = ["zlib-ng-compat"]
+# default = ["nalgebra", "parallelism", "mzsignal", "zlib-ng-compat"]
+default = ["zlib-ng-compat"]
 
 openblas = ["mzsignal", "mzsignal/openblas"]
 netlib = ["mzsignal", "mzsignal/netlib"]
