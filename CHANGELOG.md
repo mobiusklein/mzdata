@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.29.0] - 2024-09-07
+
+### Added
+
+- Add PROXI format parser/serializer in `mzdata:io:proxi`, no network request feature.
+
+### Changed
+
+- Upgrade `thermorawfilereader` to v0.2.9, theoretically making an absent .NET framework to be non-fatal
+- Upgrade `mzsignal` and enable new AVX feature
+
+### Fixed
+
+- Change `average_spectra` to take an iterator over `SpectrumLike` (#6)
+* Allowed average from an iterator and added more documentation
+
+---------
+
 ## [0.28.1] - 2024-09-01
 
 ### Fixed
@@ -401,7 +419,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.28.1...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/mobiusklein/mzdata/compare/v0.28.1...v0.29.0
 [0.28.1]: https://github.com/mobiusklein/mzdata/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/mobiusklein/mzdata/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/mobiusklein/mzdata/compare/v0.26.0...v0.27.0
