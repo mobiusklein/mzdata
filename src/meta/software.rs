@@ -806,7 +806,7 @@ crate::cvmap! {
         LibraryCreationSoftware,
         #[term(cv=MS, accession=1003232, name="PeakForest", flags={1}, parents={["MS:1001456", "MS:1003207", "MS:1002878"]})]
         PeakForest,
-        #[term(cv=MS, accession=1003253, name="DIA-NN", flags={1}, parents={["MS:1001139", "MS:1001456"]})]
+        #[term(cv=MS, accession=1003253, name="DIA-NN", flags={1}, parents={["MS:1001139", "MS:1001456", "MS:1003207"]})]
         DIANN,
         #[term(cv=MS, accession=1003281, name="Casanovo", flags={1}, parents={["MS:1001456"]})]
         Casanovo,
@@ -843,7 +843,7 @@ crate::cvmap! {
         #[term(cv=MS, accession=4000151, name="MsQuality", flags={1}, parents={["MS:1001456"]})]
         MsQuality,
     }
-    //[[[end]]] (checksum: d489393ae10116422bbe72ad6eebfee7)
+    //[[[end]]] (checksum: d5462cd300dc95d12f301bba900962a3)
 }
 
 #[cfg(test)]

@@ -13,13 +13,14 @@ use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
 use quick_xml::Reader;
 
+use crate::meta::DissociationEnergyTerm;
 use crate::meta::Sample;
 use crate::prelude::*;
 
 use super::super::offset_index::OffsetIndex;
 use super::super::traits::{
-    MZFileReader, RandomAccessSpectrumIterator, SpectrumSource, SeekRead, SpectrumAccessError,
-    ChromatogramSource,
+    ChromatogramSource, MZFileReader, RandomAccessSpectrumIterator, SeekRead, SpectrumAccessError,
+    SpectrumSource,
 };
 use super::reading_shared::EntryType;
 
@@ -134,12 +135,14 @@ pub trait SpectrumBuilding<
                     self.current_array_mut().name = ArrayType::NonStandardDataArray {
                         name: Box::new(param.value().to_string()),
                     };
-                },
+                }
                 1000595 => {
                     self.current_array_mut().name = ArrayType::TimeArray;
                     let unit = param.unit();
                     match unit {
-                        Unit::Minute | Unit::Second | Unit::Millisecond => self.current_array_mut().unit = unit,
+                        Unit::Minute | Unit::Second | Unit::Millisecond => {
+                            self.current_array_mut().unit = unit
+                        }
                         _ => {
                             warn!("Invalid unit {} found for time array", unit)
                         }
@@ -396,7 +399,7 @@ impl<
         spectrum.arrays = Some(self.arrays);
     }
 
-    fn fill_spectrum<P: ParamLike + Into<Param>  + ParamValue>(&mut self, param: P) {
+    fn fill_spectrum<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P) {
         match param.name() {
             "ms level" => {
                 self.ms_level = param.to_i32().expect("Failed to parse ms level") as u8;
@@ -487,6 +490,16 @@ impl<
         }
     }
 
+    fn warning_context(&self) -> String {
+        if self.is_spectrum_entry() {
+            format!("spectrum entry {} ({})", self.index, self.entry_id)
+        } else if self.is_chromatogram_entry() {
+            format!("chromatogram entry {} ({})", self.index, self.entry_id)
+        } else {
+            format!("unknown entry {} ({})", self.index, self.entry_id)
+        }
+    }
+
     pub fn _reset(&mut self) {
         self.params.clear();
         self.acquisition = Acquisition::default();
@@ -557,7 +570,8 @@ impl<
                     b"ion injection time" => {
                         event.injection_time = param
                             .to_f64()
-                            .expect("Expected floating point number for injection time") as f32;
+                            .expect("Expected floating point number for injection time")
+                            as f32;
                     }
                     _ => event.add_param(param),
                 }
@@ -578,7 +592,7 @@ impl<
                 if Activation::is_param_activation(&param)
                     && self.precursor.activation.method().is_none()
                 {
-                    *self.precursor.activation.method_mut() = Some(param.into());
+                    self.precursor.activation.methods_mut().push(param.into());
                 } else {
                     match param.name.as_ref() {
                         "collision energy" | "activation energy" => {
@@ -782,32 +796,34 @@ impl<
                                 self.acquisition.add_param(param.into())
                             }
                         }
-                        MzMLParserState::Scan => {
-                            let event = self.acquisition.scans.last_mut().unwrap();
-                            match param.name.as_bytes() {
-                                b"scan start time" => {
-                                    let value: f64 = param
-                                        .to_f64()
-                                        .expect("Expected floating point number for scan time");
-                                    let value = match &param.unit {
-                                        Unit::Minute => value,
-                                        Unit::Second => value / 60.0,
-                                        Unit::Millisecond => value / 60000.0,
-                                        _ => {
-                                            warn!("Could not infer unit for {:?}", param);
-                                            value
-                                        }
-                                    };
-                                    event.start_time = value;
-                                }
-                                b"ion injection time" => {
-                                    event.injection_time = param.to_f32().expect(
-                                        "Expected floating point number for injection time",
-                                    );
-                                }
-                                _ => event.add_param(param.into()),
+                        MzMLParserState::Scan => match param.name.as_bytes() {
+                            b"scan start time" => {
+                                let value: f64 = param
+                                    .to_f64()
+                                    .unwrap_or_else(|e| panic!("Expected floating point number for scan time: {e} for {}", self.warning_context()));
+                                let value = match &param.unit {
+                                    Unit::Minute => value,
+                                    Unit::Second => value / 60.0,
+                                    Unit::Millisecond => value / 60000.0,
+                                    _ => {
+                                        warn!("Could not infer unit for {:?} for {}", param, self.warning_context());
+                                        value
+                                    }
+                                };
+                                self.acquisition.scans.last_mut().unwrap().start_time = value;
                             }
-                        }
+                            b"ion injection time" => {
+                                self.acquisition.scans.last_mut().unwrap().injection_time = param.to_f32().unwrap_or_else(
+                                            |e| panic!("Expected floating point number for injection time: {e} for {}", self.warning_context())
+                                        );
+                            }
+                            _ => self
+                                .acquisition
+                                .scans
+                                .last_mut()
+                                .unwrap()
+                                .add_param(param.into()),
+                        },
                         MzMLParserState::ScanWindowList => self
                             .acquisition
                             .scans
@@ -824,18 +840,30 @@ impl<
                             self.fill_selected_ion(param.into());
                         }
                         MzMLParserState::Activation => {
-                            if Activation::is_param_activation(&param)
-                                && self.precursor.activation.method().is_none()
-                            {
-                                *self.precursor.activation.method_mut() = Some(param.into());
+                            if Activation::is_param_activation(&param) {
+                                self.precursor.activation.methods_mut().push(param.into());
                             } else {
-                                match param.name.as_ref() {
-                                    "collision energy" | "activation energy" => {
-                                        self.precursor.activation.energy = param
-                                            .to_f32()
-                                            .expect("Failed to parse collision energy");
+                                let dissociation_energy = param.curie().and_then(|c| {
+                                        DissociationEnergyTerm::from_curie(&c, param.value().to_f32().unwrap_or_else(|e| {
+                                            warn!("Failed to convert dissociation energy: {e} for {} for {}", param.name(), self.warning_context());
+                                            0.0
+                                        }))
+                                    });
+                                match dissociation_energy {
+                                    Some(t) => {
+                                        if t.is_supplemental() {
+                                            self.precursor.activation.add_param(param.into())
+                                        } else {
+                                            if self.precursor.activation.energy != 0.0 {
+                                                warn!(
+                                                        "Multiple dissociation energies detected. Saw {t} after already setting dissociation energy for {}",
+                                                        self.warning_context()
+                                                    );
+                                            }
+                                            self.precursor.activation.energy = t.energy();
+                                        }
                                     }
-                                    &_ => {
+                                    None => {
                                         self.precursor.activation.add_param(param.into());
                                     }
                                 }
@@ -1513,11 +1541,11 @@ impl<
 }
 
 impl<
-    R: SeekRead,
-    C: CentroidPeakAdapting + BuildFromArrayMap,
-    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > ChromatogramSource for MzMLReaderType<R, C, D> {
-
+        R: SeekRead,
+        C: CentroidPeakAdapting + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > ChromatogramSource for MzMLReaderType<R, C, D>
+{
     fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
         self.get_chromatogram_by_id(id)
     }
@@ -1724,7 +1752,7 @@ impl<
         if let Some(captures) = pattern.captures(&String::from_utf8_lossy(&buf)) {
             if let Some(hit) = captures.get(1) {
                 self.handle.seek(SeekFrom::Start(current_position))?;
-                return Ok(Some(hit.as_str().to_string()))
+                return Ok(Some(hit.as_str().to_string()));
             }
         }
 

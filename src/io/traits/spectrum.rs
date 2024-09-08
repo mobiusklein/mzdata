@@ -652,6 +652,14 @@ impl<
         }
     }
 
+    pub fn get_inner(&self) -> &I {
+        &self.source
+    }
+
+    pub fn get_mut(&mut self) -> &mut I {
+        &mut self.source
+    }
+
     fn push_front(&mut self, spectrum: S) {
         self.buffer.push_front(spectrum);
     }

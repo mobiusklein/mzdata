@@ -6,12 +6,13 @@ use log::{debug, warn};
 use crate::{
     io::{traits::ChromatogramSource, utils::checksum_file, DetailLevel, OffsetIndex},
     meta::{
-        Component, ComponentType, DataProcessing, DetectorTypeTerm, FileDescription, InstrumentConfiguration, IonizationTypeTerm, MassAnalyzerTerm, MassSpectrometryRun, Sample, Software, SourceFile
+        Component, ComponentType, DataProcessing, DetectorTypeTerm, FileDescription, InstrumentConfiguration, IonizationTypeTerm, MassAnalyzerTerm, MassSpectrometryRun, Sample, Software, SourceFile,
+        DissociationMethodTerm,
     },
     params::{ControlledVocabulary, Unit},
     prelude::*,
     spectrum::{
-        ActivationMethod, ArrayType, BinaryArrayMap, BinaryDataArrayType, CentroidPeakAdapting, Chromatogram, ChromatogramDescription, ChromatogramType, DataArray, DeconvolutedPeakAdapting, MultiLayerSpectrum, Precursor, ScanEvent, ScanPolarity, ScanWindow, SelectedIon, SignalContinuity
+        ArrayType, BinaryArrayMap, BinaryDataArrayType, CentroidPeakAdapting, Chromatogram, ChromatogramDescription, ChromatogramType, DataArray, DeconvolutedPeakAdapting, MultiLayerSpectrum, Precursor, ScanEvent, ScanPolarity, ScanWindow, SelectedIon, SignalContinuity
     },
     Param,
 };
@@ -501,32 +502,29 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
         activation.energy = vact.collision_energy() as f32;
         match vact.dissociation_method() {
             DissociationMethod::CID => {
-                *activation.method_mut() = Some(ActivationMethod::CollisionInducedDissociation);
+                activation.methods_mut().push(DissociationMethodTerm::CollisionInducedDissociation);
             }
             DissociationMethod::HCD => {
-                *activation.method_mut() =
-                    Some(ActivationMethod::BeamTypeCollisionInducedDissociation);
+                activation.methods_mut().push(DissociationMethodTerm::BeamTypeCollisionInducedDissociation);
             }
             DissociationMethod::ECD => {
-                *activation.method_mut() = Some(ActivationMethod::ElectronCaptureDissociation);
+                activation.methods_mut().push(DissociationMethodTerm::ElectronCaptureDissociation);
             }
             DissociationMethod::ETD => {
-                *activation.method_mut() = Some(ActivationMethod::ElectronTransferDissociation);
+                activation.methods_mut().push(DissociationMethodTerm::ElectronTransferDissociation);
             }
             DissociationMethod::ETHCD => {
-                *activation.method_mut() = Some(ActivationMethod::ElectronTransferDissociation);
+                activation.methods_mut().push(DissociationMethodTerm::ElectronTransferDissociation);
                 activation.add_param(
-                    ActivationMethod::SupplementalBeamTypeCollisionInducedDissociation.into(),
+                    DissociationMethodTerm::SupplementalBeamTypeCollisionInducedDissociation.into(),
                 );
             }
             DissociationMethod::ETCID => {
-                *activation.method_mut() = Some(ActivationMethod::ElectronTransferDissociation);
-                activation
-                    .add_param(ActivationMethod::SupplementalCollisionInducedDissociation.into());
+                activation.methods_mut().push(DissociationMethodTerm::ElectronTransferDissociation);
+                activation.methods_mut().push(DissociationMethodTerm::SupplementalCollisionInducedDissociation.into());
             }
             DissociationMethod::NETD => {
-                *activation.method_mut() =
-                    Some(ActivationMethod::NegativeElectronTransferDissociation);
+                activation.methods_mut().push(DissociationMethodTerm::NegativeElectronTransferDissociation);
             }
             DissociationMethod::MPD => {
                 todo!("Need to define MPD")
@@ -535,18 +533,18 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
                 todo!("Need to define PTD")
             }
             DissociationMethod::ECCID => {
-                *activation.method_mut() = Some(ActivationMethod::ElectronCaptureDissociation);
+                activation.methods_mut().push(DissociationMethodTerm::ElectronCaptureDissociation);
                 activation
-                    .add_param(ActivationMethod::SupplementalCollisionInducedDissociation.into());
+                    .add_param(DissociationMethodTerm::SupplementalCollisionInducedDissociation.into());
             }
             DissociationMethod::ECHCD => {
-                *activation.method_mut() = Some(ActivationMethod::ElectronCaptureDissociation);
+                activation.methods_mut().push(DissociationMethodTerm::ElectronCaptureDissociation);
                 activation.add_param(
-                    ActivationMethod::SupplementalBeamTypeCollisionInducedDissociation.into(),
+                    DissociationMethodTerm::SupplementalBeamTypeCollisionInducedDissociation.into(),
                 )
             }
             _ => {
-                *activation.method_mut() = Some(ActivationMethod::CollisionInducedDissociation);
+                activation.methods_mut().push(DissociationMethodTerm::CollisionInducedDissociation);
             }
         }
 

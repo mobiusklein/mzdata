@@ -49,6 +49,7 @@ COMPONENT_TO_ENUM = {
     "ionization-type": 'IonizationType',
     "inlet-type": "InletType",
     "detector-type": "DetectorType",
+    "collision-energy": "CollisionEnergy"
 }
 
 
@@ -57,12 +58,23 @@ COMPONENT_TO_TERM = {
     "ionization-type": PrefixedIdent("MS", "1000008"),
     "inlet-type": PrefixedIdent("MS", "1000007"),
     "detector-type": PrefixedIdent("MS", "1000026"),
+    "collision-energy": PrefixedIdent("MS", "1000045"),
 }
 
 
 def make_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("component", choices=["mass-analyzer", "ionization-type", "inlet-type", "detector-type", "-"])
+    parser.add_argument(
+        "component",
+        choices=[
+            "mass-analyzer",
+            "ionization-type",
+            "inlet-type",
+            "detector-type",
+            "collision-energy",
+            "-",
+        ],
+    )
     parser.add_argument("-c", "--curie")
     parser.add_argument("-t", "--type-name")
     return parser

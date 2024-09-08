@@ -1027,6 +1027,30 @@ macro_rules! param_value_ref_float {
     };
 }
 
+impl From<ValueRef<'_>> for f32 {
+    fn from(value: ValueRef<'_>) -> Self {
+        value.to_f32().unwrap()
+    }
+}
+
+impl From<ValueRef<'_>> for f64 {
+    fn from(value: ValueRef<'_>) -> Self {
+        value.to_f64().unwrap()
+    }
+}
+
+impl From<ValueRef<'_>> for i32 {
+    fn from(value: ValueRef<'_>) -> Self {
+        value.to_i32().unwrap()
+    }
+}
+
+impl From<ValueRef<'_>> for i64 {
+    fn from(value: ValueRef<'_>) -> Self {
+        value.to_i64().unwrap()
+    }
+}
+
 impl From<bool> for Value {
     fn from(value: bool) -> Self {
         Self::Boolean(value)

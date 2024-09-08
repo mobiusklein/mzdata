@@ -378,7 +378,7 @@ crate::cvmap! {
         #[doc = "Open Chromatography Binary OCB format - ChemClipse/OpenChrom file format."]
         OpenChromatographyBinaryOCB,
     }
-    //[[[end]]] (checksum: 05a2b3a28a60b4f6990463fb98e5afe4)
+    //[[[end]]] (checksum: 144dff32032929c664857bb8d843810a)
 }
 
 

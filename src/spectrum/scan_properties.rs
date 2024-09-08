@@ -9,6 +9,7 @@ use crate::io::traits::SpectrumSource;
 use crate::params::{
     ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef, CURIE,
 };
+use crate::meta::DissociationMethodTerm;
 use crate::{curie, impl_param_described, ParamList};
 
 /**
@@ -309,11 +310,19 @@ impl Acquisition {
             .collect()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &ScanEvent> {
+    pub fn len(&self) -> usize {
+        self.scans.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.scans.is_empty()
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, ScanEvent> {
         self.scans.iter()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut ScanEvent> {
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, ScanEvent> {
         self.scans.iter_mut()
     }
 }
@@ -362,205 +371,43 @@ impl IonProperties for SelectedIon {
 
 impl IonMobilityMeasure for SelectedIon {}
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ActivationMethod {
-    CollisionInducedDissociation,
-    HighEnergyCollisionInducedDissociation,
-    LowEnergyCollisionInducedDissociation,
-    InSourceCollisionInducedDissociation,
-    BeamTypeCollisionInducedDissociation,
-    TrapTypeCollisionInducedDissociation,
-
-    SupplementalCollisionInducedDissociation,
-    SupplementalBeamTypeCollisionInducedDissociation,
-
-    ElectronTransferDissociation,
-    ElectronCaptureDissociation,
-    ElectronActivationDissociation,
-    NegativeElectronTransferDissociation,
-
-    Photodissociation,
-    UltravioletPhotodissociation,
-    Other(Box<Param>),
-}
-
-impl ActivationMethod {
-    pub fn accession(&self) -> Option<u32> {
-        match self {
-            ActivationMethod::CollisionInducedDissociation => Some(1000133),
-            ActivationMethod::LowEnergyCollisionInducedDissociation => Some(1000433),
-            ActivationMethod::BeamTypeCollisionInducedDissociation => Some(1000422),
-            ActivationMethod::TrapTypeCollisionInducedDissociation => Some(1002472),
-            ActivationMethod::SupplementalCollisionInducedDissociation => Some(1002678),
-            ActivationMethod::SupplementalBeamTypeCollisionInducedDissociation => Some(1002679),
-            ActivationMethod::HighEnergyCollisionInducedDissociation => Some(1002481),
-            ActivationMethod::InSourceCollisionInducedDissociation => Some(1001880),
-
-            ActivationMethod::ElectronCaptureDissociation => Some(1000250),
-            ActivationMethod::ElectronTransferDissociation => Some(1000598),
-            ActivationMethod::NegativeElectronTransferDissociation => Some(1003247),
-            ActivationMethod::ElectronActivationDissociation => Some(1003294),
-
-            ActivationMethod::Photodissociation => Some(1000435),
-            ActivationMethod::UltravioletPhotodissociation => Some(1003246),
-
-            ActivationMethod::Other(param) => param.accession(),
-        }
-    }
-
-    pub fn is_collisional(&self) -> Option<bool> {
-        match self {
-            ActivationMethod::CollisionInducedDissociation
-            | ActivationMethod::LowEnergyCollisionInducedDissociation
-            | ActivationMethod::BeamTypeCollisionInducedDissociation
-            | Self::TrapTypeCollisionInducedDissociation
-            | Self::InSourceCollisionInducedDissociation
-            | Self::SupplementalBeamTypeCollisionInducedDissociation
-            | Self::SupplementalCollisionInducedDissociation
-            | Self::HighEnergyCollisionInducedDissociation => Some(true),
-            Self::Other(_) => None,
-            _ => Some(false),
-        }
-    }
-
-    pub fn controlled_vocabulary(&self) -> Option<ControlledVocabulary> {
-        match self {
-            ActivationMethod::Other(param) => param.controlled_vocabulary(),
-            _ => Some(ControlledVocabulary::MS),
-        }
-    }
-}
-
-impl From<ActivationMethod> for Param {
-    fn from(value: ActivationMethod) -> Self {
-        match value {
-            ActivationMethod::Other(val) => *val,
-            ActivationMethod::CollisionInducedDissociation => ControlledVocabulary::MS
-                .const_param_ident("collision-induced dissociation", value.accession().unwrap())
-                .into(),
-            ActivationMethod::LowEnergyCollisionInducedDissociation => ControlledVocabulary::MS
-                .const_param_ident(
-                    "low-energy collision-induced dissociation",
-                    value.accession().unwrap(),
-                )
-                .into(),
-            ActivationMethod::BeamTypeCollisionInducedDissociation => ControlledVocabulary::MS
-                .const_param_ident(
-                    "beam-type collision-induced dissociation",
-                    value.accession().unwrap(),
-                )
-                .into(),
-            ActivationMethod::TrapTypeCollisionInducedDissociation => ControlledVocabulary::MS
-                .const_param_ident(
-                    "trap-type collision-induced dissociation",
-                    value.accession().unwrap(),
-                )
-                .into(),
-            ActivationMethod::HighEnergyCollisionInducedDissociation => ControlledVocabulary::MS
-                .const_param_ident(
-                    "higher energy collision-induced dissociation",
-                    value.accession().unwrap(),
-                )
-                .into(),
-            ActivationMethod::InSourceCollisionInducedDissociation => ControlledVocabulary::MS
-                .const_param_ident(
-                    "in-source collision-induced dissociation",
-                    value.accession().unwrap(),
-                )
-                .into(),
-            ActivationMethod::SupplementalCollisionInducedDissociation => ControlledVocabulary::MS
-                .const_param_ident(
-                    "supplemental collision-induced dissociation",
-                    value.accession().unwrap(),
-                )
-                .into(),
-            ActivationMethod::SupplementalBeamTypeCollisionInducedDissociation => {
-                ControlledVocabulary::MS
-                    .const_param_ident(
-                        "supplemental beam-type collision-induced dissociation",
-                        value.accession().unwrap(),
-                    )
-                    .into()
-            }
-            ActivationMethod::ElectronTransferDissociation => ControlledVocabulary::MS
-                .const_param_ident("electron transfer dissociation", value.accession().unwrap())
-                .into(),
-            ActivationMethod::ElectronCaptureDissociation => ControlledVocabulary::MS
-                .const_param_ident("electron capture dissociation", value.accession().unwrap())
-                .into(),
-            ActivationMethod::ElectronActivationDissociation => ControlledVocabulary::MS
-                .const_param_ident(
-                    "electron activation dissociation",
-                    value.accession().unwrap(),
-                )
-                .into(),
-            ActivationMethod::NegativeElectronTransferDissociation => ControlledVocabulary::MS
-                .const_param_ident(
-                    "negative electron transfer dissociation",
-                    value.accession().unwrap(),
-                )
-                .into(),
-            ActivationMethod::Photodissociation => ControlledVocabulary::MS
-                .const_param_ident("photodissociation", value.accession().unwrap())
-                .into(),
-            ActivationMethod::UltravioletPhotodissociation => ControlledVocabulary::MS
-                .const_param_ident("ultraviolet photodissociation", value.accession().unwrap())
-                .into(),
-        }
-    }
-}
-
-impl<P: ParamLike + Into<Param>> From<P> for ActivationMethod {
-    fn from(value: P) -> Self {
-        if value.is_ms() {
-            match value.accession().unwrap() {
-                1000133 => Self::CollisionInducedDissociation,
-                1000433 => Self::LowEnergyCollisionInducedDissociation,
-                1002481 => Self::HighEnergyCollisionInducedDissociation,
-                1000422 => Self::BeamTypeCollisionInducedDissociation,
-                1002472 => Self::TrapTypeCollisionInducedDissociation,
-                1002678 => Self::SupplementalCollisionInducedDissociation,
-                1002679 => Self::SupplementalBeamTypeCollisionInducedDissociation,
-
-                1001880 => Self::InSourceCollisionInducedDissociation,
-
-                1000250 => Self::ElectronCaptureDissociation,
-                1000598 => Self::ElectronTransferDissociation,
-                1003247 => Self::NegativeElectronTransferDissociation,
-                1003294 => Self::ElectronActivationDissociation,
-
-                1000435 => Self::Photodissociation,
-                1003246 => Self::UltravioletPhotodissociation,
-
-                _ => Self::Other(Box::new(value.into())),
-            }
-        } else {
-            Self::Other(Box::new(value.into()))
-        }
-    }
-}
-
 #[derive(Debug, Default, Clone, PartialEq)]
 /// Describes the activation method used to dissociate the precursor ion
 pub struct Activation {
-    _method: Option<ActivationMethod>,
+    _methods: Vec<DissociationMethodTerm>,
     pub energy: f32,
     pub params: ParamList,
 }
 
 impl Activation {
-    pub fn method(&self) -> Option<&ActivationMethod> {
-        if self._method.is_some() {
-            self._method.as_ref()
-        } else {
-            None
-        }
+
+    /// Get a reference to the first activation method, if it exists
+    pub fn method(&self) -> Option<&DissociationMethodTerm> {
+        self._methods.first()
     }
 
-    pub fn method_mut(&mut self) -> &mut Option<ActivationMethod> {
-        &mut self._method
+    /// Get a mutable reference to the first activation method, if it exists
+    pub fn method_mut(&mut self) -> Option<&mut DissociationMethodTerm> {
+        self._methods.first_mut()
     }
 
+    /// Get a slice over all of the activation methods used.
+    pub fn methods(&self) -> &[DissociationMethodTerm] {
+        &self._methods
+    }
+
+    /// Get a mutable reference to a [`Vec`] of activation methods, which may be useful
+    /// for adding or removing methods.
+    pub fn methods_mut(&mut self) -> &mut Vec<DissociationMethodTerm> {
+        &mut self._methods
+    }
+
+    /// Check if multiple dissociation methods were used
+    pub fn is_combined(&self) -> bool {
+        self._methods.len() > 1
+    }
+
+    /// Check if a [`ParamLike`] type references an activation method
     pub fn is_param_activation<P: ParamLike>(p: &P) -> bool {
         if p.is_controlled() && p.controlled_vocabulary().unwrap() == ControlledVocabulary::MS {
             Self::accession_to_activation(p.accession().unwrap())
@@ -570,54 +417,21 @@ impl Activation {
     }
 
     pub fn accession_to_activation(accession: u32) -> bool {
-        matches!(
-            accession,
-            1000133
-                | 1000134
-                | 1000135
-                | 1000136
-                | 1000242
-                | 1000250
-                | 1000282
-                | 1000433
-                | 1000435
-                | 1000598
-                | 1000599
-                | 1001880
-                | 1002000
-                | 1003181
-                | 1003247
-                | 1000422
-                | 1002472
-                | 1002679
-                | 1003294
-                | 1000262
-                | 1003246
-                | 1002631
-                | 1003182
-                | 1002481
-                | 1002678
-        )
+        DissociationMethodTerm::from_accession(accession).is_some()
     }
 
-    pub fn _set_method(&mut self) {
-        let found = self
-            .params
-            .iter()
-            .enumerate()
-            .filter(|(_, p)| {
-                if p.is_controlled() && p.controlled_vocabulary.unwrap() == ControlledVocabulary::MS
-                {
-                    Self::accession_to_activation(p.accession.unwrap())
-                } else {
-                    false
-                }
-            })
-            .map(|(i, _)| i)
-            .next();
-        if let Some(hit) = found {
-            self._method = Some(self.params.remove(hit).into());
+    pub fn _extract_methods_from_params(&mut self) {
+        let mut methods = Vec::with_capacity(1);
+        let mut rest = Vec::with_capacity(self.params.len());
+        for p in self.params.drain(..) {
+            if Self::is_param_activation(&p) {
+                methods.push(p.into())
+            } else {
+                rest.push(p)
+            }
         }
+        self.params = rest;
+        self._methods = methods;
     }
 }
 
