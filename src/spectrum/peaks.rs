@@ -37,6 +37,7 @@ trait SummaryOps {
     /// and number of data points
     fn fetch_summaries(&self) -> SpectrumSummary;
 
+    #[allow(unused)]
     /// Check if the collection is empty
     fn is_empty(&self) -> bool;
 }

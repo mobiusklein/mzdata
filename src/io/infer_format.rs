@@ -2,6 +2,7 @@ use std::convert::TryFrom;
 use std::fmt::Display;
 use std::fs;
 use std::io::{self, prelude::*, BufReader};
+use std::marker::PhantomData;
 use std::path::{self, Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender, SyncSender};
 
@@ -27,6 +28,7 @@ use crate::Param;
 use super::thermo::{ThermoRawReaderType, is_thermo_raw_prefix};
 
 use super::traits::{ChromatogramSource, SeekRead, SpectrumReceiver, StreamingSpectrumIterator};
+use super::DetailLevel;
 
 /// Mass spectrometry file formats that [`mzdata`](crate)
 /// supports
@@ -119,9 +121,109 @@ pub enum MZReaderType<
     MzMLb(MzMLbReaderType<C, D>)
 }
 
+
+/// A builder type for [`MZReaderType`].
+///
+/// To create an instance, see [`MZReaderType::builder`]
+#[derive(Debug)]
+pub struct MZReaderBuilder<
+        C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap=CentroidPeak,
+        D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap=DeconvolutedPeak> {
+    buffer_size: Option<usize>,
+    detail_level: DetailLevel,
+    _c: PhantomData<C>,
+    _d: PhantomData<D>,
+}
+
+impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap, D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> Default for MZReaderBuilder<C, D> {
+    fn default() -> Self {
+        Self { buffer_size: None, detail_level: Default::default(), _c: Default::default(), _d: Default::default() }
+    }
+}
+
+#[allow(unused)]
+impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap, D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> MZReaderBuilder<C, D> {
+
+    /// Set the buffer capacity for a streaming reader.
+    pub fn buffer_size(mut self, capacity: usize) -> Self {
+        self.buffer_size = Some(capacity);
+        self
+    }
+
+    /// Set the detail level for controlling how much work the reader
+    /// will do to load peak information from spectra.
+    pub fn detail_level(mut self, detail_level: DetailLevel) -> Self {
+        self.detail_level = detail_level;
+        self
+    }
+
+    /// Create a reader from a file on the local file system denoted by `path`.
+    pub fn from_path<P: AsRef<Path>>(self, path: P) -> io::Result<MZReaderType<fs::File, C, D>> {
+        let mut reader = MZReaderType::open_path(path.as_ref())?;
+        reader.set_detail_level(self.detail_level);
+        Ok(reader)
+    }
+
+    /// Create a reader from a type that supports [`io::Read`] and
+    /// [`io::Seek`].
+    ///
+    /// # Note
+    /// Not all formats can be read from an `io` type, these will
+    /// fail to open and an error will be returned
+    pub fn from_read_seek<R: io::Read + io::Seek>(self, source: R) -> io::Result<MZReaderType<R, C, D>> {
+        let mut reader = MZReaderType::open_read_seek(source)?;
+        reader.set_detail_level(self.detail_level);
+        Ok(reader)
+    }
+
+    /// Create a reader from a type that supports [`io::Read`].
+    ///
+    /// This will internally wrap the file in a [`PreBufferedStream`] for metadata
+    /// reading, but does not construct an index for full random access. Attempting
+    /// to use the reader to access spectra may move the reader forwards, but it can
+    /// never go backwards.
+    ///
+    /// # Note
+    /// Not all formats can be read from an `io` type, these will
+    /// fail to open and an error will be returned
+    pub fn from_read<R: io::Read>(self, source: R) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, MZReaderType<PreBufferedStream<R>, C, D>>> {
+        let mut reader = if let Some(buffer_size) = self.buffer_size {
+            MZReaderType::open_read_with_buffer_size(source, buffer_size)
+        } else {
+            MZReaderType::open_read(source)
+        }?;
+        reader.get_mut().set_detail_level(self.detail_level);
+        Ok(reader)
+    }
+}
+
+
+
+macro_rules! msfmt_dispatch {
+    ($d:ident, $r:ident, $e:expr) => {
+        match $d {
+            MZReaderType::MzML($r) => $e,
+            MZReaderType::MGF($r) => $e,
+            #[cfg(feature = "thermorawfilereader")]
+            MZReaderType::ThermoRaw($r) => $e,
+            #[cfg(feature = "mzmlb")]
+            MZReaderType::MzMLb($r) => $e,
+        }
+    };
+}
+
+
 impl<R: io::Read + io::Seek,
      C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
      D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> MZReaderType<R, C, D> {
+
+    /// Create a [`MZReaderBuilder`] which can be used to configure the
+    /// created reader, setting [`DetailLevel`] and buffer capacity
+    /// The builder can create a reader from any type that the
+    /// direct creation functions support.
+    pub fn builder() -> MZReaderBuilder<C, D> {
+        MZReaderBuilder::default()
+    }
 
     /// Get the file format for this reader
     pub fn as_format(&self) -> MassSpectrometryFormat {
@@ -135,6 +237,33 @@ impl<R: io::Read + io::Seek,
         }
     }
 
+    /// Get the [`DetailLevel`] the reader currently uses
+    pub fn detail_level(&self) -> &DetailLevel {
+        msfmt_dispatch!(self, reader, {
+            &reader.detail_level
+        })
+    }
+
+    /// Set the [`DetailLevel`] for the reader, changing
+    /// the amount of work done immediately on loading a
+    /// spectrum.
+    ///
+    /// # Note
+    /// Not all readers support all detail levels, and the
+    /// behavior when requesting one of those levels will
+    /// depend upon the underlying reader.
+    pub fn set_detail_level(&mut self, detail_level: DetailLevel) {
+        msfmt_dispatch!(self, reader, {
+            reader.detail_level = detail_level
+        });
+    }
+
+    /// Create a reader from a type that supports [`io::Read`] and
+    /// [`io::Seek`].
+    ///
+    /// # Note
+    /// Not all formats can be read from an `io` type, these will
+    /// fail to open and an error will be returned
     pub fn open_read_seek(mut stream: R) -> io::Result<Self> {
         let (fmt, gzipped) = infer_from_stream(&mut stream)?;
         if gzipped {
@@ -181,8 +310,40 @@ impl<R: io::Read,
      C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
      D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> MZReaderType<PreBufferedStream<R>, C, D> {
 
+    /// Create a reader from a type that supports [`io::Read`].
+    ///
+    /// This will internally wrap the file in a [`PreBufferedStream`] for metadata
+    /// reading, but does not construct an index for full random access. Attempting
+    /// to use the reader to access spectra may move the reader forwards, but it can
+    /// never go backwards.
+    ///
+    /// # Note
+    /// Not all formats can be read from an `io` type, these will
+    /// fail to open and an error will be returned
     pub fn open_read(stream: R) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, Self>> {
         let mut stream = PreBufferedStream::new(stream)?;
+        let (fmt, gzipped) = infer_from_stream(&mut stream)?;
+
+        if gzipped {
+            return Err(io::Error::new(io::ErrorKind::Unsupported, "This method does not support gzipped streams"))
+        }
+
+        let reader = match fmt {
+            MassSpectrometryFormat::MGF => Self::MGF(MGFReaderType::new(stream)),
+            MassSpectrometryFormat::MzML => Self::MzML(MzMLReaderType::new(stream)),
+            _ => {
+                return Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
+            }
+        };
+        Ok(StreamingSpectrumIterator::new(reader))
+    }
+
+    /// See [`MZReaderType::open_read`].
+    ///
+    /// This function lets the caller specify the prebuffering size for files with large
+    /// headers that exceed the default buffer size.
+    pub fn open_read_with_buffer_size(stream: R, buffer_size: usize) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, Self>> {
+        let mut stream = PreBufferedStream::new_with_buffer_size(stream, buffer_size)?;
         let (fmt, gzipped) = infer_from_stream(&mut stream)?;
 
         if gzipped {
@@ -203,19 +364,6 @@ impl<R: io::Read,
 /// A specialization of [`MZReaderType`] for the default peak types, for common use. The preferred means
 /// of creating an instance is using the [`MZReader::open_path`] function.
 pub type MZReader<R> = MZReaderType<R, CentroidPeak, DeconvolutedPeak>;
-
-macro_rules! msfmt_dispatch {
-    ($d:ident, $r:ident, $e:expr) => {
-        match $d {
-            MZReaderType::MzML($r) => $e,
-            MZReaderType::MGF($r) => $e,
-            #[cfg(feature = "thermorawfilereader")]
-            MZReaderType::ThermoRaw($r) => $e,
-            #[cfg(feature = "mzmlb")]
-            MZReaderType::MzMLb($r) => $e,
-        }
-    };
-}
 
 impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
      D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MZReaderType<fs::File, C, D> {
