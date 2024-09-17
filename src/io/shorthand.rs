@@ -28,7 +28,7 @@ use super::{Sink, Source, SpectrumSource};
 #[macro_export]
 macro_rules! mz_read {
     ($source:expr, $reader:ident => $impl:tt) => {
-        $crate::mz_read!($source, $reader => $impl, mzpeaks::CentroidPeak, mzpeaks::DeconvolutedPeak)
+        $crate::mz_read!($source, $reader => $impl, $crate::mzpeaks::CentroidPeak, $crate::mzpeaks::DeconvolutedPeak)
     };
     ($source:expr, $reader:ident => $impl:tt, $C:ty, $D:ty) => {{
         let source = $crate::io::Source::<_, _>::from($source);
@@ -208,7 +208,7 @@ macro_rules! mz_read {
 #[macro_export]
 macro_rules! mz_write {
     ($sink:expr, $writer:ident => $impl:tt) => {
-        mz_write!($sink, $writer => $impl, mzpeaks::CentroidPeak, mzpeaks::DeconvolutedPeak)
+        mz_write!($sink, $writer => $impl, $crate::mzpeaks::CentroidPeak, $crate::mzpeaks::DeconvolutedPeak)
     };
     ($sink:expr, $writer:ident => $impl:tt, $C:ty, $D:ty) => {{
         let sink = $crate::io::Sink::<$C, $D>::from($sink);
