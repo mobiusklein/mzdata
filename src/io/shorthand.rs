@@ -69,7 +69,7 @@ macro_rules! mz_read {
                         let mut $reader: $crate::io::mzmlb::MzMLbReaderType<$C, $D> = $crate::io::mzmlb::MzMLbReaderType::<$C, $D>::new(&read_path)?;
                         Ok($impl)
                     },
-                    #[cfg(feature = "thermorawfilereader")]
+                    #[cfg(feature = "thermo")]
                     $crate::io::MassSpectrometryFormat::ThermoRaw => {
                         #[allow(unused_mut)]
                         let mut $reader: $crate::io::thermo::ThermoRawReaderType<$C, $D> = $crate::io::thermo::ThermoRawReaderType::<$C, $D>::new(&read_path)?;
