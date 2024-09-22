@@ -10,15 +10,17 @@ use quick_xml::Error as XMLError;
 
 use thiserror::Error;
 
-use crate::prelude::*;
+use super::reader::Bytes;
 use crate::io::traits::SeekRead;
 use crate::io::OffsetIndex;
 use crate::meta::{
-    Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometerFileFormatTerm, NativeSpectrumIdentifierFormatTerm, ProcessingMethod, Sample, Software, SourceFile
+    Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration,
+    MassSpectrometerFileFormatTerm, NativeSpectrumIdentifierFormatTerm, ProcessingMethod, Sample,
+    Software, SourceFile,
 };
 use crate::params::{curie_to_num, ControlledVocabulary, Param, ParamCow, Unit};
-
-use super::reader::Bytes;
+use crate::prelude::*;
+use crate::spectrum::{bindata::ArrayRetrievalError, ArrayType};
 
 /**
 The different states the [`MzMLReaderType`](crate::io::mzml::MzMLReaderType) can enter while parsing
@@ -90,7 +92,7 @@ pub enum MzMLParserState {
     ChromatogramListDone,
 
     ParserError,
-    EOF
+    EOF,
 }
 
 impl Display for MzMLParserState {
@@ -103,7 +105,7 @@ impl Display for MzMLParserState {
 pub enum EntryType {
     #[default]
     Spectrum,
-    Chromatogram
+    Chromatogram,
 }
 
 /**
@@ -111,18 +113,22 @@ All the ways that mzML parsing can go wrong
 */
 #[derive(Debug, Error)]
 pub enum MzMLParserError {
-    #[error("An error occurred outside of normal conditions {0:?}")]
+    #[error("An error occurred outside of normal conditions {0}")]
     UnknownError(MzMLParserState),
     #[error("An incomplete spectrum was parsed")]
     IncompleteSpectrum,
-    #[error("An incomplete element {0} was encountered in {1:?}")]
+    #[error("An incomplete element {0} was encountered in {1}")]
     IncompleteElementError(String, MzMLParserState),
-    #[error("An XML error {1:?} was encountered in {0:?}")]
+    #[error("An XML error {1} was encountered in {0}")]
     XMLError(MzMLParserState, #[source] XMLError),
-    #[error("An IO error {1} was encountered in {0:?}")]
+    #[error("An XML error {1} was encountered in {0}: {2}")]
+    XMLErrorContext(MzMLParserState, #[source] XMLError, String),
+    #[error("An IO error {1} was encountered in {0}")]
     IOError(MzMLParserState, #[source] io::Error),
     #[error("The {0} section is over")]
-    SectionOver(&'static str)
+    SectionOver(&'static str),
+    #[error("Failed to decode {1}: {2} for {0}")]
+    ArrayDecodingError(MzMLParserState, ArrayType, ArrayRetrievalError),
 }
 
 impl From<MzMLParserError> for io::Error {
@@ -783,10 +789,11 @@ impl<'a> FileMetadataBuilder<'a> {
                                     .expect("Error decoding id")
                                     .to_string();
                             } else if attr.key.as_ref() == b"name" {
-                                sample.name = Some(attr
-                                    .unescape_value()
-                                    .expect("Error decoding name")
-                                    .to_string());
+                                sample.name = Some(
+                                    attr.unescape_value()
+                                        .expect("Error decoding name")
+                                        .to_string(),
+                                );
                             }
                         }
                         Err(msg) => {
@@ -862,10 +869,8 @@ impl<'a> FileMetadataBuilder<'a> {
                             let value = attr
                                 .unescape_value()
                                 .expect("Error decoding default instrument configuration ID");
-                            self.default_instrument_config = self
-                                .instrument_id_map
-                                .as_mut()
-                                .map(|m| m.get(&value));
+                            self.default_instrument_config =
+                                self.instrument_id_map.as_mut().map(|m| m.get(&value));
                         }
                         b"defaultSourceFileRef" => {
                             self.default_source_file = Some(
@@ -875,11 +880,13 @@ impl<'a> FileMetadataBuilder<'a> {
                             );
                         }
                         b"startTimeStamp" => {
-                            let val = attr.unescape_value().expect("Error decoding start timestamp");
-                            let val = DateTime::parse_from_rfc3339(&val).expect("Expected a dateTime value conforming to ISO 8601 standard");
-                            self.start_timestamp = Some(
-                                val
+                            let val = attr
+                                .unescape_value()
+                                .expect("Error decoding start timestamp");
+                            let val = DateTime::parse_from_rfc3339(&val).expect(
+                                "Expected a dateTime value conforming to ISO 8601 standard",
                             );
+                            self.start_timestamp = Some(val);
                         }
                         _ => {}
                     }
@@ -929,7 +936,7 @@ impl<'a> FileMetadataBuilder<'a> {
                 } else {
                     sf.add_param(param)
                 }
-            },
+            }
             MzMLParserState::Sample => {
                 let sample = self.samples.last_mut().unwrap();
                 sample.add_param(param)

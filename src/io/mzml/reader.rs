@@ -297,6 +297,15 @@ pub trait SpectrumBuilding<
     ) -> Self;
 }
 
+macro_rules! xml_error {
+    ($state:ident, $xml_err:ident) => {
+        MzMLParserError::XMLError($state, $xml_err)
+    };
+    ($state:ident, $xml_err:ident, $ctx:expr) => {
+        MzMLParserError::XMLErrorContext($state, $xml_err, $ctx)
+    };
+}
+
 const BUFFER_SIZE: usize = 10000;
 
 /// An accumulator for the attributes of a spectrum as it is read from an
@@ -633,10 +642,16 @@ impl<
                     match attr_parsed {
                         Ok(attr) => match attr.key.as_ref() {
                             b"id" => {
-                                self.entry_id = attr
-                                    .unescape_value()
-                                    .expect("Error decoding id")
-                                    .to_string();
+                                self.entry_id = match attr.unescape_value() {
+                                    Ok(value) => value.to_string(),
+                                    Err(e) => {
+                                        return Err(xml_error!(
+                                            state,
+                                            e,
+                                            "Failed to decode spectrum id".into()
+                                        ))
+                                    }
+                                }
                             }
                             b"index" => {
                                 self.index = String::from_utf8_lossy(&attr.value)
@@ -778,106 +793,112 @@ impl<
             // Inline the `fill_param_into` to avoid excessive copies.
             b"cvParam" | b"userParam" => {
                 match Self::handle_param_borrowed(event, reader_position, state) {
-                    Ok(param) => match state {
-                        MzMLParserState::Spectrum | MzMLParserState::Chromatogram => {
-                            self.fill_spectrum(param)
-                        }
-                        MzMLParserState::ScanList => {
-                            if param.is_controlled() {
-                                if let Some(comb) = ScanCombination::from_accession(
-                                    param.controlled_vocabulary.unwrap(),
-                                    param.accession.unwrap(),
-                                ) {
-                                    self.acquisition.combination = comb
+                    Ok(param) => {
+                        match state {
+                            MzMLParserState::Spectrum | MzMLParserState::Chromatogram => {
+                                self.fill_spectrum(param)
+                            }
+                            MzMLParserState::ScanList => {
+                                if param.is_controlled() {
+                                    if let Some(comb) = ScanCombination::from_accession(
+                                        param.controlled_vocabulary.unwrap(),
+                                        param.accession.unwrap(),
+                                    ) {
+                                        self.acquisition.combination = comb
+                                    } else {
+                                        self.acquisition.add_param(param.into())
+                                    }
                                 } else {
                                     self.acquisition.add_param(param.into())
                                 }
-                            } else {
-                                self.acquisition.add_param(param.into())
                             }
-                        }
-                        MzMLParserState::Scan => match param.name.as_bytes() {
-                            b"scan start time" => {
-                                let value: f64 = param
+                            MzMLParserState::Scan => match param.name.as_bytes() {
+                                b"scan start time" => {
+                                    let value: f64 = param
                                     .to_f64()
                                     .unwrap_or_else(|e| panic!("Expected floating point number for scan time: {e} for {}", self.warning_context()));
-                                let value = match &param.unit {
-                                    Unit::Minute => value,
-                                    Unit::Second => value / 60.0,
-                                    Unit::Millisecond => value / 60000.0,
-                                    _ => {
-                                        warn!("Could not infer unit for {:?} for {}", param, self.warning_context());
-                                        value
-                                    }
-                                };
-                                self.acquisition.scans.last_mut().unwrap().start_time = value;
-                            }
-                            b"ion injection time" => {
-                                self.acquisition.scans.last_mut().unwrap().injection_time = param.to_f32().unwrap_or_else(
+                                    let value = match &param.unit {
+                                        Unit::Minute => value,
+                                        Unit::Second => value / 60.0,
+                                        Unit::Millisecond => value / 60000.0,
+                                        _ => {
+                                            warn!(
+                                                "Could not infer unit for {:?} for {}",
+                                                param,
+                                                self.warning_context()
+                                            );
+                                            value
+                                        }
+                                    };
+                                    self.acquisition.scans.last_mut().unwrap().start_time = value;
+                                }
+                                b"ion injection time" => {
+                                    self.acquisition.scans.last_mut().unwrap().injection_time = param.to_f32().unwrap_or_else(
                                             |e| panic!("Expected floating point number for injection time: {e} for {}", self.warning_context())
                                         );
-                            }
-                            _ => self
+                                }
+                                _ => self
+                                    .acquisition
+                                    .scans
+                                    .last_mut()
+                                    .unwrap()
+                                    .add_param(param.into()),
+                            },
+                            MzMLParserState::ScanWindowList => self
                                 .acquisition
                                 .scans
                                 .last_mut()
                                 .unwrap()
                                 .add_param(param.into()),
-                        },
-                        MzMLParserState::ScanWindowList => self
-                            .acquisition
-                            .scans
-                            .last_mut()
-                            .unwrap()
-                            .add_param(param.into()),
-                        MzMLParserState::ScanWindow => {
-                            self.fill_scan_window(param.into());
-                        }
-                        MzMLParserState::IsolationWindow => {
-                            self.fill_isolation_window(param.into());
-                        }
-                        MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
-                            self.fill_selected_ion(param.into());
-                        }
-                        MzMLParserState::Activation => {
-                            if Activation::is_param_activation(&param) {
-                                self.precursor.activation.methods_mut().push(param.into());
-                            } else {
-                                let dissociation_energy = param.curie().and_then(|c| {
+                            MzMLParserState::ScanWindow => {
+                                self.fill_scan_window(param.into());
+                            }
+                            MzMLParserState::IsolationWindow => {
+                                self.fill_isolation_window(param.into());
+                            }
+                            MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
+                                self.fill_selected_ion(param.into());
+                            }
+                            MzMLParserState::Activation => {
+                                if Activation::is_param_activation(&param) {
+                                    self.precursor.activation.methods_mut().push(param.into());
+                                } else {
+                                    let dissociation_energy = param.curie().and_then(|c| {
                                         DissociationEnergyTerm::from_curie(&c, param.value().to_f32().unwrap_or_else(|e| {
                                             warn!("Failed to convert dissociation energy: {e} for {} for {}", param.name(), self.warning_context());
                                             0.0
                                         }))
                                     });
-                                match dissociation_energy {
-                                    Some(t) => {
-                                        if t.is_supplemental() {
-                                            self.precursor.activation.add_param(param.into())
-                                        } else {
-                                            if self.precursor.activation.energy != 0.0 {
-                                                warn!(
+                                    match dissociation_energy {
+                                        Some(t) => {
+                                            if t.is_supplemental() {
+                                                self.precursor.activation.add_param(param.into())
+                                            } else {
+                                                if self.precursor.activation.energy != 0.0 {
+                                                    warn!(
                                                         "Multiple dissociation energies detected. Saw {t} after already setting dissociation energy for {}",
                                                         self.warning_context()
                                                     );
+                                                }
+                                                self.precursor.activation.energy = t.energy();
                                             }
-                                            self.precursor.activation.energy = t.energy();
                                         }
-                                    }
-                                    None => {
-                                        self.precursor.activation.add_param(param.into());
+                                        None => {
+                                            self.precursor.activation.add_param(param.into());
+                                        }
                                     }
                                 }
                             }
+                            MzMLParserState::BinaryDataArrayList => {}
+                            MzMLParserState::BinaryDataArray => {
+                                self.fill_binary_data_array(param);
+                            }
+                            MzMLParserState::Precursor | MzMLParserState::PrecursorList => {
+                                warn!("cvParam found for {:?} where none are allowed", &state);
+                            }
+                            _ => {}
                         }
-                        MzMLParserState::BinaryDataArrayList => {}
-                        MzMLParserState::BinaryDataArray => {
-                            self.fill_binary_data_array(param);
-                        }
-                        MzMLParserState::Precursor | MzMLParserState::PrecursorList => {
-                            warn!("cvParam found for {:?} where none are allowed", &state);
-                        }
-                        _ => {}
-                    },
+                    }
                     Err(err) => return Err(err),
                 }
             }
@@ -907,9 +928,9 @@ impl<
             b"binaryDataArray" => {
                 let mut array = mem::take(&mut self.current_array);
                 if self.detail_level == DetailLevel::Full {
-                    array
-                        .decode_and_store()
-                        .expect("Error during decoding and storing of array data");
+                    array.decode_and_store().map_err(|e| {
+                        MzMLParserError::ArrayDecodingError(state, array.name.clone(), e)
+                    })?;
                 }
                 self.arrays.add(array);
                 return Ok(MzMLParserState::BinaryDataArrayList);
@@ -926,7 +947,7 @@ impl<
         if state == MzMLParserState::Binary && self.detail_level != DetailLevel::MetadataOnly {
             let bin = event
                 .unescape()
-                .expect("Failed to unescape binary data array content");
+                .map_err(|e| MzMLParserError::XMLError(state, e))?;
             self.current_array.data = Bytes::from(bin.as_bytes());
         }
         Ok(state)
@@ -1827,7 +1848,7 @@ impl<
         self.spectrum_index.init = true;
         *self.chromatogram_index = indexer.chromatogram_index;
         self.chromatogram_index.init = true;
-        self.handle.seek(SeekFrom::Start(current_position)).unwrap();
+        self.handle.seek(SeekFrom::Start(current_position))?;
         Ok(self.spectrum_index.len() as u64)
     }
 
