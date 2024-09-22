@@ -32,7 +32,8 @@ use super::{
 };
 
 use crate::meta::{
-    DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, Software
+    DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
+    MassSpectrometryRun, Sample, Software,
 };
 use crate::params::{
     ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue as _, CURIE,
@@ -68,8 +69,8 @@ pub enum MGFError {
     NoError,
     #[error("Encountered a malformed peak line")]
     MalformedPeakLine,
-    #[error("Encountered a malformed header line")]
-    MalformedHeaderLine,
+    #[error("Encountered a malformed header line: {0}")]
+    MalformedHeaderLine(String),
     #[error("Too many columns for peak line encountered")]
     NotEnoughColumnsForPeakLine,
     #[error("Encountered an IO error: {0}")]
@@ -312,10 +313,46 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                 }
                 "PEPMASS" => {
                     let mut parts = value.split_ascii_whitespace();
-                    let mz: f64 = parts.next().unwrap().parse().unwrap();
-                    let intensity: f32 =
-                        parts.next().map(|v| v.parse().unwrap()).unwrap_or_default();
-                    let charge: Option<i32> = parts.next().map(|c| c.parse().unwrap());
+                    let mz = match parts.next() {
+                        Some(s) => s,
+                        None => {
+                            self.state = MGFParserState::Error;
+                            self.error = Some(MGFError::MalformedHeaderLine(
+                                "No m/z value in PEPMASS header".into(),
+                            ));
+                            return false;
+                        }
+                    };
+                    let mz: f64 = match mz.parse() {
+                        Ok(mz) => mz,
+                        Err(e) => {
+                            self.state = MGFParserState::Error;
+                            self.error = Some(MGFError::MalformedHeaderLine(format!(
+                                "Malformed m/z value in PEPMASS header {value}: {e}"
+                            )));
+                            return false;
+                        }
+                    };
+
+                    let intensity: f32 = parts
+                        .next()
+                        .map(|v| v.parse())
+                        .unwrap_or_else(|| Ok(0.0))
+                        .map_err(|e| warn!("Failed to parse PEPMASS intensity {value}: {e}"))
+                        .unwrap_or_default();
+                    let charge: Option<i32> = match parts.next() {
+                        Some(c) => match c.parse::<i32>() {
+                            Ok(val) => Some(val),
+                            Err(e) => {
+                                self.state = MGFParserState::Error;
+                                self.error = Some(MGFError::MalformedHeaderLine(format!(
+                                    "Malformed charge value in PEPMASS header {value}: {e}"
+                                )));
+                                return false;
+                            }
+                        },
+                        None => None,
+                    };
                     builder.description.precursor = Some(Precursor {
                         ions: vec![SelectedIon {
                             mz,
@@ -326,6 +363,26 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                         ..Default::default()
                     });
                 }
+                "CHARGE" => match value.parse() {
+                    Ok(z) => {
+                        if let Some(ion) = builder
+                            .description
+                            .precursor
+                            .get_or_insert_with(|| Precursor::default())
+                            .iter_mut()
+                            .last()
+                        {
+                            ion.charge = Some(z);
+                        }
+                    }
+                    Err(e) => {
+                        self.state = MGFParserState::Error;
+                        self.error = Some(MGFError::MalformedHeaderLine(format!(
+                            "Could not parse CHARGE header {value} : {e}"
+                        )));
+                        return false;
+                    }
+                },
                 &_ => {
                     builder
                         .description
@@ -336,7 +393,9 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             true
         } else {
             self.state = MGFParserState::Error;
-            self.error = Some(MGFError::MalformedHeaderLine);
+            self.error = Some(MGFError::MalformedHeaderLine(
+                "No '=' in header line".into(),
+            ));
             false
         }
     }
@@ -606,7 +665,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
         result.map(|mut scan| {
-                scan.description.index = index;
+            scan.description.index = index;
             scan
         })
     }
@@ -747,7 +806,6 @@ const MSN_SPECTRUM_CV: CURIE = ControlledVocabulary::MS.curie(1000580);
 /// are written in the spectrum header of an MGF file, not including
 /// the essential items like `RTINSECONDS` and `PEPMASS`
 pub trait MGFHeaderStyle: Sized {
-    #[allow(unused)]
     fn write_header<
         W: io::Write,
         C: CentroidPeakAdapting,
@@ -759,6 +817,39 @@ pub trait MGFHeaderStyle: Sized {
     ) -> io::Result<()> {
         let desc = spectrum.description();
         writer.write_kv("SCANS", &desc.index.to_string())?;
+        Ok(())
+    }
+
+    fn write_precursor<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>(
+        writer: &mut MGFWriterType<W, C, D, Self>,
+        precursor: &Precursor,
+    ) -> io::Result<()> {
+        let ion = precursor.ion();
+        writer.handle.write_all(b"PEPMASS=")?;
+        writer.handle.write_all(ion.mz.to_string().as_bytes())?;
+        writer.handle.write_all(b" ")?;
+        writer
+            .handle
+            .write_all(ion.intensity.to_string().as_bytes())?;
+        if let Some(charge) = ion.charge {
+            writer.handle.write_all(b" ")?;
+            writer.handle.write_all(charge.to_string().as_bytes())?;
+        }
+        writer.handle.write_all(b"\n")?;
+
+        for param in precursor
+            .ion()
+            .params()
+            .iter()
+            .chain(precursor.activation.params())
+        {
+            writer.write_param(param)?;
+        }
+        if let Some(pid) = precursor.precursor_id() {
+            writer.handle.write_all(b"PRECURSORSCAN=")?;
+            writer.handle.write_all(pid.as_bytes())?;
+            writer.handle.write_all(b"\n")?;
+        }
         Ok(())
     }
 }
@@ -893,31 +984,7 @@ impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting, Y: MGFH
     }
 
     fn write_precursor(&mut self, precursor: &Precursor) -> io::Result<()> {
-        let ion = precursor.ion();
-        self.handle.write_all(b"PEPMASS=")?;
-        self.handle.write_all(ion.mz.to_string().as_bytes())?;
-        self.handle.write_all(b" ")?;
-        self.handle
-            .write_all(ion.intensity.to_string().as_bytes())?;
-        if let Some(charge) = ion.charge {
-            self.handle.write_all(b" ")?;
-            self.handle.write_all(charge.to_string().as_bytes())?;
-        }
-        self.handle.write_all(b"\n")?;
-
-        for param in precursor
-            .ion()
-            .params()
-            .iter()
-            .chain(precursor.activation.params())
-        {
-            self.write_param(param)?;
-        }
-        if let Some(pid) = precursor.precursor_id() {
-            self.handle.write_all(b"PRECURSORSCAN=")?;
-            self.handle.write_all(pid.as_bytes())?;
-            self.handle.write_all(b"\n")?;
-        }
+        Y::write_precursor(self, precursor)?;
         Ok(())
     }
 
@@ -1009,10 +1076,13 @@ impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting, Y: MGFH
             }
             RefPeakDataLevel::RawData(arrays) => {
                 if description.signal_continuity == SignalContinuity::Profile {
-                    return Err(io::Error::new(io::ErrorKind::Unsupported, "Cannot write profile spectrum to MGF"))
+                    return Err(io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        "Cannot write profile spectrum to MGF",
+                    ));
                 }
                 self.write_arrays(description, arrays)?
-            },
+            }
             RefPeakDataLevel::Centroid(centroids) => {
                 self.write_centroids(&centroids[0..centroids.len()])?
             }
