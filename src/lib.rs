@@ -81,3 +81,5 @@ pub use crate::spectrum::{CentroidSpectrum, RawSpectrum, Spectrum};
 
 #[cfg(doc)]
 pub mod tutorial;
+
+pub use mzpeaks;
