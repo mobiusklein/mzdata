@@ -24,7 +24,7 @@ use crate::spectrum::bindata::{BuildArrayMapFrom, BuildFromArrayMap};
 use crate::spectrum::MultiLayerSpectrum;
 use crate::Param;
 
-#[cfg(feature = "thermorawfilereader")]
+#[cfg(feature = "thermo")]
 use super::thermo::{ThermoRawReaderType, is_thermo_raw_prefix};
 
 use super::traits::{ChromatogramSource, SeekRead, SpectrumReceiver, StreamingSpectrumIterator};
@@ -115,7 +115,7 @@ pub enum MZReaderType<
         D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap=DeconvolutedPeak> {
     MzML(MzMLReaderType<R, C, D>),
     MGF(MGFReaderType<R, C, D>),
-    #[cfg(feature = "thermorawfilereader")]
+    #[cfg(feature = "thermo")]
     ThermoRaw(ThermoRawReaderType<C, D>),
     #[cfg(feature = "mzmlb")]
     MzMLb(MzMLbReaderType<C, D>)
@@ -204,7 +204,7 @@ macro_rules! msfmt_dispatch {
         match $d {
             MZReaderType::MzML($r) => $e,
             MZReaderType::MGF($r) => $e,
-            #[cfg(feature = "thermorawfilereader")]
+            #[cfg(feature = "thermo")]
             MZReaderType::ThermoRaw($r) => $e,
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb($r) => $e,
@@ -230,7 +230,7 @@ impl<R: io::Read + io::Seek,
         match &self {
             MZReaderType::MzML(_) => MassSpectrometryFormat::MzML,
             MZReaderType::MGF(_) => MassSpectrometryFormat::MGF,
-            #[cfg(feature = "thermorawfilereader")]
+            #[cfg(feature = "thermo")]
             MZReaderType::ThermoRaw(_) => MassSpectrometryFormat::ThermoRaw,
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(_) => MassSpectrometryFormat::MzMLb,
@@ -287,7 +287,7 @@ impl<R: io::Read + io::Seek,
         match self {
             MZReaderType::MzML(r) => r.get_chromatogram_by_id(id),
             MZReaderType::MGF(r) => r.get_chromatogram_by_id(id),
-            #[cfg(feature = "thermorawfilereader")]
+            #[cfg(feature = "thermo")]
             MZReaderType::ThermoRaw(r) => r.get_chromatogram_by_id(id),
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(r) => r.get_chromatogram_by_id(id),
@@ -298,7 +298,7 @@ impl<R: io::Read + io::Seek,
         match self {
             MZReaderType::MzML(r) => r.get_chromatogram_by_index(index),
             MZReaderType::MGF(r) => r.get_chromatogram_by_index(index),
-            #[cfg(feature = "thermorawfilereader")]
+            #[cfg(feature = "thermo")]
             MZReaderType::ThermoRaw(r) => r.get_chromatogram_by_index(index),
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(r) => r.get_chromatogram_by_index(index),
@@ -391,7 +391,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
                 let reader = MzMLReaderType::open_path(path)?;
                 Ok(Self::MzML(reader))
             }
-            #[cfg(feature = "thermorawfilereader")]
+            #[cfg(feature = "thermo")]
             MassSpectrometryFormat::ThermoRaw => {
                 let reader = ThermoRawReaderType::open_path(path)?;
                 Ok(Self::ThermoRaw(reader))
@@ -427,7 +427,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
                 let reader = MzMLReaderType::open_file(source)?;
                 Ok(Self::MzML(reader))
             }
-            #[cfg(feature = "thermorawfilereader")]
+            #[cfg(feature = "thermo")]
             MassSpectrometryFormat::ThermoRaw => {
                 let reader = ThermoRawReaderType::open_file(source)?;
                 Ok(Self::ThermoRaw(reader))
@@ -535,7 +535,7 @@ macro_rules! msfmt_dispatch_cap {
             MZReaderType::MGF($r) => {
                 $e?;
             },
-            #[cfg(feature = "thermorawfilereader")]
+            #[cfg(feature = "thermo")]
             MZReaderType::ThermoRaw($r) => {
                 $e?;
             },
@@ -578,7 +578,7 @@ pub fn infer_from_path<P: Into<path::PathBuf>>(path: P) -> (MassSpectrometryForm
                 "mgf" => MassSpectrometryFormat::MGF,
                 #[cfg(feature = "mzmlb")]
                 "mzmlb" => MassSpectrometryFormat::MzMLb,
-                #[cfg(feature = "thermorawfilereader")]
+                #[cfg(feature = "thermo")]
                 "raw" => MassSpectrometryFormat::ThermoRaw,
                 _ => MassSpectrometryFormat::Unknown,
             };
@@ -621,7 +621,7 @@ pub fn infer_from_stream<R: Read + Seek>(
     match &buf {
         _ if is_mzml(&buf) => Ok((MassSpectrometryFormat::MzML, is_stream_gzipped)),
         _ if is_mgf(&buf) => Ok((MassSpectrometryFormat::MGF, is_stream_gzipped)),
-        #[cfg(feature = "thermorawfilereader")]
+        #[cfg(feature = "thermo")]
         _ if is_thermo_raw_prefix(&buf) => Ok((MassSpectrometryFormat::ThermoRaw, is_stream_gzipped)),
         _ => Ok((MassSpectrometryFormat::Unknown, is_stream_gzipped))
     }
@@ -907,7 +907,7 @@ pub trait MassSpectrometryReadWriteProcess<
                         self.open_writer(reader, format, write_path)?;
                         Ok(())
                     },
-                    #[cfg(feature = "thermorawfilereader")]
+                    #[cfg(feature = "thermo")]
                     MassSpectrometryFormat::ThermoRaw => {
                         let reader = ThermoRawReaderType::new(&read_path)?;
                         let reader = self.transform_reader(reader, format)?;
