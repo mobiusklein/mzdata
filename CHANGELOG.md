@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.30.0] - 2024-09-23
+
+### Added
+
+- Add `MZReaderBuilder` to make configuring `MZReader`s easier
+- Add CV-derived dissociation methods and energies, update vendored PSI-MS CV
+- Add more descriptive failure messages when parsing MGF files
+- Add more descriptive errors and failure messages when encountering errors while parsing mzML files
+
+### Fixed
+
+- Publicly re-export `mzpeaks` dependency to guarantee `mz_read` works (#9)
+Prevent downstream users needing to declare a dependency on mzpeaks when
+using mz_read macro. This also prevents potential version mismatches.
+
 ## [0.29.0] - 2024-09-07
 
 ### Added
@@ -419,7 +434,8 @@ and this project adheres to [Semantic Versioning].
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.29.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/mobiusklein/mzdata/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/mobiusklein/mzdata/compare/v0.28.1...v0.29.0
 [0.28.1]: https://github.com/mobiusklein/mzdata/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/mobiusklein/mzdata/compare/v0.27.0...v0.28.0
