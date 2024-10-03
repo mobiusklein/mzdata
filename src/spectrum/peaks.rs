@@ -208,7 +208,7 @@ impl<D: DeconvolutedCentroidLike> SummaryOps for MassPeakSetType<D> {
             .max_by(|ia, ib| ia.1.intensity().partial_cmp(&ib.1.intensity()).unwrap());
         if let Some((i, peak)) = result {
             CentroidPeak::new(
-                crate::utils::mass_charge_ratio(peak.coordinate(), peak.charge()),
+                mass_charge_ratio(peak.coordinate(), peak.charge()),
                 peak.intensity(),
                 i as IndexType,
             )
