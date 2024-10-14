@@ -393,7 +393,7 @@ mod mzsignal_impl {
 
     use mzpeaks::{feature::Feature, peak_set::PeakSetVec, CentroidPeak, Tolerance};
     use mzsignal::{
-        feature_mapping::{FeatureExtracterType, FeatureGraphBuilder, MapState, PeakMapState},
+        feature_mapping::{FeatureExtracterType, graph::FeatureGraphBuilder, MapState, PeakMapState},
         peak_picker::PeakPicker,
         FittedPeak, PeakFitType,
     };

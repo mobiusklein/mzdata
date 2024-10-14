@@ -320,8 +320,8 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
         match self {
             Self::Missing => CentroidPeak::new(0.0, 0.0, 0),
             Self::RawData(arrays) => arrays.base_peak(),
-            Self::Centroid(peaks) => peaks.base_peak(),
-            Self::Deconvoluted(peaks) => peaks.base_peak(),
+            Self::Centroid(peaks) => SummaryOps::base_peak(peaks),
+            Self::Deconvoluted(peaks) => SummaryOps::base_peak(peaks),
         }
     }
 
@@ -582,8 +582,8 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D
         match self {
             RefPeakDataLevel::Missing => CentroidPeak::new(0.0, 0.0, 0),
             RefPeakDataLevel::RawData(arrays) => arrays.base_peak(),
-            RefPeakDataLevel::Centroid(peaks) => peaks.base_peak(),
-            RefPeakDataLevel::Deconvoluted(peaks) => peaks.base_peak(),
+            RefPeakDataLevel::Centroid(peaks) => SummaryOps::base_peak(*peaks),
+            RefPeakDataLevel::Deconvoluted(peaks) => SummaryOps::base_peak(*peaks),
         }
     }
 
