@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.32.0] - 2024-10-14
+
+### Added
+
+- Add some Thermo scan trailer values to `ThermoRawReaderType`
+- Add `NativeSpectrumIdentifierFormatTerm::format`
+
+### Changed
+
+- Upgraded `mzpeaks` and `mzsignal` dependencies
+
 ## [0.31.0] - 2024-10-03
 
 ### Changed
@@ -445,7 +456,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.31.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/mobiusklein/mzdata/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/mobiusklein/mzdata/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/mobiusklein/mzdata/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/mobiusklein/mzdata/compare/v0.28.1...v0.29.0
