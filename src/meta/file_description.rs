@@ -1,10 +1,10 @@
 use std::path::Path;
 use std::io;
-use regex;
+use regex::{self, Regex};
 
 use crate::io::infer_format;
 use crate::impl_param_described;
-use crate::params::{Param, ParamDescribed, ParamList, CURIE, ControlledVocabulary};
+use crate::params::{ControlledVocabulary, Param, ParamDescribed, ParamList, ParamValue, ValueRef, CURIE};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SourceFile {
@@ -187,6 +187,63 @@ crate::cvmap! {
 }
 
 
+/// A text-based schema that defines how native spectrum identifiers are formatted.
+///
+/// These patterns are often found in mzML-compatible formats.
+#[derive(Debug, Clone)]
+pub struct NativeSpectrumIDFormat {
+    pub term: NativeSpectrumIdentifierFormatTerm,
+    parser: Regex,
+    field_names: Vec<Option<String>>,
+}
+
+impl From<NativeSpectrumIdentifierFormatTerm> for NativeSpectrumIDFormat {
+    fn from(value: NativeSpectrumIdentifierFormatTerm) -> Self {
+        Self::new(value)
+    }
+}
+
+impl NativeSpectrumIDFormat {
+    pub fn new(term: NativeSpectrumIdentifierFormatTerm) -> Self {
+        let parser = term.parser();
+        let field_names = parser.capture_names().skip(1).map(|s| s.map(|i| i.to_string())).collect();
+        Self { term, parser, field_names }
+    }
+
+    /// This parses the provided string, returning the captured groups of the ID pattern if they are present
+    /// in a [`regex::Captures`] structure that can be indexed by group number.
+    pub fn parse<'h>(&self, ident: &'h str) -> Option<regex::Captures<'h>> {
+        self.parser.captures(ident)
+    }
+
+    /// Given the field values of a nativeID format, create string in that format
+    ///
+    /// # Note
+    /// This method creates a new regular expression every time.
+    pub fn format<'h>(&self, values: impl IntoIterator<Item = ValueRef<'h>>) -> String {
+        let mut buffer = String::with_capacity(64);
+        let names = &self.field_names;
+        let n_names= names.len().saturating_sub(1);
+        for (i, (k, v)) in names.into_iter().skip(1).zip(values).enumerate() {
+            match k {
+                Some(k) => {
+                    buffer.push_str(k);
+                    buffer.push_str("=");
+                    buffer.push_str(&v.as_str());
+                },
+                None => {
+                    buffer.push_str(&v.as_str());
+                },
+            };
+            if i < n_names {
+                buffer.push(' ');
+            }
+        };
+        buffer
+    }
+}
+
+
 impl NativeSpectrumIdentifierFormatTerm {
     // pub fn from_curie(curie: &CURIE) -> Option<Self> {
     //     if curie.controlled_vocabulary == ControlledVocabulary::MS {
@@ -211,6 +268,39 @@ impl NativeSpectrumIdentifierFormatTerm {
     pub fn parse<'h>(&self, ident: &'h str) -> Option<regex::Captures<'h>> {
         let parser = self.parser();
         parser.captures(ident)
+    }
+
+    /// Create a [`NativeIDFormat`] that owns the [`Regex`] produced
+    /// by [`NativeSpectrumIdentifierFormat::parser`]
+    pub fn build(&self) -> NativeSpectrumIDFormat {
+        (*self).into()
+    }
+
+    /// Given the field values of a nativeID format, create string in that format
+    ///
+    /// # Note
+    /// This method creates a new regular expression every time.
+    pub fn format<'h>(&self, values: impl IntoIterator<Item = ValueRef<'h>>) -> String {
+        let parser = self.parser();
+        let mut buffer = String::with_capacity(64);
+        let names = parser.capture_names();
+        let n_names= names.len().saturating_sub(2);
+        for (i, (k, v)) in names.into_iter().skip(1).zip(values).enumerate() {
+            match k {
+                Some(k) => {
+                    buffer.push_str(k);
+                    buffer.push_str("=");
+                    buffer.push_str(&v.as_str());
+                },
+                None => {
+                    buffer.push_str(&v.as_str());
+                },
+            };
+            if i < n_names {
+                buffer.push(' ');
+            }
+        };
+        buffer
     }
 
     /// This parses the provided string, returning the capture groups as (name, value) pairs they are present.
@@ -391,5 +481,11 @@ mod test {
         let ident = NativeSpectrumIdentifierFormatTerm::ThermoNativeIDFormat.parse("controllerType=0 controllerNumber=1 scan=25788").unwrap();
         let scan_number = ident.name("scan").unwrap().as_str();
         assert_eq!(scan_number, "25788");
+    }
+
+    #[test]
+    fn test_format() {
+        let fmt = NativeSpectrumIdentifierFormatTerm::ThermoNativeIDFormat.format([ValueRef::Int(0), ValueRef::Int(1), ValueRef::Int(25788)]);
+        assert_eq!(fmt, "controllerType=0 controllerNumber=1 scan=25788")
     }
 }
