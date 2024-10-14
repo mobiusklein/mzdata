@@ -6,13 +6,17 @@ use log::{debug, warn};
 use crate::{
     io::{traits::ChromatogramSource, utils::checksum_file, DetailLevel, OffsetIndex},
     meta::{
-        Component, ComponentType, DataProcessing, DetectorTypeTerm, FileDescription, InstrumentConfiguration, IonizationTypeTerm, MassAnalyzerTerm, MassSpectrometryRun, Sample, Software, SourceFile,
-        DissociationMethodTerm,
+        Component, ComponentType, DataProcessing, DetectorTypeTerm, DissociationMethodTerm,
+        FileDescription, InstrumentConfiguration, IonizationTypeTerm, MassAnalyzerTerm,
+        MassSpectrometryRun, Sample, Software, SourceFile,
     },
-    params::{ControlledVocabulary, Unit},
+    params::{ControlledVocabulary, Unit, Value},
     prelude::*,
     spectrum::{
-        ArrayType, BinaryArrayMap, BinaryDataArrayType, CentroidPeakAdapting, Chromatogram, ChromatogramDescription, ChromatogramType, DataArray, DeconvolutedPeakAdapting, MultiLayerSpectrum, Precursor, ScanEvent, ScanPolarity, ScanWindow, SelectedIon, SignalContinuity
+        ArrayType, BinaryArrayMap, BinaryDataArrayType, CentroidPeakAdapting, Chromatogram,
+        ChromatogramDescription, ChromatogramType, DataArray, DeconvolutedPeakAdapting,
+        MultiLayerSpectrum, Precursor, ScanEvent, ScanPolarity, ScanWindow, SelectedIon,
+        SignalContinuity,
     },
     Param,
 };
@@ -426,7 +430,11 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 
     fn make_sample(thermo_file_description: &ThermoFileDescription) -> Option<Sample> {
         if let Some(name) = thermo_file_description.sample_id() {
-            Some(Sample::new(name.to_string(), Some(name.to_string()), Vec::new()))
+            Some(Sample::new(
+                name.to_string(),
+                Some(name.to_string()),
+                Vec::new(),
+            ))
         } else {
             None
         }
@@ -461,7 +469,9 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             Self::make_instrument_configuration(&handle);
 
         let ms_run = Self::make_ms_run(&path, &thermo_file_description);
-        let samples = Self::make_sample(&thermo_file_description).into_iter().collect();
+        let samples = Self::make_sample(&thermo_file_description)
+            .into_iter()
+            .collect();
 
         Ok(Self {
             path,
@@ -502,29 +512,45 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
         activation.energy = vact.collision_energy() as f32;
         match vact.dissociation_method() {
             DissociationMethod::CID => {
-                activation.methods_mut().push(DissociationMethodTerm::CollisionInducedDissociation);
+                activation
+                    .methods_mut()
+                    .push(DissociationMethodTerm::CollisionInducedDissociation);
             }
             DissociationMethod::HCD => {
-                activation.methods_mut().push(DissociationMethodTerm::BeamTypeCollisionInducedDissociation);
+                activation
+                    .methods_mut()
+                    .push(DissociationMethodTerm::BeamTypeCollisionInducedDissociation);
             }
             DissociationMethod::ECD => {
-                activation.methods_mut().push(DissociationMethodTerm::ElectronCaptureDissociation);
+                activation
+                    .methods_mut()
+                    .push(DissociationMethodTerm::ElectronCaptureDissociation);
             }
             DissociationMethod::ETD => {
-                activation.methods_mut().push(DissociationMethodTerm::ElectronTransferDissociation);
+                activation
+                    .methods_mut()
+                    .push(DissociationMethodTerm::ElectronTransferDissociation);
             }
             DissociationMethod::ETHCD => {
-                activation.methods_mut().push(DissociationMethodTerm::ElectronTransferDissociation);
+                activation
+                    .methods_mut()
+                    .push(DissociationMethodTerm::ElectronTransferDissociation);
                 activation.add_param(
                     DissociationMethodTerm::SupplementalBeamTypeCollisionInducedDissociation.into(),
                 );
             }
             DissociationMethod::ETCID => {
-                activation.methods_mut().push(DissociationMethodTerm::ElectronTransferDissociation);
-                activation.methods_mut().push(DissociationMethodTerm::SupplementalCollisionInducedDissociation.into());
+                activation
+                    .methods_mut()
+                    .push(DissociationMethodTerm::ElectronTransferDissociation);
+                activation
+                    .methods_mut()
+                    .push(DissociationMethodTerm::SupplementalCollisionInducedDissociation.into());
             }
             DissociationMethod::NETD => {
-                activation.methods_mut().push(DissociationMethodTerm::NegativeElectronTransferDissociation);
+                activation
+                    .methods_mut()
+                    .push(DissociationMethodTerm::NegativeElectronTransferDissociation);
             }
             DissociationMethod::MPD => {
                 todo!("Need to define MPD")
@@ -533,18 +559,25 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
                 todo!("Need to define PTD")
             }
             DissociationMethod::ECCID => {
-                activation.methods_mut().push(DissociationMethodTerm::ElectronCaptureDissociation);
                 activation
-                    .add_param(DissociationMethodTerm::SupplementalCollisionInducedDissociation.into());
+                    .methods_mut()
+                    .push(DissociationMethodTerm::ElectronCaptureDissociation);
+                activation.add_param(
+                    DissociationMethodTerm::SupplementalCollisionInducedDissociation.into(),
+                );
             }
             DissociationMethod::ECHCD => {
-                activation.methods_mut().push(DissociationMethodTerm::ElectronCaptureDissociation);
+                activation
+                    .methods_mut()
+                    .push(DissociationMethodTerm::ElectronCaptureDissociation);
                 activation.add_param(
                     DissociationMethodTerm::SupplementalBeamTypeCollisionInducedDissociation.into(),
                 )
             }
             _ => {
-                activation.methods_mut().push(DissociationMethodTerm::CollisionInducedDissociation);
+                activation
+                    .methods_mut()
+                    .push(DissociationMethodTerm::CollisionInducedDissociation);
             }
         }
 
@@ -682,6 +715,67 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             }
         }
 
+        let trailers = self.handle.get_raw_trailers_for(index)?;
+        for kv in trailers.iter() {
+            match kv.label {
+                "Micro Scan Count" => {
+                    if !kv.value.is_empty() {
+                        let param = Param::new_key_value(
+                            "[Thermo Trailer Extra]Micro Scan Count",
+                            kv.value.parse::<Value>().unwrap(),
+                        );
+                        spec.params_mut().push(param);
+                    }
+                }
+                "Scan Segment" => {
+                    if !kv.value.is_empty() {
+                        let param = Param::new_key_value(
+                            "[Thermo Trailer Extra]Scan Segment",
+                            kv.value.parse::<Value>().unwrap(),
+                        );
+                        spec.params_mut().push(param);
+                    }
+                }
+                "Scan Event" => {
+                    if !kv.value.is_empty() {
+                        let param = Param::new_key_value(
+                            "[Thermo Trailer Extra]Scan Event",
+                            kv.value.parse::<Value>().unwrap(),
+                        );
+                        spec.params_mut().push(param);
+                    }
+                }
+                "Monoisotopic M/Z" => {
+                    if !kv.value.is_empty() {
+                        let param = Param::new_key_value(
+                            "[Thermo Trailer Extra]Monoisotopic M/Z",
+                            kv.value.parse::<Value>().unwrap(),
+                        );
+                        spec.params_mut().push(param);
+                    }
+                }
+                "HCD Energy eV" => {
+                    if !kv.value.is_empty() {
+                        let param = Param::new_key_value(
+                            "[Thermo Trailer Extra]HCD Energy eV",
+                            kv.value.parse::<Value>().unwrap(),
+                        );
+                        spec.params_mut().push(param);
+                    }
+                }
+                "HCD Energy" => {
+                    if !kv.value.is_empty() {
+                        let param = Param::new_key_value(
+                            "[Thermo Trailer Extra]HCD Energy",
+                            kv.value.parse::<Value>().unwrap(),
+                        );
+                        spec.params_mut().push(param);
+                    }
+                }
+                _ => {}
+            }
+        }
+
         spec.update_summaries();
         Some(spec)
     }
@@ -741,10 +835,8 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             intensity_array_in.extend(&intensity_array).unwrap();
             array_map.add(intensity_array_in);
         } else {
-            let mut time_array_in = DataArray::from_name_and_type(
-                &ArrayType::TimeArray,
-                BinaryDataArrayType::Float64,
-            );
+            let mut time_array_in =
+                DataArray::from_name_and_type(&ArrayType::TimeArray, BinaryDataArrayType::Float64);
             time_array_in.unit = Unit::Minute;
             array_map.add(time_array_in);
 
@@ -788,10 +880,8 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
             intensity_array_in.extend(&intensity_array).unwrap();
             array_map.add(intensity_array_in);
         } else {
-            let mut time_array_in = DataArray::from_name_and_type(
-                &ArrayType::TimeArray,
-                BinaryDataArrayType::Float64,
-            );
+            let mut time_array_in =
+                DataArray::from_name_and_type(&ArrayType::TimeArray, BinaryDataArrayType::Float64);
             time_array_in.unit = Unit::Minute;
             array_map.add(time_array_in);
 
@@ -961,28 +1051,22 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ChromatogramSource for ThermoRawReaderType<C, D> {
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ChromatogramSource
+    for ThermoRawReaderType<C, D>
+{
     fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
         match id {
-            "TIC" => {
-                Some(self.get_tic())
-            },
-            "BPC" => {
-                Some(self.get_bpc())
-            },
-            _ => None
+            "TIC" => Some(self.get_tic()),
+            "BPC" => Some(self.get_bpc()),
+            _ => None,
         }
     }
 
     fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
         match index {
-            0 => {
-                Some(self.get_tic())
-            },
-            1 => {
-                Some(self.get_bpc())
-            },
-            _ => None
+            0 => Some(self.get_tic()),
+            1 => Some(self.get_bpc()),
+            _ => None,
         }
     }
 }
