@@ -299,6 +299,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             true
         } else if line.contains('=') {
             let (key, value) = line.split_once('=').unwrap();
+            let value = value.trim();
             builder.empty_metadata = false;
             match key {
                 "TITLE" => builder.description.id = value.to_string(),
@@ -362,26 +363,44 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                         ..Default::default()
                     });
                 }
-                "CHARGE" => match value.parse() {
-                    Ok(z) => {
-                        if let Some(ion) = builder
-                            .description
-                            .precursor
-                            .get_or_insert_with(Precursor::default)
-                            .iter_mut()
-                            .last()
-                        {
-                            ion.charge = Some(z);
-                        }
-                    }
-                    Err(e) => {
+                "CHARGE" => {
+                    let (sign, value, tail_sign) = if let Some(stripped) = value.strip_suffix('+') {
+                        (1, stripped, true)
+                    } else if let Some(stripped) = value.strip_suffix('-') {
+                        (-1, stripped, true)
+                    } else {
+                        (1, value, false)
+                    };
+
+                    if tail_sign && (value.starts_with('-') || value.starts_with('+')) {
                         self.state = MGFParserState::Error;
                         self.error = Some(MGFError::MalformedHeaderLine(format!(
-                            "Could not parse CHARGE header {value} : {e}"
+                            "Could not parse CHARGE header {value}"
                         )));
                         return false;
                     }
-                },
+
+                    match value.parse::<i32>() {
+                        Ok(z) => {
+                            if let Some(ion) = builder
+                                .description
+                                .precursor
+                                .get_or_insert_with(Precursor::default)
+                                .iter_mut()
+                                .last()
+                            {
+                                ion.charge = Some(sign * z);
+                            }
+                        }
+                        Err(e) => {
+                            self.state = MGFParserState::Error;
+                            self.error = Some(MGFError::MalformedHeaderLine(format!(
+                                "Could not parse CHARGE header {value} : {e}"
+                            )));
+                            return false;
+                        }
+                    }
+                }
                 &_ => {
                     builder
                         .description
