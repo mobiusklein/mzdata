@@ -8,7 +8,6 @@ use std::convert::TryInto;
 use std::fs;
 use std::io::{self, prelude::*, BufWriter, SeekFrom};
 use std::marker::PhantomData;
-use std::mem;
 use std::str;
 
 use log::warn;
@@ -508,10 +507,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                 MGFParserState::Between => self.handle_between(line),
                 MGFParserState::Done => false,
                 MGFParserState::Error => {
-                    let mut err = None;
-                    mem::swap(&mut self.error, &mut err);
-                    self.error = None;
-                    return Err(err.unwrap());
+                    return Err(self.error.take().unwrap_or(MGFError::NoError));
                 }
             };
         }
