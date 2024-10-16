@@ -367,7 +367,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                         if let Some(ion) = builder
                             .description
                             .precursor
-                            .get_or_insert_with(|| Precursor::default())
+                            .get_or_insert_with(Precursor::default)
                             .iter_mut()
                             .last()
                         {
@@ -445,16 +445,11 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
     /// Read the next spectrum from the file, if there is one.
     pub fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
         let mut builder = SpectrumBuilder::<C, D>::default();
-        match self._parse_into(&mut builder) {
-            Ok((_, started_spectrum)) => {
-                if started_spectrum && !builder.is_empty() {
-                    Some(builder.into())
-                } else {
-                    None
-                }
-            }
-            Err(_err) => None,
-        }
+        self._parse_into(&mut builder)
+            .ok()
+            .and_then(|(_, started_spectrum)| {
+                (started_spectrum && !builder.is_empty()).then(|| builder.into())
+            })
     }
 
     /// Read the next spectrum's contents directly into the passed [`SpectrumBuilder`].
@@ -470,12 +465,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
         while work {
             buffer.clear();
             let b = match self.read_line(&mut buffer) {
-                Ok(b) => {
-                    if b == 0 {
-                        work = false;
-                    }
-                    b
-                }
+                Ok(b) => b,
                 Err(err) => {
                     self.state = MGFParserState::Error;
                     return Err(MGFError::IOError(err));
@@ -490,10 +480,9 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             }
 
             let line = buffer.trim();
-            let n = line.len();
 
             // Skip empty lines
-            if n == 0 {
+            if line.is_empty() {
                 continue;
             }
 
@@ -672,8 +661,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
 
     /// Retrieve a spectrum by it's integer index
     fn get_spectrum_by_index(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
-        let (_id, offset) = self.index.get_index(index)?;
-        let byte_offset = offset;
+        let (_id, byte_offset) = self.index.get_index(index)?;
         let start = self
             .handle
             .stream_position()
@@ -682,13 +670,10 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
         let result = self.read_next();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
-        match result {
-            Some(mut scan) => {
-                scan.description.index = index;
-                Some(scan)
-            }
-            None => None,
-        }
+        result.map(|mut scan| {
+            scan.description.index = index;
+            scan
+        })
     }
 
     /// Return the data stream to the beginning
