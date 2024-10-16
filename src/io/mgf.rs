@@ -510,6 +510,10 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                     return Err(self.error.take().unwrap_or(MGFError::NoError));
                 }
             };
+
+            if self.state == MGFParserState::Error {
+                return Err(self.error.take().unwrap_or(MGFError::NoError));
+            }
         }
         Ok((offset, had_begin_ions))
     }
