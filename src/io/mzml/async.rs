@@ -251,9 +251,7 @@ impl<
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
             MzMLParserState::ParserError => {
-                let mut error = None;
-                mem::swap(&mut error, &mut self.error);
-                Err(error.unwrap())
+                Err(self.error.take().unwrap_or_else(|| MzMLParserError::UnknownError(MzMLParserState::ParserError)))
             }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
@@ -275,7 +273,7 @@ impl<
                         Ok(state) => {
                             match state {
                                 MzMLParserState::ParserError => {
-                                    eprintln!(
+                                    warn!(
                                         "Encountered an error while starting {:?}",
                                         String::from_utf8_lossy(&self.buffer)
                                     );
@@ -369,12 +367,10 @@ impl<
         match self.state {
             MzMLParserState::SpectrumDone => Ok((offset, accumulator)),
             MzMLParserState::ParserError if self.error.is_some() => {
-                let mut error = None;
-                mem::swap(&mut error, &mut self.error);
-                Err(error.unwrap())
+                Err(self.error.take().unwrap())
             }
             MzMLParserState::ParserError if self.error.is_none() => {
-                eprintln!(
+                warn!(
                     "Terminated with ParserError but no error set: {:?}",
                     self.error
                 );
@@ -397,10 +393,10 @@ impl<
                 self.state = MzMLParserState::Resume;
             },
             MzMLParserState::ParserError => {
-                eprintln!("Starting parsing from error: {:?}", self.error);
+                warn!("Starting parsing from error: {:?}", self.error);
             }
             state if state > MzMLParserState::SpectrumDone => {
-                eprintln!("Attempting to start parsing a spectrum in state {}", self.state);
+                warn!("Attempting to start parsing a spectrum in state {}", self.state);
             }
             _ => {}
         }
