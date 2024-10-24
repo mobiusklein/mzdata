@@ -365,7 +365,9 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                         .iter_mut()
                         .last()
                     {
-                        ion.charge = builder.precursor_charge
+                        if ion.charge.is_none() {
+                            ion.charge = builder.precursor_charge
+                        }
                     }
                 }
                 &_ => {
