@@ -1195,7 +1195,7 @@ mod test {
             }
         }
         assert_eq!(ms1_count, 0);
-        assert_eq!(msn_count, 34);
+        assert_eq!(msn_count, 35);
     }
 
     #[test]
@@ -1222,7 +1222,7 @@ mod test {
             })
         }
         assert_eq!(ms1_count, 0);
-        assert_eq!(msn_count, 34);
+        assert_eq!(msn_count, 35);
     }
 
     #[test]
