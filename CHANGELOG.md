@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.33.0] - 2024-10-17
+
+### Fixed
+
+- Fixed crash while mgf parsing (#12)
+* Fixed rare crash while mgf parsing
+* Fixed silent error that returns an unfinished spectrum
+* Handle charge when the sign is at the tail
+
 ## [0.32.0] - 2024-10-14
 
 ### Added
@@ -456,7 +465,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.32.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/mobiusklein/mzdata/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/mobiusklein/mzdata/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/mobiusklein/mzdata/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/mobiusklein/mzdata/compare/v0.29.0...v0.30.0

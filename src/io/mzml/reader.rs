@@ -1208,9 +1208,7 @@ impl<
         match self.state {
             MzMLParserState::SpectrumDone | MzMLParserState::ChromatogramDone => Ok(()),
             MzMLParserState::ParserError => {
-                let mut error = None;
-                mem::swap(&mut error, &mut self.error);
-                Err(error.unwrap())
+                Err(self.error.take().unwrap_or_else(|| MzMLParserError::UnknownError(MzMLParserState::ParserError)))
             }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
@@ -1243,7 +1241,7 @@ impl<
                         Ok(state) => {
                             self.state = state;
                             if state == MzMLParserState::ParserError {
-                                eprintln!(
+                                warn!(
                                     "Encountered an error while starting {:?}",
                                     String::from_utf8_lossy(&self.buffer)
                                 );
@@ -1341,12 +1339,10 @@ impl<
                 Ok((accumulator, offset))
             }
             MzMLParserState::ParserError if self.error.is_some() => {
-                let mut error = None;
-                mem::swap(&mut error, &mut self.error);
-                Err(error.unwrap())
+                Err(self.error.take().unwrap())
             }
             MzMLParserState::ParserError if self.error.is_none() => {
-                eprintln!(
+                warn!(
                     "Terminated with ParserError but no error set: {:?}",
                     self.error
                 );
@@ -1411,13 +1407,13 @@ impl<
                 self.state = MzMLParserState::Resume;
             }
             MzMLParserState::ParserError => {
-                eprintln!("Starting parsing from error: {:?}", self.error);
+                warn!("Starting parsing from error: {:?}", self.error);
             }
             state
                 if state > MzMLParserState::ChromatogramDone
                     && state < MzMLParserState::Chromatogram =>
             {
-                eprintln!(
+                warn!(
                     "Attempting to start parsing a spectrum in state {}",
                     self.state
                 );
@@ -1877,7 +1873,7 @@ impl<
                                         b"id" => {
                                             let scan_id = attr
                                                 .unescape_value()
-                                                .expect("Error decoding id")
+                                                .expect("Error decoding spectrum id in streaming mzML index")
                                                 .to_string();
                                             // This count is off by 2 because somehow the < and > bytes are removed?
                                             self.spectrum_index.insert(
@@ -2393,7 +2389,7 @@ mod test {
     }
 
     #[cfg(feature = "mzsignal")]
-    #[test]
+    #[test_log::test]
     fn test_averaging() -> io::Result<()> {
         use crate::spectrum::group::SpectrumAveragingIterator;
 

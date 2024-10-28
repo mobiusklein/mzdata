@@ -39,9 +39,7 @@ impl<R: BufRead + Seek> RestartableGzDecoder<R> {
     }
 
     fn reset(&mut self) -> io::Result<u64> {
-        let mut handle = None;
-        swap(&mut self.handle, &mut handle);
-        let handle = handle.unwrap();
+        let handle = self.handle.take().unwrap();
         let mut inner = handle.into_inner();
         let res = inner.seek(io::SeekFrom::Start(0));
         self.handle = Some(MultiGzDecoder::new(inner));
