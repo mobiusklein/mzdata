@@ -44,7 +44,7 @@ debug = true
 
 [features]
 # default = ["nalgebra", "parallelism", "mzsignal", "zlib-ng-compat"]
-default = ["zlib-ng-compat", "proxi"]
+default = ["zlib-ng-compat"]
 
 openblas = ["mzsignal", "mzsignal/openblas"]
 netlib = ["mzsignal", "mzsignal/netlib"]
@@ -80,6 +80,7 @@ doc-only = ["thermorawfilereader/doc-only"]
 async = ["tokio", "quick-xml/async-tokio"]
 
 proxi = ["reqwest"]
+proxi-async = ["proxi", "futures"]
 
 [dependencies]
 regex = "1"
@@ -112,6 +113,7 @@ libz-sys = { version = "1.1", default-features = false, features = [
 ndarray = { version = "0.15.6", optional = true }
 filename = { version = "0.1.1", optional = true }
 reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
+futures = { version = "0.3", optional = true }
 
 numpress = { version = "1.1.0", optional = true }
 bytemuck = { version = "1.18.0", features = ["extern_crate_alloc"] }
@@ -145,6 +147,7 @@ features = [
     "async",
     "thermorawfilereader",
     "proxi",
+    "proxi-async",
     "doc-only",
 ]
 no-default-features = true
