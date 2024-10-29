@@ -43,11 +43,57 @@ impl USI {
     pub fn get_spectrum_blocking(
         &self,
         backend: Option<PROXIBackend>,
-    ) -> Result<Vec<PROXISpectrum>, Option<(PROXIBackend, reqwest::Error)>> {
+    ) -> Result<(PROXIBackend, Vec<PROXISpectrum>), PROXIError> {
+        // Some backends are more strict in the interpretation, they need the charge to be known, so stripping the interpretation allows these to still return the correct data.
+        let stripped_usi = if let Some(ident) = self.identifier.as_ref() {
+            let (ident_class, ident_val) = match ident {
+                super::usi::Identifier::Scan(i) => ("scan", i.to_string()),
+                super::usi::Identifier::Index(i) => ("index", i.to_string()),
+                super::usi::Identifier::NativeID(parts) => (
+                    "nativeId",
+                    parts
+                        .iter()
+                        .map(|i| i.to_string())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                ),
+            };
+            format!(
+                "{}:{}:{}:{ident_class}:{ident_val}",
+                self.protocol, self.dataset, self.run_name
+            )
+        } else {
+            format!("{}:{}:{}", self.protocol, self.dataset, self.run_name)
+        };
+
+        fn transform_response(
+            backend: PROXIBackend,
+            response: Result<PROXIResponse, reqwest::Error>,
+        ) -> Result<(PROXIBackend, Vec<PROXISpectrum>), PROXIError> {
+            match response {
+                Ok(PROXIResponse::Spectra(s)) => Ok((backend, s)),
+                Ok(PROXIResponse::Error {
+                    detail,
+                    status,
+                    title,
+                    kind,
+                }) => Err(PROXIError::Error {
+                    backend,
+                    detail,
+                    status,
+                    title,
+                    kind,
+                }),
+                Err(err) => Err(PROXIError::IO(backend, err)),
+            }
+        }
+
         if let Some(backend) = backend {
-            reqwest::blocking::get(backend.base_url().to_string() + &self.to_string())
-                .and_then(|r| r.json::<Vec<PROXISpectrum>>())
-                .map_err(|err| Some((backend, err)))
+            transform_response(
+                backend,
+                reqwest::blocking::get(backend.base_url().to_string() + &stripped_usi)
+                    .and_then(|r| r.json::<PROXIResponse>()),
+            )
         } else {
             let client = reqwest::blocking::Client::new();
             let mut last_error = None;
@@ -60,18 +106,48 @@ impl USI {
             ]
             .iter()
             .find_map(|backend| {
-                client
-                    .get(backend.base_url().to_string() + &self.to_string())
-                    .send()
-                    .and_then(|r| r.json::<Vec<PROXISpectrum>>())
-                    .map_err(|err| {
-                        last_error = Some((*backend, err));
-                    })
-                    .ok()
+                transform_response(
+                    *backend,
+                    client
+                        .get(backend.base_url().to_string() + &stripped_usi)
+                        .send()
+                        .and_then(|r| r.json::<PROXIResponse>()),
+                )
+                .map_err(|err| {
+                    last_error = Some(err);
+                })
+                .ok()
             })
-            .ok_or(last_error)
+            .ok_or(last_error.unwrap_or(PROXIError::NotFound))
         }
     }
+}
+
+/// An error returned when accessing a PROXI server
+#[derive(Debug)]
+pub enum PROXIError {
+    IO(PROXIBackend, reqwest::Error),
+    Error {
+        backend: PROXIBackend,
+        detail: String,
+        status: usize,
+        title: String,
+        kind: String,
+    },
+    NotFound,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum PROXIResponse {
+    Spectra(Vec<PROXISpectrum>),
+    Error {
+        detail: String,
+        status: usize,
+        title: String,
+        #[serde(rename = "type")]
+        kind: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -948,7 +1024,7 @@ mod test {
             "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555:VLHPLEGAVVIIFK/2"
                 .parse()
                 .unwrap();
-        let response = usi
+        let (_, response) = usi
             .get_spectrum_blocking(Some(PROXIBackend::PeptideAtlas))
             .unwrap();
         assert!(!response.is_empty())
@@ -959,7 +1035,7 @@ mod test {
         let usi: USI = "mzspec:MSV000078547:120228_nbut_3610_it_it_take2:scan:389"
             .parse()
             .unwrap();
-        let response = usi
+        let (_, response) = usi
             .get_spectrum_blocking(Some(PROXIBackend::MassIVE))
             .unwrap();
         assert!(!response.is_empty())
@@ -971,7 +1047,7 @@ mod test {
             "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV"
                 .parse()
                 .unwrap();
-        let response = usi
+        let (_, response) = usi
             .get_spectrum_blocking(Some(PROXIBackend::Pride))
             .unwrap();
         assert!(!response.is_empty())
@@ -983,7 +1059,7 @@ mod test {
             "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"
                 .parse()
                 .unwrap();
-        let response = usi
+        let (_, response) = usi
             .get_spectrum_blocking(Some(PROXIBackend::ProteomeXchange))
             .unwrap();
         assert!(!response.is_empty())
@@ -998,7 +1074,7 @@ mod test {
             "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"] {
             println!("Trying: {usi}");
             let usi: USI = usi.parse().unwrap();
-            let response = usi.get_spectrum_blocking(None).unwrap();
+            let (_, response) = usi.get_spectrum_blocking(None).unwrap();
             assert!(!response.is_empty())
         }
     }
