@@ -74,28 +74,24 @@ impl<R: BufRead + Seek> Seek for RestartableGzDecoder<R> {
                 io::ErrorKind::Unsupported,
                 "Cannot seek relative to end of a gzip stream",
             )),
-            io::SeekFrom::Current(o) => {
-                match o {
-                    0 => {
-                        Ok(self.offset)
-                    },
-                    _ if o < 0 => {
-                        if o.unsigned_abs() > self.offset {
-                            Err(io::Error::new(
-                                io::ErrorKind::Unsupported,
-                                "Cannot earlier than the start of the stream",
-                            ))
-                        } else {
-                            self.seek(io::SeekFrom::Start((self.offset as i64 + o) as u64))
-                        }
-                    },
-                    _ => {
-                        let mut buf = vec![0; o as usize];
-                        self.read_exact(&mut buf)?;
-                        Ok(self.offset)
+            io::SeekFrom::Current(o) => match o {
+                0 => Ok(self.offset),
+                _ if o < 0 => {
+                    if o.unsigned_abs() > self.offset {
+                        Err(io::Error::new(
+                            io::ErrorKind::Unsupported,
+                            "Cannot earlier than the start of the stream",
+                        ))
+                    } else {
+                        self.seek(io::SeekFrom::Start((self.offset as i64 + o) as u64))
                     }
                 }
-            }
+                _ => {
+                    let mut buf = vec![0; o as usize];
+                    self.read_exact(&mut buf)?;
+                    Ok(self.offset)
+                }
+            },
         }
     }
 }
