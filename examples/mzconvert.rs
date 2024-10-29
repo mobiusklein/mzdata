@@ -111,7 +111,10 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
                 .file_description()
                 .source_files
                 .iter()
-                .flat_map(|f| f.get_param_by_name("SHA-1").map(|c| c.value.as_str() == checksum))
+                .flat_map(|f| {
+                    f.get_param_by_name("SHA-1")
+                        .map(|c| c.value.as_str() == checksum)
+                })
                 .all(|a| a);
             if !has_already {
                 let mut sf = SourceFile::default();

@@ -44,7 +44,7 @@ debug = true
 
 [features]
 # default = ["nalgebra", "parallelism", "mzsignal", "zlib-ng-compat"]
-default = ["zlib-ng-compat"]
+default = ["zlib-ng-compat", "proxi"]
 
 openblas = ["mzsignal", "mzsignal/openblas"]
 netlib = ["mzsignal", "mzsignal/netlib"]
@@ -78,6 +78,8 @@ thermo = [
 doc-only = ["thermorawfilereader/doc-only"]
 
 async = ["tokio", "quick-xml/async-tokio"]
+
+proxi = ["reqwest"]
 
 [dependencies]
 regex = "1"
@@ -142,6 +144,7 @@ features = [
     "mzmlb",
     "async",
     "thermorawfilereader",
+    "proxi",
     "doc-only",
 ]
 no-default-features = true

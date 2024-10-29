@@ -1,8 +1,8 @@
 use std::env;
 use std::io;
 
-use mzdata::prelude::*;
 use mzdata::mz_read;
+use mzdata::prelude::*;
 
 fn main() -> io::Result<()> {
     env_logger::init();

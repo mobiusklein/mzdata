@@ -1,12 +1,78 @@
+use std::cmp::Ordering;
 use std::fmt::Display;
+use std::marker::PhantomData;
 use std::str::FromStr;
 
+use num_traits::AsPrimitive;
 use serde::{Deserialize, Serialize};
 
 use super::usi::USI;
 use crate::params::{ControlledVocabulary, Param, ParamCow, Value, CURIE};
-use crate::spectrum::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, IsolationWindowState, MultiLayerSpectrum, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription};
+use crate::spectrum::{
+    ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, IsolationWindowState,
+    MultiLayerSpectrum, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
+};
 use crate::{curie, prelude::*};
+
+/// The possible PROXI backends
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum PROXIBackend {
+    PeptideAtlas,
+    MassIVE,
+    Pride,
+    Jpost,
+    ProteomeXchange,
+}
+
+impl PROXIBackend {
+    /// The PROXI server base url which needs concatenating of the USI at the end
+    fn base_url(&self) -> &'static str {
+        match self {
+            Self::PeptideAtlas => "http://www.peptideatlas.org/api/proxi/v0.1/spectra?resultType=full&usi=",
+            Self::MassIVE => "http://massive.ucsd.edu/ProteoSAFe/proxi/v0.1/spectra?resultType=full&usi=",
+            Self::Pride => "http://www.ebi.ac.uk/pride/proxi/archive/v0.1/spectra?resultType=full&usi=",
+            Self::Jpost => "https://repository.jpostdb.org/proxi/spectra?resultType=full&usi=",
+            Self::ProteomeXchange => "http://proteomecentral.proteomexchange.org/api/proxi/v0.1/spectra?resultType=full&usi=",
+        }
+    }
+}
+
+impl USI {
+    /// Retrieve this USI from the given PROXI backend. If no PROXI backend is indicated it will
+    /// aggregate the results from all known backends and return the first successful spectrum.
+    pub fn get_spectrum_blocking(
+        &self,
+        backend: Option<PROXIBackend>,
+    ) -> Result<Vec<PROXISpectrum>, Option<(PROXIBackend, reqwest::Error)>> {
+        if let Some(backend) = backend {
+            reqwest::blocking::get(backend.base_url().to_string() + &self.to_string())
+                .and_then(|r| r.json::<Vec<PROXISpectrum>>())
+                .map_err(|err| Some((backend, err)))
+        } else {
+            let client = reqwest::blocking::Client::new();
+            let mut last_error = None;
+            [
+                PROXIBackend::PeptideAtlas,
+                PROXIBackend::MassIVE,
+                PROXIBackend::Pride,
+                PROXIBackend::Jpost,
+                PROXIBackend::ProteomeXchange,
+            ]
+            .iter()
+            .find_map(|backend| {
+                client
+                    .get(backend.base_url().to_string() + &self.to_string())
+                    .send()
+                    .and_then(|r| r.json::<Vec<PROXISpectrum>>())
+                    .map_err(|err| {
+                        last_error = Some((*backend, err));
+                    })
+                    .ok()
+            })
+            .ok_or(last_error)
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Status {
@@ -57,49 +123,34 @@ where
             formatter.write_str("PROXIValue string")
         }
 
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
+        fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
             match v.parse::<PROXIValue>() {
                 Ok(v) => Ok(v),
                 Err(e) => Err(E::custom(e)),
             }
         }
 
-        fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
             Ok(Value::Boolean(v).into())
         }
 
-        fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
             Ok(Value::Int(v).into())
         }
 
-        fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
             Ok(Value::Int(v as i64).into())
         }
 
-        fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Self::Value, E> {
             Ok(Value::Float(v).into())
         }
 
-        fn visit_none<E>(self) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
             Ok(Value::Empty.into())
         }
 
-        fn visit_unit<E>(self) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
             Ok(Value::Empty.into())
         }
     }
@@ -222,10 +273,7 @@ where
             formatter.write_str("expected CURIE string")
         }
 
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
+        fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
             match v.parse::<CURIE>() {
                 Ok(v) => Ok(v),
                 Err(e) => Err(E::custom(e)),
@@ -362,9 +410,8 @@ where
 {
     match usi {
         Some(usi) => serializer.serialize_str(&usi.to_string()),
-        None => serializer.serialize_none()
+        None => serializer.serialize_none(),
     }
-
 }
 
 fn usi_deserialize<'de, D>(deserializer: D) -> Result<Option<USI>, D::Error>
@@ -383,16 +430,11 @@ where
             Ok(None)
         }
 
-        fn visit_unit<E>(self) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
             Ok(None)
         }
 
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
+        fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
             if v == "null" {
                 Ok(None)
             } else {
@@ -407,16 +449,105 @@ where
     deserializer.deserialize_any(USIVisit {})
 }
 
+use serde::de::{self, Visitor};
+
+/// MassIVE returns a list of strings instead of a list of numbers, this type can be deserialized if a number of string is given in the JSON
+#[derive(Debug, Default, Clone)]
+pub struct Wrapped<T>(T);
+
+impl<T> std::ops::Deref for Wrapped<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'de, T: 'static + Default + Copy + FromStr> serde::Deserialize<'de> for Wrapped<T>
+where
+    T::Err: Display,
+    f64: AsPrimitive<T>,
+    u64: AsPrimitive<T>,
+    i64: AsPrimitive<T>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        deserializer
+            .deserialize_any(PotentiallyWrappedNumberVisitor::<T>::default())
+            .map(Wrapped)
+    }
+}
+
+impl serde::Serialize for Wrapped<f64> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_f64(self.0)
+    }
+}
+
+impl serde::Serialize for Wrapped<f32> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_f32(self.0)
+    }
+}
+
+#[derive(Debug, Default)]
+struct PotentiallyWrappedNumberVisitor<T> {
+    marker: PhantomData<T>,
+}
+
+impl<'de, T: 'static + Copy + FromStr> Visitor<'de> for PotentiallyWrappedNumberVisitor<T>
+where
+    T::Err: Display,
+    f64: AsPrimitive<T>,
+    u64: AsPrimitive<T>,
+    i64: AsPrimitive<T>,
+{
+    type Value = T;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a wrapped number")
+    }
+
+    fn visit_f64<E: de::Error>(self, value: f64) -> Result<Self::Value, E> {
+        Ok(value.as_())
+    }
+
+    fn visit_i64<E: de::Error>(self, value: i64) -> Result<Self::Value, E> {
+        Ok(value.as_())
+    }
+
+    fn visit_u64<E: de::Error>(self, value: u64) -> Result<Self::Value, E> {
+        Ok(value.as_())
+    }
+
+    fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+        value.parse().map_err(|e| serde::de::Error::custom(e))
+    }
+}
+
+/// A spectrum returnd by a PROXI server
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct PROXISpectrum {
-    #[serde(serialize_with = "usi_serialize", deserialize_with = "usi_deserialize")]
+    #[serde(
+        default,
+        serialize_with = "usi_serialize",
+        deserialize_with = "usi_deserialize"
+    )]
     pub usi: Option<USI>,
     pub status: Option<Status>,
+    #[serde(default)]
     pub attributes: Vec<PROXIParam>,
     #[serde(default)]
-    pub mzs: Vec<f64>,
+    pub mzs: Vec<Wrapped<f64>>,
     #[serde(default)]
-    pub intensities: Vec<f32>,
+    pub intensities: Vec<Wrapped<f32>>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub charges: Option<Vec<i32>>,
 }
@@ -447,7 +578,10 @@ impl From<&PROXISpectrum> for SpectrumDescription {
         let mut precursor = Precursor::default();
 
         for param in value.attributes.iter() {
-            if matches!(param.accession.controlled_vocabulary, ControlledVocabulary::UO) {
+            if matches!(
+                param.accession.controlled_vocabulary,
+                ControlledVocabulary::UO
+            ) {
                 continue;
             }
             match param.name.as_str() {
@@ -465,21 +599,28 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                 }
                 "centroid spectrum" => {
                     this.signal_continuity = SignalContinuity::Centroid;
-                },
+                }
 
                 "scan start time" => {
                     if let Some(s) = this.acquisition.first_scan_mut() {
-                        s.start_time = param.value.to_f64().expect("Failed to extract scan start time") / 60.0;
+                        s.start_time = param
+                            .value
+                            .to_f64()
+                            .expect("Failed to extract scan start time")
+                            / 60.0;
                     }
-                },
+                }
                 "ion injection time" => {
                     if let Some(s) = this.acquisition.first_scan_mut() {
-                        s.injection_time = param.to_f32().expect("Failed to extract ion injection time");
+                        s.injection_time = param
+                            .to_f32()
+                            .expect("Failed to extract ion injection time");
                     }
                 }
                 "filter string" => {
                     if let Some(s) = this.acquisition.first_scan_mut() {
-                        let mut param = Param::new_key_value("filter string", param.value.to_string());
+                        let mut param =
+                            Param::new_key_value("filter string", param.value.to_string());
                         param.controlled_vocabulary = Some(ControlledVocabulary::MS);
                         param.accession = Some(1000512);
                         s.add_param(param);
@@ -510,8 +651,11 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                         IsolationWindowState::Unknown => IsolationWindowState::Complete,
                         IsolationWindowState::Explicit => IsolationWindowState::Complete,
                         IsolationWindowState::Offset => {
-                            precursor.isolation_window.lower_bound = precursor.isolation_window.target - precursor.isolation_window.lower_bound;
-                            precursor.isolation_window.upper_bound += precursor.isolation_window.target;
+                            precursor.isolation_window.lower_bound =
+                                precursor.isolation_window.target
+                                    - precursor.isolation_window.lower_bound;
+                            precursor.isolation_window.upper_bound +=
+                                precursor.isolation_window.target;
                             IsolationWindowState::Complete
                         }
                         IsolationWindowState::Complete => IsolationWindowState::Complete,
@@ -528,7 +672,8 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                             precursor.isolation_window.lower_bound = lower_bound;
                         }
                         IsolationWindowState::Complete => {
-                            precursor.isolation_window.lower_bound = precursor.isolation_window.target - lower_bound;
+                            precursor.isolation_window.lower_bound =
+                                precursor.isolation_window.target - lower_bound;
                         }
                         _ => {}
                     }
@@ -544,7 +689,8 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                             precursor.isolation_window.upper_bound = upper_bound;
                         }
                         IsolationWindowState::Complete => {
-                            precursor.isolation_window.upper_bound = precursor.isolation_window.target + upper_bound;
+                            precursor.isolation_window.upper_bound =
+                                precursor.isolation_window.target + upper_bound;
                         }
                         _ => {}
                     }
@@ -570,7 +716,8 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                     }
                 }
                 _ => {
-                    let mut p = Param::new_key_value(param.name.clone(), param.value.as_ref().to_owned());
+                    let mut p =
+                        Param::new_key_value(param.name.clone(), param.value.as_ref().to_owned());
                     p.accession = Some(param.accession.accession);
                     p.controlled_vocabulary = Some(param.accession.controlled_vocabulary);
                     this.add_param(p);
@@ -585,22 +732,39 @@ impl From<&PROXISpectrum> for SpectrumDescription {
     }
 }
 
-impl<C: CentroidLike + Default + BuildFromArrayMap + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildFromArrayMap + BuildArrayMapFrom> From<PROXISpectrum> for MultiLayerSpectrum<C, D> {
+impl<
+        C: CentroidLike + Default + BuildFromArrayMap + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + Default + BuildFromArrayMap + BuildArrayMapFrom,
+    > From<PROXISpectrum> for MultiLayerSpectrum<C, D>
+{
     fn from(value: PROXISpectrum) -> Self {
         let descr: SpectrumDescription = (&value).into();
         let mut arrays = BinaryArrayMap::default();
 
-        let mut mz_array = DataArray::from_name_and_type(&ArrayType::MZArray, BinaryDataArrayType::Float64);
-        mz_array.extend(&value.mzs).unwrap();
+        let mut mz_array =
+            DataArray::from_name_and_type(&ArrayType::MZArray, BinaryDataArrayType::Float64);
+        mz_array
+            .extend(&value.mzs.into_iter().map(|v| v.0).collect::<Vec<_>>())
+            .unwrap();
         arrays.add(mz_array);
 
-        let mut intensity_array = DataArray::from_name_and_type(&ArrayType::IntensityArray, BinaryDataArrayType::Float32);
-        intensity_array.extend(&value.intensities).unwrap();
+        let mut intensity_array =
+            DataArray::from_name_and_type(&ArrayType::IntensityArray, BinaryDataArrayType::Float32);
+        intensity_array
+            .extend(
+                &value
+                    .intensities
+                    .into_iter()
+                    .map(|v| v.0)
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
         arrays.add(intensity_array);
 
         if let Some(charges) = value.charges.as_ref() {
-            let mut charge_arrays = DataArray::from_name_and_type(&ArrayType::ChargeArray, BinaryDataArrayType::Int32);
-            charge_arrays.extend(&charges).unwrap();
+            let mut charge_arrays =
+                DataArray::from_name_and_type(&ArrayType::ChargeArray, BinaryDataArrayType::Int32);
+            charge_arrays.extend(charges).unwrap();
             arrays.add(charge_arrays);
         };
 
@@ -613,14 +777,15 @@ where
     T: SpectrumLike,
 {
     fn from(value: &T) -> Self {
-        let mut this = PROXISpectrum::default();
-        this.status = Some(Status::Readable);
+        let mut this = PROXISpectrum {
+            status: Some(Status::Readable),
+            ..Default::default()
+        };
 
-        let ms_level = value.ms_level();
-        if ms_level == 1 {
-            this.add_attribute(MS1_SPECTRUM.clone());
-        } else if ms_level > 1 {
-            this.add_attribute(MSN_SPECTRUM.clone());
+        match value.ms_level().cmp(&1) {
+            Ordering::Equal => this.add_attribute(MS1_SPECTRUM.clone()),
+            Ordering::Greater => this.add_attribute(MSN_SPECTRUM.clone()),
+            Ordering::Less => (),
         }
 
         for param in value.params().iter().filter(|p| p.is_controlled()) {
@@ -639,7 +804,7 @@ where
 
         this.add_attribute(PROXIParam {
             name: "ms level".to_string(),
-            value: PROXIValue(Value::Int(ms_level as i64)),
+            value: PROXIValue(Value::Int(value.ms_level() as i64)),
             accession: curie!(MS:1000511),
         });
 
@@ -720,19 +885,29 @@ where
         match value.peaks() {
             crate::spectrum::RefPeakDataLevel::Missing => {}
             crate::spectrum::RefPeakDataLevel::RawData(arrays) => {
-                this.mzs = arrays.mzs().unwrap().to_vec();
-                this.intensities = arrays.intensities().unwrap().to_vec();
+                this.mzs = arrays.mzs().unwrap().iter().copied().map(Wrapped).collect();
+                this.intensities = arrays
+                    .intensities()
+                    .unwrap()
+                    .iter()
+                    .copied()
+                    .map(Wrapped)
+                    .collect();
                 if let Ok(arr) = arrays.charges() {
                     this.charges = Some(arr.to_vec())
                 }
             }
             crate::spectrum::RefPeakDataLevel::Centroid(peaks) => {
-                (this.mzs, this.intensities) =
-                    peaks.iter().map(|p| (p.mz(), p.intensity())).unzip();
+                (this.mzs, this.intensities) = peaks
+                    .iter()
+                    .map(|p| (Wrapped(p.mz()), Wrapped(p.intensity())))
+                    .unzip();
             }
             crate::spectrum::RefPeakDataLevel::Deconvoluted(peaks) => {
-                (this.mzs, this.intensities) =
-                    peaks.iter().map(|p| (p.mz(), p.intensity())).unzip();
+                (this.mzs, this.intensities) = peaks
+                    .iter()
+                    .map(|p| (Wrapped(p.mz()), Wrapped(p.intensity())))
+                    .unzip();
                 this.charges = Some(peaks.iter().map(|p| p.charge()).collect::<Vec<_>>());
             }
         }
@@ -750,8 +925,8 @@ mod test {
     use std::io;
 
     use super::*;
-    use serde_json;
     use crate::MZReader;
+    use serde_json;
 
     #[test]
     fn test_convert() -> io::Result<()> {
@@ -761,9 +936,70 @@ mod test {
         let scan_message = PROXISpectrum::from(&scan);
 
         let message = serde_json::to_string(&scan_message)?;
-         let dup: PROXISpectrum = serde_json::from_str(&message)?;
+        let dup: PROXISpectrum = serde_json::from_str(&message)?;
         assert_eq!(dup.usi, scan_message.usi);
         assert_eq!(dup.attributes, scan_message.attributes);
         Ok(())
+    }
+
+    #[test]
+    fn get_peptide_atlas() {
+        let usi: USI =
+            "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555:VLHPLEGAVVIIFK/2"
+                .parse()
+                .unwrap();
+        let response = usi
+            .get_spectrum_blocking(Some(PROXIBackend::PeptideAtlas))
+            .unwrap();
+        assert!(!response.is_empty())
+    }
+
+    #[test]
+    fn get_massive() {
+        let usi: USI = "mzspec:MSV000078547:120228_nbut_3610_it_it_take2:scan:389"
+            .parse()
+            .unwrap();
+        let response = usi
+            .get_spectrum_blocking(Some(PROXIBackend::MassIVE))
+            .unwrap();
+        assert!(!response.is_empty())
+    }
+
+    #[test]
+    fn get_pride() {
+        let usi: USI =
+            "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV"
+                .parse()
+                .unwrap();
+        let response = usi
+            .get_spectrum_blocking(Some(PROXIBackend::Pride))
+            .unwrap();
+        assert!(!response.is_empty())
+    }
+
+    #[test]
+    fn get_proteomexchange() {
+        let usi: USI =
+            "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"
+                .parse()
+                .unwrap();
+        let response = usi
+            .get_spectrum_blocking(Some(PROXIBackend::ProteomeXchange))
+            .unwrap();
+        assert!(!response.is_empty())
+    }
+
+    #[test]
+    fn get_aggregate() {
+        for usi in [
+            "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555:VLHPLEGAVVIIFK/2",
+            "mzspec:MSV000078547:120228_nbut_3610_it_it_take2:scan:389",
+            "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV",
+            "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"] {
+            println!("Trying: {usi}");
+            let usi: USI = usi.parse().unwrap();
+            let response = usi.get_spectrum_blocking(None).unwrap();
+            assert!(!response.is_empty())
+        }
     }
 }
