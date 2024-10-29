@@ -46,31 +46,6 @@ impl PROXIBackend {
 }
 
 impl USI {
-    /// Some backends are more strict in the interpretation, they need the charge to be known, so stripping the interpretation allows these to still return the correct data.
-    fn stripped_usi(&self) -> String {
-        self.identifier.as_ref().map_or_else(
-            || format!("{}:{}:{}", self.protocol, self.dataset, self.run_name),
-            |identifier| {
-                let (ident_class, ident_val) = match identifier {
-                    super::usi::Identifier::Scan(i) => ("scan", i.to_string()),
-                    super::usi::Identifier::Index(i) => ("index", i.to_string()),
-                    super::usi::Identifier::NativeID(parts) => (
-                        "nativeId",
-                        parts
-                            .iter()
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>()
-                            .join(","),
-                    ),
-                };
-                format!(
-                    "{}:{}:{}:{ident_class}:{ident_val}",
-                    self.protocol, self.dataset, self.run_name
-                )
-            },
-        )
-    }
-
     /// Retrieve this USI from the given PROXI backend. If no PROXI backend is indicated it will
     /// aggregate the results from all known backends and return the first successful spectrum.
     ///
@@ -79,8 +54,6 @@ impl USI {
         &self,
         backend: Option<PROXIBackend>,
     ) -> Result<(PROXIBackend, Vec<PROXISpectrum>), PROXIError> {
-        let stripped_usi = self.stripped_usi();
-
         backend.map_or_else(
             || {
                 let client = reqwest::blocking::Client::new();
@@ -91,7 +64,7 @@ impl USI {
                         transform_response(
                             *backend,
                             client
-                                .get(backend.base_url().to_string() + &stripped_usi)
+                                .get(backend.base_url().to_string() + &self.to_string())
                                 .send()
                                 .and_then(reqwest::blocking::Response::json),
                         )
@@ -105,7 +78,7 @@ impl USI {
             |backend| {
                 transform_response(
                     backend,
-                    reqwest::blocking::get(backend.base_url().to_string() + &stripped_usi)
+                    reqwest::blocking::get(backend.base_url().to_string() + &self.to_string())
                         .and_then(reqwest::blocking::Response::json),
                 )
             },
@@ -139,18 +112,16 @@ impl USI {
             )
         }
 
-        let stripped_usi = self.stripped_usi();
-
         let client = reqwest::Client::new();
         if let Some(backend) = backend {
-            get_response(&client, backend, &stripped_usi).await
+            get_response(&client, backend, &self.to_string()).await
         } else {
             use futures::StreamExt;
 
             let mut requests = futures::stream::FuturesUnordered::new();
             let mut last_error = None;
             for backend in PROXIBackend::ALL {
-                requests.push(get_response(&client, *backend, &stripped_usi));
+                requests.push(get_response(&client, *backend, &self.to_string()));
             }
 
             while let Some(res) = requests.next().await {
@@ -233,6 +204,21 @@ pub enum PROXIErrorType {
     /// The dataset and the ms run are available, but the scan number does not exist in this file
     #[serde(rename = "ScanNotFound")]
     ScanNotFound,
+    /// The dataset identifier is not of a recognisable format, commonly PXD identifiers are used eg 'PXD004939', but see the USI spec for more details
+    #[serde(rename = "UnrecognizedIdentifierFormat")]
+    UnrecognizedIdentifierFormat,
+    /// The interpretation part of the USI is unable to be parsed, note that some PROXI backends require the addition of a charge to all peptides
+    #[serde(rename = "MalformedInterpretation")]
+    MalformedInterpretation,
+    /// The index flag (scan/index/nativeid) is malformed
+    #[serde(rename = "UnrecognizedIndexFlag")]
+    UnrecognizedIndexFlag,
+    /// Mandatory 'mzspec:' preamble is missing from the USI
+    #[serde(rename = "MissingPreamble")]
+    MissingPreamble,
+    /// The USI is malformed and has too few fields
+    #[serde(rename = "TooFewFields")]
+    TooFewFields,
     #[serde(untagged)]
     Other(String),
 }
