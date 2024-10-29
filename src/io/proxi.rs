@@ -207,7 +207,10 @@ pub enum PROXIErrorType {
     /// The dataset identifier is not of a recognisable format, commonly PXD identifiers are used eg 'PXD004939', but see the USI spec for more details
     #[serde(rename = "UnrecognizedIdentifierFormat")]
     UnrecognizedIdentifierFormat,
-    /// The interpretation part of the USI is unable to be parsed, note that some PROXI backends require the addition of a charge to all peptides
+    /// The interpretation part of the USI is unable to be parsed, note that some PROXI backends
+    /// require the addition of a charge to all peptides. Additionally, the PROXI servers do not
+    /// require the existence of the interpretation part of the USI, so removing this field before
+    /// sending the request might help prevent errors.
     #[serde(rename = "MalformedInterpretation")]
     MalformedInterpretation,
     /// The index flag (scan/index/nativeid) is malformed
