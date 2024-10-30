@@ -44,4 +44,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features nalgebra,parallelism,async,mzsignal,thermo -- --nocapture --show-output
+          args: --no-default-features --features nalgebra,parallelism,async,mzsignal,thermo,proxi,proxi-async,tokio -- --nocapture --show-output

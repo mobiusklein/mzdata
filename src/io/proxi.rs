@@ -113,15 +113,16 @@ impl USI {
         }
 
         let client = reqwest::Client::new();
+        let usi = self.to_string();
         if let Some(backend) = backend {
-            get_response(&client, backend, &self.to_string()).await
+            get_response(&client, backend, &usi).await
         } else {
             use futures::StreamExt;
 
             let mut requests = futures::stream::FuturesUnordered::new();
             let mut last_error = None;
             for backend in PROXIBackend::ALL {
-                requests.push(get_response(&client, *backend, &self.to_string()));
+                requests.push(get_response(&client, *backend, &usi));
             }
 
             while let Some(res) = requests.next().await {
@@ -438,11 +439,7 @@ where
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PROXIParam {
-    #[serde(
-        serialize_with = "curie_serialize",
-        deserialize_with = "curie_deserialize"
-    )]
-    pub accession: CURIE,
+    pub accession: PROXIAccession,
     pub name: String,
     #[serde(
         serialize_with = "proxi_value_serialize",
@@ -451,6 +448,26 @@ pub struct PROXIParam {
         default
     )]
     pub value: PROXIValue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum PROXIAccession {
+    #[serde(
+        serialize_with = "curie_serialize",
+        deserialize_with = "curie_deserialize"
+    )]
+    CURIE(CURIE),
+    #[serde(untagged)]
+    Other(String),
+}
+
+impl PROXIAccession {
+    fn controlled_vocabulary(&self) -> ControlledVocabulary {
+        match self {
+            PROXIAccession::CURIE(c) => c.controlled_vocabulary,
+            PROXIAccession::Other(_) => ControlledVocabulary::Unknown,
+        }
+    }
 }
 
 impl ParamValue for PROXIParam {
@@ -518,7 +535,7 @@ impl ParamValue for PROXIParam {
 impl PROXIParam {
     pub fn new<S: ToString, V: Into<PROXIValue>>(accession: CURIE, name: S, value: V) -> Self {
         Self {
-            accession,
+            accession: PROXIAccession::CURIE(accession),
             name: name.to_string(),
             value: value.into(),
         }
@@ -528,7 +545,7 @@ impl PROXIParam {
 impl From<Param> for PROXIParam {
     fn from(value: Param) -> Self {
         Self {
-            accession: value.curie().unwrap(),
+            accession: PROXIAccession::CURIE(value.curie().unwrap()),
             name: value.name,
             value: value.value.into(),
         }
@@ -538,7 +555,7 @@ impl From<Param> for PROXIParam {
 impl<'a> From<ParamCow<'a>> for PROXIParam {
     fn from(value: ParamCow<'a>) -> Self {
         Self {
-            accession: value.curie().unwrap(),
+            accession: PROXIAccession::CURIE(value.curie().unwrap()),
             name: value.name.to_string(),
             value: Value::from(value.value).into(),
         }
@@ -734,7 +751,7 @@ impl From<&PROXISpectrum> for SpectrumDescription {
 
         for param in &value.attributes {
             if matches!(
-                param.accession.controlled_vocabulary,
+                param.accession.controlled_vocabulary(),
                 ControlledVocabulary::UO
             ) {
                 continue;
@@ -879,8 +896,10 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                 }
                 _ => {
                     let mut p = Param::new_key_value(param.name.clone(), param.value.clone());
-                    p.accession = Some(param.accession.accession);
-                    p.controlled_vocabulary = Some(param.accession.controlled_vocabulary);
+                    if let PROXIAccession::CURIE(c) = param.accession {
+                        p.accession = Some(c.accession);
+                    }
+                    p.controlled_vocabulary = Some(param.accession.controlled_vocabulary());
                     this.add_param(p);
                 }
             }
@@ -966,7 +985,7 @@ where
         this.add_attribute(PROXIParam {
             name: "ms level".to_string(),
             value: PROXIValue(Value::Int(value.ms_level() as i64)),
-            accession: curie!(MS:1000511),
+            accession: PROXIAccession::CURIE(curie!(MS:1000511)),
         });
 
         match value.polarity() {
@@ -1032,7 +1051,7 @@ where
         for event in value.acquisition().iter() {
             let p = PROXIParam {
                 name: "scan start time".into(),
-                accession: curie!(MS:1000016),
+                accession: PROXIAccession::CURIE(curie!(MS:1000016)),
                 value: Value::Float(event.start_time * 60.0).into(),
             };
             this.add_attribute(p);
@@ -1111,15 +1130,13 @@ mod test {
     #[test]
     fn get_peptide_atlas() {
         let usi: USI =
-            "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555000000:VLHPLEGAVVIIFK/2"
+            "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555:VLHPLEGAVVIIFK/2"
                 .parse()
                 .unwrap();
         let (_, response) = usi
             .get_spectrum_blocking(Some(PROXIBackend::PeptideAtlas))
             .unwrap();
-        dbg!(&response);
         assert!(!response.is_empty());
-        todo!();
     }
 
     #[test]
