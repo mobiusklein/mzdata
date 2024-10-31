@@ -15,13 +15,17 @@ use crate::{
 };
 
 /// The possible PROXI backends
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum PROXIBackend {
     PeptideAtlas,
     MassIVE,
     Pride,
     Jpost,
     ProteomeXchange,
+    /// A custom backend with the given PROXI url, the pattern `{USI}` will be replaced with the actual usi in building the final request.
+    ///
+    /// For example the custom url `http://yourdomain.rs/proxi/v0.1/spectra?usi={USI}&resultType=full` will map to `http://yourdomain.rs/proxi/v0.1/spectra?usi=mzspec:ID:FILE:scan:SCAN&resultType=full`.
+    Custom(String),
 }
 
 impl PROXIBackend {
@@ -34,13 +38,14 @@ impl PROXIBackend {
     ];
 
     /// The PROXI server base url which needs concatenating of the USI at the end
-    const fn base_url(self) -> &'static str {
+    fn proxi_url(&self, usi: &str) -> String {
         match self {
-            Self::PeptideAtlas => "http://www.peptideatlas.org/api/proxi/v0.1/spectra?resultType=full&usi=",
-            Self::MassIVE => "http://massive.ucsd.edu/ProteoSAFe/proxi/v0.1/spectra?resultType=full&usi=",
-            Self::Pride => "http://www.ebi.ac.uk/pride/proxi/archive/v0.1/spectra?resultType=full&usi=",
-            Self::Jpost => "https://repository.jpostdb.org/proxi/spectra?resultType=full&usi=",
-            Self::ProteomeXchange => "http://proteomecentral.proteomexchange.org/api/proxi/v0.1/spectra?resultType=full&usi=",
+            Self::PeptideAtlas => format!("http://www.peptideatlas.org/api/proxi/v0.1/spectra?resultType=full&usi={usi}") ,
+            Self::MassIVE => format!("http://massive.ucsd.edu/ProteoSAFe/proxi/v0.1/spectra?resultType=full&usi={usi}"),
+            Self::Pride => format!("http://www.ebi.ac.uk/pride/proxi/archive/v0.1/spectra?resultType=full&usi={usi}"),
+            Self::Jpost => format!("https://repository.jpostdb.org/proxi/spectra?resultType=full&usi={usi}"),
+            Self::ProteomeXchange => format!("http://proteomecentral.proteomexchange.org/api/proxi/v0.1/spectra?resultType=full&usi={usi}"),
+            Self::Custom(url) => url.replace("{USI}", usi),
         }
     }
 }
@@ -49,22 +54,26 @@ impl USI {
     /// Retrieve this USI from the given PROXI backend. If no PROXI backend is indicated it will
     /// aggregate the results from all known backends and return the first successful spectrum.
     ///
+    /// A [`reqwest::blocking::Client`] can be provided to create the requests, if no client is
+    /// provided a default client will be used.
+    ///
     /// This function is only available with the feature `proxi`.
     pub fn get_spectrum_blocking(
         &self,
         backend: Option<PROXIBackend>,
+        client: Option<reqwest::blocking::Client>,
     ) -> Result<(PROXIBackend, Vec<PROXISpectrum>), PROXIError> {
         backend.map_or_else(
             || {
-                let client = reqwest::blocking::Client::new();
+                let client = client.unwrap_or_default();
                 let mut last_error = None;
                 PROXIBackend::ALL
                     .iter()
                     .find_map(|backend| {
                         transform_response(
-                            *backend,
+                            backend.clone(),
                             client
-                                .get(backend.base_url().to_string() + &self.to_string())
+                                .get(backend.proxi_url(&self.to_string()))
                                 .send()
                                 .and_then(reqwest::blocking::Response::json),
                         )
@@ -77,8 +86,8 @@ impl USI {
             },
             |backend| {
                 transform_response(
-                    backend,
-                    reqwest::blocking::get(backend.base_url().to_string() + &self.to_string())
+                    backend.clone(),
+                    reqwest::blocking::get(backend.proxi_url(&self.to_string()))
                         .and_then(reqwest::blocking::Response::json),
                 )
             },
@@ -88,11 +97,15 @@ impl USI {
     /// Retrieve this USI from the given PROXI backend. If no PROXI backend is indicated it will
     /// aggregate the results from all known backends and return the first successful spectrum.
     ///
+    /// A [`reqwest::Client`] can be provided to create the requests, if no client is
+    /// provided a default client will be used.
+    ///
     /// This function is only available with the feature `proxi-async`.
     #[cfg(feature = "proxi-async")]
     pub async fn get_spectrum_async(
         &self,
         backend: Option<PROXIBackend>,
+        client: Option<reqwest::Client>,
     ) -> Result<(PROXIBackend, Vec<PROXISpectrum>), PROXIError> {
         async fn get_response(
             client: &reqwest::Client,
@@ -100,19 +113,15 @@ impl USI {
             usi: &str,
         ) -> Result<(PROXIBackend, Vec<PROXISpectrum>), PROXIError> {
             transform_response(
-                backend,
-                match client
-                    .get(backend.base_url().to_string() + usi)
-                    .send()
-                    .await
-                {
+                backend.clone(),
+                match client.get(backend.proxi_url(usi)).send().await {
                     Ok(r) => r.json::<PROXIResponse>().await,
                     Err(e) => Err(e),
                 },
             )
         }
 
-        let client = reqwest::Client::new();
+        let client = client.unwrap_or_default();
         let usi = self.to_string();
         if let Some(backend) = backend {
             get_response(&client, backend, &usi).await
@@ -122,7 +131,7 @@ impl USI {
             let mut requests = futures::stream::FuturesUnordered::new();
             let mut last_error = None;
             for backend in PROXIBackend::ALL {
-                requests.push(get_response(&client, *backend, &usi));
+                requests.push(get_response(&client, backend.clone(), &usi));
             }
 
             while let Some(res) = requests.next().await {
@@ -1134,7 +1143,7 @@ mod test {
                 .parse()
                 .unwrap();
         let (_, response) = usi
-            .get_spectrum_blocking(Some(PROXIBackend::PeptideAtlas))
+            .get_spectrum_blocking(Some(PROXIBackend::PeptideAtlas), None)
             .unwrap();
         assert!(!response.is_empty());
     }
@@ -1145,7 +1154,7 @@ mod test {
             .parse()
             .unwrap();
         let (_, response) = usi
-            .get_spectrum_blocking(Some(PROXIBackend::MassIVE))
+            .get_spectrum_blocking(Some(PROXIBackend::MassIVE), None)
             .unwrap();
         assert!(!response.is_empty());
     }
@@ -1157,7 +1166,7 @@ mod test {
                 .parse()
                 .unwrap();
         let (_, response) = usi
-            .get_spectrum_blocking(Some(PROXIBackend::Pride))
+            .get_spectrum_blocking(Some(PROXIBackend::Pride), None)
             .unwrap();
         assert!(!response.is_empty());
     }
@@ -1169,7 +1178,7 @@ mod test {
                 .parse()
                 .unwrap();
         let (_, response) = usi
-            .get_spectrum_blocking(Some(PROXIBackend::ProteomeXchange))
+            .get_spectrum_blocking(Some(PROXIBackend::ProteomeXchange), None)
             .unwrap();
         assert!(!response.is_empty());
     }
@@ -1183,7 +1192,7 @@ mod test {
             "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"] {
             println!("Trying: {usi}");
             let usi: USI = usi.parse().unwrap();
-            let (_, response) = usi.get_spectrum_blocking(None).unwrap();
+            let (_, response) = usi.get_spectrum_blocking(None, None).unwrap();
             assert!(!response.is_empty());
         }
     }
