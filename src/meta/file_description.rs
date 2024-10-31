@@ -1,10 +1,12 @@
-use std::path::Path;
-use std::io;
 use regex::{self, Regex};
+use std::io;
+use std::path::Path;
 
-use crate::io::infer_format;
 use crate::impl_param_described;
-use crate::params::{ControlledVocabulary, Param, ParamDescribed, ParamList, ParamValue, ValueRef, CURIE};
+use crate::io::infer_format;
+use crate::params::{
+    ControlledVocabulary, Param, ParamDescribed, ParamList, ParamValue, ValueRef, CURIE,
+};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SourceFile {
@@ -23,16 +25,39 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
+    /// Create a new [`SourceFile`] from a path.
+    ///
+    /// This function makes a minimal effort to infer information about the file,
+    /// using [`infer_format`] to populate [`SourceFile::file_format`]
     pub fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         let path = path.as_ref();
-        let (format, _gz) = infer_format(path)?;
+        let format = infer_format(path)
+            .ok()
+            .and_then(|(format, _)| format.as_param());
         let inst = Self {
-            name: path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
-            location: path.canonicalize()?.parent().map(|s| format!("file://{}", s.to_string_lossy())).unwrap_or_else(|| "file://".to_string()),
-            file_format: format.as_param(),
+            name: path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default(),
+            location: path
+                .canonicalize()?
+                .parent()
+                .map(|s| format!("file://{}", s.to_string_lossy()))
+                .unwrap_or_else(|| "file://".to_string()),
+            file_format: format,
             ..Default::default()
         };
         Ok(inst)
+    }
+
+    /// Convert [`SourceFile::id_format`] into a [`NativeSpectrumIDFormat`] carrying its own
+    /// parser machinery, if such a term mapping exists
+    pub fn native_id_format(&self) -> Option<NativeSpectrumIDFormat> {
+        self.id_format
+            .as_ref()
+            .and_then(|p| p.curie())
+            .and_then(|p| NativeSpectrumIdentifierFormatTerm::from_curie(&p))
+            .map(|t| t.build())
     }
 }
 
@@ -58,7 +83,8 @@ impl FileDescription {
     /// **Note**: This does not actually inspect the spectra in the file, only the metadata,
     /// which may be incorrect/missing.
     pub fn has_ms1_spectra(&self) -> bool {
-        self.get_param_by_curie(&CURIE::new(ControlledVocabulary::MS, 1000579)).is_some()
+        self.get_param_by_curie(&CURIE::new(ControlledVocabulary::MS, 1000579))
+            .is_some()
     }
 
     /// Checks to see if the "MSn spectrum" term is present in the file contents.
@@ -66,7 +92,8 @@ impl FileDescription {
     /// **Note**: This does not actually inspect the spectra in the file, only the metadata,
     /// which may be incorrect/missing.
     pub fn has_msn_spectra(&self) -> bool {
-        self.get_param_by_curie(&CURIE::new(ControlledVocabulary::MS, 1000580)).is_some()
+        self.get_param_by_curie(&CURIE::new(ControlledVocabulary::MS, 1000580))
+            .is_some()
     }
 
     pub fn has_contents(&self) -> bool {
@@ -85,7 +112,6 @@ impl ParamDescribed for FileDescription {
         &mut self.contents
     }
 }
-
 
 crate::cvmap! {
     #[flag_type=&str]
@@ -186,7 +212,6 @@ crate::cvmap! {
     //[[[end]]] (checksum: 09215365fe33b7f82c1ce9ac64aab99a)
 }
 
-
 /// A text-based schema that defines how native spectrum identifiers are formatted.
 ///
 /// These patterns are often found in mzML-compatible formats.
@@ -203,11 +228,42 @@ impl From<NativeSpectrumIdentifierFormatTerm> for NativeSpectrumIDFormat {
     }
 }
 
+#[derive(Debug, Clone, thiserror::Error, PartialEq)]
+pub enum NativeIDFormatError {
+    #[error("{term:?} required {expected} arguments, but received {received} arguments")]
+    IncorrectArgumentNumber {
+        term: NativeSpectrumIdentifierFormatTerm,
+        expected: usize,
+        received: usize,
+    },
+    #[error("{term:?} did not match {text}")]
+    PatternMismatch {
+        term: NativeSpectrumIdentifierFormatTerm,
+        text: String,
+    },
+}
+
 impl NativeSpectrumIDFormat {
     pub fn new(term: NativeSpectrumIdentifierFormatTerm) -> Self {
         let parser = term.parser();
-        let field_names = parser.capture_names().skip(1).map(|s| s.map(|i| i.to_string())).collect();
-        Self { term, parser, field_names }
+        let field_names = parser
+            .capture_names()
+            .skip(1)
+            .map(|s| s.map(|i| i.to_string()))
+            .collect();
+        Self {
+            term,
+            parser,
+            field_names,
+        }
+    }
+
+    pub const fn name(&self) -> &str {
+        &self.term.name()
+    }
+
+    pub const fn curie(&self) -> CURIE {
+        CURIE::new(self.term.controlled_vocabulary(), self.term.accession())
     }
 
     /// This parses the provided string, returning the captured groups of the ID pattern if they are present
@@ -216,43 +272,69 @@ impl NativeSpectrumIDFormat {
         self.parser.captures(ident)
     }
 
+    /// This parses the provided string, returning the capture groups as (name, value) pairs they are present
+    pub fn parse_named<'h>(
+        &self,
+        ident: &'h str,
+    ) -> Result<Vec<(Option<String>, &'h str)>, NativeIDFormatError> {
+        if let Some(hits) = self.parser.captures(ident) {
+            Ok(self
+                .parser
+                .capture_names()
+                .enumerate()
+                .map(|(i, name)| {
+                    let m = if let Some(name_) = name {
+                        hits.name(name_).unwrap()
+                    } else {
+                        hits.get(i).unwrap()
+                    };
+                    (name.map(|s| s.to_string()), m.as_str())
+                })
+                .collect())
+        } else {
+            Err(NativeIDFormatError::PatternMismatch {
+                term: self.term,
+                text: ident.to_string(),
+            })
+        }
+    }
+
     /// Given the field values of a nativeID format, create string in that format
-    ///
-    /// # Note
-    /// This method creates a new regular expression every time.
-    pub fn format<'h>(&self, values: impl IntoIterator<Item = ValueRef<'h>>) -> String {
+    pub fn format<'h>(
+        &self,
+        values: impl IntoIterator<Item = ValueRef<'h>>,
+    ) -> Result<String, NativeIDFormatError> {
         let mut buffer = String::with_capacity(64);
         let names = &self.field_names;
-        let n_names= names.len().saturating_sub(1);
-        for (i, (k, v)) in names.into_iter().skip(1).zip(values).enumerate() {
+        let n_names = names.len().saturating_sub(1);
+        let values: Vec<_> = values.into_iter().collect();
+        if values.len() != names.len() {
+            return Err(NativeIDFormatError::IncorrectArgumentNumber {
+                term: self.term,
+                expected: names.len(),
+                received: values.len(),
+            });
+        }
+        for (i, (k, v)) in names.into_iter().zip(values).enumerate() {
             match k {
                 Some(k) => {
                     buffer.push_str(k);
                     buffer.push_str("=");
                     buffer.push_str(&v.as_str());
-                },
+                }
                 None => {
                     buffer.push_str(&v.as_str());
-                },
+                }
             };
             if i < n_names {
                 buffer.push(' ');
             }
-        };
-        buffer
+        }
+        Ok(buffer)
     }
 }
 
-
 impl NativeSpectrumIdentifierFormatTerm {
-    // pub fn from_curie(curie: &CURIE) -> Option<Self> {
-    //     if curie.controlled_vocabulary == ControlledVocabulary::MS {
-    //         Self::from_accession(curie.accession)
-    //     } else {
-    //         None
-    //     }
-    // }
-
     /// Create a new [`regex::Regex`] for this identifier format.
     pub fn parser(&self) -> regex::Regex {
         regex::Regex::new(self.flags()).unwrap()
@@ -263,7 +345,7 @@ impl NativeSpectrumIdentifierFormatTerm {
     ///
     /// # Note
     /// This method creates a new regular expression on each invocation, making it expensive to invoke.
-    /// If you must call this repeatedly, instead use [`NativeSpectrumIdentifierFormatTerm::parser`] to create a
+    /// If you must call this repeatedly, instead use [`NativeSpectrumIdentifierFormatTerm::build`] to create a
     /// the regular expression once and re-use it directly.
     pub fn parse<'h>(&self, ident: &'h str) -> Option<regex::Captures<'h>> {
         let parser = self.parser();
@@ -279,50 +361,21 @@ impl NativeSpectrumIdentifierFormatTerm {
     /// Given the field values of a nativeID format, create string in that format
     ///
     /// # Note
-    /// This method creates a new regular expression every time.
+    /// This method creates a new expression formatter every time.
+    /// Use [`NativeSpectrumIdentifierFormatTerm::build`] to create a re-useable
+    /// parser/formatter.
     pub fn format<'h>(&self, values: impl IntoIterator<Item = ValueRef<'h>>) -> String {
-        let parser = self.parser();
-        let mut buffer = String::with_capacity(64);
-        let names = parser.capture_names();
-        let n_names= names.len().saturating_sub(2);
-        for (i, (k, v)) in names.into_iter().skip(1).zip(values).enumerate() {
-            match k {
-                Some(k) => {
-                    buffer.push_str(k);
-                    buffer.push_str("=");
-                    buffer.push_str(&v.as_str());
-                },
-                None => {
-                    buffer.push_str(&v.as_str());
-                },
-            };
-            if i < n_names {
-                buffer.push(' ');
-            }
-        };
-        buffer
+        self.build().format(values).unwrap()
     }
 
     /// This parses the provided string, returning the capture groups as (name, value) pairs they are present.
     ///
     /// # Note
     /// This method creates a new regular expression on each invocation, making it expensive to invoke.
-    /// If you must call this repeatedly, instead use [`NativeSpectrumIdentifierFormatTerm::parser`] to create a
+    /// If you must call this repeatedly, instead use [`NativeSpectrumIdentifierFormatTerm::build`] to create a
     /// the regular expression once and re-use it directly.
     pub fn parse_named<'h>(&self, ident: &'h str) -> Vec<(Option<String>, &'h str)> {
-        let parser = self.parser();
-        if let Some(hits) = parser.captures(ident) {
-            parser.capture_names().enumerate().map(|(i, name)| {
-                let m = if let Some(name_) = name {
-                    hits.name(name_).unwrap()
-                } else {
-                    hits.get(i).unwrap()
-                };
-                (name.map(|s| s.to_string()), m.as_str())
-            }).collect()
-        } else {
-            Vec::new()
-        }
+        self.build().parse_named(ident).unwrap()
     }
 }
 
@@ -471,21 +524,39 @@ crate::cvmap! {
     //[[[end]]] (checksum: 144dff32032929c664857bb8d843810a)
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
     fn test_parser() {
-        let ident = NativeSpectrumIdentifierFormatTerm::ThermoNativeIDFormat.parse("controllerType=0 controllerNumber=1 scan=25788").unwrap();
+        let ident = NativeSpectrumIdentifierFormatTerm::ThermoNativeIDFormat
+            .parse("controllerType=0 controllerNumber=1 scan=25788")
+            .unwrap();
         let scan_number = ident.name("scan").unwrap().as_str();
         assert_eq!(scan_number, "25788");
     }
 
     #[test]
     fn test_format() {
-        let fmt = NativeSpectrumIdentifierFormatTerm::ThermoNativeIDFormat.format([ValueRef::Int(0), ValueRef::Int(1), ValueRef::Int(25788)]);
-        assert_eq!(fmt, "controllerType=0 controllerNumber=1 scan=25788")
+        let fmt = NativeSpectrumIdentifierFormatTerm::ThermoNativeIDFormat.format([
+            ValueRef::Int(0),
+            ValueRef::Int(1),
+            ValueRef::Int(25788),
+        ]);
+        assert_eq!(fmt, "controllerType=0 controllerNumber=1 scan=25788");
+
+        let fmt = NativeSpectrumIdentifierFormatTerm::ThermoNativeIDFormat
+            .build()
+            .format([ValueRef::Int(0), ValueRef::Int(1)])
+            .unwrap_err();
+        assert_eq!(
+            fmt,
+            NativeIDFormatError::IncorrectArgumentNumber {
+                term: NativeSpectrumIdentifierFormatTerm::ThermoNativeIDFormat,
+                expected: 3,
+                received: 2
+            }
+        );
     }
 }
