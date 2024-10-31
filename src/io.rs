@@ -18,6 +18,7 @@ pub(crate) mod compression;
 pub use crate::io::infer_format::{
     infer_format, infer_from_path, infer_from_stream, MZReader, MZReaderType,
     MassSpectrometryFormat, MassSpectrometryReadWriteProcess, Sink, Source,
+    MZReaderBuilder,
 };
 pub use crate::io::mgf::{MGFError, MGFReader, MGFWriter};
 #[cfg(feature = "async")]
