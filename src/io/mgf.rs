@@ -90,6 +90,7 @@ struct SpectrumBuilder<
     pub intensity_array: Vec<f32>,
     pub charge_array: Vec<i32>,
     pub has_charge: u32,
+    pub precursor_charge: Option<i32>,
     pub detail_level: DetailLevel,
     empty_metadata: bool,
     centroided_type: PhantomData<C>,
@@ -114,6 +115,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Default for SpectrumB
             intensity_array: Default::default(),
             charge_array: Default::default(),
             has_charge: Default::default(),
+            precursor_charge: Default::default(),
             detail_level: Default::default(),
             centroided_type: Default::default(),
             deconvoluted_type: Default::default(),
@@ -341,17 +343,8 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                         .map_err(|e| warn!("Failed to parse PEPMASS intensity {value}: {e}"))
                         .unwrap_or_default();
                     let charge: Option<i32> = match parts.next() {
-                        Some(c) => match c.parse::<i32>() {
-                            Ok(val) => Some(val),
-                            Err(e) => {
-                                self.state = MGFParserState::Error;
-                                self.error = Some(MGFError::MalformedHeaderLine(format!(
-                                    "Malformed charge value in PEPMASS header {value}: {e}"
-                                )));
-                                return false;
-                            }
-                        },
-                        None => None,
+                        Some(c) => self.parse_charge(c),
+                        None => builder.precursor_charge,
                     };
                     builder.description.precursor = Some(Precursor {
                         ions: vec![SelectedIon {
@@ -364,40 +357,16 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                     });
                 }
                 "CHARGE" => {
-                    let (sign, value, tail_sign) = if let Some(stripped) = value.strip_suffix('+') {
-                        (1, stripped, true)
-                    } else if let Some(stripped) = value.strip_suffix('-') {
-                        (-1, stripped, true)
-                    } else {
-                        (1, value, false)
-                    };
-
-                    if tail_sign && (value.starts_with('-') || value.starts_with('+')) {
-                        self.state = MGFParserState::Error;
-                        self.error = Some(MGFError::MalformedHeaderLine(format!(
-                            "Could not parse CHARGE header {value}"
-                        )));
-                        return false;
-                    }
-
-                    match value.parse::<i32>() {
-                        Ok(z) => {
-                            if let Some(ion) = builder
-                                .description
-                                .precursor
-                                .get_or_insert_with(Precursor::default)
-                                .iter_mut()
-                                .last()
-                            {
-                                ion.charge = Some(sign * z);
-                            }
-                        }
-                        Err(e) => {
-                            self.state = MGFParserState::Error;
-                            self.error = Some(MGFError::MalformedHeaderLine(format!(
-                                "Could not parse CHARGE header {value} : {e}"
-                            )));
-                            return false;
+                    builder.precursor_charge = self.parse_charge(value);
+                    if let Some(ion) = builder
+                        .description
+                        .precursor
+                        .get_or_insert_with(Precursor::default)
+                        .iter_mut()
+                        .last()
+                    {
+                        if ion.charge.is_none() {
+                            ion.charge = builder.precursor_charge
                         }
                     }
                 }
@@ -415,6 +384,35 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                 "No '=' in header line".into(),
             ));
             false
+        }
+    }
+
+    fn parse_charge(&mut self, value: &str) -> Option<i32> {
+        let (sign, value, tail_sign) = if let Some(stripped) = value.strip_suffix('+') {
+            (1, stripped, true)
+        } else if let Some(stripped) = value.strip_suffix('-') {
+            (-1, stripped, true)
+        } else {
+            (1, value, false)
+        };
+
+        if tail_sign && (value.starts_with('-') || value.starts_with('+')) {
+            self.state = MGFParserState::Error;
+            self.error = Some(MGFError::MalformedHeaderLine(format!(
+                "Could not parse charge value {value}"
+            )));
+            return None;
+        }
+
+        match value.parse::<i32>() {
+            Ok(z) => Some(sign * z),
+            Err(e) => {
+                self.state = MGFParserState::Error;
+                self.error = Some(MGFError::MalformedHeaderLine(format!(
+                    "Could not parse charge value {value} : {e}"
+                )));
+                return None;
+            }
         }
     }
 
@@ -1197,7 +1195,7 @@ mod test {
             }
         }
         assert_eq!(ms1_count, 0);
-        assert_eq!(msn_count, 34);
+        assert_eq!(msn_count, 35);
     }
 
     #[test]
@@ -1224,7 +1222,7 @@ mod test {
             })
         }
         assert_eq!(ms1_count, 0);
-        assert_eq!(msn_count, 34);
+        assert_eq!(msn_count, 35);
     }
 
     #[test]

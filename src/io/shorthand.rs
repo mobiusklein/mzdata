@@ -310,7 +310,7 @@ mod test {
         assert_eq!(val.len(), 48);
         let val: Vec<_> =
             mz_read!("./test/data/small.mgf".as_ref(), reader => { reader.collect() })?;
-        assert_eq!(val.len(), 34);
+        assert_eq!(val.len(), 35);
         let val = mz_read!("./test/data/small.mzML".as_ref(), reader => { reader.file_description().clone() })?;
         assert_eq!(val.source_files.len(), 1);
         Ok(())
