@@ -483,6 +483,10 @@ impl<'transient, 'lifespan: 'transient> ByteArrayViewMut<'transient, 'lifespan> 
     fn view_mut(&'transient mut self) -> Result<&'transient mut Bytes, ArrayRetrievalError> {
         self.decode_mut()
     }
+
+    fn unit_mut(&mut self) -> &mut Unit {
+        &mut self.unit
+    }
 }
 
 impl_param_described_deferred!(DataArray);

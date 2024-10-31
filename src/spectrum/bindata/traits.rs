@@ -194,6 +194,13 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
 pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
     ByteArrayView<'transient, 'lifespan>
 {
+
+    /// Specify the unit of the data array
+    fn unit_mut(&mut self) -> &mut Unit;
+
+    /// Get a mutable view of the bytes backing this data array.
+    ///
+    /// This is in turn used by [`ByteArrayViewMut::coerce_mut`] to produce a typed array
     fn view_mut(&'transient mut self) -> Result<&'transient mut Bytes, ArrayRetrievalError>;
 
     fn coerce_from_mut<T: Clone + Sized>(
