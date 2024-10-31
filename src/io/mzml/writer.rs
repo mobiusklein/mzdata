@@ -1323,55 +1323,68 @@ where
 
         for scan in acq.scans.iter() {
             let mut scan_tag = bstart!("scan");
+            let had_ref = if let Some(sref) = scan.spectrum_reference.as_ref() {
+                attrib!("spectrumRef", sref, scan_tag);
+                true
+            } else {
+                false
+            };
+
             let id = instrument_id(&scan.instrument_configuration_id);
             attrib!("instrumentConfigurationRef", id, scan_tag);
             self.handle.write_event(Event::Start(scan_tag.borrow()))?;
-            self.handle.write_param(&self.ms_cv.const_param(
-                "scan start time",
-                ValueRef::Float(scan.start_time),
-                1000016,
-                Unit::Minute,
-            ))?;
 
-            self.handle.write_param(&self.ms_cv.const_param(
-                "ion injection time",
-                ValueRef::Float(scan.injection_time as f64),
-                1000927,
-                Unit::Millisecond,
-            ))?;
+            // If these are zero and we had a spectrumRef attribute, this must be an empty reference
+            if !(had_ref && scan.start_time == 0.0 && scan.injection_time == 0.0) {
+                self.handle.write_param(&self.ms_cv.const_param(
+                    "scan start time",
+                    ValueRef::Float(scan.start_time),
+                    1000016,
+                    Unit::Minute,
+                ))?;
+
+                self.handle.write_param(&self.ms_cv.const_param(
+                    "ion injection time",
+                    ValueRef::Float(scan.injection_time as f64),
+                    1000927,
+                    Unit::Millisecond,
+                ))?;
+            }
 
             for param in scan.params() {
                 self.handle.write_param(param)?
             }
 
-            let mut scan_window_list_tag = bstart!("scanWindowList");
-            let scan_window_list_count = scan.scan_windows.len().to_string();
+            if !scan.scan_windows.is_empty() {
+                let mut scan_window_list_tag = bstart!("scanWindowList");
+                let scan_window_list_count = scan.scan_windows.len().to_string();
 
-            attrib!("count", scan_window_list_count, scan_window_list_tag);
-            self.handle
-                .write_event(Event::Start(scan_window_list_tag.borrow()))?;
-            for window in scan.scan_windows.iter() {
-                let window_tag = bstart!("scanWindow");
-                self.handle.write_event(Event::Start(window_tag.borrow()))?;
+                attrib!("count", scan_window_list_count, scan_window_list_tag);
+                self.handle
+                    .write_event(Event::Start(scan_window_list_tag.borrow()))?;
+                for window in scan.scan_windows.iter() {
+                    let window_tag = bstart!("scanWindow");
+                    self.handle.write_event(Event::Start(window_tag.borrow()))?;
 
-                self.handle.write_param(&self.ms_cv.const_param(
-                    "scan window lower limit",
-                    ValueRef::Float(window.lower_bound as f64),
-                    1000501,
-                    Unit::MZ,
-                ))?;
+                    self.handle.write_param(&self.ms_cv.const_param(
+                        "scan window lower limit",
+                        ValueRef::Float(window.lower_bound as f64),
+                        1000501,
+                        Unit::MZ,
+                    ))?;
 
-                self.handle.write_param(&self.ms_cv.const_param(
-                    "scan window upper limit",
-                    ValueRef::Float(window.upper_bound as f64),
-                    1000500,
-                    Unit::MZ,
-                ))?;
+                    self.handle.write_param(&self.ms_cv.const_param(
+                        "scan window upper limit",
+                        ValueRef::Float(window.upper_bound as f64),
+                        1000500,
+                        Unit::MZ,
+                    ))?;
 
-                self.handle.write_event(Event::End(window_tag.to_end()))?;
+                    self.handle.write_event(Event::End(window_tag.to_end()))?;
+                }
+                self.handle
+                    .write_event(Event::End(scan_window_list_tag.to_end()))?;
             }
-            self.handle
-                .write_event(Event::End(scan_window_list_tag.to_end()))?;
             self.handle.write_event(Event::End(scan_tag.to_end()))?;
         }
         end_event!(self, scan_list_tag);

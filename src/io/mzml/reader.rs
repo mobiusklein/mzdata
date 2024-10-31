@@ -684,6 +684,9 @@ impl<
                                     .as_mut()
                                     .expect("An instrument ID map was not provided")
                                     .get(&attr.unescape_value().expect("Error decoding id"));
+                            } else if attr.key.as_ref() == b"spectrumRef" {
+                                let sref = attr.unescape_value().expect("Error decoding spectrumRef");
+                                scan_event.spectrum_reference = Some(sref.into());
                             }
                         }
                         Err(msg) => {
