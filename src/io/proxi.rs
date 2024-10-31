@@ -151,7 +151,13 @@ fn transform_response(
     response: Result<PROXIResponse, reqwest::Error>,
 ) -> Result<(PROXIBackend, Vec<PROXISpectrum>), PROXIError> {
     match response {
-        Ok(PROXIResponse::Spectra(s)) => Ok((backend, s)),
+        Ok(PROXIResponse::Spectra(s))
+            if s.iter()
+                .all(|s| s.status.is_none_or(|s| s == Status::Readable)) =>
+        {
+            Ok((backend, s))
+        }
+        Ok(PROXIResponse::Spectra(s)) => Err(PROXIError::PeakUnavailable(backend, s)),
         Ok(PROXIResponse::Error {
             detail,
             status,
@@ -199,6 +205,8 @@ pub enum PROXIError {
         /// The error kind, often "about:blank"
         kind: String,
     },
+    /// When the server returns only spectra with [`Status::PeakUnavailable`].
+    PeakUnavailable(PROXIBackend, Vec<PROXISpectrum>),
     /// An error when none of the aggregated backends returned a positive or negative result
     NotFound,
 }
@@ -236,7 +244,7 @@ pub enum PROXIErrorType {
     Other(String),
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, PartialOrd)]
 pub enum Status {
     #[serde(rename = "READABLE")]
     Readable,
@@ -630,7 +638,7 @@ where
 use serde::de::{self, Visitor};
 
 /// MassIVE returns a list of strings instead of a list of numbers, this type can be deserialized if a number of string is given in the JSON
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Wrapped<T>(T);
 
 impl<T> std::ops::Deref for Wrapped<T> {
