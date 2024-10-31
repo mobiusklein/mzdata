@@ -28,6 +28,23 @@ pub enum PROXIBackend {
     Custom(String),
 }
 
+impl std::fmt::Display for PROXIBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::PeptideAtlas => "PeptideAtlas",
+                Self::MassIVE => "MassIVE",
+                Self::Pride => "PRIDE",
+                Self::Jpost => "jPOST",
+                Self::ProteomeXchange => "ProteomeXchange",
+                Self::Custom(_) => "Custom",
+            }
+        )
+    }
+}
+
 impl PROXIBackend {
     const ALL: &[Self] = &[
         Self::PeptideAtlas,
@@ -242,6 +259,26 @@ pub enum PROXIErrorType {
     TooFewFields,
     #[serde(untagged)]
     Other(String),
+}
+
+impl std::fmt::Display for PROXIErrorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::DataSetNotHere => "DataSetNotHere",
+                Self::MsRunNotFound => "MsRunNotFound",
+                Self::ScanNotFound => "ScanNotFound",
+                Self::UnrecognizedIdentifierFormat => "UnrecognizedIdentifierFormat",
+                Self::MalformedInterpretation => "MalformedInterpretation",
+                Self::UnrecognizedIndexFlag => "UnrecognizedIndexFlag",
+                Self::MissingPreamble => "MissingPreamble",
+                Self::TooFewFields => "TooFewFields",
+                Self::Other(o) => o,
+            }
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, PartialOrd)]
