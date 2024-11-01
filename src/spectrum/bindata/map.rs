@@ -16,7 +16,6 @@ use super::encodings::{ArrayRetrievalError, ArrayType, BinaryCompressionType};
 use super::traits::{ByteArrayView, ByteArrayViewMut};
 use super::BinaryDataArrayType;
 
-
 /// A collection of [`DataArray`]s that are identified by name.
 #[derive(Debug, Default, Clone)]
 pub struct BinaryArrayMap {
@@ -374,6 +373,65 @@ pub struct BinaryArrayMap3D {
 }
 
 impl BinaryArrayMap3D {
+    pub fn from_ion_mobility_dimension(
+        ion_mobility_dimension: Vec<f64>,
+        ion_mobility_type: ArrayType,
+        ion_mobility_unit: Unit,
+    ) -> BinaryArrayMap3D {
+        let ion_mobility_index: HashMap<_, _> = ion_mobility_dimension
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(i, f)| {
+                (
+                    NonNaNF64::wrap(f)
+                        .unwrap_or_else(|| panic!("Expected non-NaN value for ion mobility")),
+                    i,
+                )
+            })
+            .collect();
+        let mut arrays = Vec::new();
+        arrays.resize_with(ion_mobility_dimension.len(), BinaryArrayMap::default);
+        Self {
+            ion_mobility_dimension,
+            ion_mobility_type,
+            ion_mobility_unit,
+            arrays,
+            ion_mobility_index,
+            additional_arrays: Default::default(),
+        }
+    }
+
+    pub fn from_ion_mobility_dimension_and_arrays(
+        ion_mobility_dimension: Vec<f64>,
+        ion_mobility_type: ArrayType,
+        ion_mobility_unit: Unit,
+        arrays: Vec<BinaryArrayMap>,
+    ) -> BinaryArrayMap3D {
+        let ion_mobility_index: HashMap<_, _> = ion_mobility_dimension
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(i, f)| {
+                (
+                    NonNaNF64::wrap(f)
+                        .unwrap_or_else(|| panic!("Expected non-NaN value for ion mobility")),
+                    i,
+                )
+            })
+            .collect();
+
+        Self {
+            ion_mobility_dimension,
+            ion_mobility_type,
+            ion_mobility_unit,
+            arrays,
+            ion_mobility_index,
+            additional_arrays: Default::default(),
+        }
+    }
+
+    /// Get the associated arrays at the requested ion mobility, if they exist
     pub fn get_ion_mobility(&self, ion_mobility: f64) -> Option<&BinaryArrayMap> {
         if let Some(i) = NonNaNF64::wrap(ion_mobility) {
             if let Some(i) = self.ion_mobility_index.get(&i) {
@@ -386,10 +444,15 @@ impl BinaryArrayMap3D {
         }
     }
 
-    pub fn search_ion_mobility(&self, ion_mobility: f64, error_tolerance: f64) -> Option<(&BinaryArrayMap, f64)> {
-        match self.ion_mobility_dimension.binary_search_by(|x: &f64| {
-            x.total_cmp(&ion_mobility)
-        }) {
+    pub fn search_ion_mobility(
+        &self,
+        ion_mobility: f64,
+        error_tolerance: f64,
+    ) -> Option<(&BinaryArrayMap, f64)> {
+        match self
+            .ion_mobility_dimension
+            .binary_search_by(|x: &f64| x.total_cmp(&ion_mobility))
+        {
             Ok(i) => {
                 let delta = ion_mobility - self.ion_mobility_dimension[i];
                 if delta.abs() <= error_tolerance {
@@ -397,10 +460,10 @@ impl BinaryArrayMap3D {
                 } else {
                     None
                 }
-            },
+            }
             Err(i) => {
                 if self.arrays.is_empty() {
-                    return None
+                    return None;
                 }
                 let delta = ion_mobility - self.ion_mobility_dimension[i];
                 if delta.abs() <= error_tolerance {
@@ -408,7 +471,20 @@ impl BinaryArrayMap3D {
                 } else {
                     None
                 }
-            },
+            }
+        }
+    }
+
+    /// Get the a mutable reference to the associated arrays at the requested ion mobility, if they exist
+    pub fn get_ion_mobility_mut(&mut self, ion_mobility: f64) -> Option<&mut BinaryArrayMap> {
+        if let Some(i) = NonNaNF64::wrap(ion_mobility) {
+            if let Some(i) = self.ion_mobility_index.get(&i) {
+                self.arrays.get_mut(*i)
+            } else {
+                None
+            }
+        } else {
+            None
         }
     }
 
@@ -421,6 +497,15 @@ impl BinaryArrayMap3D {
             .zip(self.arrays.iter())
     }
 
+    /// Iterate over the ion mobility dimension and a mutable reference to the associated arrays
+    /// at each point.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (f64, &mut BinaryArrayMap)> {
+        self.ion_mobility_dimension
+            .iter()
+            .copied()
+            .zip(self.arrays.iter_mut())
+    }
+
     /// Flatten this array into a single [`BinaryArrayMap`].
     ///
     /// # Errors
@@ -429,10 +514,8 @@ impl BinaryArrayMap3D {
     pub fn unstack(&self) -> Result<BinaryArrayMap, ArrayRetrievalError> {
         let mut destination = self.additional_arrays.clone();
 
-        let mut im_dim = DataArray::from_name_and_type(
-            &self.ion_mobility_type,
-            BinaryDataArrayType::Float32,
-        );
+        let mut im_dim =
+            DataArray::from_name_and_type(&self.ion_mobility_type, BinaryDataArrayType::Float64);
         im_dim.unit = self.ion_mobility_unit;
 
         destination.add(im_dim);
@@ -471,34 +554,44 @@ impl BinaryArrayMap3D {
                 if let Some(i) = indices.get(bin_i).copied() {
                     if let Some(mz) = mz_axes[bin_i].get(i).copied() {
                         if (mz - current_mz).abs() < 1e-3 {
-                            destination.get_mut(&ArrayType::MZArray).as_mut().unwrap().push(mz)?;
-                            destination.get_mut(&self.ion_mobility_type).as_mut().unwrap().push(im)?;
+                            destination
+                                .get_mut(&ArrayType::MZArray)
+                                .as_mut()
+                                .unwrap()
+                                .push(mz)?;
+                            destination
+                                .get_mut(&self.ion_mobility_type)
+                                .as_mut()
+                                .unwrap()
+                                .push(im)?;
                             for (key, array) in layer.iter() {
                                 if *key == ArrayType::MZArray {
                                     continue;
                                 }
                                 match array.dtype() {
-                                    BinaryDataArrayType::Unknown => panic!("Cannot re-sort opaque or unknown dimension data types"),
+                                    BinaryDataArrayType::Unknown => panic!(
+                                        "Cannot re-sort opaque or unknown dimension data types"
+                                    ),
                                     BinaryDataArrayType::ASCII => {
                                         let val = array.decode()?[i];
                                         destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                    },
+                                    }
                                     BinaryDataArrayType::Float64 => {
                                         let val = array.to_f64()?[i];
                                         destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                    },
+                                    }
                                     BinaryDataArrayType::Float32 => {
                                         let val = array.to_f32()?[i];
                                         destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                    },
+                                    }
                                     BinaryDataArrayType::Int64 => {
                                         let val = array.to_i64()?[i];
                                         destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                    },
+                                    }
                                     BinaryDataArrayType::Int32 => {
                                         let val = array.to_i32()?[i];
                                         destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                    },
+                                    }
                                 }
                             }
                             indices[bin_i] += 1;
@@ -554,7 +647,7 @@ impl BinaryArrayMap3D {
             }
             if array.data_len()? != im_dim.len() {
                 this.additional_arrays.add(array.clone());
-                continue
+                continue;
             }
             match array.dtype() {
                 BinaryDataArrayType::Unknown => {

@@ -1,6 +1,6 @@
 [package]
 name = "mzdata"
-version = "0.34.0"
+version = "0.35.0"
 edition = "2018"
 keywords = ['mass-spectrometry', 'mzml', 'mgf']
 
@@ -125,6 +125,7 @@ sha1 = "0.10.6"
 base16ct = { version = "0.2.0", features = ["alloc"] }
 chrono = "0.4.37"
 bitflags = "2.5.0"
+identity-hash = "0.1.0"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
@@ -145,9 +146,9 @@ features = [
     "nalgebra",
     "mzmlb",
     "async",
-    "thermorawfilereader",
     "proxi",
     "proxi-async",
+    "thermo",
     "doc-only",
 ]
 no-default-features = true

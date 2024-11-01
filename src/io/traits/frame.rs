@@ -118,7 +118,7 @@ pub trait IonMobilityFrameSource<
         IonMobilityFrameIterator::new(self)
     }
 
-    /// Create a new `SpectrumIterator` over `self` and use that state to drive a `SpectrumGroupIterator`
+    /// Create a new [`IonMobilityFrameIterator`] over `self` and use that state to drive a [`IonMobilityFrameGroupingIterator`]
     fn groups(&mut self) -> IonMobilityFrameGroupingIterator<IonMobilityFrameIterator<'_, C, D, S, Self>, C, D, S>
     where
         Self: Sized,
@@ -126,7 +126,7 @@ pub trait IonMobilityFrameSource<
         IonMobilityFrameGroupingIterator::new(self.iter())
     }
 
-    /// Consume `self` to create a `SpectrumGroupIterator`. This is ideal for non-rewindable streams
+    /// Consume `self` to create a [`IonMobilityFrameGroupingIterator`]. This is ideal for non-rewindable streams
     /// like [`io::stdin`] which don't implement [`io::Seek`]
     fn into_groups(self) -> IonMobilityFrameGroupingIterator<Self, C, D, S>
     where
@@ -401,6 +401,18 @@ impl<
             _c: PhantomData,
             _d: PhantomData,
         }
+    }
+
+    pub fn get_inner(&self) -> &R {
+        &self.source
+    }
+
+    pub fn get_mut(&mut self) -> &mut R {
+        &mut self.source
+    }
+
+    pub fn into_inner(self) -> R {
+        self.source
     }
 }
 

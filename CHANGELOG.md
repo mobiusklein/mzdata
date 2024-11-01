@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.34.0] - 2024-10-31
+
+### Fixed
+
+- Fix parsing precursor charge in MGF files (#13)
+* fix parsing precursor charge in MGF files
+
+  This fixes two issues:
+  - the charge value in the PEPMASS header can have the same suffixed
+    format as the CHARGE header
+  - the order of the headers isn't determined, so the charge value should
+    still be saved correctly if the CHARGE header is before the PEPMASS
+    header
+
 ## [0.33.0] - 2024-10-17
 
 ### Fixed
@@ -465,7 +479,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.33.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/mobiusklein/mzdata/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/mobiusklein/mzdata/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/mobiusklein/mzdata/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/mobiusklein/mzdata/compare/v0.30.0...v0.31.0

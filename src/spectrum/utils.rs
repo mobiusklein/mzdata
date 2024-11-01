@@ -20,7 +20,7 @@ use super::MultiLayerSpectrum;
 /// expected to be quite irregular.
 #[derive(Debug)]
 pub struct Collator<T: Send> {
-    pub waiting: HashMap<usize, T>,
+    pub waiting: HashMap<usize, T, identity_hash::BuildIdentityHasher<usize>>,
     pub next_key: usize,
     pub ticks: usize,
     pub done: bool,

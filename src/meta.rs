@@ -2,12 +2,12 @@
  */
 #[macro_use]
 mod file_description;
+mod activation;
 mod data_processing;
 mod instrument;
 mod run;
 mod sample;
 mod software;
-mod activation;
 #[macro_use]
 mod traits;
 
@@ -17,16 +17,24 @@ pub use data_processing::{
     DataProcessing, DataProcessingAction, DataTransformationAction, FormatConversion,
     ProcessingMethod,
 };
-pub use software::{custom_software_name, Software};
+pub use software::{
+    custom_software_name, Software, SoftwareTerm, SoftwareType as SoftwareTypeFlags
+};
 
-pub use file_description::{FileDescription, SourceFile, NativeSpectrumIdentifierFormatTerm, MassSpectrometerFileFormatTerm};
+pub use file_description::{
+    FileDescription, MassSpectrometerFileFormatTerm, NativeIDFormatError, NativeSpectrumIDFormat,
+    NativeSpectrumIdentifierFormatTerm, SourceFile
+};
 
-pub use instrument::{Component, ComponentType, InstrumentConfiguration, DetectorTypeTerm, MassAnalyzerTerm, InletTypeTerm, IonizationTypeTerm};
+pub use instrument::{
+    Component, ComponentType, DetectorTypeTerm, InletTypeTerm, InstrumentConfiguration,
+    IonizationTypeTerm, MassAnalyzerTerm
+};
 
+pub use activation::{DissociationEnergy, DissociationEnergyTerm, DissociationMethodTerm};
 pub use run::MassSpectrometryRun;
-pub use traits::MSDataFileMetadata;
 pub use sample::Sample;
-pub use activation::{DissociationMethodTerm, DissociationEnergyTerm, DissociationEnergy};
+pub use traits::MSDataFileMetadata;
 
 use crate::params::{ParamValueParseError, Value, ValueRef};
 
@@ -391,18 +399,30 @@ impl From<u16> for ValueType {
 impl ValueType {
     pub fn parse(&self, s: String) -> Result<Value, ParamValueParseError> {
         let v = match *self {
-            Self::Integer | Self::NonNegativeInteger | Self::PositiveInteger => Value::Int(s.parse().map_err(|_| ParamValueParseError::FailedToExtractInt(Some(s)))?),
-            Self::Float | Self::Double => Value::Float(s.parse().map_err(|_| ParamValueParseError::FailedToExtractFloat(Some(s)))?),
-            _ => Value::String(s)
+            Self::Integer | Self::NonNegativeInteger | Self::PositiveInteger => Value::Int(
+                s.parse()
+                    .map_err(|_| ParamValueParseError::FailedToExtractInt(Some(s)))?,
+            ),
+            Self::Float | Self::Double => Value::Float(
+                s.parse()
+                    .map_err(|_| ParamValueParseError::FailedToExtractFloat(Some(s)))?,
+            ),
+            _ => Value::String(s),
         };
         Ok(v)
     }
 
     pub fn parse_str<'a>(&self, s: &'a str) -> Result<ValueRef<'a>, ParamValueParseError> {
         let v = match *self {
-            Self::Integer | Self::NonNegativeInteger | Self::PositiveInteger => ValueRef::Int(s.parse().map_err(|_| ParamValueParseError::FailedToExtractInt(Some(s.to_string())))?),
-            Self::Float | Self::Double => ValueRef::Float(s.parse().map_err(|_| ParamValueParseError::FailedToExtractFloat(Some(s.to_string())))?),
-            _ => ValueRef::String(Cow::Borrowed(s))
+            Self::Integer | Self::NonNegativeInteger | Self::PositiveInteger => ValueRef::Int(
+                s.parse()
+                    .map_err(|_| ParamValueParseError::FailedToExtractInt(Some(s.to_string())))?,
+            ),
+            Self::Float | Self::Double => ValueRef::Float(
+                s.parse()
+                    .map_err(|_| ParamValueParseError::FailedToExtractFloat(Some(s.to_string())))?,
+            ),
+            _ => ValueRef::String(Cow::Borrowed(s)),
         };
         Ok(v)
     }

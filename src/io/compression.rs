@@ -1,4 +1,3 @@
-use std::mem::swap;
 use std::{io, path};
 
 use flate2::bufread::MultiGzDecoder;

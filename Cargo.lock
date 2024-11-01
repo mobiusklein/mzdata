@@ -1423,6 +1423,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
+name = "identity-hash"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfdd7caa900436d8f13b2346fe10257e0c05c1f1f9e351f4f5d57c03bd5f45da"
+
+[[package]]
 name = "idna"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1763,7 +1769,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata"
-version = "0.34.0"
+version = "0.35.0"
 dependencies = [
  "base16ct",
  "base64-simd",
@@ -1778,6 +1784,7 @@ dependencies = [
  "futures",
  "hdf5",
  "hdf5-sys",
+ "identity-hash",
  "indexmap",
  "lazy_static",
  "libz-sys",

@@ -134,6 +134,7 @@ pub struct ScanEvent {
     pub scan_windows: ScanWindowList,
     pub instrument_configuration_id: u32,
     pub params: Option<Box<ParamList>>,
+    pub spectrum_reference: Option<Box<str>>,
 }
 
 pub(crate) const ION_MOBILITY_SCAN_TERMS: [CURIE; 4] = [
@@ -184,6 +185,7 @@ impl ScanEvent {
             scan_windows,
             instrument_configuration_id,
             params,
+            spectrum_reference: None,
         }
     }
 
