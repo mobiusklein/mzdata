@@ -874,19 +874,24 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                 "ms level" => {
                     this.ms_level = param.value.to_i32().expect("Failed to parse ms level") as u8;
                 }
-                "positive scan" => {
-                    this.polarity = ScanPolarity::Positive;
-                }
-                "negative scan" => {
-                    this.polarity = ScanPolarity::Negative;
-                }
-                "profile spectrum" => {
-                    this.signal_continuity = SignalContinuity::Profile;
-                }
-                "centroid spectrum" => {
-                    this.signal_continuity = SignalContinuity::Centroid;
-                }
-
+                "scan polarity" => match param.value.as_str().as_ref() {
+                    "positive scan" => {
+                        this.polarity = ScanPolarity::Positive;
+                    }
+                    "negative scan" => {
+                        this.polarity = ScanPolarity::Negative;
+                    }
+                    _ => (),
+                },
+                "spectrum representation" => match param.value.as_str().as_ref() {
+                    "profile spectrum" => {
+                        this.signal_continuity = SignalContinuity::Profile;
+                    }
+                    "centroid spectrum" => {
+                        this.signal_continuity = SignalContinuity::Centroid;
+                    }
+                    _ => (),
+                },
                 "scan start time" => {
                     if let Some(s) = this.acquisition.first_scan_mut() {
                         s.start_time = param
