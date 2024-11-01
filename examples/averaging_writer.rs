@@ -60,7 +60,8 @@ fn main() -> io::Result<()> {
         );
     });
 
-    let collator_task = thread::spawn(move || Collator::collate_sync(input_receiver, output_sender));
+    let collator_task =
+        thread::spawn(move || Collator::collate_sync(input_receiver, output_sender));
 
     let writer_task = thread::spawn(move || -> io::Result<()> {
         for (_, group) in output_receiver {

@@ -9,6 +9,8 @@ pub mod mzml;
 #[cfg(feature = "mzmlb")]
 pub mod mzmlb;
 mod offset_index;
+#[cfg(feature = "proxi")]
+pub mod proxi;
 mod shorthand;
 pub(crate) mod traits;
 mod utils;
@@ -45,4 +47,3 @@ pub mod thermo;
 pub use thermo::ThermoRawReader;
 
 pub mod usi;
-pub mod proxi;

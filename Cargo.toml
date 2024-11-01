@@ -79,6 +79,9 @@ doc-only = ["thermorawfilereader/doc-only"]
 
 async = ["tokio", "quick-xml/async-tokio"]
 
+proxi = ["reqwest"]
+proxi-async = ["proxi", "futures"]
+
 [dependencies]
 regex = "1"
 lazy_static = "1.4.0"
@@ -91,7 +94,9 @@ indexmap = { version = "2.0.0", features = ["serde"] }
 log = "0.4.20"
 mzpeaks = { version = ">=0.22.0,<1.0.0" }
 rayon = { version = ">=1.8.0,<2.0", optional = true }
-mzsignal = { version = ">=0.25.0,<1.0.0", default-features = false, optional = true, features = ['avx']}
+mzsignal = { version = ">=0.25.0,<1.0.0", default-features = false, optional = true, features = [
+    'avx',
+] }
 md5 = "0.7.0"
 tokio = { version = "1.32.0", optional = true, features = [
     "macros",
@@ -107,6 +112,8 @@ libz-sys = { version = "1.1", default-features = false, features = [
 ], optional = true }
 ndarray = { version = "0.15.6", optional = true }
 filename = { version = "0.1.1", optional = true }
+reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
+futures = { version = "0.3", optional = true }
 
 numpress = { version = "1.1.0", optional = true }
 bytemuck = { version = "1.18.0", features = ["extern_crate_alloc"] }
@@ -139,6 +146,8 @@ features = [
     "nalgebra",
     "mzmlb",
     "async",
+    "proxi",
+    "proxi-async",
     "thermo",
     "doc-only",
 ]

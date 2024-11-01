@@ -1,14 +1,316 @@
-use std::fmt::Display;
-use std::str::FromStr;
+use std::{
+    cmp::Ordering,
+    fmt::{self, Display},
+    marker::PhantomData,
+    str::FromStr,
+};
 
-use serde::{Deserialize, Serialize};
+use num_traits::AsPrimitive;
+use serde::{de::SeqAccess, Deserialize, Deserializer, Serialize};
 
-use super::usi::USI;
-use crate::params::{ControlledVocabulary, Param, ParamCow, Value, CURIE};
-use crate::spectrum::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, IsolationWindowState, MultiLayerSpectrum, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription};
-use crate::{curie, prelude::*};
+use crate::{
+    curie,
+    io::usi::USI,
+    params::{ControlledVocabulary, Param, ParamCow, Value, CURIE},
+    prelude::*,
+    spectrum::{
+        ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, IsolationWindowState,
+        MultiLayerSpectrum, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
+    },
+};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+/// The possible PROXI backends
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum PROXIBackend {
+    PeptideAtlas,
+    MassIVE,
+    Pride,
+    Jpost,
+    ProteomeXchange,
+    /// A custom backend with the given PROXI url, the pattern `{USI}` will be replaced with the actual usi in building the final request.
+    ///
+    /// For example the custom url `http://yourdomain.rs/proxi/v0.1/spectra?usi={USI}&resultType=full` will map to `http://yourdomain.rs/proxi/v0.1/spectra?usi=mzspec:ID:FILE:scan:SCAN&resultType=full`.
+    Custom(String),
+}
+
+impl std::fmt::Display for PROXIBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::PeptideAtlas => "PeptideAtlas",
+                Self::MassIVE => "MassIVE",
+                Self::Pride => "PRIDE",
+                Self::Jpost => "jPOST",
+                Self::ProteomeXchange => "ProteomeXchange",
+                Self::Custom(_) => "Custom",
+            }
+        )
+    }
+}
+
+impl PROXIBackend {
+    const ALL: &[Self] = &[
+        Self::PeptideAtlas,
+        Self::MassIVE,
+        Self::Pride,
+        Self::Jpost,
+        Self::ProteomeXchange,
+    ];
+
+    /// The PROXI server base url which needs concatenating of the USI at the end
+    fn proxi_url(&self, usi: &str) -> String {
+        match self {
+            Self::PeptideAtlas => format!("http://www.peptideatlas.org/api/proxi/v0.1/spectra?resultType=full&usi={usi}") ,
+            Self::MassIVE => format!("http://massive.ucsd.edu/ProteoSAFe/proxi/v0.1/spectra?resultType=full&usi={usi}"),
+            Self::Pride => format!("http://www.ebi.ac.uk/pride/proxi/archive/v0.1/spectra?resultType=full&usi={usi}"),
+            Self::Jpost => format!("https://repository.jpostdb.org/proxi/spectra?resultType=full&usi={usi}"),
+            Self::ProteomeXchange => format!("http://proteomecentral.proteomexchange.org/api/proxi/v0.1/spectra?resultType=full&usi={usi}"),
+            Self::Custom(url) => url.replace("{USI}", usi),
+        }
+    }
+}
+
+impl USI {
+    /// Download this USI using the [PROXI](https://github.com/HUPO-PSI/proxi-schemas/) API from
+    /// the given PROXI backend. If no PROXI backend is indicated it will try all known backends
+    /// sequentially and return the first successful spectrum. The result contains the backend that
+    /// ultimately succeeded as well as the list of returned spectra. This is a list because the
+    /// USI could contain the stem of the filename and the backend could have multiple formats for
+    /// that file in which case the data from each file format is returned.
+    ///
+    /// A [`reqwest::blocking::Client`] can be provided to create the requests, if no client is
+    /// provided a default client will be used. This is useful to reuse a client over multiple
+    /// requests for performance or if needed to use proxies to download the data.
+    ///
+    /// # Errors
+    /// It returns a [`PROXIError::IO`] when the network request or the parsing of the answer
+    /// failed. It returns [`PROXIError::Error`] if the backend returned an error. It returns
+    /// [`PROXIError::PeakUnavailable`] if all returned spectra have [`Status::PeakUnavailable`].
+    /// It returns [`PROXIError::NotFound`] if no backend gave any result (also no error) in the
+    /// case of the aggregate PROXI calling, this is a major error and should not occur readily.
+    ///
+    /// This function is only available with the feature `proxi`.
+    pub fn download_spectrum_blocking(
+        &self,
+        backend: Option<PROXIBackend>,
+        client: Option<reqwest::blocking::Client>,
+    ) -> Result<(PROXIBackend, Vec<PROXISpectrum>), PROXIError> {
+        backend.map_or_else(
+            || {
+                let client = client.unwrap_or_default();
+                let mut last_error = None;
+                PROXIBackend::ALL
+                    .iter()
+                    .find_map(|backend| {
+                        transform_response(
+                            backend.clone(),
+                            client
+                                .get(backend.proxi_url(&self.to_string()))
+                                .send()
+                                .and_then(reqwest::blocking::Response::json),
+                        )
+                        .map_err(|err| {
+                            last_error = Some(err);
+                        })
+                        .ok()
+                    })
+                    .ok_or(last_error.unwrap_or(PROXIError::NotFound))
+            },
+            |backend| {
+                transform_response(
+                    backend.clone(),
+                    reqwest::blocking::get(backend.proxi_url(&self.to_string()))
+                        .and_then(reqwest::blocking::Response::json),
+                )
+            },
+        )
+    }
+
+    /// Download this USI using the [PROXI](https://github.com/HUPO-PSI/proxi-schemas/) API from
+    /// the given PROXI backend. If no PROXI backend is indicated it will try all known backends
+    /// concurrently and return the first successful spectrum. The result contains the backend that
+    /// ultimately succeeded as well as the list of returned spectra. This is a list because the
+    /// USI could contain the stem of the filename and the backend could have multiple formats for
+    /// that file in which case the data from each file format is returned.
+    ///
+    /// A [`reqwest::Client`] can be provided to create the requests, if no client is
+    /// provided a default client will be used. This is useful to reuse a client over multiple
+    /// requests for performance or if needed to use proxies to download the data.
+    ///
+    /// # Errors
+    /// It returns a [`PROXIError::IO`] when the network request or the parsing of the answer
+    /// failed. It returns [`PROXIError::Error`] if the backend returned an error. It returns
+    /// [`PROXIError::PeakUnavailable`] if all returned spectra have [`Status::PeakUnavailable`].
+    /// It returns [`PROXIError::NotFound`] if no backend gave any result (also no error) in the
+    /// case of the aggregate PROXI calling, this is a major error and should not occur readily.
+    ///
+    /// This function is only available with the feature `proxi-async`.
+    #[cfg(feature = "proxi-async")]
+    pub async fn download_spectrum_async(
+        &self,
+        backend: Option<PROXIBackend>,
+        client: Option<reqwest::Client>,
+    ) -> Result<(PROXIBackend, Vec<PROXISpectrum>), PROXIError> {
+        async fn get_response(
+            client: &reqwest::Client,
+            backend: PROXIBackend,
+            usi: &str,
+        ) -> Result<(PROXIBackend, Vec<PROXISpectrum>), PROXIError> {
+            transform_response(
+                backend.clone(),
+                match client.get(backend.proxi_url(usi)).send().await {
+                    Ok(r) => r.json::<PROXIResponse>().await,
+                    Err(e) => Err(e),
+                },
+            )
+        }
+
+        let client = client.unwrap_or_default();
+        let usi = self.to_string();
+        if let Some(backend) = backend {
+            get_response(&client, backend, &usi).await
+        } else {
+            use futures::StreamExt;
+
+            let mut requests = futures::stream::FuturesUnordered::new();
+            let mut last_error = None;
+            for backend in PROXIBackend::ALL {
+                requests.push(get_response(&client, backend.clone(), &usi));
+            }
+
+            while let Some(res) = requests.next().await {
+                match res {
+                    Ok(s) => return Ok(s),
+                    Err(e) => last_error = Some(e),
+                }
+            }
+
+            Err(last_error.unwrap_or(PROXIError::NotFound))
+        }
+    }
+}
+
+fn transform_response(
+    backend: PROXIBackend,
+    response: Result<PROXIResponse, reqwest::Error>,
+) -> Result<(PROXIBackend, Vec<PROXISpectrum>), PROXIError> {
+    match response {
+        Ok(PROXIResponse::Spectra(s))
+            if s.iter()
+                .all(|s| s.status.map(|s| s == Status::Readable).unwrap_or(true)) =>
+        {
+            Ok((backend, s))
+        }
+        Ok(PROXIResponse::Spectra(s)) => Err(PROXIError::PeakUnavailable(backend, s)),
+        Ok(PROXIResponse::Error {
+            detail,
+            status,
+            title,
+            kind,
+        }) => Err(PROXIError::Error {
+            backend,
+            detail,
+            status,
+            title,
+            kind,
+        }),
+        Err(err) => Err(PROXIError::IO(backend, err)),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum PROXIResponse {
+    Spectra(Vec<PROXISpectrum>),
+    Error {
+        detail: String,
+        status: usize,
+        title: PROXIErrorType,
+        #[serde(rename = "type")]
+        kind: String,
+    },
+}
+
+/// An error returned when accessing a PROXI server
+#[derive(Debug)]
+pub enum PROXIError {
+    /// An error during the network request or decoding of the JSON response
+    IO(PROXIBackend, reqwest::Error),
+    /// A returned error by the server
+    Error {
+        /// Which backend failed
+        backend: PROXIBackend,
+        /// The type of error
+        title: PROXIErrorType,
+        /// Detailed explanation on the error
+        detail: String,
+        /// HTTP status code
+        status: usize,
+        /// The error kind, often "about:blank"
+        kind: String,
+    },
+    /// When the server returns only spectra with [`Status::PeakUnavailable`].
+    PeakUnavailable(PROXIBackend, Vec<PROXISpectrum>),
+    /// An error when none of the aggregated backends returned a positive or negative result
+    NotFound,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PROXIErrorType {
+    /// The dataset is not present on this PROXI backend, it could be present on a different backend or the identifier does not exist
+    #[serde(rename = "DatasetNotHere")]
+    DataSetNotHere,
+    /// The dataset is present, but the ms run is not, likely a mistake in the ms run name
+    #[serde(rename = "MsRunNotFound")]
+    MsRunNotFound,
+    /// The dataset and the ms run are available, but the scan number does not exist in this file
+    #[serde(rename = "ScanNotFound")]
+    ScanNotFound,
+    /// The dataset identifier is not of a recognisable format, commonly PXD identifiers are used eg 'PXD004939', but see the USI spec for more details
+    #[serde(rename = "UnrecognizedIdentifierFormat")]
+    UnrecognizedIdentifierFormat,
+    /// The interpretation part of the USI is unable to be parsed, note that some PROXI backends
+    /// require the addition of a charge to all peptides. Additionally, the PROXI servers do not
+    /// require the existence of the interpretation part of the USI, so removing this field before
+    /// sending the request might help prevent errors.
+    #[serde(rename = "MalformedInterpretation")]
+    MalformedInterpretation,
+    /// The index flag (scan/index/nativeid) is malformed
+    #[serde(rename = "UnrecognizedIndexFlag")]
+    UnrecognizedIndexFlag,
+    /// Mandatory 'mzspec:' preamble is missing from the USI
+    #[serde(rename = "MissingPreamble")]
+    MissingPreamble,
+    /// The USI is malformed and has too few fields
+    #[serde(rename = "TooFewFields")]
+    TooFewFields,
+    #[serde(untagged)]
+    Other(String),
+}
+
+impl std::fmt::Display for PROXIErrorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::DataSetNotHere => "DataSetNotHere",
+                Self::MsRunNotFound => "MsRunNotFound",
+                Self::ScanNotFound => "ScanNotFound",
+                Self::UnrecognizedIdentifierFormat => "UnrecognizedIdentifierFormat",
+                Self::MalformedInterpretation => "MalformedInterpretation",
+                Self::UnrecognizedIndexFlag => "UnrecognizedIndexFlag",
+                Self::MissingPreamble => "MissingPreamble",
+                Self::TooFewFields => "TooFewFields",
+                Self::Other(o) => o,
+            }
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, PartialOrd)]
 pub enum Status {
     #[serde(rename = "READABLE")]
     Readable,
@@ -16,7 +318,7 @@ pub enum Status {
     PeakUnavailable,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PROXIValue(Value);
 
 impl Default for PROXIValue {
@@ -26,7 +328,7 @@ impl Default for PROXIValue {
 }
 
 impl PROXIValue {
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         matches!(self.0, Value::Empty)
     }
 }
@@ -57,49 +359,34 @@ where
             formatter.write_str("PROXIValue string")
         }
 
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
+        fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
             match v.parse::<PROXIValue>() {
                 Ok(v) => Ok(v),
                 Err(e) => Err(E::custom(e)),
             }
         }
 
-        fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
             Ok(Value::Boolean(v).into())
         }
 
-        fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
             Ok(Value::Int(v).into())
         }
 
-        fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
             Ok(Value::Int(v as i64).into())
         }
 
-        fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Self::Value, E> {
             Ok(Value::Float(v).into())
         }
 
-        fn visit_none<E>(self) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
             Ok(Value::Empty.into())
         }
 
-        fn visit_unit<E>(self) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
             Ok(Value::Empty.into())
         }
     }
@@ -222,10 +509,7 @@ where
             formatter.write_str("expected CURIE string")
         }
 
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
+        fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
             match v.parse::<CURIE>() {
                 Ok(v) => Ok(v),
                 Err(e) => Err(E::custom(e)),
@@ -238,11 +522,7 @@ where
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PROXIParam {
-    #[serde(
-        serialize_with = "curie_serialize",
-        deserialize_with = "curie_deserialize"
-    )]
-    pub accession: CURIE,
+    pub accession: PROXIAccession,
     pub name: String,
     #[serde(
         serialize_with = "proxi_value_serialize",
@@ -251,6 +531,26 @@ pub struct PROXIParam {
         default
     )]
     pub value: PROXIValue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum PROXIAccession {
+    #[serde(
+        serialize_with = "curie_serialize",
+        deserialize_with = "curie_deserialize"
+    )]
+    CURIE(CURIE),
+    #[serde(untagged)]
+    Other(String),
+}
+
+impl PROXIAccession {
+    fn controlled_vocabulary(&self) -> ControlledVocabulary {
+        match self {
+            PROXIAccession::CURIE(c) => c.controlled_vocabulary,
+            PROXIAccession::Other(_) => ControlledVocabulary::Unknown,
+        }
+    }
 }
 
 impl ParamValue for PROXIParam {
@@ -318,7 +618,7 @@ impl ParamValue for PROXIParam {
 impl PROXIParam {
     pub fn new<S: ToString, V: Into<PROXIValue>>(accession: CURIE, name: S, value: V) -> Self {
         Self {
-            accession,
+            accession: PROXIAccession::CURIE(accession),
             name: name.to_string(),
             value: value.into(),
         }
@@ -328,7 +628,7 @@ impl PROXIParam {
 impl From<Param> for PROXIParam {
     fn from(value: Param) -> Self {
         Self {
-            accession: value.curie().unwrap(),
+            accession: PROXIAccession::CURIE(value.curie().unwrap()),
             name: value.name,
             value: value.value.into(),
         }
@@ -338,7 +638,7 @@ impl From<Param> for PROXIParam {
 impl<'a> From<ParamCow<'a>> for PROXIParam {
     fn from(value: ParamCow<'a>) -> Self {
         Self {
-            accession: value.curie().unwrap(),
+            accession: PROXIAccession::CURIE(value.curie().unwrap()),
             name: value.name.to_string(),
             value: Value::from(value.value).into(),
         }
@@ -362,9 +662,8 @@ where
 {
     match usi {
         Some(usi) => serializer.serialize_str(&usi.to_string()),
-        None => serializer.serialize_none()
+        None => serializer.serialize_none(),
     }
-
 }
 
 fn usi_deserialize<'de, D>(deserializer: D) -> Result<Option<USI>, D::Error>
@@ -383,16 +682,11 @@ where
             Ok(None)
         }
 
-        fn visit_unit<E>(self) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, {
+        fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
             Ok(None)
         }
 
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
+        fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
             if v == "null" {
                 Ok(None)
             } else {
@@ -407,15 +701,138 @@ where
     deserializer.deserialize_any(USIVisit {})
 }
 
+use serde::de::{self, Visitor};
+
+/// MassIVE returns a list of strings instead of a list of numbers, this type can be deserialized if a number of string is given in the JSON
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Wrapped<T>(T);
+
+impl<'de, T: 'static + Default + Copy + FromStr> serde::Deserialize<'de> for Wrapped<T>
+where
+    T::Err: Display,
+    f64: AsPrimitive<T>,
+    u64: AsPrimitive<T>,
+    i64: AsPrimitive<T>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        deserializer
+            .deserialize_any(PotentiallyWrappedNumberVisitor::<T>::default())
+            .map(Wrapped)
+    }
+}
+
+impl serde::Serialize for Wrapped<f64> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_f64(self.0)
+    }
+}
+
+impl serde::Serialize for Wrapped<f32> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_f32(self.0)
+    }
+}
+
+#[derive(Debug, Default)]
+struct PotentiallyWrappedNumberVisitor<T>(PhantomData<T>);
+
+impl<'de, T: 'static + Copy + FromStr> Visitor<'de> for PotentiallyWrappedNumberVisitor<T>
+where
+    T::Err: Display,
+    f64: AsPrimitive<T>,
+    u64: AsPrimitive<T>,
+    i64: AsPrimitive<T>,
+{
+    type Value = T;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a wrapped number")
+    }
+
+    fn visit_f64<E: de::Error>(self, value: f64) -> Result<Self::Value, E> {
+        Ok(value.as_())
+    }
+
+    fn visit_i64<E: de::Error>(self, value: i64) -> Result<Self::Value, E> {
+        Ok(value.as_())
+    }
+
+    fn visit_u64<E: de::Error>(self, value: u64) -> Result<Self::Value, E> {
+        Ok(value.as_())
+    }
+
+    fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+        value.parse().map_err(|e| de::Error::custom(e))
+    }
+}
+
+fn deserialize_wrapped_series<'de, T, D>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    T: Deserialize<'de> + Default + Copy + FromStr + 'static,
+    T::Err: Display,
+    f64: AsPrimitive<T>,
+    u64: AsPrimitive<T>,
+    i64: AsPrimitive<T>,
+    D: Deserializer<'de>,
+{
+    struct WrappingVisitor<T>(PhantomData<fn() -> T>);
+
+    impl<'de, T> Visitor<'de> for WrappingVisitor<T>
+    where
+        T: Deserialize<'de> + Default + Copy + FromStr + 'static,
+        T::Err: Display,
+        f64: AsPrimitive<T>,
+        u64: AsPrimitive<T>,
+        i64: AsPrimitive<T>,
+    {
+        type Value = Vec<T>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a nonempty sequence of numbers")
+        }
+
+        fn visit_seq<S>(self, mut seq: S) -> Result<Vec<T>, S::Error>
+        where
+            S: SeqAccess<'de>,
+        {
+            let mut buf = Vec::new();
+            while let Some(value) = seq.next_element::<Wrapped<T>>()? {
+                buf.push(value.0);
+            }
+            Ok(buf)
+        }
+    }
+    let visitor = WrappingVisitor::<T>(PhantomData);
+    deserializer.deserialize_seq(visitor)
+}
+
+/// A spectrum returnd by a PROXI server
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct PROXISpectrum {
-    #[serde(serialize_with = "usi_serialize", deserialize_with = "usi_deserialize")]
+    /// The USI as returned by the PROXI server
+    #[serde(
+        default,
+        serialize_with = "usi_serialize",
+        deserialize_with = "usi_deserialize"
+    )]
     pub usi: Option<USI>,
+    /// The status of this request
     pub status: Option<Status>,
+    /// Metadata for this spectrum
+    #[serde(default)]
     pub attributes: Vec<PROXIParam>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_wrapped_series")]
     pub mzs: Vec<f64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_wrapped_series")]
     pub intensities: Vec<f32>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub charges: Option<Vec<i32>>,
@@ -423,13 +840,13 @@ pub struct PROXISpectrum {
 
 impl PROXISpectrum {
     pub fn add_attribute<P: Into<PROXIParam>>(&mut self, param: P) {
-        self.attributes.push(param.into())
+        self.attributes.push(param.into());
     }
 }
 
 impl From<&PROXISpectrum> for SpectrumDescription {
     fn from(value: &PROXISpectrum) -> Self {
-        let mut this = SpectrumDescription::default();
+        let mut this = Self::default();
         if let Some(usi) = value.usi.as_ref() {
             this.id = usi.to_string();
             if let Some(ident) = usi.identifier.as_ref() {
@@ -446,40 +863,55 @@ impl From<&PROXISpectrum> for SpectrumDescription {
         let mut has_precursor = false;
         let mut precursor = Precursor::default();
 
-        for param in value.attributes.iter() {
-            if matches!(param.accession.controlled_vocabulary, ControlledVocabulary::UO) {
+        for param in &value.attributes {
+            if matches!(
+                param.accession.controlled_vocabulary(),
+                ControlledVocabulary::UO
+            ) {
                 continue;
             }
             match param.name.as_str() {
                 "ms level" => {
                     this.ms_level = param.value.to_i32().expect("Failed to parse ms level") as u8;
                 }
-                "positive scan" => {
-                    this.polarity = ScanPolarity::Positive;
-                }
-                "negative scan" => {
-                    this.polarity = ScanPolarity::Negative;
-                }
-                "profile spectrum" => {
-                    this.signal_continuity = SignalContinuity::Profile;
-                }
-                "centroid spectrum" => {
-                    this.signal_continuity = SignalContinuity::Centroid;
+                "scan polarity" => match param.value.as_str().as_ref() {
+                    "positive scan" => {
+                        this.polarity = ScanPolarity::Positive;
+                    }
+                    "negative scan" => {
+                        this.polarity = ScanPolarity::Negative;
+                    }
+                    _ => (),
                 },
-
+                "spectrum representation" => match param.value.as_str().as_ref() {
+                    "profile spectrum" => {
+                        this.signal_continuity = SignalContinuity::Profile;
+                    }
+                    "centroid spectrum" => {
+                        this.signal_continuity = SignalContinuity::Centroid;
+                    }
+                    _ => (),
+                },
                 "scan start time" => {
                     if let Some(s) = this.acquisition.first_scan_mut() {
-                        s.start_time = param.value.to_f64().expect("Failed to extract scan start time") / 60.0;
+                        s.start_time = param
+                            .value
+                            .to_f64()
+                            .expect("Failed to extract scan start time")
+                            / 60.0;
                     }
-                },
+                }
                 "ion injection time" => {
                     if let Some(s) = this.acquisition.first_scan_mut() {
-                        s.injection_time = param.to_f32().expect("Failed to extract ion injection time");
+                        s.injection_time = param
+                            .to_f32()
+                            .expect("Failed to extract ion injection time");
                     }
                 }
                 "filter string" => {
                     if let Some(s) = this.acquisition.first_scan_mut() {
-                        let mut param = Param::new_key_value("filter string", param.value.to_string());
+                        let mut param =
+                            Param::new_key_value("filter string", param.value.to_string());
                         param.controlled_vocabulary = Some(ControlledVocabulary::MS);
                         param.accession = Some(1000512);
                         s.add_param(param);
@@ -508,13 +940,17 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                         .expect("Failed to parse isolation window target");
                     precursor.isolation_window.flags = match precursor.isolation_window.flags {
                         IsolationWindowState::Unknown => IsolationWindowState::Complete,
-                        IsolationWindowState::Explicit => IsolationWindowState::Complete,
-                        IsolationWindowState::Offset => {
-                            precursor.isolation_window.lower_bound = precursor.isolation_window.target - precursor.isolation_window.lower_bound;
-                            precursor.isolation_window.upper_bound += precursor.isolation_window.target;
+                        IsolationWindowState::Explicit | IsolationWindowState::Complete => {
                             IsolationWindowState::Complete
                         }
-                        IsolationWindowState::Complete => IsolationWindowState::Complete,
+                        IsolationWindowState::Offset => {
+                            precursor.isolation_window.lower_bound =
+                                precursor.isolation_window.target
+                                    - precursor.isolation_window.lower_bound;
+                            precursor.isolation_window.upper_bound +=
+                                precursor.isolation_window.target;
+                            IsolationWindowState::Complete
+                        }
                     };
                 }
                 "isolation window lower offset" => {
@@ -528,7 +964,8 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                             precursor.isolation_window.lower_bound = lower_bound;
                         }
                         IsolationWindowState::Complete => {
-                            precursor.isolation_window.lower_bound = precursor.isolation_window.target - lower_bound;
+                            precursor.isolation_window.lower_bound =
+                                precursor.isolation_window.target - lower_bound;
                         }
                         _ => {}
                     }
@@ -544,7 +981,8 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                             precursor.isolation_window.upper_bound = upper_bound;
                         }
                         IsolationWindowState::Complete => {
-                            precursor.isolation_window.upper_bound = precursor.isolation_window.target + upper_bound;
+                            precursor.isolation_window.upper_bound =
+                                precursor.isolation_window.target + upper_bound;
                         }
                         _ => {}
                     }
@@ -554,7 +992,10 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                     let lower_bound = param
                         .to_f32()
                         .expect("Failed to parse isolation window limit");
-                    if let IsolationWindowState::Unknown = precursor.isolation_window.flags {
+                    if matches!(
+                        precursor.isolation_window.flags,
+                        IsolationWindowState::Unknown
+                    ) {
                         precursor.isolation_window.flags = IsolationWindowState::Explicit;
                         precursor.isolation_window.lower_bound = lower_bound;
                     }
@@ -564,15 +1005,20 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                     let upper_bound = param
                         .to_f32()
                         .expect("Failed to parse isolation window limit");
-                    if let IsolationWindowState::Unknown = precursor.isolation_window.flags {
+                    if matches!(
+                        precursor.isolation_window.flags,
+                        IsolationWindowState::Unknown
+                    ) {
                         precursor.isolation_window.flags = IsolationWindowState::Explicit;
                         precursor.isolation_window.upper_bound = upper_bound;
                     }
                 }
                 _ => {
-                    let mut p = Param::new_key_value(param.name.clone(), param.value.as_ref().to_owned());
-                    p.accession = Some(param.accession.accession);
-                    p.controlled_vocabulary = Some(param.accession.controlled_vocabulary);
+                    let mut p = Param::new_key_value(param.name.clone(), param.value.clone());
+                    if let PROXIAccession::CURIE(c) = param.accession {
+                        p.accession = Some(c.accession);
+                    }
+                    p.controlled_vocabulary = Some(param.accession.controlled_vocabulary());
                     this.add_param(p);
                 }
             }
@@ -585,26 +1031,33 @@ impl From<&PROXISpectrum> for SpectrumDescription {
     }
 }
 
-impl<C: CentroidLike + Default + BuildFromArrayMap + BuildArrayMapFrom, D: DeconvolutedCentroidLike + Default + BuildFromArrayMap + BuildArrayMapFrom> From<PROXISpectrum> for MultiLayerSpectrum<C, D> {
+impl<
+        C: CentroidLike + Default + BuildFromArrayMap + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + Default + BuildFromArrayMap + BuildArrayMapFrom,
+    > From<PROXISpectrum> for MultiLayerSpectrum<C, D>
+{
     fn from(value: PROXISpectrum) -> Self {
         let descr: SpectrumDescription = (&value).into();
         let mut arrays = BinaryArrayMap::default();
 
-        let mut mz_array = DataArray::from_name_and_type(&ArrayType::MZArray, BinaryDataArrayType::Float64);
+        let mut mz_array =
+            DataArray::from_name_and_type(&ArrayType::MZArray, BinaryDataArrayType::Float64);
         mz_array.extend(&value.mzs).unwrap();
         arrays.add(mz_array);
 
-        let mut intensity_array = DataArray::from_name_and_type(&ArrayType::IntensityArray, BinaryDataArrayType::Float32);
+        let mut intensity_array =
+            DataArray::from_name_and_type(&ArrayType::IntensityArray, BinaryDataArrayType::Float32);
         intensity_array.extend(&value.intensities).unwrap();
         arrays.add(intensity_array);
 
         if let Some(charges) = value.charges.as_ref() {
-            let mut charge_arrays = DataArray::from_name_and_type(&ArrayType::ChargeArray, BinaryDataArrayType::Int32);
-            charge_arrays.extend(&charges).unwrap();
+            let mut charge_arrays =
+                DataArray::from_name_and_type(&ArrayType::ChargeArray, BinaryDataArrayType::Int32);
+            charge_arrays.extend(charges).unwrap();
             arrays.add(charge_arrays);
         };
 
-        MultiLayerSpectrum::from_arrays_and_description(arrays, descr)
+        Self::from_arrays_and_description(arrays, descr)
     }
 }
 
@@ -613,21 +1066,22 @@ where
     T: SpectrumLike,
 {
     fn from(value: &T) -> Self {
-        let mut this = PROXISpectrum::default();
-        this.status = Some(Status::Readable);
+        let mut this = Self {
+            status: Some(Status::Readable),
+            ..Default::default()
+        };
 
-        let ms_level = value.ms_level();
-        if ms_level == 1 {
-            this.add_attribute(MS1_SPECTRUM.clone());
-        } else if ms_level > 1 {
-            this.add_attribute(MSN_SPECTRUM.clone());
+        match value.ms_level().cmp(&1) {
+            Ordering::Equal => this.add_attribute(MS1_SPECTRUM.clone()),
+            Ordering::Greater => this.add_attribute(MSN_SPECTRUM.clone()),
+            Ordering::Less => (),
         }
 
         for param in value.params().iter().filter(|p| p.is_controlled()) {
             if param.curie().unwrap() == curie!(MS:1003063) {
                 this.usi = Some(param.value.as_str().parse().unwrap());
             } else {
-                this.add_attribute(param.clone())
+                this.add_attribute(param.clone());
             }
         }
 
@@ -639,27 +1093,27 @@ where
 
         this.add_attribute(PROXIParam {
             name: "ms level".to_string(),
-            value: PROXIValue(Value::Int(ms_level as i64)),
-            accession: curie!(MS:1000511),
+            value: PROXIValue(Value::Int(value.ms_level() as i64)),
+            accession: PROXIAccession::CURIE(curie!(MS:1000511)),
         });
 
         match value.polarity() {
             crate::spectrum::ScanPolarity::Unknown => {}
             crate::spectrum::ScanPolarity::Positive => {
-                this.attributes.push(Param::from(POSITIVE_SCAN).into())
+                this.attributes.push(Param::from(POSITIVE_SCAN).into());
             }
             crate::spectrum::ScanPolarity::Negative => {
-                this.attributes.push(Param::from(NEGATIVE_SCAN).into())
+                this.attributes.push(Param::from(NEGATIVE_SCAN).into());
             }
         }
 
         match value.signal_continuity() {
             crate::spectrum::SignalContinuity::Unknown => {}
             crate::spectrum::SignalContinuity::Centroid => {
-                this.attributes.push(Param::from(CENTROID_SPECTRUM).into())
+                this.attributes.push(Param::from(CENTROID_SPECTRUM).into());
             }
             crate::spectrum::SignalContinuity::Profile => {
-                this.attributes.push(Param::from(PROFILE_SPECTRUM).into())
+                this.attributes.push(Param::from(PROFILE_SPECTRUM).into());
             }
         }
 
@@ -706,7 +1160,7 @@ where
         for event in value.acquisition().iter() {
             let p = PROXIParam {
                 name: "scan start time".into(),
-                accession: curie!(MS:1000016),
+                accession: PROXIAccession::CURIE(curie!(MS:1000016)),
                 value: Value::Float(event.start_time * 60.0).into(),
             };
             this.add_attribute(p);
@@ -720,10 +1174,10 @@ where
         match value.peaks() {
             crate::spectrum::RefPeakDataLevel::Missing => {}
             crate::spectrum::RefPeakDataLevel::RawData(arrays) => {
-                this.mzs = arrays.mzs().unwrap().to_vec();
-                this.intensities = arrays.intensities().unwrap().to_vec();
+                this.mzs = arrays.mzs().unwrap().iter().copied().collect();
+                this.intensities = arrays.intensities().unwrap().iter().copied().collect();
                 if let Ok(arr) = arrays.charges() {
-                    this.charges = Some(arr.to_vec())
+                    this.charges = Some(arr.to_vec());
                 }
             }
             crate::spectrum::RefPeakDataLevel::Centroid(peaks) => {
@@ -733,7 +1187,12 @@ where
             crate::spectrum::RefPeakDataLevel::Deconvoluted(peaks) => {
                 (this.mzs, this.intensities) =
                     peaks.iter().map(|p| (p.mz(), p.intensity())).unzip();
-                this.charges = Some(peaks.iter().map(|p| p.charge()).collect::<Vec<_>>());
+                this.charges = Some(
+                    peaks
+                        .iter()
+                        .map(mzpeaks::KnownCharge::charge)
+                        .collect::<Vec<_>>(),
+                );
             }
         }
 
@@ -750,8 +1209,8 @@ mod test {
     use std::io;
 
     use super::*;
-    use serde_json;
     use crate::MZReader;
+    use serde_json;
 
     #[test]
     fn test_convert() -> io::Result<()> {
@@ -761,9 +1220,89 @@ mod test {
         let scan_message = PROXISpectrum::from(&scan);
 
         let message = serde_json::to_string(&scan_message)?;
-         let dup: PROXISpectrum = serde_json::from_str(&message)?;
+        let dup: PROXISpectrum = serde_json::from_str(&message)?;
         assert_eq!(dup.usi, scan_message.usi);
         assert_eq!(dup.attributes, scan_message.attributes);
         Ok(())
+    }
+
+    #[test]
+    fn get_peptide_atlas() {
+        let usi: USI =
+            "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555:VLHPLEGAVVIIFK/2"
+                .parse()
+                .unwrap();
+        let (_, response) = usi
+            .download_spectrum_blocking(Some(PROXIBackend::PeptideAtlas), None)
+            .unwrap();
+        assert!(!response.is_empty());
+    }
+
+    #[test]
+    fn get_massive() {
+        let usi: USI = "mzspec:MSV000078547:120228_nbut_3610_it_it_take2:scan:389"
+            .parse()
+            .unwrap();
+        let (_, response) = usi
+            .download_spectrum_blocking(Some(PROXIBackend::MassIVE), None)
+            .unwrap();
+        assert!(!response.is_empty());
+    }
+
+    #[test]
+    fn get_pride() {
+        let usi: USI =
+            "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV"
+                .parse()
+                .unwrap();
+        let (_, response) = usi
+            .download_spectrum_blocking(Some(PROXIBackend::Pride), None)
+            .unwrap();
+        assert!(!response.is_empty());
+    }
+
+    #[test]
+    fn get_proteomexchange() {
+        let usi: USI =
+            "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"
+                .parse()
+                .unwrap();
+        let (_, response) = usi
+            .download_spectrum_blocking(Some(PROXIBackend::ProteomeXchange), None)
+            .unwrap();
+        assert!(!response.is_empty());
+    }
+
+    #[test]
+    fn get_aggregate() {
+        for usi in [
+            "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555:VLHPLEGAVVIIFK/2",
+            "mzspec:MSV000078547:120228_nbut_3610_it_it_take2:scan:389",
+            "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV",
+            "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"] {
+            println!("Trying: {usi}");
+            let usi: USI = usi.parse().unwrap();
+            let (_, response) = usi.download_spectrum_blocking(None, None).unwrap();
+            assert!(!response.is_empty());
+        }
+    }
+}
+
+#[cfg(all(feature = "proxi-async", feature = "tokio"))]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn get_aggregate_async() {
+        for usi in [
+            "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555:VLHPLEGAVVIIFK/2",
+            "mzspec:MSV000078547:120228_nbut_3610_it_it_take2:scan:389",
+            "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV",
+            "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"] {
+            println!("Trying: {usi}");
+            let usi: USI = usi.parse().unwrap();
+            let (_, response) = usi.download_spectrum_async(None, None).await.unwrap();
+            assert!(!response.is_empty());
+        }
     }
 }

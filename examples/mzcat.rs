@@ -1,10 +1,10 @@
 use std::time;
 use std::{env, io, path};
 
-use rayon::prelude::*;
 use env_logger;
 use mzdata::spectrum::MultiLayerSpectrum;
 use mzdata::{prelude::*, MZReader};
+use rayon::prelude::*;
 
 fn scan_file<R: MZFileReader + Iterator<Item = MultiLayerSpectrum> + Send>(reader: &mut R) {
     let start = time::Instant::now();

@@ -16,17 +16,16 @@ pub enum USIParseError {
     MalformedIndex(String, String, String),
 }
 
-
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Protocol {
     #[default]
-    MZSpec
+    MZSpec,
 }
 
 impl Display for Protocol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::MZSpec => write!(f, "mzspec")
+            Self::MZSpec => write!(f, "mzspec"),
         }
     }
 }
@@ -37,7 +36,6 @@ pub enum Identifier {
     Index(u64),
     NativeID(Box<Vec<u64>>),
 }
-
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct USI {
@@ -60,7 +58,12 @@ impl FromStr for USI {
                 "mzspec" => {
                     this.protocol = Protocol::MZSpec;
                 }
-                _ => return Err(USIParseError::UnknownProtocol(protocol.to_string(), s.to_string()))
+                _ => {
+                    return Err(USIParseError::UnknownProtocol(
+                        protocol.to_string(),
+                        s.to_string(),
+                    ))
+                }
             };
 
             if let Some(dataset) = tokens.next() {
@@ -71,38 +74,52 @@ impl FromStr for USI {
 
                     if let (Some(ident_type), Some(ident_value)) = (tokens.next(), tokens.next()) {
                         match ident_type {
-                            "scan" => {
-                                match ident_value.parse() {
-                                    Ok(v) => {
-                                        this.identifier = Some(Identifier::Scan(v));
-                                    },
-                                    Err(e) => {
-                                        return Err(USIParseError::MalformedIndex(ident_value.to_string(), e.to_string(), s.to_string()))
-                                    }
+                            "scan" => match ident_value.parse() {
+                                Ok(v) => {
+                                    this.identifier = Some(Identifier::Scan(v));
+                                }
+                                Err(e) => {
+                                    return Err(USIParseError::MalformedIndex(
+                                        ident_value.to_string(),
+                                        e.to_string(),
+                                        s.to_string(),
+                                    ))
                                 }
                             },
-                            "index" => {
-                                match ident_value.parse() {
-                                    Ok(v) => {
-                                        this.identifier = Some(Identifier::Index(v));
-                                    },
-                                    Err(e) => {
-                                        return Err(USIParseError::MalformedIndex(ident_value.to_string(), e.to_string(), s.to_string()))
-                                    }
+                            "index" => match ident_value.parse() {
+                                Ok(v) => {
+                                    this.identifier = Some(Identifier::Index(v));
+                                }
+                                Err(e) => {
+                                    return Err(USIParseError::MalformedIndex(
+                                        ident_value.to_string(),
+                                        e.to_string(),
+                                        s.to_string(),
+                                    ))
                                 }
                             },
                             "nativeId" => {
-                                let res: Result<Vec<u64>, _> = ident_value.split(',').map(|t| t.parse()).collect();
+                                let res: Result<Vec<u64>, _> =
+                                    ident_value.split(',').map(|t| t.parse()).collect();
                                 match res {
                                     Ok(vals) => {
                                         this.identifier = Some(Identifier::NativeID(vals.into()))
-                                    },
+                                    }
                                     Err(e) => {
-                                        return Err(USIParseError::MalformedIndex(ident_value.to_string(), e.to_string(), s.to_string()))
+                                        return Err(USIParseError::MalformedIndex(
+                                            ident_value.to_string(),
+                                            e.to_string(),
+                                            s.to_string(),
+                                        ))
                                     }
                                 }
-                            },
-                            _ => return Err(USIParseError::UnknownIndexType(ident_type.to_string(), s.to_string()))
+                            }
+                            _ => {
+                                return Err(USIParseError::UnknownIndexType(
+                                    ident_type.to_string(),
+                                    s.to_string(),
+                                ))
+                            }
                         };
 
                         this.interpretation = tokens.next().map(|s| s.to_string());
@@ -112,12 +129,14 @@ impl FromStr for USI {
                 } else {
                     Err(USIParseError::MissingRun(s.to_string()))
                 }
-
             } else {
                 Err(USIParseError::MissingDataset(s.to_string()))
             }
         } else {
-            Err(USIParseError::UnknownProtocol("".to_string(), s.to_string()))
+            Err(USIParseError::UnknownProtocol(
+                "".to_string(),
+                s.to_string(),
+            ))
         }
     }
 }
@@ -128,9 +147,20 @@ impl Display for USI {
             let (ident_class, ident_val) = match ident {
                 Identifier::Scan(i) => ("scan", i.to_string()),
                 Identifier::Index(i) => ("index", i.to_string()),
-                Identifier::NativeID(parts) => ("nativeId", parts.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(","))
+                Identifier::NativeID(parts) => (
+                    "nativeId",
+                    parts
+                        .iter()
+                        .map(|i| i.to_string())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                ),
             };
-            write!(f, "{}:{}:{}:{ident_class}:{ident_val}", self.protocol, self.dataset, self.run_name)?;
+            write!(
+                f,
+                "{}:{}:{}:{ident_class}:{ident_val}",
+                self.protocol, self.dataset, self.run_name
+            )?;
             if let Some(interp) = self.interpretation.as_ref() {
                 write!(f, ":{}", interp)?;
                 if let Some(provenance) = self.provenance.as_ref() {
@@ -143,7 +173,6 @@ impl Display for USI {
         }
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -169,9 +198,15 @@ mod test {
     fn test_example() -> Result<(), USIParseError> {
         let usi: USI = "mzspec:PXD019909:20180914_QE8_nLC0_BDA_SA_DIA_Skin_Dendritic_cells_DC_MT_600000:scan:62396:SAGQGEVLVYVEDPAGHQEEAK/3".parse()?;
         assert_eq!(usi.dataset, "PXD019909");
-        assert_eq!(usi.run_name, "20180914_QE8_nLC0_BDA_SA_DIA_Skin_Dendritic_cells_DC_MT_600000");
+        assert_eq!(
+            usi.run_name,
+            "20180914_QE8_nLC0_BDA_SA_DIA_Skin_Dendritic_cells_DC_MT_600000"
+        );
         assert_eq!(usi.identifier, Some(Identifier::Scan(62396)));
-        assert_eq!(usi.interpretation, Some("SAGQGEVLVYVEDPAGHQEEAK/3".to_string()));
+        assert_eq!(
+            usi.interpretation,
+            Some("SAGQGEVLVYVEDPAGHQEEAK/3".to_string())
+        );
         Ok(())
     }
 }
