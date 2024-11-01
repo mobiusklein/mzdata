@@ -92,7 +92,7 @@ impl USI {
     /// case of the aggregate PROXI calling, this is a major error and should not occur readily.
     ///
     /// This function is only available with the feature `proxi`.
-    pub fn get_spectrum_blocking(
+    pub fn download_spectrum_blocking(
         &self,
         backend: Option<PROXIBackend>,
         client: Option<reqwest::blocking::Client>,
@@ -135,7 +135,7 @@ impl USI {
     /// USI could contain the stem of the filename and the backend could have multiple formats for
     /// that file in which case the data from each file format is returned.
     ///
-    /// A [`reqwest::blocking::Client`] can be provided to create the requests, if no client is
+    /// A [`reqwest::Client`] can be provided to create the requests, if no client is
     /// provided a default client will be used. This is useful to reuse a client over multiple
     /// requests for performance or if needed to use proxies to download the data.
     ///
@@ -148,7 +148,7 @@ impl USI {
     ///
     /// This function is only available with the feature `proxi-async`.
     #[cfg(feature = "proxi-async")]
-    pub async fn get_spectrum_async(
+    pub async fn download_spectrum_async(
         &self,
         backend: Option<PROXIBackend>,
         client: Option<reqwest::Client>,
@@ -1233,7 +1233,7 @@ mod test {
                 .parse()
                 .unwrap();
         let (_, response) = usi
-            .get_spectrum_blocking(Some(PROXIBackend::PeptideAtlas), None)
+            .download_spectrum_blocking(Some(PROXIBackend::PeptideAtlas), None)
             .unwrap();
         assert!(!response.is_empty());
     }
@@ -1244,7 +1244,7 @@ mod test {
             .parse()
             .unwrap();
         let (_, response) = usi
-            .get_spectrum_blocking(Some(PROXIBackend::MassIVE), None)
+            .download_spectrum_blocking(Some(PROXIBackend::MassIVE), None)
             .unwrap();
         assert!(!response.is_empty());
     }
@@ -1256,7 +1256,7 @@ mod test {
                 .parse()
                 .unwrap();
         let (_, response) = usi
-            .get_spectrum_blocking(Some(PROXIBackend::Pride), None)
+            .download_spectrum_blocking(Some(PROXIBackend::Pride), None)
             .unwrap();
         assert!(!response.is_empty());
     }
@@ -1268,7 +1268,7 @@ mod test {
                 .parse()
                 .unwrap();
         let (_, response) = usi
-            .get_spectrum_blocking(Some(PROXIBackend::ProteomeXchange), None)
+            .download_spectrum_blocking(Some(PROXIBackend::ProteomeXchange), None)
             .unwrap();
         assert!(!response.is_empty());
     }
@@ -1282,7 +1282,7 @@ mod test {
             "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"] {
             println!("Trying: {usi}");
             let usi: USI = usi.parse().unwrap();
-            let (_, response) = usi.get_spectrum_blocking(None, None).unwrap();
+            let (_, response) = usi.download_spectrum_blocking(None, None).unwrap();
             assert!(!response.is_empty());
         }
     }
@@ -1301,7 +1301,7 @@ mod tests {
             "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"] {
             println!("Trying: {usi}");
             let usi: USI = usi.parse().unwrap();
-            let (_, response) = usi.get_spectrum_async(None).await.unwrap();
+            let (_, response) = usi.download_spectrum_async(None).await.unwrap();
             assert!(!response.is_empty());
         }
     }
