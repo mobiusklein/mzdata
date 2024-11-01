@@ -27,6 +27,28 @@ and this project adheres to [Semantic Versioning].
 
 - Fix multiple errors in `BinaryArrayMap3D`
 
+## [0.35.0] - 2024-11-01
+
+### Added
+
+- Add `ParamBuilder` to make building `Param` easier
+- Add `unit_mut` to `ByteArrayViewMut`
+- Add error handling logic to nativeID format parsing logic
+- Add `MZReaderBuilder` type to the public API
+- Add more metadata types to the public API
+- Add `spectrum_reference` to `ScanEvent`
+- Add source-manipulation functions to `Generic3DIonMobilityFrameSource`
+- Added method to retrieve the raw spectrum from any USI (#15)
+    * Added `USI::download_spectrum_blocking` and `USI::download_spectrum_async` to retrieve the designated spectrum from a PROXI server
+
+### Changed
+
+- Change the hashing function for `mzdata::spectrum::Collator` to `IdentityHasher`
+
+### Fixed
+
+- Fix multiple errors in `BinaryArrayMap3D`
+
 ## [0.34.0] - 2024-10-31
 
 ### Fixed
@@ -502,6 +524,7 @@ using mz_read macro. This also prevents potential version mismatches.
 <!-- Versions -->
 
 [unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/mobiusklein/mzdata/compare/v0.35.0...v0.35.0
 [0.35.0]: https://github.com/mobiusklein/mzdata/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/mobiusklein/mzdata/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/mobiusklein/mzdata/compare/v0.32.0...v0.33.0
