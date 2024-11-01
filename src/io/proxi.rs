@@ -1,7 +1,7 @@
-use std::{cmp::Ordering, fmt::Display, marker::PhantomData, str::FromStr};
+use std::{cmp::Ordering, fmt::{self, Display}, marker::PhantomData, str::FromStr};
 
 use num_traits::AsPrimitive;
-use serde::{Deserialize, Serialize};
+use serde::{de::SeqAccess, Deserialize, Deserializer, Serialize};
 
 use crate::{
     curie,
@@ -170,7 +170,7 @@ fn transform_response(
     match response {
         Ok(PROXIResponse::Spectra(s))
             if s.iter()
-                .all(|s| s.status.is_none_or(|s| s == Status::Readable)) =>
+                .all(|s| s.status.map(|s| s == Status::Readable).unwrap_or(true)) =>
         {
             Ok((backend, s))
         }
@@ -678,13 +678,6 @@ use serde::de::{self, Visitor};
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Wrapped<T>(T);
 
-impl<T> std::ops::Deref for Wrapped<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl<'de, T: 'static + Default + Copy + FromStr> serde::Deserialize<'de> for Wrapped<T>
 where
     T::Err: Display,
@@ -721,9 +714,7 @@ impl serde::Serialize for Wrapped<f32> {
 }
 
 #[derive(Debug, Default)]
-struct PotentiallyWrappedNumberVisitor<T> {
-    marker: PhantomData<T>,
-}
+struct PotentiallyWrappedNumberVisitor<T>(PhantomData<T>);
 
 impl<'de, T: 'static + Copy + FromStr> Visitor<'de> for PotentiallyWrappedNumberVisitor<T>
 where
@@ -751,8 +742,49 @@ where
     }
 
     fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
-        value.parse().map_err(|e| serde::de::Error::custom(e))
+        value.parse().map_err(|e| de::Error::custom(e))
     }
+}
+
+
+fn deserialize_wrapped_series<'de, T, D>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    T: Deserialize<'de> + Default + Copy + FromStr + 'static,
+    T::Err: Display,
+    f64: AsPrimitive<T>,
+    u64: AsPrimitive<T>,
+    i64: AsPrimitive<T>,
+    D: Deserializer<'de>,
+{
+    struct WrappingVisitor<T>(PhantomData<fn() -> T>);
+
+    impl<'de, T> Visitor<'de> for WrappingVisitor<T>
+    where
+        T: Deserialize<'de> + Default + Copy + FromStr + 'static,
+        T::Err: Display,
+        f64: AsPrimitive<T>,
+        u64: AsPrimitive<T>,
+        i64: AsPrimitive<T>,
+    {
+        type Value = Vec<T>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a nonempty sequence of numbers")
+        }
+
+        fn visit_seq<S>(self, mut seq: S) -> Result<Vec<T>, S::Error>
+        where
+            S: SeqAccess<'de>,
+        {
+            let mut buf = Vec::new();
+            while let Some(value) = seq.next_element::<Wrapped<T>>()? {
+                buf.push(value.0);
+            }
+            Ok(buf)
+        }
+    }
+    let visitor = WrappingVisitor::<T>(PhantomData);
+    deserializer.deserialize_seq(visitor)
 }
 
 /// A spectrum returnd by a PROXI server
@@ -770,10 +802,10 @@ pub struct PROXISpectrum {
     /// Metadata for this spectrum
     #[serde(default)]
     pub attributes: Vec<PROXIParam>,
-    #[serde(default)]
-    pub mzs: Vec<Wrapped<f64>>,
-    #[serde(default)]
-    pub intensities: Vec<Wrapped<f32>>,
+    #[serde(default, deserialize_with = "deserialize_wrapped_series")]
+    pub mzs: Vec<f64>,
+    #[serde(default, deserialize_with = "deserialize_wrapped_series")]
+    pub intensities: Vec<f32>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub charges: Option<Vec<i32>>,
 }
@@ -977,22 +1009,12 @@ impl<
 
         let mut mz_array =
             DataArray::from_name_and_type(&ArrayType::MZArray, BinaryDataArrayType::Float64);
-        mz_array
-            .extend(&value.mzs.into_iter().map(|v| v.0).collect::<Vec<_>>())
-            .unwrap();
+        mz_array.extend(&value.mzs).unwrap();
         arrays.add(mz_array);
 
         let mut intensity_array =
             DataArray::from_name_and_type(&ArrayType::IntensityArray, BinaryDataArrayType::Float32);
-        intensity_array
-            .extend(
-                &value
-                    .intensities
-                    .into_iter()
-                    .map(|v| v.0)
-                    .collect::<Vec<_>>(),
-            )
-            .unwrap();
+        intensity_array.extend(&value.intensities).unwrap();
         arrays.add(intensity_array);
 
         if let Some(charges) = value.charges.as_ref() {
@@ -1119,13 +1141,12 @@ where
         match value.peaks() {
             crate::spectrum::RefPeakDataLevel::Missing => {}
             crate::spectrum::RefPeakDataLevel::RawData(arrays) => {
-                this.mzs = arrays.mzs().unwrap().iter().copied().map(Wrapped).collect();
+                this.mzs = arrays.mzs().unwrap().iter().copied().collect();
                 this.intensities = arrays
                     .intensities()
                     .unwrap()
                     .iter()
                     .copied()
-                    .map(Wrapped)
                     .collect();
                 if let Ok(arr) = arrays.charges() {
                     this.charges = Some(arr.to_vec());
@@ -1134,13 +1155,13 @@ where
             crate::spectrum::RefPeakDataLevel::Centroid(peaks) => {
                 (this.mzs, this.intensities) = peaks
                     .iter()
-                    .map(|p| (Wrapped(p.mz()), Wrapped(p.intensity())))
+                    .map(|p| (p.mz(), p.intensity()))
                     .unzip();
             }
             crate::spectrum::RefPeakDataLevel::Deconvoluted(peaks) => {
                 (this.mzs, this.intensities) = peaks
                     .iter()
-                    .map(|p| (Wrapped(p.mz()), Wrapped(p.intensity())))
+                    .map(|p| (p.mz(), p.intensity()))
                     .unzip();
                 this.charges = Some(
                     peaks
