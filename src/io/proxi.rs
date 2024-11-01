@@ -1301,7 +1301,7 @@ mod tests {
             "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"] {
             println!("Trying: {usi}");
             let usi: USI = usi.parse().unwrap();
-            let (_, response) = usi.download_spectrum_async(None).await.unwrap();
+            let (_, response) = usi.download_spectrum_async(None, None).await.unwrap();
             assert!(!response.is_empty());
         }
     }
