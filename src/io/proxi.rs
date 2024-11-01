@@ -1,4 +1,9 @@
-use std::{cmp::Ordering, fmt::{self, Display}, marker::PhantomData, str::FromStr};
+use std::{
+    cmp::Ordering,
+    fmt::{self, Display},
+    marker::PhantomData,
+    str::FromStr,
+};
 
 use num_traits::AsPrimitive;
 use serde::{de::SeqAccess, Deserialize, Deserializer, Serialize};
@@ -68,11 +73,23 @@ impl PROXIBackend {
 }
 
 impl USI {
-    /// Retrieve this USI from the given PROXI backend. If no PROXI backend is indicated it will
-    /// aggregate the results from all known backends and return the first successful spectrum.
+    /// Download this USI using the [PROXI](https://github.com/HUPO-PSI/proxi-schemas/) API from
+    /// the given PROXI backend. If no PROXI backend is indicated it will try all known backends
+    /// sequentially and return the first successful spectrum. The result contains the backend that
+    /// ultimately succeeded as well as the list of returned spectra. This is a list because the
+    /// USI could contain the stem of the filename and the backend could have multiple formats for
+    /// that file in which case the data from each file format is returned.
     ///
     /// A [`reqwest::blocking::Client`] can be provided to create the requests, if no client is
-    /// provided a default client will be used.
+    /// provided a default client will be used. This is useful to reuse a client over multiple
+    /// requests for performance or if needed to use proxies to download the data.
+    ///
+    /// # Errors
+    /// It returns a [`PROXIError::IO`] when the network request or the parsing of the answer
+    /// failed. It returns [`PROXIError::Error`] if the backend returned an error. It returns
+    /// [`PROXIError::PeakUnavailable`] if all returned spectra have [`Status::PeakUnavailable`].
+    /// It returns [`PROXIError::NotFound`] if no backend gave any result (also no error) in the
+    /// case of the aggregate PROXI calling, this is a major error and should not occur readily.
     ///
     /// This function is only available with the feature `proxi`.
     pub fn get_spectrum_blocking(
@@ -111,11 +128,23 @@ impl USI {
         )
     }
 
-    /// Retrieve this USI from the given PROXI backend. If no PROXI backend is indicated it will
-    /// aggregate the results from all known backends and return the first successful spectrum.
+    /// Download this USI using the [PROXI](https://github.com/HUPO-PSI/proxi-schemas/) API from
+    /// the given PROXI backend. If no PROXI backend is indicated it will try all known backends
+    /// concurrently and return the first successful spectrum. The result contains the backend that
+    /// ultimately succeeded as well as the list of returned spectra. This is a list because the
+    /// USI could contain the stem of the filename and the backend could have multiple formats for
+    /// that file in which case the data from each file format is returned.
     ///
-    /// A [`reqwest::Client`] can be provided to create the requests, if no client is
-    /// provided a default client will be used.
+    /// A [`reqwest::blocking::Client`] can be provided to create the requests, if no client is
+    /// provided a default client will be used. This is useful to reuse a client over multiple
+    /// requests for performance or if needed to use proxies to download the data.
+    ///
+    /// # Errors
+    /// It returns a [`PROXIError::IO`] when the network request or the parsing of the answer
+    /// failed. It returns [`PROXIError::Error`] if the backend returned an error. It returns
+    /// [`PROXIError::PeakUnavailable`] if all returned spectra have [`Status::PeakUnavailable`].
+    /// It returns [`PROXIError::NotFound`] if no backend gave any result (also no error) in the
+    /// case of the aggregate PROXI calling, this is a major error and should not occur readily.
     ///
     /// This function is only available with the feature `proxi-async`.
     #[cfg(feature = "proxi-async")]
@@ -746,7 +775,6 @@ where
     }
 }
 
-
 fn deserialize_wrapped_series<'de, T, D>(deserializer: D) -> Result<Vec<T>, D::Error>
 where
     T: Deserialize<'de> + Default + Copy + FromStr + 'static,
@@ -1142,27 +1170,18 @@ where
             crate::spectrum::RefPeakDataLevel::Missing => {}
             crate::spectrum::RefPeakDataLevel::RawData(arrays) => {
                 this.mzs = arrays.mzs().unwrap().iter().copied().collect();
-                this.intensities = arrays
-                    .intensities()
-                    .unwrap()
-                    .iter()
-                    .copied()
-                    .collect();
+                this.intensities = arrays.intensities().unwrap().iter().copied().collect();
                 if let Ok(arr) = arrays.charges() {
                     this.charges = Some(arr.to_vec());
                 }
             }
             crate::spectrum::RefPeakDataLevel::Centroid(peaks) => {
-                (this.mzs, this.intensities) = peaks
-                    .iter()
-                    .map(|p| (p.mz(), p.intensity()))
-                    .unzip();
+                (this.mzs, this.intensities) =
+                    peaks.iter().map(|p| (p.mz(), p.intensity())).unzip();
             }
             crate::spectrum::RefPeakDataLevel::Deconvoluted(peaks) => {
-                (this.mzs, this.intensities) = peaks
-                    .iter()
-                    .map(|p| (p.mz(), p.intensity()))
-                    .unzip();
+                (this.mzs, this.intensities) =
+                    peaks.iter().map(|p| (p.mz(), p.intensity())).unzip();
                 this.charges = Some(
                     peaks
                         .iter()
