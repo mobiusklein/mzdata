@@ -78,12 +78,15 @@ pub use crate::spectrum::peaks::{
     SpectrumSummary,
 };
 
-pub use frame::{IonMobilityFrameDescription, IonMobilityFrameLike, MultiLayerIonMobilityFrame};
+pub use frame::{
+    FeatureDataLevel, IonMobilityFrameDescription, IonMobilityFrameLike,
+    MultiLayerIonMobilityFrame, RefFeatureDataLevel
+};
 
 pub use group::{
     IonMobilityFrameGroup, IonMobilityFrameGroupIntoIter, IonMobilityFrameGroupIter,
     IonMobilityFrameGroupingIterator, SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter,
-    SpectrumGroupingIterator,
+    SpectrumGroupingIterator, SpectrumGrouping, IonMobilityFrameGrouping,
 };
 
 #[cfg(feature = "mzsignal")]

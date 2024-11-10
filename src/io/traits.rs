@@ -6,18 +6,20 @@ mod util;
 pub use spectrum::{
     MZFileReader, MemorySpectrumSource, RandomAccessSpectrumGroupingIterator,
     RandomAccessSpectrumIterator, RandomAccessSpectrumSource, SpectrumAccessError,
-    SpectrumGrouping, SpectrumIterator, SpectrumReceiver, SpectrumSource,
+    SpectrumIterator, SpectrumReceiver, SpectrumSource,
     SpectrumSourceWithMetadata, SpectrumWriter, StreamingSpectrumIterator,
 };
 pub use util::SeekRead;
 
 pub use frame::{
     BorrowedGeneric3DIonMobilityFrameSource, Generic3DIonMobilityFrameSource,
-    IonMobilityFrameAccessError, IonMobilityFrameGrouping, IonMobilityFrameIterator,
+    IonMobilityFrameAccessError, IonMobilityFrameIterator,
     IonMobilityFrameSource, IonMobilityFrameWriter, RandomAccessIonMobilityFrameIterator,
 };
 
 pub use chromatogram::{ChromatogramIterator, ChromatogramSource};
+
+pub use crate::spectrum::group::{SpectrumGrouping, IonMobilityFrameGrouping};
 
 #[cfg(test)]
 mod test {

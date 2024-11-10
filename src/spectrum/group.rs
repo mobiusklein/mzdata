@@ -10,8 +10,9 @@ use mzpeaks::{
 
 use crate::{
     io::{
-        traits::{RandomAccessSpectrumGroupingIterator, SpectrumGrouping},
-        IonMobilityFrameGrouping, RandomAccessSpectrumIterator, SpectrumAccessError,
+        RandomAccessSpectrumGroupingIterator,
+        RandomAccessSpectrumIterator,
+        SpectrumAccessError,
     },
     prelude::{MSDataFileMetadata, SpectrumLike},
 };
@@ -22,8 +23,8 @@ mod frame;
 mod spectrum;
 mod util;
 
-pub use frame::{IonMobilityFrameGroup, IonMobilityFrameGroupIntoIter, IonMobilityFrameGroupIter};
-pub use spectrum::{SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter};
+pub use frame::{IonMobilityFrameGroup, IonMobilityFrameGroupIntoIter, IonMobilityFrameGroupIter, IonMobilityFrameGrouping};
+pub use spectrum::{SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter, SpectrumGrouping};
 pub(crate) use util::GenerationTracker;
 
 const MAX_GROUP_DEPTH: u32 = 512u32;

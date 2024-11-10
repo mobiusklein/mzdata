@@ -659,7 +659,7 @@ impl Display for SignalContinuity {
 
 /**
 The set of descriptive metadata that give context for how a mass spectrum was acquired
-within a particular run. This forms the basis for a large portion of the [`SpectrumDescription`]
+within a particular run. This forms the basis for a large portion of the [`SpectrumLike`]
 trait.
 */
 #[derive(Debug, Default, Clone, PartialEq)]

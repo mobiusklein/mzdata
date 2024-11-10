@@ -8,15 +8,26 @@ use mzpeaks::{
 };
 
 use super::{
-    bindata::{ArrayRetrievalError, BinaryArrayMap3D, BinaryCompressionType, BinaryDataArrayType, BuildArrayMap3DFrom}, Acquisition, ArrayType, BinaryArrayMap, CentroidPeakAdapting, DeconvolutedPeakAdapting, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription
+    bindata::{
+        ArrayRetrievalError, BinaryArrayMap3D, BinaryCompressionType, BinaryDataArrayType,
+        BuildArrayMap3DFrom,
+    },
+    Acquisition, ArrayType, BinaryArrayMap, CentroidPeakAdapting, DeconvolutedPeakAdapting,
+    Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
 };
 use super::{scan_properties::SCAN_TITLE, MultiLayerSpectrum};
-use crate::{prelude::*, RawSpectrum};
 use crate::{
     io::IonMobilityFrameGrouping,
     params::{ParamDescribed, ParamList},
 };
+use crate::{prelude::*, RawSpectrum};
 
+
+/// Represent an owned representation of one the kinds of feature data that a [`IonMobilityFrameLike`](crate::spectrum::IonMobilityFrameLike) instance
+/// might otherwise carry.
+///
+/// # See also
+/// [`RefFeatureDataLevel`] for borrowed version.
 #[derive(Debug)]
 pub enum FeatureDataLevel<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
@@ -28,6 +39,8 @@ pub enum FeatureDataLevel<
     Deconvoluted(FeatureMap<Mass, IonMobility, D>),
 }
 
+/// An variant for dispatching to different strategies of computing
+/// common statistics of different levels of feature data.
 #[derive(Debug)]
 pub enum RefFeatureDataLevel<
     'a,
@@ -40,7 +53,13 @@ pub enum RefFeatureDataLevel<
     Deconvoluted(&'a FeatureMap<Mass, IonMobility, D>),
 }
 
+/**
+The set of descriptive metadata that give context for how an ion mobility frame was acquired
+within a particular run. This forms the basis for a large portion of the [`IonMobilityFrameLike`]
+trait.
 
+This is the equivalent of the [`SpectrumDescription`] type.
+*/
 #[derive(Debug, Default, Clone)]
 pub struct IonMobilityFrameDescription {
     /// The spectrum's native identifier
@@ -246,6 +265,16 @@ pub struct MultiLayerIonMobilityFrame<
     description: IonMobilityFrameDescription,
 }
 
+impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge> ParamDescribed for MultiLayerIonMobilityFrame<C, D> {
+    fn params(&self) -> &[crate::Param] {
+        &self.description().params
+    }
+
+    fn params_mut(&mut self) -> &mut ParamList {
+        &mut self.description_mut().params
+    }
+}
+
 impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge>
     MultiLayerIonMobilityFrame<C, D>
 {
@@ -307,10 +336,9 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     }
 }
 
-impl<
-    CFeat: FeatureLike<MZ, IonMobility>,
-    DFeat: FeatureLike<Mass, IonMobility> + KnownCharge,
-> TryFrom<RawSpectrum> for MultiLayerIonMobilityFrame<CFeat, DFeat> {
+impl<CFeat: FeatureLike<MZ, IonMobility>, DFeat: FeatureLike<Mass, IonMobility> + KnownCharge>
+    TryFrom<RawSpectrum> for MultiLayerIonMobilityFrame<CFeat, DFeat>
+{
     type Error = ArrayRetrievalError;
 
     fn try_from(value: RawSpectrum) -> Result<Self, Self::Error> {
@@ -352,11 +380,11 @@ impl<
     }
 }
 
-
 impl<
         C: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
         D: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
-> From<MultiLayerIonMobilityFrame<C, D>> for RawSpectrum {
+    > From<MultiLayerIonMobilityFrame<C, D>> for RawSpectrum
+{
     fn from(value: MultiLayerIonMobilityFrame<C, D>) -> Self {
         let arrays = if let Some(d) = value.deconvoluted_features {
             BuildArrayMap3DFrom::as_arrays_3d(&d[..]).unstack().unwrap()
@@ -379,8 +407,8 @@ impl<
         DFeat: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
         CPeak: CentroidPeakAdapting + BuildFromArrayMap,
         DPeak: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > From<MultiLayerIonMobilityFrame<CFeat, DFeat>> for MultiLayerSpectrum<CPeak, DPeak> {
-
+    > From<MultiLayerIonMobilityFrame<CFeat, DFeat>> for MultiLayerSpectrum<CPeak, DPeak>
+{
     fn from(value: MultiLayerIonMobilityFrame<CFeat, DFeat>) -> Self {
         let raw: RawSpectrum = value.into();
         raw.into()
@@ -393,7 +421,9 @@ mod mzsignal_impl {
 
     use mzpeaks::{feature::Feature, peak_set::PeakSetVec, CentroidPeak, Tolerance};
     use mzsignal::{
-        feature_mapping::{FeatureExtracterType, graph::FeatureGraphBuilder, MapState, PeakMapState},
+        feature_mapping::{
+            graph::FeatureGraphBuilder, FeatureExtracterType, MapState, PeakMapState,
+        },
         peak_picker::PeakPicker,
         FittedPeak, PeakFitType,
     };
@@ -491,7 +521,6 @@ mod mzsignal_impl {
         }
     }
 }
-
 
 #[cfg(test)]
 mod test {

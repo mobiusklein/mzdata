@@ -1,11 +1,93 @@
 use std::{marker::PhantomData, mem};
 
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
-use crate::io::SpectrumGrouping;
 
 use super::super::{MultiLayerSpectrum, SpectrumLike};
 
 use super::util::GroupIterState;
+
+
+/// An abstraction over [`SpectrumGroup`](crate::spectrum::SpectrumGroup)'s interface.
+pub trait SpectrumGrouping<
+    C: CentroidLike + Default = CentroidPeak,
+    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
+>: Default
+{
+    /// Get the precursor spectrum, which may be absent
+    fn precursor(&self) -> Option<&S>;
+    /// Get a mutable reference to the precursor spectrum, which may be absent
+    fn precursor_mut(&mut self) -> Option<&mut S>;
+    /// Explicitly set the precursor spectrum directly.
+    fn set_precursor(&mut self, prec: S);
+
+    /// Get a reference to the collection of product spectra
+    fn products(&self) -> &[S];
+
+    /// Get a mutable reference to the collection of product spectra
+    fn products_mut(&mut self) -> &mut Vec<S>;
+
+    /// The total number of spectra in the group
+    fn total_spectra(&self) -> usize {
+        self.precursor().is_some() as usize + self.products().len()
+    }
+
+    /// The spectrum that occurred first chronologically
+    fn earliest_spectrum(&self) -> Option<&S> {
+        self.precursor().or_else(|| {
+            self.products().iter().min_by(|a, b| {
+                a.acquisition()
+                    .start_time()
+                    .total_cmp(&b.acquisition().start_time())
+            })
+        })
+    }
+
+    /// The spectrum that occurred last chronologically
+    fn latest_spectrum(&self) -> Option<&S> {
+        self.precursor().or_else(|| {
+            self.products().iter().max_by(|a, b| {
+                a.acquisition()
+                    .start_time()
+                    .total_cmp(&b.acquisition().start_time())
+            })
+        })
+    }
+
+    /// The lowest MS level in the group
+    fn lowest_ms_level(&self) -> Option<u8> {
+        let prec_level = self.precursor().map(|p| p.ms_level()).unwrap_or(u8::MAX);
+        let val = self
+            .products()
+            .iter()
+            .fold(prec_level, |state, s| state.min(s.ms_level()));
+        if val > 0 {
+            Some(val)
+        } else {
+            None
+        }
+    }
+
+    /// The highest MS level in the group
+    fn highest_ms_level(&self) -> Option<u8> {
+        let prec_level = self
+            .precursor()
+            .map(|p| p.ms_level())
+            .unwrap_or_else(|| u8::MIN);
+        let val = self
+            .products()
+            .iter()
+            .fold(prec_level, |state, s| state.max(s.ms_level()));
+        if val > 0 {
+            Some(val)
+        } else {
+            None
+        }
+    }
+
+    /// Decompose the group into its components, discarding any additional metrics
+    fn into_parts(self) -> (Option<S>, Vec<S>);
+}
 
 /**
 A pairing of an optional MS1 spectrum with all its associated MSn spectra.

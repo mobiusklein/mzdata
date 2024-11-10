@@ -19,7 +19,7 @@ use crate::spectrum::{
     MultiLayerIonMobilityFrame,
 };
 
-use super::{RandomAccessSpectrumIterator, SpectrumAccessError, SpectrumSource};
+use super::{IonMobilityFrameGrouping, RandomAccessSpectrumIterator, SpectrumAccessError, SpectrumSource};
 
 
 
@@ -457,6 +457,28 @@ impl From<IonMobilityFrameAccessError> for io::Error {
     }
 }
 
+impl From<IonMobilityFrameAccessError> for SpectrumAccessError {
+    fn from(value: IonMobilityFrameAccessError) -> Self {
+        match value {
+            IonMobilityFrameAccessError::FrameNotFound => SpectrumAccessError::SpectrumNotFound,
+            IonMobilityFrameAccessError::FrameIdNotFound(id) => SpectrumAccessError::SpectrumIdNotFound(id),
+            IonMobilityFrameAccessError::FrameIndexNotFound(i) => SpectrumAccessError::SpectrumIndexNotFound(i),
+            IonMobilityFrameAccessError::IOError(error) => SpectrumAccessError::IOError(error),
+        }
+    }
+}
+
+impl From<SpectrumAccessError> for IonMobilityFrameAccessError {
+    fn from(value: SpectrumAccessError) -> Self {
+        match value {
+            SpectrumAccessError::SpectrumNotFound => IonMobilityFrameAccessError::FrameNotFound,
+            SpectrumAccessError::SpectrumIdNotFound(id) => IonMobilityFrameAccessError::FrameIdNotFound(id),
+            SpectrumAccessError::SpectrumIndexNotFound(i) => IonMobilityFrameAccessError::FrameIndexNotFound(i),
+            SpectrumAccessError::IOError(error) => IonMobilityFrameAccessError::IOError(error),
+        }
+    }
+}
+
 /// An extension of [`IonMobilityFrameSource`] that supports relocatable iteration relative to a
 /// specific spectrum coordinate or identifier.
 pub trait RandomAccessIonMobilityFrameIterator<
@@ -489,39 +511,21 @@ where
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError> {
         match self.source.start_from_id(id) {
             Ok(_) => Ok(self),
-            Err(e) => Err(match e {
-                SpectrumAccessError::SpectrumIdNotFound(id) => {
-                    IonMobilityFrameAccessError::FrameIdNotFound(id)
-                }
-                SpectrumAccessError::SpectrumNotFound => IonMobilityFrameAccessError::FrameNotFound,
-                SpectrumAccessError::IOError(e) => IonMobilityFrameAccessError::IOError(e),
-                _ => todo!(),
-            }),
+            Err(e) => Err(IonMobilityFrameAccessError::from(e)),
         }
     }
 
     fn start_from_index(&mut self, index: usize) -> Result<&mut Self, IonMobilityFrameAccessError> {
         match self.source.start_from_index(index) {
             Ok(_) => Ok(self),
-            Err(e) => Err(match e {
-                SpectrumAccessError::SpectrumIndexNotFound(i) => {
-                    IonMobilityFrameAccessError::FrameIndexNotFound(i)
-                }
-                SpectrumAccessError::SpectrumNotFound => IonMobilityFrameAccessError::FrameNotFound,
-                SpectrumAccessError::IOError(e) => IonMobilityFrameAccessError::IOError(e),
-                _ => todo!(),
-            }),
+            Err(e) => Err(IonMobilityFrameAccessError::from(e)),
         }
     }
 
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, IonMobilityFrameAccessError> {
         match self.source.start_from_time(time) {
             Ok(_) => Ok(self),
-            Err(e) => Err(match e {
-                SpectrumAccessError::SpectrumNotFound => IonMobilityFrameAccessError::FrameNotFound,
-                SpectrumAccessError::IOError(e) => IonMobilityFrameAccessError::IOError(e),
-                _ => todo!(),
-            }),
+            Err(e) => Err(IonMobilityFrameAccessError::from(e)),
         }
     }
 }
@@ -575,89 +579,6 @@ impl<
         }
     }
 }
-
-/// An abstraction over [`IonMobilityFrameGroup`](crate::spectrum::IonMobilityFrameGroup)'s interface.
-pub trait IonMobilityFrameGrouping<
-    C: FeatureLike<MZ, IonMobility>,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    S: IonMobilityFrameLike<C, D> = MultiLayerIonMobilityFrame<C, D>,
->: Default
-{
-    /// Get the precursor spectrum, which may be absent
-    fn precursor(&self) -> Option<&S>;
-    /// Get a mutable reference to the precursor spectrum, which may be absent
-    fn precursor_mut(&mut self) -> Option<&mut S>;
-    /// Explicitly set the precursor spectrum directly.
-    fn set_precursor(&mut self, prec: S);
-
-    /// Get a reference to the collection of product frames
-    fn products(&self) -> &[S];
-
-    /// Get a mutable reference to the collection of product frames
-    fn products_mut(&mut self) -> &mut Vec<S>;
-
-    /// The total number of frames in the group
-    fn total_frames(&self) -> usize {
-        self.precursor().is_some() as usize + self.products().len()
-    }
-
-    /// The frame that occurred first chronologically
-    fn earliest_frame(&self) -> Option<&S> {
-        self.precursor().or_else(|| {
-            self.products().iter().min_by(|a, b| {
-                a.acquisition()
-                    .start_time()
-                    .total_cmp(&b.acquisition().start_time())
-            })
-        })
-    }
-
-    /// The frame that occurred last chronologically
-    fn latest_frame(&self) -> Option<&S> {
-        self.precursor().or_else(|| {
-            self.products().iter().max_by(|a, b| {
-                a.acquisition()
-                    .start_time()
-                    .total_cmp(&b.acquisition().start_time())
-            })
-        })
-    }
-
-    /// The lowest MS level in the group
-    fn lowest_ms_level(&self) -> Option<u8> {
-        let prec_level = self.precursor().map(|p| p.ms_level()).unwrap_or(u8::MAX);
-        let val = self
-            .products()
-            .iter()
-            .fold(prec_level, |state, s| state.min(s.ms_level()));
-        if val > 0 {
-            Some(val)
-        } else {
-            None
-        }
-    }
-
-    /// The highest MS level in the group
-    fn highest_ms_level(&self) -> Option<u8> {
-        let prec_level = self
-            .precursor()
-            .map(|p| p.ms_level())
-            .unwrap_or_else(|| u8::MIN);
-        let val = self
-            .products()
-            .iter()
-            .fold(prec_level, |state, s| state.max(s.ms_level()));
-        if val > 0 {
-            Some(val)
-        } else {
-            None
-        }
-    }
-
-    /// Decompose the group into its components, discarding any additional metrics
-    fn into_parts(self) -> (Option<S>, Vec<S>);
-}
-
 
 /// Common interface for ion mobility frame writing
 pub trait IonMobilityFrameWriter<

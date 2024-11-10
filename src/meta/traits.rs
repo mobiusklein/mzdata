@@ -147,18 +147,6 @@ macro_rules! impl_metadata_trait {
 macro_rules! delegate_impl_metadata_trait {
     ($src:tt, extended) => {
         $crate::delegate_impl_metadata_trait($src);
-
-        fn spectrum_count_hint(&self) -> Option<u64> {
-            self.$src.spectrum_count_hint()
-        }
-
-        fn run_description(&self) -> Option<&$crate::meta::MassSpectrometryRun> {
-            self.$src.run_description()
-        }
-
-        fn run_description_mut(&mut self) -> Option<&mut $crate::meta::MassSpectrometryRun> {
-            self.$src.run_description_mut()
-        }
     };
     ($src:tt) => {
 
