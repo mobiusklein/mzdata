@@ -574,7 +574,7 @@ mod test {
 
                 let feat = &hits[0];
 
-                if true {
+                if false {
                     let mut writer = io::BufWriter::new(std::fs::File::create("tmp/features_graph.txt")?);
                     writer.write_all(b"feature_id\tmz\trt\tintensity\n")?;
                     for (i, f) in fm.iter().enumerate() {
