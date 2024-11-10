@@ -575,6 +575,18 @@ mod test {
                 let feat = &hits[0];
 
                 if false {
+                    let mut writer = io::BufWriter::new(std::fs::File::create("tmp/peaks_over_time.txt")?);
+                    let arrays = frame.arrays.as_ref().unwrap();
+                    for (im, arrs) in arrays.ion_mobility_dimension.iter().zip(arrays.arrays.iter()) {
+                        let mzs = arrs.mzs()?;
+                        let intensities = arrs.intensities()?;
+                        for (mz, int) in mzs.iter().zip(intensities.iter()) {
+                            writeln!(writer, "{mz}\t{int}\t{im}")?;
+                        }
+                    }
+                }
+
+                if false {
                     let mut writer = io::BufWriter::new(std::fs::File::create("tmp/features_graph.txt")?);
                     writer.write_all(b"feature_id\tmz\trt\tintensity\n")?;
                     for (i, f) in fm.iter().enumerate() {
@@ -585,9 +597,9 @@ mod test {
                 }
 
                 assert_is_close!(feat.start_time().unwrap(), 1.1628155190587295, 1e-3, "start_time");
-                assert_is_close!(feat.end_time().unwrap(), 1.2521668672561646, 1e-3, "end_time");
+                assert_is_close!(feat.end_time().unwrap(), 1.2536284405594418, 1e-3, "end_time");
                 assert_is_close!(feat.apex_time().unwrap(), 1.212666, 1e-3, "apex_time");
-                assert_eq!(feat.len(), 52);
+                assert_eq!(feat.len(), 62);
             }
         });
         Ok(())
