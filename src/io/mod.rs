@@ -41,9 +41,9 @@ pub use crate::io::traits::{
 pub use crate::io::utils::{checksum_file, DetailLevel, PreBufferedStream};
 pub use compression::RestartableGzDecoder;
 
-#[cfg(feature = "thermo")]
+#[cfg(any(feature = "thermo", feature="doc-only"))]
 pub mod thermo;
-#[cfg(feature = "thermo")]
+#[cfg(any(feature = "thermo", feature="doc-only"))]
 pub use thermo::ThermoRawReader;
 
 pub mod usi;
