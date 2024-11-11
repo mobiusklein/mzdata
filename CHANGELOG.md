@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.36.0] - 2024-11-11
+
+### Added
+
+- Adjust test using `extract_features_simple` for new `mzsignal` behavior
+
+### Fixed
+
+- Upgrade to `mzpeaks v0.23.0`  and `mzsignal v0.26.0` and organize dependencies
+- Split the `thermo` implementation so it does not require a .NET library during documentation building
+- Refactor scan unit grouping trait locations, preserve import paths
+- Upgrade to `mzsignal v0.27.0`
+
 ## [0.35.0] - 2024-11-01
 
 ### Added
@@ -523,7 +536,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.35.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.36.0...HEAD
+[0.36.0]: https://github.com/mobiusklein/mzdata/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/mobiusklein/mzdata/compare/v0.35.0...v0.35.0
 [0.35.0]: https://github.com/mobiusklein/mzdata/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/mobiusklein/mzdata/compare/v0.33.0...v0.34.0
