@@ -403,6 +403,11 @@ impl<
         match self._parse_into(accumulator).await {
             Ok((sz, accumulator)) => {
                 accumulator.into_spectrum(spectrum);
+                if self.detail_level == DetailLevel::Full {
+                    if let Err(e) = spectrum.try_build_peaks() {
+                        log::debug!("Failed to eagerly load peaks from centroid spectrum: {e}");
+                    }
+                }
                 Ok(sz)
             }
             Err(err) => Err(err),
