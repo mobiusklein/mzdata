@@ -657,6 +657,15 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
 impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
+
+    fn detail_level(&self) -> &DetailLevel {
+        &self.detail_level
+    }
+
+    fn set_detail_level(&mut self, detail_level: DetailLevel) {
+        self.detail_level = detail_level;
+    }
+
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
         let offset = self.index.get(id)?;

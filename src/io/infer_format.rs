@@ -479,6 +479,14 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
     fn set_index(&mut self, index: super::OffsetIndex) {
         msfmt_dispatch!(self, reader, reader.set_index(index))
     }
+
+    fn detail_level(&self) -> &DetailLevel {
+        self.detail_level()
+    }
+
+    fn set_detail_level(&mut self, detail_level: DetailLevel) {
+        self.set_detail_level(detail_level);
+    }
 }
 
 impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,

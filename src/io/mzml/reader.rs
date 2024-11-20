@@ -1381,6 +1381,11 @@ impl<
         match self._parse_into(accumulator) {
             Ok((accumulator, sz)) => {
                 accumulator.into_spectrum(spectrum);
+                if self.detail_level == DetailLevel::Full {
+                    if let Err(e) = spectrum.try_build_peaks() {
+                        log::debug!("Failed to eagerly load peaks from centroid spectrum: {e}");
+                    }
+                }
                 Ok(sz)
             }
             Err(err) => Err(err),
@@ -1653,6 +1658,14 @@ impl<
 
     fn set_index(&mut self, index: OffsetIndex) {
         self.spectrum_index = index
+    }
+
+    fn detail_level(&self) -> &DetailLevel {
+        &self.detail_level
+    }
+
+    fn set_detail_level(&mut self, detail_level: DetailLevel) {
+        self.detail_level = detail_level;
     }
 }
 

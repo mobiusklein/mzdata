@@ -11,7 +11,7 @@ use mzpeaks::{
     feature::{ChargedFeature, Feature, FeatureLike}
 };
 
-use crate::{io::OffsetIndex, prelude::MSDataFileMetadata};
+use crate::{io::{DetailLevel, OffsetIndex}, prelude::MSDataFileMetadata};
 use crate::spectrum::group::IonMobilityFrameGroupingIterator;
 use crate::spectrum::spectrum_types::MultiLayerSpectrum;
 use crate::spectrum::{
@@ -30,7 +30,23 @@ pub trait IonMobilityFrameSource<
     S: IonMobilityFrameLike<C, D> = MultiLayerIonMobilityFrame<C, D>,
 >: Iterator<Item = S>
 {
+    /// Rewind the current position of the source to the beginning
     fn reset(&mut self);
+
+
+    /// Get the [`DetailLevel`] the reader currently uses
+    fn detail_level(&self) -> &DetailLevel;
+
+
+    /// Set the [`DetailLevel`] for the reader, changing
+    /// the amount of work done immediately on loading a
+    /// spectrum.
+    ///
+    /// # Note
+    /// Not all readers support all detail levels, and the
+    /// behavior when requesting one of those levels will
+    /// depend upon the underlying reader.
+    fn set_detail_level(&mut self, detail_level: DetailLevel);
 
     /// Retrieve a frame by it's native ID
     fn get_frame_by_id(&mut self, id: &str) -> Option<S>;
@@ -111,6 +127,7 @@ pub trait IonMobilityFrameSource<
         }
     }
 
+    /// Open a new iterator over this stream
     fn iter(&mut self) -> IonMobilityFrameIterator<C, D, S, Self>
     where
         Self: Sized,
@@ -258,6 +275,14 @@ impl<
     fn set_index(&mut self, index: OffsetIndex) {
         self.source.set_index(index);
     }
+
+    fn detail_level(&self) -> &DetailLevel {
+        self.source.detail_level()
+    }
+
+    fn set_detail_level(&mut self, detail_level: DetailLevel) {
+        self.source.set_detail_level(detail_level);
+    }
 }
 
 /// If the underlying iterator implements [`MSDataFileMetadata`] then [`IonMobilityFrameIterator`] will
@@ -314,6 +339,15 @@ impl<
     > IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>>
     for Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
 {
+
+    fn detail_level(&self) -> &DetailLevel {
+        self.source.detail_level()
+    }
+
+    fn set_detail_level(&mut self, detail_level: DetailLevel) {
+        self.source.set_detail_level(detail_level);
+    }
+
     fn reset(&mut self) {
         self.source.reset()
     }
@@ -741,6 +775,15 @@ impl<
     > IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>>
     for BorrowedGeneric3DIonMobilityFrameSource<'a, CP, DP, R, C, D>
 {
+
+    fn detail_level(&self) -> &DetailLevel {
+        self.source.detail_level()
+    }
+
+    fn set_detail_level(&mut self, detail_level: DetailLevel) {
+        self.source.set_detail_level(detail_level);
+    }
+
     fn reset(&mut self) {
         self.source.reset()
     }

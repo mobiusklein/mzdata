@@ -13,7 +13,7 @@ use mzpeaks::{
 use thiserror::Error;
 
 use crate::io::utils::FileSource;
-use crate::io::OffsetIndex;
+use crate::io::{DetailLevel, OffsetIndex};
 use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software};
 use crate::prelude::MSDataFileMetadata;
 use crate::spectrum::group::{SpectrumGroup, SpectrumGroupingIterator};
@@ -31,7 +31,22 @@ pub trait SpectrumSource<
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 >: Iterator<Item = S>
 {
+
+    /// Rewind the current position of the source to the beginning
     fn reset(&mut self);
+
+    /// Get the [`DetailLevel`] the reader currently uses
+    fn detail_level(&self) -> &DetailLevel;
+
+    /// Set the [`DetailLevel`] for the reader, changing
+    /// the amount of work done immediately on loading a
+    /// spectrum.
+    ///
+    /// # Note
+    /// Not all readers support all detail levels, and the
+    /// behavior when requesting one of those levels will
+    /// depend upon the underlying reader.
+    fn set_detail_level(&mut self, detail_level: DetailLevel);
 
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<S>;
@@ -121,7 +136,7 @@ pub trait SpectrumSource<
         }
     }
 
-    /// Open a new iterator over this stream.
+    /// Open a new iterator over this stream
     fn iter(&mut self) -> SpectrumIterator<C, D, S, Self>
     where
         Self: Sized,
@@ -245,6 +260,9 @@ impl<
         R: SpectrumSource<C, D, S>,
     > SpectrumSource<C, D, S> for SpectrumIterator<'lifespan, C, D, S, R>
 {
+
+
+
     fn reset(&mut self) {
         self.index = 0;
         self.back_index = 0;
@@ -268,6 +286,14 @@ impl<
 
     fn set_index(&mut self, index: OffsetIndex) {
         self.source.set_index(index);
+    }
+
+    fn detail_level(&self) -> &DetailLevel {
+        self.source.detail_level()
+    }
+
+    fn set_detail_level(&mut self, detail_level: DetailLevel) {
+        self.source.set_detail_level(detail_level);
     }
 }
 
@@ -569,6 +595,12 @@ impl<
         I: Iterator<Item = S>,
     > SpectrumSource<C, D, S> for StreamingSpectrumIterator<C, D, S, I>
 {
+    fn detail_level(&self) -> &DetailLevel {
+        &DetailLevel::Full
+    }
+
+    fn set_detail_level(&mut self, _detail_level: DetailLevel) {}
+
     fn reset(&mut self) {
         panic!("Cannot reset StreamingSpectrumIterator")
     }
@@ -950,6 +982,12 @@ impl<
     fn set_index(&mut self, index: OffsetIndex) {
         self.offsets = index
     }
+
+    fn detail_level(&self) -> &DetailLevel {
+        &DetailLevel::Full
+    }
+
+    fn set_detail_level(&mut self, _detail_level: DetailLevel) {}
 }
 
 impl<
