@@ -202,5 +202,8 @@ macro_rules! delegate_impl_metadata_trait {
             self.$src.run_description_mut()
         }
 
+        fn source_file_name(&self) -> Option<&str> {
+            self.$src.source_file_name()
+        }
     };
 }
