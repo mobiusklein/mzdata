@@ -21,6 +21,7 @@ struct MSDataFileSummary {
     pub charge_table: HashMap<i32, usize>,
     pub peak_charge_table: HashMap<u8, HashMap<i32, usize>>,
     pub peak_mode_table: HashMap<SignalContinuity, usize>,
+    pub has_ion_mobility: bool
 }
 
 impl Default for MSDataFileSummary {
@@ -32,6 +33,7 @@ impl Default for MSDataFileSummary {
             charge_table: Default::default(),
             peak_charge_table: Default::default(),
             peak_mode_table: Default::default(),
+            has_ion_mobility: false,
         }
     }
 }
@@ -54,12 +56,20 @@ impl MSDataFileSummary {
             .peak_mode_table
             .entry(scan.signal_continuity())
             .or_default() += scan.peaks().len();
+
         let has_charge = match scan.peaks() {
             RefPeakDataLevel::Missing => false,
             RefPeakDataLevel::RawData(arrays) => arrays.charges().is_ok(),
             RefPeakDataLevel::Centroid(_) => false,
             RefPeakDataLevel::Deconvoluted(_) => true,
         };
+
+        let has_ion_mobility = match scan.peaks() {
+            RefPeakDataLevel::RawData(arrays) => arrays.has_ion_mobility(),
+            _ => false,
+        } || scan.has_ion_mobility();
+        self.has_ion_mobility |= has_ion_mobility;
+
         if has_charge {
             let deconv_scan: DeconvolutedSpectrum = scan.try_into().unwrap();
             deconv_scan.deconvoluted_peaks.iter().for_each(|p| {
@@ -126,6 +136,7 @@ impl MSDataFileSummary {
     pub fn write_out(&self) {
         println!("Start Time: {:0.2}", self.start_time);
         println!("End Time: {:0.2}", self.end_time);
+        println!("Has Ion Mobility: {}", self.has_ion_mobility);
         println!("MS Levels:");
         let mut level_set: Vec<(&u8, &usize)> = self.level_table.iter().collect();
         level_set.sort_by_key(|(a, _)| *a);

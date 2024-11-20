@@ -66,11 +66,7 @@ pub trait SpectrumLike<
     #[inline]
     fn precursor(&self) -> Option<&Precursor> {
         let desc = self.description();
-        if let Some(precursor) = &desc.precursor {
-            Some(precursor)
-        } else {
-            None
-        }
+        desc.precursor.as_ref()
     }
 
     /// Iterate over all precursors of the spectrum
@@ -82,11 +78,7 @@ pub trait SpectrumLike<
     /// Mutably access the precursor information, if it exists
     fn precursor_mut(&mut self) -> Option<&mut Precursor> {
         let desc = self.description_mut();
-        if let Some(precursor) = desc.precursor.as_mut() {
-            Some(precursor)
-        } else {
-            None
-        }
+        desc.precursor.as_mut()
     }
 
     /// Iterate over all precursors of the spectrum mutably
@@ -130,11 +122,13 @@ pub trait SpectrumLike<
         self.description().signal_continuity
     }
 
+    /// Access a description of the spectrum polarity
     #[inline]
     fn polarity(&self) -> ScanPolarity {
         self.description().polarity
     }
 
+    /// Get the spectrum-level [`Param`] list which provides the [`ParamDescribed`] interface.
     #[inline]
     fn params(&self) -> &ParamList {
         &self.description().params
@@ -155,13 +149,21 @@ pub trait SpectrumLike<
         self.ion_mobility().is_some()
     }
 
-    /// Retrieve the most processed representation of the mass spectrum's
-    /// signal
+    /// Retrieve the most processed representation of the mass spectrum's signal
     fn peaks(&'_ self) -> RefPeakDataLevel<'_, C, D>;
 
     fn into_peaks_and_description(self) -> (PeakDataLevel<C, D>, SpectrumDescription);
 
+    /// Obtain a reference to the [`BinaryArrayMap`] if one is available for the peak
+    /// information. This may not be the most refined version of the peak signal if
+    /// it has been processed further.
     fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap>;
+
+    /// Check if this spectrum has an ion mobility dimension/array. This is distinct from
+    /// having a scan-level point measure of ion mobility.
+    fn has_ion_mobility_dimension(&self) -> bool {
+        self.raw_arrays().map(|a| a.has_ion_mobility()).unwrap_or_default()
+    }
 
     /// Compute and update the the total ion current, base peak, and m/z range for
     /// the spectrum based upon its current peak data.
