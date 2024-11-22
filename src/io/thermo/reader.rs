@@ -199,11 +199,9 @@ pub(crate) mod sealed {
             self.handle.set_centroid_spectra(value)
         }
 
-        pub fn get_tic(&mut self) -> Chromatogram {
-            let tic = self.handle.tic();
-
+        fn unpack_chromatogram_signal(&self, descr: thermorawfilereader::ChromatogramDescription) -> BinaryArrayMap {
             let mut array_map = BinaryArrayMap::default();
-            if let Some(data) = tic.data() {
+            if let Some(data) = descr.data() {
                 let time_array = data.time();
                 let intensity_array = data.intensity();
 
@@ -239,6 +237,13 @@ pub(crate) mod sealed {
                 intensity_array_in.unit = Unit::DetectorCounts;
                 array_map.add(intensity_array_in);
             }
+
+            array_map
+        }
+
+        pub fn get_tic(&mut self) -> Chromatogram {
+            let tic = self.handle.tic();
+            let array_map = self.unpack_chromatogram_signal(tic);
 
             let mut descr = ChromatogramDescription::default();
             descr.chromatogram_type = ChromatogramType::TotalIonCurrentChromatogram;
@@ -249,44 +254,7 @@ pub(crate) mod sealed {
         pub fn get_bpc(&mut self) -> Chromatogram {
             let bpc = self.handle.bpc();
 
-            let mut array_map = BinaryArrayMap::default();
-            if let Some(data) = bpc.data() {
-                let time_array = data.time();
-                let intensity_array = data.intensity();
-
-                let mut time_array_in = DataArray::from_name_type_size(
-                    &ArrayType::TimeArray,
-                    BinaryDataArrayType::Float64,
-                    time_array.len() * BinaryDataArrayType::Float64.size_of(),
-                );
-                time_array_in.unit = Unit::Minute;
-                time_array_in.extend(&time_array).unwrap();
-                array_map.add(time_array_in);
-
-                let mut intensity_array_in = DataArray::from_name_type_size(
-                    &ArrayType::IntensityArray,
-                    BinaryDataArrayType::Float32,
-                    time_array.len() * BinaryDataArrayType::Float32.size_of(),
-                );
-                intensity_array_in.unit = Unit::DetectorCounts;
-                intensity_array_in.extend(&intensity_array).unwrap();
-                array_map.add(intensity_array_in);
-            } else {
-                let mut time_array_in = DataArray::from_name_and_type(
-                    &ArrayType::TimeArray,
-                    BinaryDataArrayType::Float64,
-                );
-                time_array_in.unit = Unit::Minute;
-                array_map.add(time_array_in);
-
-                let mut intensity_array_in = DataArray::from_name_and_type(
-                    &ArrayType::IntensityArray,
-                    BinaryDataArrayType::Float32,
-                );
-                intensity_array_in.unit = Unit::DetectorCounts;
-                array_map.add(intensity_array_in);
-            }
-
+            let array_map = self.unpack_chromatogram_signal(bpc);
             let mut descr = ChromatogramDescription::default();
             descr.chromatogram_type = ChromatogramType::BasePeakChromatogram;
             descr.id = "BPC".to_string();
@@ -1090,26 +1058,6 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
         self.get_spectrum(index)
     }
 
-    fn get_spectrum_by_time(&mut self, time: f64) -> Option<MultiLayerSpectrum<C, D>> {
-        let reload = if self.handle.get_signal_loading() {
-            self.handle.set_signal_loading(false);
-            true
-        } else {
-            false
-        };
-        if let Some(i) = self._offset_of_time(time) {
-            if reload {
-                self.handle.set_signal_loading(true);
-            }
-            self.get_spectrum(i as usize)
-        } else {
-            if reload {
-                self.handle.set_signal_loading(true);
-            }
-            None
-        }
-    }
-
     fn get_index(&self) -> &OffsetIndex {
         &self.spectrum_index
     }
@@ -1141,22 +1089,10 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
     }
 
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
-        let reload = if self.handle.get_signal_loading() {
-            self.handle.set_signal_loading(false);
-            true
-        } else {
-            false
-        };
         if let Some(i) = self._offset_of_time(time) {
             self.index = i as usize;
-            if reload {
-                self.handle.set_signal_loading(true);
-            }
             Ok(self)
         } else {
-            if reload {
-                self.handle.set_signal_loading(true);
-            }
             Err(SpectrumAccessError::SpectrumNotFound)
         }
     }
@@ -1249,6 +1185,7 @@ mod test {
         let sf = &reader.file_description().source_files[0];
         assert_eq!(sf.id, "RAW1");
         assert_eq!(sf.name, "small.RAW");
+        assert_eq!(reader.source_file_name().unwrap(), sf.name);
         assert_eq!(
             sf.get_param_by_name("SHA-1").unwrap().value,
             "b43e9286b40e8b5dbc0dfa2e428495769ca96a96"
@@ -1274,6 +1211,15 @@ mod test {
             conf.get_param_by_accession("MS:1000448").unwrap().name(),
             "LTQ FT"
         );
+
+        let sw = reader.softwares().iter().find(|s| s.id == "thermo_xcalibur").unwrap();
+        assert!(sw.is_acquisition());
+        assert!(sw.is_data_processing());
+
+        assert_eq!(reader.samples().len(), 1);
+
+        assert_eq!(reader.spectrum_count_hint(), Some(reader.len() as u64));
+
         Ok(())
     }
 
@@ -1378,6 +1324,16 @@ mod test {
             eprintln!("{k} -> {v:?}");
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_tic() -> io::Result<()> {
+        let mut reader = ThermoRawReader::open_path("./test/data/small.RAW")?;
+        let tic= reader.get_chromatogram_by_id("TIC").unwrap();
+        let exp_n = reader.len();
+        let obs_n = tic.time()?.len();
+        assert_eq!(obs_n, exp_n);
         Ok(())
     }
 }

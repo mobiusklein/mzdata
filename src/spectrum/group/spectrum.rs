@@ -45,13 +45,23 @@ pub trait SpectrumGrouping<
 
     /// The spectrum that occurred last chronologically
     fn latest_spectrum(&self) -> Option<&S> {
-        self.precursor().or_else(|| {
-            self.products().iter().max_by(|a, b| {
-                a.acquisition()
-                    .start_time()
-                    .total_cmp(&b.acquisition().start_time())
-            })
-        })
+        let product = self.products().iter().max_by(|a, b| {
+            a.acquisition()
+                .start_time()
+                .total_cmp(&b.acquisition().start_time())
+        });
+        match (self.precursor(), product) {
+            (None, None) => None,
+            (None, Some(c)) => Some(c),
+            (Some(p), None) => Some(p),
+            (Some(p), Some(c)) => {
+                if p.start_time() > c.start_time() {
+                    Some(p)
+                } else {
+                    Some(c)
+                }
+            },
+        }
     }
 
     /// The lowest MS level in the group
@@ -366,3 +376,57 @@ where
     }
 }
 
+
+#[cfg(test)]
+mod test {
+    use crate::Spectrum;
+
+    use super::*;
+
+    fn make_group() -> SpectrumGroup {
+        let mut spec1 = Spectrum::default();
+        {
+            let desc1 = spec1.description_mut();
+            desc1.id = "index=0".into();
+            desc1.ms_level = 1;
+            desc1.index = 0;
+            desc1.acquisition.first_scan_mut().unwrap().start_time = 100.0;
+        }
+
+        let mut spec2 = Spectrum::default();
+        {
+            let desc2 = spec2.description_mut();
+            desc2.id = "index=1".into();
+            desc2.ms_level = 2;
+            desc2.index = 1;
+            desc2.acquisition.first_scan_mut().unwrap().start_time = 101.0;
+        }
+
+        let mut spec3 = Spectrum::default();
+        {
+            let desc3 = spec3.description_mut();
+            desc3.id = "index=2".into();
+            desc3.ms_level = 2;
+            desc3.index = 2;
+            desc3.acquisition.first_scan_mut().unwrap().start_time = 101.5;
+        }
+
+        SpectrumGroup::new(Some(spec1), vec![
+            spec2,
+            spec3
+        ])
+    }
+
+    #[test]
+    fn test_construct() {
+        let group = make_group();
+        assert_eq!(group.lowest_ms_level().unwrap(), 1);
+        assert_eq!(group.highest_ms_level().unwrap(), 2);
+
+        assert_eq!(group.earliest_spectrum().unwrap().ms_level(), 1);
+        assert_eq!(group.latest_spectrum().unwrap().ms_level(), 2);
+
+        assert_eq!(group.iter().count(), 3);
+        assert_eq!(group.into_iter().count(), 3);
+    }
+}

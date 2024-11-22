@@ -75,6 +75,9 @@ pub trait SpectrumSource<
         if lo == hi {
             return None;
         }
+
+        let original_detail_level = *self.detail_level();
+        self.set_detail_level(DetailLevel::MetadataOnly);
         while hi != lo {
             let mid = (hi + lo) / 2;
             let scan = self.get_spectrum_by_index(mid)?;
@@ -86,6 +89,7 @@ pub trait SpectrumSource<
                 best_match = Some(scan);
             }
             if hi.saturating_sub(1) == lo {
+                self.set_detail_level(original_detail_level);
                 return best_match
             }
             else if scan_time > time {
@@ -94,6 +98,7 @@ pub trait SpectrumSource<
                 lo = mid;
             }
         }
+        self.set_detail_level(original_detail_level);
         best_match
     }
 

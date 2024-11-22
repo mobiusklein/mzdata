@@ -2,13 +2,13 @@ use std::{marker::PhantomData, mem};
 
 use mzpeaks::{
     coordinate::{IonMobility, Mass, MZ},
-    feature::FeatureLike, KnownCharge,
+    feature::FeatureLike,
+    KnownCharge,
 };
 
 use crate::spectrum::{IonMobilityFrameLike, MultiLayerIonMobilityFrame};
 
 use super::util::GroupIterState;
-
 
 /// An abstraction over [`IonMobilityFrameGroup`](crate::spectrum::IonMobilityFrameGroup)'s interface.
 pub trait IonMobilityFrameGrouping<
@@ -48,13 +48,23 @@ pub trait IonMobilityFrameGrouping<
 
     /// The frame that occurred last chronologically
     fn latest_frame(&self) -> Option<&S> {
-        self.precursor().or_else(|| {
-            self.products().iter().max_by(|a, b| {
-                a.acquisition()
-                    .start_time()
-                    .total_cmp(&b.acquisition().start_time())
-            })
-        })
+        let product = self.products().iter().max_by(|a, b| {
+            a.acquisition()
+                .start_time()
+                .total_cmp(&b.acquisition().start_time())
+        });
+        match (self.precursor(), product) {
+            (None, None) => None,
+            (None, Some(c)) => Some(c),
+            (Some(p), None) => Some(p),
+            (Some(p), Some(c)) => {
+                if p.start_time() > c.start_time() {
+                    Some(p)
+                } else {
+                    Some(c)
+                }
+            }
+        }
     }
 
     /// The lowest MS level in the group
@@ -92,7 +102,6 @@ pub trait IonMobilityFrameGrouping<
     fn into_parts(self) -> (Option<S>, Vec<S>);
 }
 
-
 /**
 A pairing of an optional MS1 ion mobility frame with all its associated MSn ion mobility frames.
 */
@@ -119,11 +128,14 @@ where
     S: IonMobilityFrameLike<C, D>,
 {
     fn default() -> Self {
-        Self { precursor: None, products: Vec::new(), centroid_type: Default::default(), deconvoluted_type: Default::default() }
+        Self {
+            precursor: None,
+            products: Vec::new(),
+            centroid_type: Default::default(),
+            deconvoluted_type: Default::default(),
+        }
     }
 }
-
-
 
 impl<C, D, S> IonMobilityFrameGrouping<C, D, S> for IonMobilityFrameGroup<C, D, S>
 where
@@ -161,7 +173,6 @@ where
         (self.precursor, self.products)
     }
 }
-
 
 pub struct IonMobilityFrameGroupIntoIter<
     C: FeatureLike<MZ, IonMobility> + Default,
@@ -362,7 +373,71 @@ where
     D: FeatureLike<Mass, IonMobility> + KnownCharge + Default,
     S: IonMobilityFrameLike<C, D> + Default,
 {
+    pub fn new(precursor: Option<S>, products: Vec<S>) -> Self {
+        Self {
+            precursor,
+            products,
+            centroid_type: PhantomData,
+            deconvoluted_type: PhantomData,
+        }
+    }
+
     pub fn iter(&'a self) -> IonMobilityFrameGroupIter<'a, C, D, S, Self> {
         IonMobilityFrameGroupIter::new(self)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use mzpeaks::feature::{ChargedFeature, Feature};
+
+    use super::*;
+
+    fn make_group() -> IonMobilityFrameGroup<
+        Feature<MZ, IonMobility>,
+        ChargedFeature<Mass, IonMobility>,
+        MultiLayerIonMobilityFrame<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>,
+    > {
+        let mut spec1 = MultiLayerIonMobilityFrame::default();
+        {
+            let desc1 = spec1.description_mut();
+            desc1.id = "index=0".into();
+            desc1.ms_level = 1;
+            desc1.index = 0;
+            desc1.acquisition.first_scan_mut().unwrap().start_time = 100.0;
+        }
+
+        let mut spec2 = MultiLayerIonMobilityFrame::default();
+        {
+            let desc2 = spec2.description_mut();
+            desc2.id = "index=1".into();
+            desc2.ms_level = 2;
+            desc2.index = 1;
+            desc2.acquisition.first_scan_mut().unwrap().start_time = 101.0;
+        }
+
+        let mut spec3 = MultiLayerIonMobilityFrame::default();
+        {
+            let desc3 = spec3.description_mut();
+            desc3.id = "index=2".into();
+            desc3.ms_level = 2;
+            desc3.index = 2;
+            desc3.acquisition.first_scan_mut().unwrap().start_time = 101.5;
+        }
+
+        IonMobilityFrameGroup::new(Some(spec1), vec![spec2, spec3])
+    }
+
+    #[test]
+    fn test_construct() {
+        let group = make_group();
+        assert_eq!(group.lowest_ms_level().unwrap(), 1);
+        assert_eq!(group.highest_ms_level().unwrap(), 2);
+
+        assert_eq!(group.earliest_frame().unwrap().ms_level(), 1);
+        assert_eq!(group.latest_frame().unwrap().ms_level(), 2);
+
+        assert_eq!(group.iter().count(), 3);
+        assert_eq!(group.into_iter().count(), 3);
     }
 }

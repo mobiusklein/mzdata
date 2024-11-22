@@ -2023,7 +2023,7 @@ impl<
     type Item = Chromatogram;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.reader.chromatogram_index.len() <= self.index {
+        if self.index < self.reader.chromatogram_index.len() {
             let result = self.reader.get_chromatogram_by_index(self.index);
             self.index += 1;
             result
@@ -2401,6 +2401,15 @@ mod test {
         assert_eq!(view.len(), 73368);
         assert_eq!(chrom.time().unwrap().len(), 73368);
 
+        let chrom2 = reader.get_chromatogram_by_index(0).unwrap();
+        assert_eq!(chrom2.id(), "TIC");
+        assert_eq!(chrom2.time()?.len(), 73368);
+
+        reader.reset();
+        assert_eq!(reader.chromatogram_index.len(), 1);
+        let chrom3 = reader.iter_chromatograms().next().unwrap();
+        assert_eq!(chrom3.id(), "TIC");
+        assert_eq!(chrom3.time()?.len(), 73368);
         Ok(())
     }
 

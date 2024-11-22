@@ -101,6 +101,9 @@ impl ArrayType {
             ArrayType::TimeArray => CV
                 .const_param_ident_unit("time array", 1000595, unit.unwrap_or(Unit::Minute))
                 .into(),
+            ArrayType::WavelengthArray => CV.const_param_ident_unit("wavelength array", 1000617, Unit::Nanometer).into(),
+            ArrayType::SignalToNoiseArray => CV.const_param_ident("signal to noise array", 1000517).into(),
+            ArrayType::IonMobilityArray => CV.const_param_ident_unit("ion mobility array", 1002893, unit.unwrap_or_default()).into(),
             ArrayType::RawIonMobilityArray => CV
                 .const_param_ident_unit("raw ion mobility array", 1003007, unit.unwrap_or_default())
                 .into(),
@@ -119,11 +122,7 @@ impl ArrayType {
                 )
                 .into(),
             ArrayType::NonStandardDataArray { name } => {
-                let mut p = CV.param_val(
-                    1000786,
-                    "non-standard data array",
-                    name.to_string(),
-                );
+                let mut p = CV.param_val(1000786, "non-standard data array", name.to_string());
                 p.unit = unit.unwrap_or_default();
                 p
             }
@@ -142,6 +141,9 @@ impl ArrayType {
             }
             ArrayType::ChargeArray => CV.const_param_ident("charge array", 1000516),
             ArrayType::TimeArray => CV.const_param_ident_unit("time array", 1000595, Unit::Minute),
+            ArrayType::WavelengthArray => CV.const_param_ident_unit("wavelength array", 1000617, Unit::Nanometer),
+            ArrayType::SignalToNoiseArray => CV.const_param_ident("signal to noise array", 1000517),
+            ArrayType::IonMobilityArray => CV.const_param_ident("ion mobility array", 1002893),
             ArrayType::RawIonMobilityArray => {
                 CV.const_param_ident("raw ion mobility array", 1003007)
             }
@@ -152,7 +154,9 @@ impl ArrayType {
                 CV.const_param_ident("deconvoluted ion mobility array", 1003154)
             }
             ArrayType::NonStandardDataArray { name: _name } => {
-                panic!("Cannot format NonStandardDataArray in a const context, please use `as_param`");
+                panic!(
+                    "Cannot format NonStandardDataArray in a const context, please use `as_param`"
+                );
             }
             _ => {
                 panic!("Could not determine how to name for array");
@@ -179,7 +183,9 @@ impl ArrayType {
                 CV.const_param_ident_unit("deconvoluted ion mobility array", 1003154, unit)
             }
             ArrayType::NonStandardDataArray { name: _name } => {
-                panic!("Cannot format NonStandardDataArray in a const context, please use `as_param`");
+                panic!(
+                    "Cannot format NonStandardDataArray in a const context, please use `as_param`"
+                );
             }
             _ => {
                 panic!("Could not determine how to name for array");
@@ -414,4 +420,86 @@ pub fn delta_encoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] 
         tmp
     });
     values
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_dtype_size() {
+        assert_eq!(BinaryDataArrayType::ASCII.size_of(), 1);
+        assert_eq!(BinaryDataArrayType::Float32.size_of(), 4);
+        assert_eq!(BinaryDataArrayType::Int32.size_of(), 4);
+        assert_eq!(BinaryDataArrayType::Float64.size_of(), 8);
+        assert_eq!(BinaryDataArrayType::Int64.size_of(), 8);
+    }
+
+    #[test]
+    fn test_array_type_param() {
+        let array_types = [
+            ArrayType::MZArray,
+            ArrayType::IntensityArray,
+            ArrayType::ChargeArray,
+            ArrayType::SignalToNoiseArray,
+            ArrayType::TimeArray,
+            ArrayType::WavelengthArray,
+            ArrayType::IonMobilityArray,
+            ArrayType::MeanIonMobilityArray,
+            ArrayType::RawIonMobilityArray,
+            ArrayType::DeconvolutedIonMobilityArray,
+        ];
+
+        for at in array_types {
+            assert_eq!(at.as_param_const().name, at.as_param(None).name)
+        }
+    }
+
+    #[test]
+    fn test_binary_encoding_conv() {
+        let encodings = [
+            BinaryCompressionType::Decoded,
+            BinaryCompressionType::NoCompression,
+            BinaryCompressionType::NumpressLinear,
+            BinaryCompressionType::NumpressLinearZlib,
+            BinaryCompressionType::NumpressPIC,
+            BinaryCompressionType::NumpressPICZlib,
+            BinaryCompressionType::NumpressSLOF,
+            BinaryCompressionType::NumpressSLOFZlib,
+            BinaryCompressionType::Zlib,
+        ];
+
+        for enc in encodings {
+            let reps = match enc {
+                BinaryCompressionType::NoCompression => ("no compression", 1000576),
+                BinaryCompressionType::Zlib => ("zlib compression", 1000574),
+                BinaryCompressionType::NumpressLinear => {
+                    ("MS-Numpress linear prediction compression", 1002312)
+                }
+                BinaryCompressionType::NumpressSLOF => {
+                    ("MS-Numpress positive integer compression", 1002313)
+                }
+                BinaryCompressionType::NumpressPIC => {
+                    ("MS-Numpress short logged float compression", 1002314)
+                }
+                BinaryCompressionType::NumpressLinearZlib => (
+                    "MS-Numpress linear prediction compression followed by zlib compression",
+                    1002746,
+                ),
+                BinaryCompressionType::NumpressSLOFZlib => (
+                    "MS-Numpress positive integer compression followed by zlib compression",
+                    1002477,
+                ),
+                BinaryCompressionType::NumpressPICZlib => (
+                    "MS-Numpress short logged float compression followed by zlib compression",
+                    1002478,
+                ),
+                _ =>  ("", 0),
+            };
+            if let Some(p) = enc.as_param() {
+                assert_eq!(p.name, reps.0);
+                assert_eq!(p.accession.unwrap(), reps.1);
+            }
+        }
+    }
 }

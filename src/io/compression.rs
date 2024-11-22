@@ -94,3 +94,25 @@ impl<R: BufRead + Seek> Seek for RestartableGzDecoder<R> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::fs;
+
+    use super::*;
+
+    #[test]
+    fn exercise_restartable() -> io::Result<()> {
+        let handle = io::BufReader::new(fs::File::open("test/data/small.mzML.gz")?);
+        let mut reader = RestartableGzDecoder::new(handle);
+        reader.seek(io::SeekFrom::Current(5113415))?;
+        let mut buf = String::new();
+        reader.read_to_string(&mut buf)?;
+        assert!(buf.starts_with("<indexList count=\"2\">"));
+        reader.seek(io::SeekFrom::Start(5145))?;
+        buf.clear();
+        io::BufReader::new(&mut reader).read_line(&mut buf)?;
+        assert!(buf.contains("controllerType=0 controllerNumber=1 scan=1"));
+        Ok(())
+    }
+}

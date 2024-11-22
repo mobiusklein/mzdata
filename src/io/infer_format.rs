@@ -472,6 +472,17 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
         msfmt_dispatch!(self, reader, reader.get_spectrum_by_index(index))
     }
 
+    fn get_spectrum_by_time(&mut self, time: f64) -> Option<MultiLayerSpectrum<C, D>> {
+        match self {
+            MZReaderType::MzML(reader) => reader.get_spectrum_by_time(time),
+            MZReaderType::MGF(reader) => reader.get_spectrum_by_time(time),
+            #[cfg(feature = "thermo")]
+            MZReaderType::ThermoRaw(reader) => reader.get_spectrum_by_time(time),
+            #[cfg(feature = "mzmlb")]
+            MZReaderType::MzMLb(reader) => reader.get_spectrum_by_time(time),
+        }
+    }
+
     fn get_index(&self) -> &super::OffsetIndex {
         msfmt_dispatch!(self, reader, reader.get_index())
     }
@@ -1220,13 +1231,22 @@ mod test {
         assert!(!zipped);
     }
 
+    #[cfg(feature = "thermo")]
+    #[test]
+    fn infer_thermo() {
+        let path = path::Path::new("./test/data/small.RAW");
+        let (fmt, zipped) = infer_from_path(path);
+        assert_eq!(fmt, MassSpectrometryFormat::ThermoRaw);
+        assert!(!zipped);
+    }
+
     #[test]
     fn infer_open() {
         let path = path::Path::new("./test/data/small.mzML");
         assert!(path.exists());
         if let Ok(mut reader) = MZReader::open_path(path) {
             assert_eq!(reader.len(), 48);
-
+            assert_eq!(*reader.detail_level(), DetailLevel::Full);
             if let Some(spec) = reader.get_spectrum_by_index(10) {
                 let spec: Spectrum = spec;
                 assert!(spec.index() == 10);
@@ -1237,7 +1257,48 @@ mod test {
                     let mzs = data_arrays.mzs().unwrap();
                     assert!(mzs.len() == 941);
                 }
+            } else {
+                panic!("Failed to retrieve spectrum by index")
             }
+
+            assert_eq!(reader.get_spectrum_by_id("controllerType=0 controllerNumber=1 scan=11").unwrap().index(), 10);
+
+            if let Some(spec) = reader.get_spectrum_by_time(0.358558333333) {
+                assert_eq!(spec.index(), 34);
+            } else {
+                panic!("Failed to retrieve spectrum by time")
+            }
+
+        } else {
+            panic!("Failed to open file")
+        }
+    }
+
+    #[cfg(feature = "thermo")]
+    #[test]
+    fn infer_open_thermo() {
+        let path = path::Path::new("./test/data/small.RAW");
+        assert!(path.exists());
+        if let Ok(mut reader) = MZReader::open_path(path) {
+            assert_eq!(reader.len(), 48);
+            assert_eq!(*reader.detail_level(), DetailLevel::Full);
+            if let Some(spec) = reader.get_spectrum_by_index(10) {
+                let spec: Spectrum = spec;
+                assert_eq!(spec.index(), 10);
+                assert_eq!(spec.id(), "controllerType=0 controllerNumber=1 scan=11");
+                assert_eq!(spec.peaks().len(), 941);
+            } else {
+                panic!("Failed to retrieve spectrum by index")
+            }
+
+            assert_eq!(reader.get_spectrum_by_id("controllerType=0 controllerNumber=1 scan=11").unwrap().index(), 10);
+
+            if let Some(spec) = reader.get_spectrum_by_time(0.358558333333) {
+                assert_eq!(spec.index(), 34);
+            } else {
+                panic!("Failed to retrieve spectrum by time")
+            }
+
         } else {
             panic!("Failed to open file")
         }
