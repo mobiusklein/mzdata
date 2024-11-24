@@ -2010,7 +2010,6 @@ dependencies = [
  "hdf5-sys",
  "identity-hash",
  "indexmap",
- "lazy_static",
  "libz-sys",
  "log",
  "md5",
