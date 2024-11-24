@@ -61,7 +61,7 @@ impl MassSpectrometryFormat {
     pub fn as_param(&self) -> Option<Param> {
         let p = match self {
             MassSpectrometryFormat::MGF => ControlledVocabulary::MS.const_param_ident("Mascot MGF format", 1001062),
-            MassSpectrometryFormat::MzML => ControlledVocabulary::MS.const_param_ident("MzML format", 1000584),
+            MassSpectrometryFormat::MzML => ControlledVocabulary::MS.const_param_ident("mzML format", 1000584),
             MassSpectrometryFormat::MzMLb => ControlledVocabulary::MS.const_param_ident("mzMLb format", 1002838),
             MassSpectrometryFormat::ThermoRaw => ControlledVocabulary::MS.const_param_ident("Thermo RAW format", 1000563),
             MassSpectrometryFormat::BrukerTDF => ControlledVocabulary::MS.const_param_ident("Bruker TDF format", 1002817),
