@@ -127,6 +127,13 @@ impl IndexExtry {
     }
 }
 
+
+/// An ion mobility frame reader for Bruker TDF file format. It supports the same
+/// kind of PASEF frame traversal that is supported by [ProteoWizard](https://github.com/ProteoWizard/pwiz).
+///
+/// It implements the full range of [`IonMobilityFrameSource`]-derived traits. To view
+/// these frames as flat peak lists, this type can be wrapped in a [`TDFSpectrumReaderType`]
+/// using [`TDFFrameReaderType::into_spectrum_reader`].
 #[derive(Debug)]
 pub struct TDFFrameReaderType<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
@@ -162,10 +169,21 @@ pub struct TDFFrameReaderType<
 impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge>
     TDFFrameReaderType<C, D>
 {
+    /// Construct a new reader from the specified file system path.
+    ///
+    /// # Errors
+    /// This may fail if any of the component files fails to match the expected schema
+    /// or layout.
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, timsrust::TimsRustError> {
         Self::new_with_detail_level(path, DetailLevel::Full)
     }
 
+    /// Construct a new reader from the specified file system path with the specified
+    /// [`DetailLevel`].
+    ///
+    /// # Errors
+    /// This may fail if any of the component files fails to match the expected schema
+    /// or layout.
     pub fn new_with_detail_level<P: AsRef<Path>>(
         path: P,
         detail_level: DetailLevel,
@@ -211,6 +229,8 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         Ok(this)
     }
 
+    /// Consume this reader, wrapping it in a [`TDFSpectrumReaderType`] with the default
+    /// peak merging tolerance.
     pub fn into_spectrum_reader<
         CP: CentroidLike + Default,
         DP: DeconvolutedCentroidLike + Default,
@@ -220,6 +240,8 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         self.into_spectrum_reader_with_peak_merging_tolerance(PEAK_MERGE_TOLERANCE)
     }
 
+    /// Consume this reader, wrapping it in a [`TDFSpectrumReaderType`] with the
+    /// specified peak merging error tolerance.
     pub fn into_spectrum_reader_with_peak_merging_tolerance<
         CP: CentroidLike + Default,
         DP: DeconvolutedCentroidLike + Default,
@@ -935,6 +957,8 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 pub type TDFFrameReader =
     TDFFrameReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>;
 
+/// A consolidated spectrum reader for Bruker TDF file format. It sums over ion mobility
+/// spectra, consolidating features into peaks.
 #[derive(Debug)]
 pub struct TDFSpectrumReaderType<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
@@ -1117,10 +1141,12 @@ impl<
         })
     }
 
+    /// The number of spectra available
     pub fn len(&self) -> usize {
         self.frame_reader.len()
     }
 
+    /// Retrieve a spectrum by index
     pub fn get(&self, index: usize) -> Result<Option<MultiLayerSpectrum>, TimsRustError> {
         self.frame_reader.get(index).map(|f| {
             f.map(|f| {
@@ -1130,16 +1156,34 @@ impl<
         })
     }
 
+    /// Consume the spectrum reader, retrieving the underlying [`TDFFrameReaderType`]
     pub fn into_inner(self) -> TDFFrameReaderType<C, D> {
         self.frame_reader
     }
 
+    /// Retrieving a mutable reference the underlying [`TDFFrameReaderType`]
     pub fn frame_reader(&mut self) -> &mut TDFFrameReaderType<C, D> {
         &mut self.frame_reader
     }
 
+    /// Consume the spectrum reader, retrieving the underlying [`TDFFrameReaderType`]
+    ///
+    /// # See also
+    /// An alias of [`TDFSpectrumReaderType::into_inner`]
     pub fn into_frame_reader(self) -> TDFFrameReaderType<C, D> {
         self.into_inner()
+    }
+
+    /// Get the error tolerance margin for consolidating peaks over the
+    /// ion mobility dimension.
+    pub fn peak_merging_tolerance(&self) -> Tolerance {
+        self.peak_merging_tolerance
+    }
+
+    /// Get a mutable reference to the error tolerance margin for consolidating
+    /// peaks over the ion mobility dimension.
+    pub fn peak_merging_tolerance_mut(&mut self) -> &mut Tolerance {
+        &mut self.peak_merging_tolerance
     }
 }
 
@@ -1313,6 +1357,10 @@ impl<
 }
 
 /// Test if a file system path is a TDF directory
+///
+/// This will first probe the directory for the required
+/// files, and only after verifying the files exist, attempt
+/// to test the SQL schema.
 pub fn is_tdf<P: AsRef<Path>>(path: P) -> bool {
     let path = path.as_ref();
 
