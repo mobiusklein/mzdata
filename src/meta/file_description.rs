@@ -222,6 +222,12 @@ pub struct NativeSpectrumIDFormat {
     field_names: Vec<Option<String>>,
 }
 
+impl PartialEq for NativeSpectrumIDFormat {
+    fn eq(&self, other: &Self) -> bool {
+        self.term == other.term
+    }
+}
+
 impl From<NativeSpectrumIdentifierFormatTerm> for NativeSpectrumIDFormat {
     fn from(value: NativeSpectrumIdentifierFormatTerm) -> Self {
         Self::new(value)
@@ -527,6 +533,13 @@ crate::cvmap! {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_source_file() -> io::Result<()> {
+        let sf = SourceFile::from_path("test/data/small.mzML")?;
+        assert_eq!(MassSpectrometerFileFormatTerm::MzML.to_param(), sf.file_format.clone().unwrap());
+        Ok(())
+    }
 
     #[test]
     fn test_parser() {
