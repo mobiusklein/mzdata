@@ -132,7 +132,7 @@ pub trait ChromatogramLike {
     }
 
     #[inline]
-    fn chromatogram_typ(&self) -> ChromatogramType {
+    fn chromatogram_type(&self) -> ChromatogramType {
         self.description().chromatogram_type
     }
 
