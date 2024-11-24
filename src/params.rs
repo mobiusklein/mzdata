@@ -2031,6 +2031,7 @@ pub enum Unit {
     Mass,
     PartsPerMillion,
 
+    // Wavelength
     Nanometer,
 
     // Time

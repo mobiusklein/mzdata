@@ -9,6 +9,8 @@ use std::sync::mpsc::{Receiver, Sender, SyncSender};
 
 use flate2::{bufread::GzDecoder, write::GzEncoder};
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
+#[cfg(feature = "bruker_tdf")]
+use mzpeaks::{feature::{ChargedFeature, Feature}, IonMobility, Mass, MZ};
 
 use crate::io::PreBufferedStream;
 use crate::params::ControlledVocabulary;
@@ -27,6 +29,9 @@ use crate::Param;
 #[cfg(feature = "thermo")]
 use super::thermo::{ThermoRawReaderType, is_thermo_raw_prefix};
 
+#[cfg(feature = "bruker_tdf")]
+use super::tdf::{is_tdf, TDFSpectrumReaderType};
+
 use super::traits::{ChromatogramSource, SeekRead, SpectrumReceiver, StreamingSpectrumIterator};
 use super::DetailLevel;
 
@@ -39,6 +44,7 @@ pub enum MassSpectrometryFormat {
     MzML,
     MzMLb,
     ThermoRaw,
+    BrukerTDF,
     Unknown,
 }
 
@@ -58,6 +64,7 @@ impl MassSpectrometryFormat {
             MassSpectrometryFormat::MzML => ControlledVocabulary::MS.const_param_ident("MzML format", 1000584),
             MassSpectrometryFormat::MzMLb => ControlledVocabulary::MS.const_param_ident("mzMLb format", 1002838),
             MassSpectrometryFormat::ThermoRaw => ControlledVocabulary::MS.const_param_ident("Thermo RAW format", 1000563),
+            MassSpectrometryFormat::BrukerTDF => ControlledVocabulary::MS.const_param_ident("Bruker TDF format", 1002817),
             MassSpectrometryFormat::Unknown => return None,
         };
         Some(p.into())
@@ -118,7 +125,9 @@ pub enum MZReaderType<
     #[cfg(feature = "thermo")]
     ThermoRaw(ThermoRawReaderType<C, D>),
     #[cfg(feature = "mzmlb")]
-    MzMLb(MzMLbReaderType<C, D>)
+    MzMLb(MzMLbReaderType<C, D>),
+    #[cfg(feature = "bruker_tdf")]
+    BrukerTDF(TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D>)
 }
 
 
@@ -208,6 +217,8 @@ macro_rules! msfmt_dispatch {
             MZReaderType::ThermoRaw($r) => $e,
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb($r) => $e,
+            #[cfg(feature = "bruker_tdf")]
+            MZReaderType::BrukerTDF($r) => $e,
         }
     };
 }
@@ -234,13 +245,15 @@ impl<R: io::Read + io::Seek,
             MZReaderType::ThermoRaw(_) => MassSpectrometryFormat::ThermoRaw,
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(_) => MassSpectrometryFormat::MzMLb,
+            #[cfg(feature = "bruker_tdf")]
+            MZReaderType::BrukerTDF(_) => MassSpectrometryFormat::BrukerTDF
         }
     }
 
     /// Get the [`DetailLevel`] the reader currently uses
     pub fn detail_level(&self) -> &DetailLevel {
         msfmt_dispatch!(self, reader, {
-            &reader.detail_level
+            &reader.detail_level()
         })
     }
 
@@ -254,7 +267,7 @@ impl<R: io::Read + io::Seek,
     /// depend upon the underlying reader.
     pub fn set_detail_level(&mut self, detail_level: DetailLevel) {
         msfmt_dispatch!(self, reader, {
-            reader.detail_level = detail_level
+            reader.set_detail_level(detail_level);
         });
     }
 
@@ -291,6 +304,8 @@ impl<R: io::Read + io::Seek,
             MZReaderType::ThermoRaw(r) => r.get_chromatogram_by_id(id),
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(r) => r.get_chromatogram_by_id(id),
+            #[cfg(feature = "bruker_tdf")]
+            MZReaderType::BrukerTDF(r) => r.get_chromatogram_by_id(id),
         }
     }
 
@@ -302,6 +317,8 @@ impl<R: io::Read + io::Seek,
             MZReaderType::ThermoRaw(r) => r.get_chromatogram_by_index(index),
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(r) => r.get_chromatogram_by_index(index),
+            #[cfg(feature = "bruker_tdf")]
+            MZReaderType::BrukerTDF(r) => r.get_chromatogram_by_index(index)
         }
     }
 }
@@ -480,6 +497,8 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
             MZReaderType::ThermoRaw(reader) => reader.get_spectrum_by_time(time),
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(reader) => reader.get_spectrum_by_time(time),
+            #[cfg(feature = "bruker_tdf")]
+            MZReaderType::BrukerTDF(r) => r.get_spectrum_by_time(time)
         }
     }
 
@@ -562,6 +581,10 @@ macro_rules! msfmt_dispatch_cap {
             MZReaderType::MzMLb($r) => {
                 $e?;
             },
+            #[cfg(feature = "bruker_tdf")]
+            MZReaderType::BrukerTDF($r) => {
+                $e?;
+            }
         };
     };
 }
@@ -589,6 +612,14 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
 /// GZIP compressed
 pub fn infer_from_path<P: Into<path::PathBuf>>(path: P) -> (MassSpectrometryFormat, bool) {
     let path: path::PathBuf = path.into();
+    if path.is_dir() {
+        #[cfg(feature = "bruker_tdf")]
+        if is_tdf(path) {
+            return (MassSpectrometryFormat::BrukerTDF, false)
+        } else {
+            return (MassSpectrometryFormat::Unknown, false)
+        }
+    }
     let (is_gzipped, path) = is_gzipped_extension(path);
     if let Some(ext) = path.extension() {
         if let Some(ext) = ext.to_ascii_lowercase().to_str() {
@@ -930,6 +961,12 @@ pub trait MassSpectrometryReadWriteProcess<
                     MassSpectrometryFormat::ThermoRaw => {
                         let reader = ThermoRawReaderType::new(&read_path)?;
                         let reader = self.transform_reader(reader, format)?;
+                        self.open_writer(reader, format, write_path)?;
+                        Ok(())
+                    },
+                    #[cfg(feature = "bruker_tdf")]
+                    MassSpectrometryFormat::BrukerTDF => {
+                        let reader: TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D> = TDFSpectrumReaderType::open_path(read_path)?;
                         self.open_writer(reader, format, write_path)?;
                         Ok(())
                     },

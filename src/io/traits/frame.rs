@@ -11,7 +11,7 @@ use mzpeaks::{
     feature::{ChargedFeature, Feature, FeatureLike}
 };
 
-use crate::{io::{DetailLevel, OffsetIndex}, prelude::MSDataFileMetadata};
+use crate::{io::{DetailLevel, OffsetIndex}, prelude::MSDataFileMetadata, spectrum::IonMobilityFrameGroup};
 use crate::spectrum::group::IonMobilityFrameGroupingIterator;
 use crate::spectrum::spectrum_types::MultiLayerSpectrum;
 use crate::spectrum::{
@@ -450,7 +450,7 @@ impl<
     }
 }
 
-/// Errors that may occur when reading a spectrum from a [`RandomAccessSpectrumIterator`]
+/// Errors that may occur when reading a spectrum from a [`RandomAccessIonMobilityFrameIterator`]
 #[derive(Debug, Error)]
 pub enum IonMobilityFrameAccessError {
     /// An undetermined error failing to locate the requested frame
@@ -932,3 +932,16 @@ where
 }
 
 
+/// Analogous to to [`RandomAccessIonMobilityFrameIterator`], but for [`IonMobilityFrameGrouping`] implementations.
+pub trait RandomAccessIonMobilityFrameGroupingIterator<
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D> = MultiLayerIonMobilityFrame<C, D>,
+    G: IonMobilityFrameGrouping<C, D, S> = IonMobilityFrameGroup<C, D, MultiLayerIonMobilityFrame<C, D>>,
+>: Iterator<Item = G>
+{
+    fn start_from_id(&mut self, id: &str) -> Result<&Self, IonMobilityFrameAccessError>;
+    fn start_from_index(&mut self, index: usize) -> Result<&Self, IonMobilityFrameAccessError>;
+    fn start_from_time(&mut self, time: f64) -> Result<&Self, IonMobilityFrameAccessError>;
+    fn reset_state(&mut self);
+}

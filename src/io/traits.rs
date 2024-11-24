@@ -15,6 +15,7 @@ pub use frame::{
     BorrowedGeneric3DIonMobilityFrameSource, Generic3DIonMobilityFrameSource,
     IonMobilityFrameAccessError, IonMobilityFrameIterator,
     IonMobilityFrameSource, IonMobilityFrameWriter, RandomAccessIonMobilityFrameIterator,
+    RandomAccessIonMobilityFrameGroupingIterator,
 };
 
 pub use chromatogram::{ChromatogramIterator, ChromatogramSource};

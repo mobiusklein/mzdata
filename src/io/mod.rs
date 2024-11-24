@@ -37,6 +37,7 @@ pub use crate::io::traits::{
     RandomAccessSpectrumIterator, RandomAccessSpectrumSource, SpectrumAccessError,
     SpectrumGrouping, SpectrumIterator, SpectrumReceiver, SpectrumSource,
     SpectrumSourceWithMetadata, SpectrumWriter, StreamingSpectrumIterator,
+    RandomAccessIonMobilityFrameGroupingIterator,
 };
 pub use crate::io::utils::{checksum_file, DetailLevel, PreBufferedStream};
 pub use compression::RestartableGzDecoder;
@@ -45,5 +46,8 @@ pub use compression::RestartableGzDecoder;
 pub mod thermo;
 #[cfg(any(feature = "thermo", feature="doc-only"))]
 pub use thermo::ThermoRawReader;
+
+#[cfg(feature = "bruker_tdf")]
+pub mod tdf;
 
 pub mod usi;

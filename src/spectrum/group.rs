@@ -13,6 +13,8 @@ use crate::{
         RandomAccessSpectrumGroupingIterator,
         RandomAccessSpectrumIterator,
         SpectrumAccessError,
+        RandomAccessIonMobilityFrameIterator,
+        RandomAccessIonMobilityFrameGroupingIterator,
     },
     prelude::{MSDataFileMetadata, SpectrumLike},
 };
@@ -653,6 +655,64 @@ impl<
         }
     }
 }
+
+
+impl<
+        R: Iterator<Item = S>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D>,
+        G: IonMobilityFrameGrouping<C, D, S>,
+    > MSDataFileMetadata for IonMobilityFrameGroupingIterator<R, C, D, S, G>
+where
+    R: MSDataFileMetadata,
+{
+    crate::delegate_impl_metadata_trait!(source);
+}
+
+impl<
+        R: RandomAccessIonMobilityFrameIterator<C, D, S>,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D>,
+        G: IonMobilityFrameGrouping<C, D, S>,
+    > RandomAccessIonMobilityFrameGroupingIterator<C, D, S, G> for IonMobilityFrameGroupingIterator<R, C, D, S, G>
+{
+    fn start_from_id(&mut self, id: &str) -> Result<&Self, crate::io::IonMobilityFrameAccessError> {
+        match self.source.start_from_id(id) {
+            Ok(_) => {
+                self.clear();
+                Ok(self)
+            },
+            Err(e) => Err(e)
+        }
+    }
+
+    fn start_from_index(&mut self, index: usize) -> Result<&Self, crate::io::IonMobilityFrameAccessError> {
+        match self.source.start_from_index(index) {
+            Ok(_) => {
+                self.clear();
+                Ok(self)
+            },
+            Err(e) => Err(e)
+        }
+    }
+
+    fn start_from_time(&mut self, time: f64) -> Result<&Self, crate::io::IonMobilityFrameAccessError> {
+        match self.source.start_from_time(time) {
+            Ok(_) => {
+                self.clear();
+                Ok(self)
+            },
+            Err(e) => Err(e)
+        }
+    }
+
+    fn reset_state(&mut self) {
+        self.clear()
+    }
+}
+
 
 #[cfg(feature = "mzsignal")]
 mod mzsignal_impl {

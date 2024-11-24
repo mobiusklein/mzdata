@@ -556,7 +556,22 @@ mod test {
     }
 
     #[test]
-    fn test_reader_wrapper() -> io::Result<()> {
+    fn test_reader_wrapper_iter() -> io::Result<()> {
+        let group = crate::mz_read!("./test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz".as_ref(), reader => {
+            let mut wrapper: Generic3DIonMobilityFrameSource<_, _, _, Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>> = Generic3DIonMobilityFrameSource::new(reader);
+            let mut group_iter = wrapper.into_groups();
+            group_iter.start_from_id("merged=42926 frame=9728 scanStart=1 scanEnd=705")?;
+            group_iter.next().unwrap()
+        })?;
+
+        assert_eq!(group.lowest_ms_level().unwrap(), 1);
+        assert_eq!(group.highest_ms_level().unwrap(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_reader_wrapper_extract() -> io::Result<()> {
         crate::mz_read!("./test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz".as_ref(), reader => {
             let mut wrapper: Generic3DIonMobilityFrameSource<_, _, _, Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>> = Generic3DIonMobilityFrameSource::new(reader);
             let mut frame = wrapper.get_frame_by_id("merged=42926 frame=9728 scanStart=1 scanEnd=705").unwrap();

@@ -75,6 +75,13 @@ thermo = [
     "thermorawfilereader/nethost-download",
 ]
 
+bruker_tdf = [
+    "dep:timsrust",
+    "dep:parking_lot",
+    "dep:rusqlite",
+    "mzsignal",
+]
+
 doc-only = []
 
 async = ["tokio", "quick-xml/async-tokio"]
@@ -139,6 +146,11 @@ futures = { version = "0.3", optional = true }
 
 # Thermo RAW-related features
 thermorawfilereader = { version = "0.3.0", default-features = false, optional = true }
+
+# Bruker TDF-related features
+rusqlite = { version = "0.31.0", optional = true }
+timsrust = { version = "0.4.1", default-features = false, features = ["tdf", ], optional = true }
+parking_lot = { version = "0.12.3", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

@@ -75,6 +75,12 @@ macro_rules! mz_read {
                         let mut $reader: $crate::io::thermo::ThermoRawReaderType<$C, $D> = $crate::io::thermo::ThermoRawReaderType::<$C, $D>::new(&read_path)?;
                         Ok($impl)
                     },
+                    #[cfg(feature = "bruker_tdf")]
+                    $crate::io::MassSpectrometryFormat::BrukerTDF => {
+                        #[allow(unused_mut)]
+                        let mut $reader: $crate::io::tdf::TDFSpectrumReaderType<$crate::mzpeaks::feature::Feature<$crate::mzpeaks::MZ, $crate::mzpeaks::IonMobility>, $crate::mzpeaks::feature::ChargedFeature<$crate::mzpeaks::Mass, $crate::mzpeaks::IonMobility>, $C, $D> = $crate::io::tdf::TDFSpectrumReaderType::open_path(read_path)?;
+                        Ok($impl)
+                    }
                     _ => Err(std::io::Error::new(
                         std::io::ErrorKind::Unsupported,
                         format!(

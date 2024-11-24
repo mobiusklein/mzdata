@@ -4,7 +4,7 @@ pub use crate::io::traits::{
     RandomAccessSpectrumSource as _, SpectrumSourceWithMetadata as _, SpectrumSource,
     SpectrumWriter, SeekRead, SpectrumAccessError, IonMobilityFrameSource,
     RandomAccessIonMobilityFrameIterator, ChromatogramSource,
-    IonMobilityFrameWriter,
+    IonMobilityFrameWriter, RandomAccessIonMobilityFrameGroupingIterator,
 };
 
 pub use crate::meta::MSDataFileMetadata;
