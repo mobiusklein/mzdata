@@ -24,7 +24,8 @@ use super::SpectrumGrouping;
 
 /// A base trait defining the behaviors of a source of spectra.
 ///
-/// A [`SpectrumSource`]
+/// A [`SpectrumSource`] is the basis for many data access methods
+/// in [`mzdata`](crate).
 pub trait SpectrumSource<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
@@ -149,7 +150,7 @@ pub trait SpectrumSource<
         SpectrumIterator::new(self)
     }
 
-    /// Create a new `SpectrumIterator` over `self` and use that state to drive a `SpectrumGroupIterator`
+    /// Create a new [`SpectrumIterator`] over `self` and use that state to drive a [`SpectrumGroupingIterator`]
     fn groups(&mut self) -> SpectrumGroupingIterator<SpectrumIterator<'_, C, D, S, Self>, C, D, S>
     where
         Self: Sized,
@@ -157,7 +158,7 @@ pub trait SpectrumSource<
         SpectrumGroupingIterator::new(self.iter())
     }
 
-    /// Consume `self` to create a `SpectrumGroupIterator`. This is ideal for non-rewindable streams
+    /// Consume `self` to create a [`SpectrumGroupingIterator`]. This is ideal for non-rewindable streams
     /// like [`io::stdin`] which don't implement [`io::Seek`]
     fn into_groups(self) -> SpectrumGroupingIterator<Self, C, D, S>
     where
