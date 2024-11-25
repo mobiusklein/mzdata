@@ -940,8 +940,8 @@ pub trait RandomAccessIonMobilityFrameGroupingIterator<
     G: IonMobilityFrameGrouping<C, D, S> = IonMobilityFrameGroup<C, D, MultiLayerIonMobilityFrame<C, D>>,
 >: Iterator<Item = G>
 {
-    fn start_from_id(&mut self, id: &str) -> Result<&Self, IonMobilityFrameAccessError>;
-    fn start_from_index(&mut self, index: usize) -> Result<&Self, IonMobilityFrameAccessError>;
-    fn start_from_time(&mut self, time: f64) -> Result<&Self, IonMobilityFrameAccessError>;
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError>;
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, IonMobilityFrameAccessError>;
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, IonMobilityFrameAccessError>;
     fn reset_state(&mut self);
 }

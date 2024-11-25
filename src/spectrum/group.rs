@@ -678,7 +678,7 @@ impl<
         G: IonMobilityFrameGrouping<C, D, S>,
     > RandomAccessIonMobilityFrameGroupingIterator<C, D, S, G> for IonMobilityFrameGroupingIterator<R, C, D, S, G>
 {
-    fn start_from_id(&mut self, id: &str) -> Result<&Self, crate::io::IonMobilityFrameAccessError> {
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
         match self.source.start_from_id(id) {
             Ok(_) => {
                 self.clear();
@@ -688,7 +688,7 @@ impl<
         }
     }
 
-    fn start_from_index(&mut self, index: usize) -> Result<&Self, crate::io::IonMobilityFrameAccessError> {
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
         match self.source.start_from_index(index) {
             Ok(_) => {
                 self.clear();
@@ -698,7 +698,7 @@ impl<
         }
     }
 
-    fn start_from_time(&mut self, time: f64) -> Result<&Self, crate::io::IonMobilityFrameAccessError> {
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
         match self.source.start_from_time(time) {
             Ok(_) => {
                 self.clear();
