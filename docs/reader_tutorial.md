@@ -16,6 +16,9 @@
     - [By index](#by-index)
     - [By scan start time](#by-scan-start-time)
   - [What can you do with a spectrum?](#what-can-you-do-with-a-spectrum)
+  - [Fancy iterators](#fancy-iterators)
+    - [Random access iterators](#random-access-iterators)
+    - [Grouping iterators](#grouping-iterators)
 
 ## Open a `SpectrumSource`:
 
@@ -173,9 +176,8 @@ fn mz_read_path() -> io::Result<()> {
 
 Again, the drawback is that the reader itself cannot leave the scope created inside the macro, so you cannot hold onto the
 instance, nor do you know what kind of reader you have so you cannot customize what to do in each case.
-[`MassSpectrometryReadWriteProcess`](crate::io::MassSpectrometryReadWriteProcess) can help work around this limitation, but
-it carries its own restrictions. For an example of that, see [mzconvert](https://github.com/mobiusklein/mzdata/blob/main/examples/mzconvert.rs)
-example program.
+[`MassSpectrometryReadWriteProcess`] can help work around this limitation, but it carries its own restrictions. For an example
+of that, see [mzconvert](https://github.com/mobiusklein/mzdata/blob/main/examples/mzconvert.rs) example program.
 
 ## Getting a spectrum
 
@@ -277,3 +279,29 @@ but it is possible to convert between these four types. With the [`mzsignal`](ht
 perform peak picking to centroid profile spectra when dealing with raw signal [`MultiLayerSpectrum::pick_peaks`] and [`RawSpectrum::pick_peaks_into`].
 
 For more details, see the [spectrum tutorial](crate::tutorial::spectrum).
+
+## Fancy iterators
+
+### Random access iterators
+
+The [`SpectrumSource`] trait requires that the type already be an [`Iterator`], which can be convenient for reading
+all the spectra in a data source sequentially. Sometimes we might want to iterate over a subset of spectra which appear
+part-way through an MS run. The natural solution would be to use [`Iterator::skip`] or [`Iterator::filter`], but these
+would *require* that the [`SpectrumSource`] consume all the intervening spectra until it reached some you were interested
+in. The [`RandomAccessSpectrumIterator`] trait extends [`SpectrumSource`] iterators with methods to immediately jump to
+the requested location without needing to do the intermediate parsing that mirror the `get_spectrum_by_` methods described
+earlier:
+
+1. [`RandomAccessSpectrumIterator::start_from_id`]
+2. [`RandomAccessSpectrumIterator::start_from_index`]
+3. [`RandomAccessSpectrumIterator::start_from_time`]
+
+These alter the [`Iterator`] state, potentially encountering an error if the requested coordinate couldn't be located.
+
+### Grouping iterators
+
+Spectra naturally form units of hierarchy with MS levels and precursor-product relationships connecting them. A complete unit of
+that hierarchy is described as a [`SpectrumGroup`], a simple implementation of the [`SpectrumingGrouping`](crate::spectrum::SpectrumGrouping)
+trait. The [`SpectrumSource::groups`] or [`SpectrumSource::into_groups`] methods produce [`SpectrumGroupingIterator`], iterators
+over [`SpectrumGroup`]. These work by buffering to build trees of spectra before producing them and provide many of the same
+metadata and fancy iterator methods that their underlying [`SpectrumSource`] do.

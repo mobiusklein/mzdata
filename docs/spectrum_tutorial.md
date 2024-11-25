@@ -15,7 +15,7 @@
 As mentioned at the end of the [reading tutorial](crate::tutorial::reading) `mzdata` uses the [`SpectrumLike`] trait to
 define a set of operations that all data structures representing spectra need to provide. These are mostly implemented by
 returning a [`SpectrumDescription`] instances. The [`SpectrumLike`] also provides a few compatibility methods to provide
-limit interaction with the signal data, independent of the state it is in with the [`RefPeakDataLevel`](crate::spectrum::RefPeakDataLevel)
+limit interaction with the signal data, independent of the state it is in with the [`RefPeakDataLevel`]
 returned by [`SpectrumLike::peaks`].
 
 ### Identifying a spectrum
