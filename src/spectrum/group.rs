@@ -733,6 +733,8 @@ mod mzsignal_impl {
     use mzsignal::reprofile::{reprofile, PeakSetReprofiler, PeakShape, PeakShapeModel};
     use mzsignal::{ArrayPair, FittedPeak, MZGrid};
 
+    const FWHM_DEFAULT: f32 = 0.01;
+
     impl From<ArrayPair<'_>> for BinaryArrayMap {
         fn from(value: ArrayPair<'_>) -> Self {
             let mz_array = DataArray::wrap(
@@ -782,7 +784,11 @@ mod mzsignal_impl {
                         spectrum
                             .peaks()
                             .iter()
-                            .map(|p| FittedPeak::from(p.as_centroid()))
+                            .map(|p| {
+                                let mut f = FittedPeak::from(p.as_centroid());
+                                f.full_width_at_half_max = FWHM_DEFAULT;
+                                f
+                            })
                             .collect::<Vec<_>>(),
                     );
                 }
@@ -975,7 +981,7 @@ mod mzsignal_impl {
                         .map(|(mz, intensity)| FittedPeak {
                             mz: *mz,
                             intensity: *intensity,
-                            full_width_at_half_max: 0.01,
+                            full_width_at_half_max: FWHM_DEFAULT,
                             ..Default::default()
                         })
                         .collect();
@@ -1315,7 +1321,8 @@ mod mzsignal_impl {
                         let fpeaks: Vec<_> = peaks
                             .iter()
                             .map(|p| {
-                                let fp = FittedPeak::from(p.as_centroid());
+                                let mut fp = FittedPeak::from(p.as_centroid());
+                                fp.full_width_at_half_max = FWHM_DEFAULT;
                                 PeakShapeModel {
                                     peak: Cow::Owned(fp),
                                     shape: PeakShape::Gaussian,
@@ -1611,6 +1618,9 @@ pub use mzsignal_impl::{
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{prelude::*, RawSpectrum};
+    use crate::spectrum::SignalContinuity;
+    use crate::MzMLReader;
 
     #[test]
     fn test_group_iter() {
@@ -1621,5 +1631,24 @@ mod test {
         > = SpectrumGroup::default();
         let entries: Vec<_> = group.iter().collect();
         assert_eq!(entries.len(), 0);
+    }
+
+    #[test]
+    fn test_average_single() {
+        let mut reader = MzMLReader::open_path("./test/data/three_test_scans.mzML")
+            .expect("Failed to open test file");
+        reader.reset();
+        let mut scan = reader.next().expect("Failed to read spectrum");
+        scan.pick_peaks(1.0).unwrap();
+
+        let scan = scan.into_centroid().unwrap();
+        assert_eq!(scan.signal_continuity(), SignalContinuity::Centroid);
+
+        let signal = average_spectra([&scan], 0.001);
+        let mut spec = RawSpectrum::new(scan.description().clone(), signal.into());
+        spec.description.signal_continuity = SignalContinuity::Profile;
+        let tic = SpectrumLike::<CentroidPeak, DeconvolutedPeak>::peaks(&spec).tic();
+        assert!(!tic.is_nan());
+        assert!(tic > 0.0);
     }
 }

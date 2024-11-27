@@ -1412,4 +1412,27 @@ mod test {
             assert!((p.mz() - 563.739).abs() < 1e-3)
         }
     }
+
+    #[test]
+    fn test_reprofile() {
+        let mut reader = MzMLReader::open_path("./test/data/three_test_scans.mzML")
+            .expect("Failed to open test file");
+        reader.reset();
+        let mut scan = reader.next().expect("Failed to read spectrum");
+        assert_eq!(scan.signal_continuity(), SignalContinuity::Profile);
+        assert_eq!(scan.ms_level(), 1);
+        assert_eq!(scan.polarity(), ScanPolarity::Positive);
+        assert!(scan.precursor().is_none());
+
+        if let Err(err) = scan.pick_peaks(1.0) {
+            panic!("Should not have an error! {}", err);
+        }
+
+        let mut duplicate = scan.clone();
+        duplicate.reprofile_with_shape(0.001, 0.01).unwrap();
+        duplicate.peaks = None;
+        duplicate.pick_peaks(1.0).unwrap();
+        let peak = duplicate.peaks.as_ref().unwrap().base_peak().unwrap();
+        eprintln!("{}", peak);
+    }
 }
