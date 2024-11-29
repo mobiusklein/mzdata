@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.37.0] - 2024-11-29
+
+### Added
+
+- Add `detail_level` manipulation to `SpectrumSource` and equivalents
+- Add `has_ion_mobility_dimension` to `SpectrumLike`
+- MSV collections appear to be unsupported by PROXI backends, and the MassiVE server is broken
+- Add Bruker TDF support
+- Add more documentation and tutorial
+
+### Changed
+
+- MzML(b) readers attempt to eagerly instantiate peak lists with `try_build_peaks`
+
+### Fixed
+
+- Include `source_file_name` to `delegate_impl_metadata_trait`
+- Thermo and MZReaderType time random access fixes
+- Fix parameter conversion for mzML in `MassSpectrometryFormat::as_param`
+- Fix typo in `ChromatogramLike::chromatogram_type`
+- Fix FWHM assignment during reprofiling in `average_spectra` (GH #17)
+
 ## [0.36.0] - 2024-11-11
 
 ### Added
@@ -536,7 +558,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.36.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.37.0...HEAD
+[0.37.0]: https://github.com/mobiusklein/mzdata/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/mobiusklein/mzdata/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/mobiusklein/mzdata/compare/v0.35.0...v0.35.0
 [0.35.0]: https://github.com/mobiusklein/mzdata/compare/v0.34.0...v0.35.0
