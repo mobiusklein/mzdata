@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.38.0] - 2024-11-30
+
+### Added
+
+- Add `set_spectrum_count_hint` to `MSDataFileMetadata`
+
 ## [0.37.0] - 2024-11-29
 
 ### Added
@@ -558,7 +564,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.37.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.38.0...HEAD
+[0.38.0]: https://github.com/mobiusklein/mzdata/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/mobiusklein/mzdata/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/mobiusklein/mzdata/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/mobiusklein/mzdata/compare/v0.35.0...v0.35.0
