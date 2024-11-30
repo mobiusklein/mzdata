@@ -126,7 +126,7 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
                     .file_name()
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or("".to_string());
-                let par = ControlledVocabulary::MS.param_val(1000569u32, "SHA-1", checksum);
+                let par = ControlledVocabulary::MS.param_val(1000569, "SHA-1", checksum);
                 sf.add_param(par);
                 sf.file_format = reader_format.as_param();
 

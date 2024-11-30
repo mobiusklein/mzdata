@@ -1077,11 +1077,13 @@ param_value_ref_int!(usize);
 param_value_ref_float!(f32);
 param_value_ref_float!(f64);
 
+pub type AccessionCode = u32;
+
 /// A CURIE is a namespace + accession identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CURIE {
     pub controlled_vocabulary: ControlledVocabulary,
-    pub accession: u32,
+    pub accession: AccessionCode,
 }
 
 #[macro_export]
@@ -1095,7 +1097,7 @@ macro_rules! curie {
 }
 
 impl CURIE {
-    pub const fn new(cv_id: ControlledVocabulary, accession: u32) -> Self {
+    pub const fn new(cv_id: ControlledVocabulary, accession: AccessionCode) -> Self {
         Self {
             controlled_vocabulary: cv_id,
             accession,
@@ -1205,7 +1207,7 @@ impl<'a> TryFrom<&ParamCow<'a>> for CURIE {
     }
 }
 
-pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<u32>) {
+pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<AccessionCode>) {
     let mut parts = curie.split(':');
     let prefix = match parts.next() {
         Some(v) => v.parse::<ControlledVocabulary>().unwrap().as_option(),
@@ -1225,7 +1227,7 @@ pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<u32>) 
 pub trait ParamLike {
     fn name(&self) -> &str;
     fn value(&self) -> ValueRef;
-    fn accession(&self) -> Option<u32>;
+    fn accession(&self) -> Option<AccessionCode>;
     fn controlled_vocabulary(&self) -> Option<ControlledVocabulary>;
     fn unit(&self) -> Unit;
     fn is_ms(&self) -> bool {
@@ -1261,7 +1263,7 @@ pub trait ParamLike {
 pub struct ParamCow<'a> {
     pub name: Cow<'a, str>,
     pub value: ValueRef<'a>,
-    pub accession: Option<u32>,
+    pub accession: Option<AccessionCode>,
     pub controlled_vocabulary: Option<ControlledVocabulary>,
     pub unit: Unit,
 }
@@ -1332,7 +1334,7 @@ impl ParamCow<'static> {
     pub const fn const_new(
         name: &'static str,
         value: ValueRef<'static>,
-        accession: Option<u32>,
+        accession: Option<AccessionCode>,
         controlled_vocabulary: Option<ControlledVocabulary>,
         unit: Unit,
     ) -> Self {
@@ -1350,7 +1352,7 @@ impl<'a> ParamCow<'a> {
     pub fn new(
         name: Cow<'a, str>,
         value: ValueRef<'a>,
-        accession: Option<u32>,
+        accession: Option<AccessionCode>,
         controlled_vocabulary: Option<ControlledVocabulary>,
         unit: Unit,
     ) -> Self {
@@ -1388,7 +1390,7 @@ impl<'a> ParamLike for ParamCow<'a> {
         self.value.clone()
     }
 
-    fn accession(&self) -> Option<u32> {
+    fn accession(&self) -> Option<AccessionCode> {
         self.accession
     }
 
@@ -1430,7 +1432,7 @@ impl<'a> AsRef<ValueRef<'a>> for ParamCow<'a> {
 pub struct Param {
     pub name: String,
     pub value: Value,
-    pub accession: Option<u32>,
+    pub accession: Option<AccessionCode>,
     pub controlled_vocabulary: Option<ControlledVocabulary>,
     pub unit: Unit,
 }
@@ -1529,7 +1531,7 @@ impl Display for Param {
 pub struct ParamBuilder {
     name: String,
     value: Value,
-    accession: Option<u32>,
+    accession: Option<AccessionCode>,
     controlled_vocabulary: Option<ControlledVocabulary>,
     unit: Unit,
 }
@@ -1550,7 +1552,7 @@ impl ParamBuilder {
         self
     }
 
-    pub fn accession(mut self, accession: u32) -> Self {
+    pub fn accession(mut self, accession: AccessionCode) -> Self {
         self.accession = Some(accession);
         self
     }
@@ -1659,7 +1661,7 @@ impl ParamLike for Param {
         self.value.as_ref()
     }
 
-    fn accession(&self) -> Option<u32> {
+    fn accession(&self) -> Option<AccessionCode> {
         self.accession
     }
 
@@ -1715,24 +1717,41 @@ pub enum ControlledVocabulary {
     MS,
     /// The Unit Ontology [https://www.ebi.ac.uk/ols4/ontologies/uo](https://www.ebi.ac.uk/ols4/ontologies/uo)
     UO,
+    /// The Experimental Factor Ontology [https://www.ebi.ac.uk/ols4/ontologies/efo]
+    EFO,
+    /// The Ontology for Biomedical Investigations [https://www.ebi.ac.uk/ols4/ontologies/obi]
+    OBI,
+    /// The Human Ancestry Ontology [https://www.ebi.ac.uk/ols4/ontologies/hancestro]
+    HANCESTRO,
+    /// The Basic Formal Ontology [https://www.ebi.ac.uk/ols4/ontologies/bfo]
+    BFO,
     Unknown,
 }
 
 const MS_CV: &str = "MS";
 const UO_CV: &str = "UO";
+const EFO_CV: &str = "EFO";
+const OBI_CV: &str = "OBI";
+const HANCESTRO_CV: &str = "HANCESTRO";
+const BFO_CV: &str = "BFO";
+
 const MS_CV_BYTES: &[u8] = MS_CV.as_bytes();
 const UO_CV_BYTES: &[u8] = UO_CV.as_bytes();
+const EFO_CV_BYTES: &[u8] = EFO_CV.as_bytes();
+const OBI_CV_BYTES: &[u8] = OBI_CV.as_bytes();
+const HANCESTRO_CV_BYTES: &[u8] = HANCESTRO_CV.as_bytes();
+const BFO_CV_BYTES: &[u8] = BFO_CV.as_bytes();
 
 /// Anything that can be converted into an accession code portion of a [`CURIE`]
 #[derive(Debug, Clone)]
 pub enum AccessionLike<'a> {
     Text(Cow<'a, str>),
-    Number(u32),
+    Number(AccessionCode),
     CURIE(CURIE),
 }
 
-impl<'a> From<u32> for AccessionLike<'a> {
-    fn from(value: u32) -> Self {
+impl<'a> From<AccessionCode> for AccessionLike<'a> {
+    fn from(value: AccessionCode) -> Self {
         Self::Number(value)
     }
 }
@@ -1755,6 +1774,10 @@ impl<'a> ControlledVocabulary {
         match &self {
             Self::MS => Cow::Borrowed(MS_CV),
             Self::UO => Cow::Borrowed(UO_CV),
+            Self::EFO => Cow::Borrowed(EFO_CV),
+            Self::OBI => Cow::Borrowed(OBI_CV),
+            Self::HANCESTRO => Cow::Borrowed(HANCESTRO_CV),
+            Self::BFO => Cow::Borrowed(BFO_CV),
             Self::Unknown => panic!("Cannot encode unknown CV"),
         }
     }
@@ -1764,6 +1787,10 @@ impl<'a> ControlledVocabulary {
         match &self {
             Self::MS => MS_CV_BYTES,
             Self::UO => UO_CV_BYTES,
+            Self::EFO => EFO_CV_BYTES,
+            Self::OBI => OBI_CV_BYTES,
+            Self::HANCESTRO => HANCESTRO_CV_BYTES,
+            Self::BFO => BFO_CV_BYTES,
             Self::Unknown => panic!("Cannot encode unknown CV"),
         }
     }
@@ -1810,7 +1837,7 @@ impl<'a> ControlledVocabulary {
         param
     }
 
-    pub const fn curie(&self, accession: u32) -> CURIE {
+    pub const fn curie(&self, accession: AccessionCode) -> CURIE {
         CURIE::new(*self, accession)
     }
 
@@ -1828,7 +1855,7 @@ impl<'a> ControlledVocabulary {
         &self,
         name: &'static str,
         value: ValueRef<'static>,
-        accession: u32,
+        accession: AccessionCode,
         unit: Unit,
     ) -> ParamCow<'static> {
         ParamCow {
@@ -1844,7 +1871,7 @@ impl<'a> ControlledVocabulary {
     /// value and no unit.
     ///
     /// See [`ControlledVocabulary::const_param`] for more details.
-    pub const fn const_param_ident(&self, name: &'static str, accession: u32) -> ParamCow<'static> {
+    pub const fn const_param_ident(&self, name: &'static str, accession: AccessionCode) -> ParamCow<'static> {
         self.const_param(name, ValueRef::Empty, accession, Unit::Unknown)
     }
 
@@ -1857,7 +1884,7 @@ impl<'a> ControlledVocabulary {
     pub const fn const_param_ident_unit(
         &self,
         name: &'static str,
-        accession: u32,
+        accession: AccessionCode,
         unit: Unit,
     ) -> ParamCow<'static> {
         self.const_param(name, ValueRef::Empty, accession, unit)
@@ -1900,6 +1927,10 @@ impl FromStr for ControlledVocabulary {
         match s {
             "MS" | "PSI-MS" => Ok(Self::MS),
             "UO" => Ok(Self::UO),
+            EFO_CV => Ok(Self::EFO),
+            OBI_CV => Ok(Self::OBI),
+            BFO_CV => Ok(Self::BFO),
+            HANCESTRO_CV => Ok(Self::HANCESTRO),
             _ => Ok(Self::Unknown),
         }
     }

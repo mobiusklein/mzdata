@@ -5,7 +5,7 @@ use std::path::Path;
 use crate::impl_param_described;
 use crate::io::infer_format;
 use crate::params::{
-    ControlledVocabulary, Param, ParamDescribed, ParamList, ParamValue, ValueRef, CURIE,
+    ControlledVocabulary, Param, ParamDescribed, ParamList, ParamValue, ValueRef, CURIE
 };
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

@@ -64,7 +64,7 @@ macro_rules! cvmap {
         impl $enum_name {
 
             /// Retrieve the accession number for this term, independent of its controlled vocabulary
-            pub const fn accession(&self) -> u32 {
+            pub const fn accession(&self) -> $crate::params::AccessionCode {
                 match self {
                     $(Self::$variant => $accession,)*
                 }
@@ -100,7 +100,7 @@ macro_rules! cvmap {
             /// set.
             ///
             /// If no match is found, [`None`] is returned.
-            pub const fn from_accession(accession: u32) -> Option<Self> {
+            pub const fn from_accession(accession: $crate::params::AccessionCode) -> Option<Self> {
                 match accession {
                     $($accession => Some(Self::$variant),)*
                     _ => None
@@ -230,7 +230,7 @@ macro_rules! cvmap {
         impl $enum_name {
 
             /// Retrieve the accession number for this term, independent of its controlled vocabulary
-            pub const fn accession(&self) -> u32 {
+            pub const fn accession(&self) -> $crate::params::AccessionCode {
                 match self {
                     $(Self::$variant(_) => $accession,)*
                 }
@@ -266,7 +266,7 @@ macro_rules! cvmap {
             /// set.
             ///
             /// If no match is found, [`None`] is returned.
-            pub const fn from_accession(accession: u32, value: $value_type) -> Option<Self> {
+            pub const fn from_accession(accession: $crate::params::AccessionCode, value: $value_type) -> Option<Self> {
                 match accession {
                     $($accession => Some(Self::$variant(value)),)*
                     _ => None
