@@ -1078,7 +1078,55 @@ param_value_ref_float!(f32);
 param_value_ref_float!(f64);
 
 pub type AccessionIntCode = u32;
-pub type AccessionByteCode = [u8; 7];
+pub type AccessionByteCode7 = [u8; 7];
+
+#[allow(unused)]
+#[derive(Debug)]
+#[repr(u8)]
+enum AccessionCode {
+    Int(AccessionIntCode),
+    Byte7(AccessionByteCode7),
+}
+
+impl Display for AccessionCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccessionCode::Int(v) => write!(f, "{v:07}"),
+            AccessionCode::Byte7(v) => write!(f, "{}", core::str::from_utf8(v).map_err(|e| format!("ERROR:{e}")).unwrap()),
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error, Clone, PartialEq)]
+pub enum AccessionCodeParseError {
+    #[error("The acccession code was too long: {0}")]
+    AccessionCodeTooLong(String),
+    #[error("The acccession code was not in range: {0}")]
+    AccessionCodeNotInRange(String)
+}
+
+
+impl FromStr for AccessionCode {
+    type Err = AccessionCodeParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() > 7 {
+            return Err(AccessionCodeParseError::AccessionCodeTooLong(s.to_string()))
+        }
+        if !s.is_ascii() {
+            return Err(AccessionCodeParseError::AccessionCodeNotInRange(s.to_string()))
+        }
+        if let Ok(u) = s.parse::<AccessionIntCode>() {
+            Ok(Self::Int(u))
+        } else {
+            let mut bytes = AccessionByteCode7::default();
+            for (byte_from, byte_to) in s.as_bytes().iter().rev().zip(bytes.iter_mut().rev()) {
+                *byte_to = *byte_from;
+            }
+            Ok(Self::Byte7(bytes))
+        }
+    }
+}
 
 /// A CURIE is a namespace + accession identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1086,6 +1134,21 @@ pub struct CURIE {
     pub controlled_vocabulary: ControlledVocabulary,
     pub accession: AccessionIntCode,
 }
+
+#[allow(unused)]
+macro_rules! accessioncode {
+    ($acc:literal) => {
+        AccessionCode::Int($acc)
+    };
+    ($acc:tt) => {
+        match stringify!($acc).as_bytes() {
+            [a, b, c, d, e, f, g] => AccessionCode::Byte7([*a, *b, *c, *d, *e, *f, *g]),
+            _ => panic!(concat!("Cannot convert ", stringify!($acc), " to accession code. Expected exactly 7 bytes"))
+        }
+    };
+}
+
+
 
 #[macro_export]
 macro_rules! curie {
@@ -1095,6 +1158,27 @@ macro_rules! curie {
     (UO:$acc:literal) => {
         $crate::params::CURIE::new($crate::params::ControlledVocabulary::UO, $acc)
     };
+    (EFO:$acc:literal) => {
+        $crate::params::CURIE::new($crate::params::ControlledVocabulary::EFO, $acc)
+    };
+    (BFO:$acc:literal) => {
+        $crate::params::CURIE::new($crate::params::ControlledVocabulary::BFO, $acc)
+    };
+    (BTO:$acc:literal) => {
+        $crate::params::CURIE::new($crate::params::ControlledVocabulary::BTO, $acc)
+    };
+    (OBI:$acc:literal) => {
+        $crate::params::CURIE::new($crate::params::ControlledVocabulary::OBI, $acc)
+    };
+    (HANCESTRO:$acc:literal) => {
+        $crate::params::CURIE::new($crate::params::ControlledVocabulary::HANCESTRO, $acc)
+    };
+    (NCIT:$acc:literal) => {
+        $crate::params::CURIE::new($crate::params::ControlledVocabulary::NCIT, $acc)
+    };
+    (PRIDE:$acc:literal) => {
+        $crate::params::CURIE::new($crate::params::ControlledVocabulary::PRIDE, $acc)
+    }
 }
 
 impl CURIE {
@@ -1726,6 +1810,12 @@ pub enum ControlledVocabulary {
     HANCESTRO,
     /// The Basic Formal Ontology [https://www.ebi.ac.uk/ols4/ontologies/bfo]
     BFO,
+    /// The NCI Thesaurus OBO Edition [https://www.ebi.ac.uk/ols4/ontologies/ncit]
+    NCIT,
+    /// The BRENDA Tissue Ontology [https://www.ebi.ac.uk/ols4/ontologies/bto]
+    BTO,
+    /// The PRIDE Controlled Vocabulary [https://www.ebi.ac.uk/ols4/ontologies/pride]
+    PRIDE,
     Unknown,
 }
 
@@ -1735,6 +1825,9 @@ const EFO_CV: &str = "EFO";
 const OBI_CV: &str = "OBI";
 const HANCESTRO_CV: &str = "HANCESTRO";
 const BFO_CV: &str = "BFO";
+const BTO_CV: &str = "BTO";
+const NCIT_CV: &str = "NCIT";
+const PRIDE_CV: &str = "PRIDE";
 
 const MS_CV_BYTES: &[u8] = MS_CV.as_bytes();
 const UO_CV_BYTES: &[u8] = UO_CV.as_bytes();
@@ -1742,6 +1835,9 @@ const EFO_CV_BYTES: &[u8] = EFO_CV.as_bytes();
 const OBI_CV_BYTES: &[u8] = OBI_CV.as_bytes();
 const HANCESTRO_CV_BYTES: &[u8] = HANCESTRO_CV.as_bytes();
 const BFO_CV_BYTES: &[u8] = BFO_CV.as_bytes();
+const BTO_CV_BYTES: &[u8] = BTO_CV.as_bytes();
+const NCIT_CV_BYTES: &[u8] = NCIT_CV.as_bytes();
+const PRIDE_CV_BYTES: &[u8] = PRIDE_CV.as_bytes();
 
 /// Anything that can be converted into an accession code portion of a [`CURIE`]
 #[derive(Debug, Clone)]
@@ -1779,6 +1875,9 @@ impl<'a> ControlledVocabulary {
             Self::OBI => Cow::Borrowed(OBI_CV),
             Self::HANCESTRO => Cow::Borrowed(HANCESTRO_CV),
             Self::BFO => Cow::Borrowed(BFO_CV),
+            Self::NCIT => Cow::Borrowed(NCIT_CV),
+            Self::BTO => Cow::Borrowed(BTO_CV),
+            Self::PRIDE => Cow::Borrowed(PRIDE_CV),
             Self::Unknown => panic!("Cannot encode unknown CV"),
         }
     }
@@ -1792,6 +1891,9 @@ impl<'a> ControlledVocabulary {
             Self::OBI => OBI_CV_BYTES,
             Self::HANCESTRO => HANCESTRO_CV_BYTES,
             Self::BFO => BFO_CV_BYTES,
+            Self::NCIT => NCIT_CV_BYTES,
+            Self::BTO => BTO_CV_BYTES,
+            Self::PRIDE => PRIDE_CV_BYTES,
             Self::Unknown => panic!("Cannot encode unknown CV"),
         }
     }
@@ -2304,5 +2406,16 @@ impl Default for Unit {
 impl Display for Unit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(format!("{:?}", self).as_str())
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_accn_macro() {
+        const ACC: AccessionCode = accessioncode!(A123456);
     }
 }
