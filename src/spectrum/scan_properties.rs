@@ -7,7 +7,7 @@ use num_traits::Float;
 use super::spectrum_types::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
 use crate::io::traits::SpectrumSource;
 use crate::params::{
-    AccessionCode, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef, CURIE
+    AccessionIntCode, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef, CURIE
 };
 use crate::meta::DissociationMethodTerm;
 use crate::{curie, impl_param_described, ParamList};
@@ -229,7 +229,7 @@ impl Display for ScanCombination {
 impl ScanCombination {
     pub fn from_accession(
         controlled_vocabulary: ControlledVocabulary,
-        accession: AccessionCode,
+        accession: AccessionIntCode,
     ) -> Option<ScanCombination> {
         match controlled_vocabulary {
             ControlledVocabulary::MS => match accession {
@@ -250,7 +250,7 @@ impl ScanCombination {
         }
     }
 
-    pub const fn accession(&self) -> AccessionCode {
+    pub const fn accession(&self) -> AccessionIntCode {
         match self {
             ScanCombination::NoCombination => 1000795,
             ScanCombination::Sum => 1000571,
@@ -418,7 +418,7 @@ impl Activation {
         }
     }
 
-    pub fn accession_to_activation(accession: AccessionCode) -> bool {
+    pub fn accession_to_activation(accession: AccessionIntCode) -> bool {
         DissociationMethodTerm::from_accession(accession).is_some()
     }
 
@@ -737,7 +737,7 @@ pub enum ChromatogramType {
 }
 
 impl ChromatogramType {
-    pub fn from_accession(accession: AccessionCode) -> Option<Self> {
+    pub fn from_accession(accession: AccessionIntCode) -> Option<Self> {
         let tp = match accession {
             1000235 => Self::TotalIonCurrentChromatogram,
             1000628 => Self::BasePeakChromatogram,

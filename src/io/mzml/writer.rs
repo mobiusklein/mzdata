@@ -26,7 +26,7 @@ use crate::meta::{
     ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, Software
 };
 use crate::params::{
-    AccessionCode, ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef
+    AccessionIntCode, ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef
 };
 use crate::spectrum::bindata::{
     to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType,
@@ -108,13 +108,13 @@ const CENTROID_SPECTRUM: ParamCow =
 #[allow(unused)]
 struct ParamPack {
     name: &'static str,
-    accession: AccessionCode,
+    accession: AccessionIntCode,
     unit: Unit,
 }
 
 #[allow(unused)]
 impl ParamPack {
-    const fn new(name: &'static str, accession: AccessionCode, unit: Unit) -> Self {
+    const fn new(name: &'static str, accession: AccessionIntCode, unit: Unit) -> Self {
         Self {
             name,
             accession,
