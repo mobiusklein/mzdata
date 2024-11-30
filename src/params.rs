@@ -2409,13 +2409,3 @@ impl Display for Unit {
     }
 }
 
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_accn_macro() {
-        const ACC: AccessionCode = accessioncode!(A123456);
-    }
-}

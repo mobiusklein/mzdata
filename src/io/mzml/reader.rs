@@ -1107,7 +1107,7 @@ impl<
                             match &self.state {
                                 MzMLParserState::SpectrumList | MzMLParserState::Spectrum => break,
                                 MzMLParserState::ParserError => {
-                                    eprintln!(
+                                    log::error!(
                                         "Encountered an error while starting {:?}",
                                         String::from_utf8_lossy(&self.buffer)
                                     );
@@ -1184,7 +1184,7 @@ impl<
             };
             self.buffer.clear();
             match self.state {
-                MzMLParserState::Run | MzMLParserState::ParserError => {
+                MzMLParserState::SpectrumList | MzMLParserState::ParserError => {
                     break;
                 }
                 _ => {}
@@ -1956,6 +1956,10 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMe
 
     fn spectrum_count_hint(&self) -> Option<u64> {
         self.num_spectra
+    }
+
+    fn set_spectrum_count_hint(&mut self, _value: Option<u64>) {
+        self.num_spectra = _value;
     }
 
     fn run_description(&self) -> Option<&MassSpectrometryRun> {
