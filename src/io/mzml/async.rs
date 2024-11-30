@@ -260,7 +260,7 @@ impl<
     async fn _parse_into(
         &'a mut self,
         mut accumulator: MzMLSpectrumBuilder<'a, C, D>,
-    ) -> Result<(usize, MzMLSpectrumBuilder<C, D>), MzMLParserError> {
+    ) -> Result<(usize, MzMLSpectrumBuilder<'a, C, D>), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         accumulator.instrument_id_map = Some(&mut self.instrument_id_map);
