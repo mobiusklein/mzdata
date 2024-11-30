@@ -42,6 +42,7 @@ pub trait MSDataFileMetadata {
         *self.file_description_mut() = source.file_description().clone();
         *self.softwares_mut() = source.softwares().clone();
         *self.samples_mut() = source.samples().clone();
+        self.set_spectrum_count_hint(source.spectrum_count_hint());
 
         match source.run_description() {
             Some(run) => {
@@ -61,6 +62,8 @@ pub trait MSDataFileMetadata {
     fn spectrum_count_hint(&self) -> Option<u64> {
         None
     }
+
+    fn set_spectrum_count_hint(&mut self, _value: Option<u64>) {}
 
     /// Access the [`MassSpectrometryRun`] metadata record if it is available
     fn run_description(&self) -> Option<&MassSpectrometryRun> {

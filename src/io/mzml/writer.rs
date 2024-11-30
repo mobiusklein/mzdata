@@ -601,14 +601,17 @@ impl<
 {
     crate::impl_metadata_trait!();
 
-    fn copy_metadata_from(&mut self, source: &impl MSDataFileMetadata) {
-        *self.data_processings_mut() = source.data_processings().clone();
-        *self.instrument_configurations_mut() = source.instrument_configurations().clone();
-        *self.file_description_mut() = source.file_description().clone();
-        *self.softwares_mut() = source.softwares().clone();
-        if let Some(value) = source.spectrum_count_hint() {
-            self.spectrum_count = value;
-        }
+    fn spectrum_count_hint(&self) -> Option<u64> {
+        Some(self.spectrum_count)
+    }
+
+    fn set_spectrum_count_hint(&mut self, value: Option<u64>) {
+        match value {
+            Some(value) => {
+                self.spectrum_count = value;
+            },
+            None => {},
+        };
     }
 
     fn run_description(&self) -> Option<&MassSpectrometryRun> {
@@ -2116,6 +2119,7 @@ mod test {
         let dest = fs::File::create(dest_path.clone())?;
         let mut writer = MzMLWriterType::new(dest);
         writer.copy_metadata_from(&reader);
+        assert_eq!(reader.samples(), writer.samples());
         *writer.spectrum_count_mut() = reader.len() as u64;
         for mut group in reader.groups() {
             if let Some(prec) = group.precursor_mut() {

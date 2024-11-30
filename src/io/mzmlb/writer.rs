@@ -145,6 +145,14 @@ where
     fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
         Some(&mut self.mzml_writer.run)
     }
+
+    fn spectrum_count_hint(&self) -> Option<u64> {
+        self.mzml_writer.spectrum_count_hint()
+    }
+
+    fn set_spectrum_count_hint(&mut self, value: Option<u64>) {
+        self.mzml_writer.set_spectrum_count_hint(value);
+    }
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
