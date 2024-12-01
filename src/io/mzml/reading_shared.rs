@@ -883,10 +883,13 @@ impl<'a> FileMetadataBuilder<'a> {
                             let val = attr
                                 .unescape_value()
                                 .expect("Error decoding start timestamp");
-                            let val = DateTime::parse_from_rfc3339(&val).expect(
-                                "Expected a dateTime value conforming to ISO 8601 standard",
-                            );
-                            self.start_timestamp = Some(val);
+                            let val = DateTime::parse_from_rfc3339(&val).map_err(
+                                |e| {
+                                    log::error!("Expected a dateTime value conforming to ISO 8601 standard: {e}");
+                                    e
+                                }
+                            ).ok();
+                            self.start_timestamp = val;
                         }
                         _ => {}
                     }
@@ -897,12 +900,13 @@ impl<'a> FileMetadataBuilder<'a> {
                 for attr in event.attributes().flatten() {
                     match attr.key.as_ref() {
                         b"count" => {
-                            self.num_spectra = Some(
-                                attr.unescape_value()
+                            self.num_spectra = attr.unescape_value()
                                     .expect("Error decoding spectrum list size")
                                     .parse()
-                                    .expect("Error parsing spectrum list size"),
-                            );
+                                    .map_err(|e| {
+                                        log::error!("Error parsing spectrum list size: {e}");
+                                        e
+                                    }).ok();
                         }
                         b"defaultDataProcessingRef" => {
                             let value = attr
