@@ -967,6 +967,7 @@ pub trait MassSpectrometryReadWriteProcess<
                     #[cfg(feature = "bruker_tdf")]
                     MassSpectrometryFormat::BrukerTDF => {
                         let reader: TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D> = TDFSpectrumReaderType::open_path(read_path)?;
+                        let reader = self.transform_reader(reader, format)?;
                         self.open_writer(reader, format, write_path)?;
                         Ok(())
                     },
