@@ -8,6 +8,16 @@ mod writer;
 pub use reader::{MGFReaderType, MGFReader, is_mgf, MGFError, MGFParserState};
 pub use writer::{MGFHeaderStyle, MGFWriter, MGFWriterType, SimpleMGFStyle, MZDataMGFStyle};
 
+#[cfg(feature = "async")]
+mod async_reader;
+
+#[cfg(feature = "async")]
+pub use crate::io::mgf::async_reader::{
+    MGFReaderType as AsyncMGFReaderType,
+    MGFReader as AsyncMGFReader
+};
+
+
 #[cfg(test)]
 mod test {
     use mzpeaks::{IndexedCoordinate, CentroidPeak, DeconvolutedPeak};
@@ -84,5 +94,59 @@ mod test {
 
         // Not including platform-specific line endings
         Ok(())
+    }
+
+
+    #[cfg(feature = "async")]
+    mod async_tests {
+        use super::*;
+        use tokio::fs;
+
+        #[tokio::test]
+        async fn test_reader() {
+            let path = path::Path::new("./test/data/small.mgf");
+            let file = fs::File::open(path).await.expect("Test file doesn't exist");
+            let mut reader = AsyncMGFReaderType::<_>::new(file);
+            let mut ms1_count = 0;
+            let mut msn_count = 0;
+            while let Some(scan) = reader.read_next().await {
+                let level = scan.ms_level();
+                if level == 1 {
+                    ms1_count += 1;
+                } else {
+                    msn_count += 1;
+                }
+            }
+            assert_eq!(ms1_count, 0);
+            assert_eq!(msn_count, 35);
+        }
+
+        #[tokio::test]
+        async fn test_reader_indexed() {
+            let path = path::Path::new("./test/data/small.mgf");
+            let file = fs::File::open(path).await.expect("Test file doesn't exist");
+            let mut reader = AsyncMGFReaderType::<_, CentroidPeak, DeconvolutedPeak>::new_indexed(file).await;
+
+            let n = reader.len();
+            let mut ms1_count = 0;
+            let mut msn_count = 0;
+
+            for i in (0..n).rev() {
+                let scan = reader.get_spectrum_by_index(i).await.expect("Missing spectrum");
+                let level = scan.ms_level();
+                if level == 1 {
+                    ms1_count += 1;
+                } else {
+                    msn_count += 1;
+                }
+                let centroided: CentroidSpectrum = scan.try_into().unwrap();
+                centroided.peaks.iter().for_each(|p| {
+                    (centroided.peaks[p.get_index() as usize]).mz();
+                })
+            }
+            assert_eq!(ms1_count, 0);
+            assert_eq!(msn_count, 35);
+        }
+
     }
 }

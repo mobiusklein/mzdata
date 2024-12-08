@@ -21,7 +21,7 @@ mod reading_shared;
 mod writer;
 
 #[cfg(feature = "async")]
-mod r#async;
+mod async_reader;
 
 pub use reading_shared::{
     CVParamParse, MzMLParserError, MzMLParserState, MzMLSAX, XMLParseBase,
@@ -41,6 +41,6 @@ pub(crate) use crate::io::mzml::reader::is_mzml;
 pub use crate::io::mzml::writer::{MzMLWriter, MzMLWriterState, MzMLWriterType, MzMLWriterError};
 
 #[cfg(feature = "async")]
-pub use crate::io::mzml::r#async::{
+pub use crate::io::mzml::async_reader::{
     MzMLReader as AsyncMzMLReader, MzMLReaderType as AsyncMzMLReaderType,
 };

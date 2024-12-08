@@ -10,6 +10,7 @@ use super::reading_shared::{
     MzMLParserState, MzMLSAX, XMLParseBase,
 };
 
+use futures::{stream, Stream};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, BufReader};
 use tokio::{self, io};
 
@@ -611,6 +612,16 @@ impl<
         D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
     > MzMLReaderType<R, C, D>
 {
+
+    pub fn as_stream<'a>(&'a mut self) -> impl Stream<Item=MultiLayerSpectrum<C, D>> + 'a {
+        stream::unfold(self, |reader| async {
+            let spec = reader.read_next();
+            match spec.await {
+                Some(val) => Some((val, reader)),
+                None => None
+            }
+        })
+    }
 
     /// Jump to the end of the document and read the offset indices, if they are available
     pub async fn read_index_from_end(&mut self) -> Result<u64, MzMLIndexingError> {

@@ -71,7 +71,7 @@ pub enum MGFError {
 }
 
 #[derive(Debug)]
-struct SpectrumBuilder<
+pub(crate) struct SpectrumBuilder<
     C: CentroidPeakAdapting = CentroidPeak,
     D: DeconvolutedPeakAdapting = DeconvolutedPeak,
 > {
@@ -225,7 +225,12 @@ pub struct MGFReaderType<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReaderType<R, C, D> {
+
+pub(crate) trait MGFLineParsing<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> {
+    fn state(&self) -> &MGFParserState;
+    fn state_mut(&mut self) -> &mut MGFParserState;
+    fn error_mut(&mut self) -> &mut Option<MGFError>;
+
     fn parse_peak_from_line(
         &mut self,
         line: &str,
@@ -251,8 +256,8 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             };
 
             if nparts < 2 {
-                self.state = MGFParserState::Error;
-                self.error = Some(MGFError::NotEnoughColumnsForPeakLine);
+                *self.state_mut() = MGFParserState::Error;
+                *self.error_mut() = Some(MGFError::NotEnoughColumnsForPeakLine);
                 return None;
             }
             if !matches!(builder.detail_level, DetailLevel::MetadataOnly) {
@@ -279,10 +284,10 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
     fn handle_scan_header(&mut self, line: &str, builder: &mut SpectrumBuilder<C, D>) -> bool {
         let peak_line = self.parse_peak_from_line(line, builder).unwrap_or(false);
         if peak_line {
-            self.state = MGFParserState::Peaks;
+            *self.state_mut() = MGFParserState::Peaks;
             true
         } else if line == "END IONS" {
-            self.state = MGFParserState::Between;
+            *self.state_mut() = MGFParserState::Between;
             true
         } else if line.contains('=') {
             let (key, value) = line.split_once('=').unwrap();
@@ -303,8 +308,8 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                     let mz = match parts.next() {
                         Some(s) => s,
                         None => {
-                            self.state = MGFParserState::Error;
-                            self.error = Some(MGFError::MalformedHeaderLine(
+                            *self.state_mut() = MGFParserState::Error;
+                            *self.error_mut() = Some(MGFError::MalformedHeaderLine(
                                 "No m/z value in PEPMASS header".into(),
                             ));
                             return false;
@@ -313,8 +318,8 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                     let mz: f64 = match mz.parse() {
                         Ok(mz) => mz,
                         Err(e) => {
-                            self.state = MGFParserState::Error;
-                            self.error = Some(MGFError::MalformedHeaderLine(format!(
+                            *self.state_mut() = MGFParserState::Error;
+                            *self.error_mut() = Some(MGFError::MalformedHeaderLine(format!(
                                 "Malformed m/z value in PEPMASS header {value}: {e}"
                             )));
                             return false;
@@ -364,8 +369,8 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
 
             true
         } else {
-            self.state = MGFParserState::Error;
-            self.error = Some(MGFError::MalformedHeaderLine(
+            *self.state_mut() = MGFParserState::Error;
+            *self.error_mut() = Some(MGFError::MalformedHeaderLine(
                 "No '=' in header line".into(),
             ));
             false
@@ -382,8 +387,8 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
         };
 
         if tail_sign && (value.starts_with('-') || value.starts_with('+')) {
-            self.state = MGFParserState::Error;
-            self.error = Some(MGFError::MalformedHeaderLine(format!(
+            *self.state_mut() = MGFParserState::Error;
+            *self.error_mut() = Some(MGFError::MalformedHeaderLine(format!(
                 "Could not parse charge value {value}"
             )));
             return None;
@@ -392,8 +397,8 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
         match value.parse::<i32>() {
             Ok(z) => Some(sign * z),
             Err(e) => {
-                self.state = MGFParserState::Error;
-                self.error = Some(MGFError::MalformedHeaderLine(format!(
+                *self.state_mut() = MGFParserState::Error;
+                *self.error_mut() = Some(MGFError::MalformedHeaderLine(format!(
                     "Could not parse charge value {value} : {e}"
                 )));
                 return None;
@@ -406,27 +411,27 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
         if peak_line {
             true
         } else if line == "END IONS" {
-            self.state = MGFParserState::Between;
+            *self.state_mut() = MGFParserState::Between;
             false
         } else {
-            self.state = MGFParserState::Error;
-            self.error = Some(MGFError::MalformedPeakLine);
+            *self.state_mut() = MGFParserState::Error;
+            *self.error_mut() = Some(MGFError::MalformedPeakLine);
             false
         }
     }
 
     fn handle_start(&mut self, line: &str) -> bool {
         if line.contains('=') {
-            match self.state {
+            match self.state() {
                 MGFParserState::Start => {
-                    self.state = MGFParserState::FileHeader;
+                    *self.state_mut() = MGFParserState::FileHeader;
                     true
                 }
                 MGFParserState::FileHeader => true,
                 _ => false,
             }
         } else if line == "BEGIN IONS" {
-            self.state = MGFParserState::ScanHeaders;
+            *self.state_mut() = MGFParserState::ScanHeaders;
             true
         } else {
             false
@@ -435,11 +440,30 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
 
     fn handle_between(&mut self, line: &str) -> bool {
         if line == "BEGIN IONS" {
-            self.state = MGFParserState::ScanHeaders;
+            *self.state_mut() = MGFParserState::ScanHeaders;
         }
         true
     }
 
+}
+
+
+impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFLineParsing<C, D> for MGFReaderType<R, C, D> {
+    fn state(&self) -> &MGFParserState {
+        &self.state
+    }
+
+    fn state_mut(&mut self) -> &mut MGFParserState {
+        &mut self.state
+    }
+
+    fn error_mut(&mut self) -> &mut Option<MGFError> {
+        &mut self.error
+    }
+}
+
+
+impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReaderType<R, C, D> {
     fn read_line(&mut self, buffer: &mut String) -> io::Result<usize> {
         self.handle.read_line(buffer)
     }

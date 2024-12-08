@@ -62,15 +62,15 @@ zlib-ng = ["flate2/zlib-ng"]
 miniz_oxide = ["flate2/rust_backend"]
 
 # Enables reading mzMLb
-mzmlb = ["hdf5", "ndarray", "hdf5-sys"]
+mzmlb = ["dep:hdf5", "dep:ndarray", "dep:hdf5-sys"]
 
 # Enable compiling and statically linking HDF5, which requires building
 # libz-sys in static mode, which conflicts with flate2/zlib-ng-compat
 # but not flate2/zlib
-hdf5_static = ["mzmlb", "hdf5-sys/static", "hdf5-sys/zlib", "libz-sys"]
+hdf5_static = ["mzmlb", "hdf5-sys/static", "hdf5-sys/zlib", "dep:libz-sys"]
 
 thermo = [
-    "thermorawfilereader",
+    "dep:thermorawfilereader",
     "thermorawfilereader/net8_0",
     "thermorawfilereader/nethost-download",
 ]
@@ -84,10 +84,10 @@ bruker_tdf = [
 
 doc-only = []
 
-async = ["tokio", "quick-xml/async-tokio"]
+async = ["dep:tokio", "quick-xml/async-tokio", "dep:futures", "dep:pin-project"]
 
-proxi = ["reqwest"]
-proxi-async = ["proxi", "futures"]
+proxi = ["dep:reqwest"]
+proxi-async = ["proxi", "dep:futures"]
 
 [dependencies]
 regex = "1"
@@ -150,6 +150,7 @@ thermorawfilereader = { version = "0.3.0", default-features = false, optional = 
 rusqlite = { version = "0.31.0", optional = true }
 timsrust = { version = "0.4.1", default-features = false, features = ["tdf", ], optional = true }
 parking_lot = { version = "0.12.3", optional = true }
+pin-project = { version = "1.1.7", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
