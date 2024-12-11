@@ -1287,7 +1287,7 @@ mod test {
 
     #[test]
     fn test_read_spectra() -> io::Result<()> {
-        let mut reader = ThermoRawReader::open_path("./test/data/small.RAW")?;
+        let mut reader = ThermoRawReader::new_with_detail_level_and_centroiding("./test/data/small.RAW", DetailLevel::Lazy, false)?;
         assert_eq!(reader.len(), 48);
 
         let groups: Vec<_> = reader.groups().collect();
@@ -1320,17 +1320,36 @@ mod test {
         assert!((event.injection_time - 68.227486).abs() < 1e-3);
         assert!((event.start_time - 0.004935).abs() < 1e-3);
 
-        for (k, v) in reader.instrument_configurations().iter() {
-            eprintln!("{k} -> {v:?}");
-        }
+        for _ in reader.instrument_configurations().iter() {}
 
+        assert_eq!(reader.get_centroiding(), false);
+        reader.set_centroiding(true);
+        assert_eq!(reader.get_centroiding(), true);
+        let spec_centr = reader.get_spectrum_by_index(spec.index()).unwrap();
+        assert_eq!(spec_centr.signal_continuity(), SignalContinuity::Centroid);
+        assert!(spec_centr.peaks.is_some());
         Ok(())
     }
 
     #[test]
-    fn test_read_tic() -> io::Result<()> {
+    fn test_read_chromatograms() -> io::Result<()> {
         let mut reader = ThermoRawReader::open_path("./test/data/small.RAW")?;
         let tic= reader.get_chromatogram_by_id("TIC").unwrap();
+        let exp_n = reader.len();
+        let obs_n = tic.time()?.len();
+        assert_eq!(obs_n, exp_n);
+
+        let tic= reader.get_chromatogram_by_id("BPC").unwrap();
+        let exp_n = reader.len();
+        let obs_n = tic.time()?.len();
+        assert_eq!(obs_n, exp_n);
+
+        let tic= reader.get_chromatogram_by_index(0).unwrap();
+        let exp_n = reader.len();
+        let obs_n = tic.time()?.len();
+        assert_eq!(obs_n, exp_n);
+
+        let tic= reader.get_chromatogram_by_index(1).unwrap();
         let exp_n = reader.len();
         let obs_n = tic.time()?.len();
         assert_eq!(obs_n, exp_n);
