@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::env;
 use std::io;
 use std::path::PathBuf;
@@ -80,8 +81,9 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
         R: RandomAccessSpectrumIterator<CentroidPeak, DeconvolutedPeak>
             + SpectrumSource<CentroidPeak, DeconvolutedPeak>
             + Send
+            + Any
             + 'static,
-        W: SpectrumWriter<CentroidPeak, DeconvolutedPeak> + Send + 'static,
+        W: SpectrumWriter<CentroidPeak, DeconvolutedPeak> + Send + Any + 'static,
     >(
         &self,
         reader: R,
@@ -95,8 +97,9 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
             + MSDataFileMetadata
             + SpectrumSource<CentroidPeak, DeconvolutedPeak>
             + Send
+            + Any
             + 'static,
-        W: SpectrumWriter<CentroidPeak, DeconvolutedPeak> + MSDataFileMetadata + Send + 'static,
+        W: SpectrumWriter<CentroidPeak, DeconvolutedPeak> + MSDataFileMetadata + Send + Any + 'static,
     >(
         &self,
         reader: R,
