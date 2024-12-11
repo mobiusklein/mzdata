@@ -100,6 +100,7 @@ mod test {
     #[cfg(feature = "async")]
     mod async_tests {
         use super::*;
+        use futures::StreamExt;
         use tokio::fs;
 
         #[tokio::test]
@@ -132,7 +133,7 @@ mod test {
             let mut msn_count = 0;
 
             for i in (0..n).rev() {
-                let scan = reader.get_spectrum_by_index(i).await.expect("Missing spectrum");
+                let scan = reader.get_spectrum_by_index(i).await.unwrap();
                 let level = scan.ms_level();
                 if level == 1 {
                     ms1_count += 1;
@@ -144,6 +145,27 @@ mod test {
                     (centroided.peaks[p.get_index() as usize]).mz();
                 })
             }
+            assert_eq!(ms1_count, 0);
+            assert_eq!(msn_count, 35);
+
+            ms1_count = 0;
+            msn_count = 0;
+            reader.reset().await;
+
+            let mut stream = reader.as_stream();
+            while let Some(scan) = stream.next().await {
+                let level = scan.ms_level();
+                if level == 1 {
+                    ms1_count += 1;
+                } else {
+                    msn_count += 1;
+                }
+                let centroided: CentroidSpectrum = scan.try_into().unwrap();
+                centroided.peaks.iter().for_each(|p| {
+                    (centroided.peaks[p.get_index() as usize]).mz();
+                })
+            }
+
             assert_eq!(ms1_count, 0);
             assert_eq!(msn_count, 35);
         }

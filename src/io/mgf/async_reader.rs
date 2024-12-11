@@ -1,5 +1,5 @@
 use core::str;
-use std::{future::Future, io::SeekFrom};
+use std::io::SeekFrom;
 use std::marker::PhantomData;
 
 use std::collections::HashMap;
@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use tokio::io::{self, AsyncBufReadExt, AsyncSeekExt};
 use futures::stream::{self, Stream};
 
-use log::warn;
+use log::{error, warn};
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
@@ -85,6 +85,9 @@ impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
         let mut builder = SpectrumBuilder::<C, D>::default();
         self._parse_into(&mut builder)
             .await
+            .inspect_err(|e| {
+                error!("An error occurred while reading MGF spectrum: {e}")
+            })
             .ok()
             .and_then(|(_, started_spectrum)| {
                 (started_spectrum && !builder.is_empty()).then(|| builder.into())
@@ -199,18 +202,6 @@ impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
     }
 }
 
-#[pin_project::pin_project]
-pub struct SpectrumStream<
-        R: io::AsyncRead + io::AsyncSeek + Unpin,
-        C: CentroidPeakAdapting,
-        D: DeconvolutedPeakAdapting,
-    > {
-        #[pin]
-        source: MGFReaderType<R, C, D>,
-        #[pin]
-        state: Box<dyn Future<Output = Option<MultiLayerSpectrum<C, D>>> + Unpin>,
-}
-
 impl<
         R: io::AsyncRead + io::AsyncSeek + Unpin,
         C: CentroidPeakAdapting,
@@ -219,13 +210,13 @@ impl<
 {
 
     pub fn as_stream<'a>(&'a mut self) -> impl Stream<Item=MultiLayerSpectrum<C, D>> + 'a {
-        stream::unfold(self, |reader| async {
+        Box::pin(stream::unfold(self, |reader| async {
             let spec = reader.read_next();
             match spec.await {
                 Some(val) => Some((val, reader)),
                 None => None
             }
-        })
+        }))
     }
 
     /// Construct a new MGFReaderType and build an offset index
