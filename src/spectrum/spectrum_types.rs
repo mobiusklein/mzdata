@@ -128,12 +128,6 @@ pub trait SpectrumLike<
         self.description().polarity
     }
 
-    /// Get the spectrum-level [`Param`] list which provides the [`ParamDescribed`] interface.
-    // #[inline]
-    // fn params(&self) -> &ParamList {
-    //     &self.description().params
-    // }
-
     /// Access the point measure of ion mobility associated with the scan if present. This is distinct from
     /// having a frame-level scan across the ion mobility dimension.
     fn ion_mobility(&self) -> Option<f64> {

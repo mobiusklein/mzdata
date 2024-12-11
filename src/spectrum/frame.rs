@@ -154,7 +154,7 @@ impl From<IonMobilityFrameDescription> for SpectrumDescription {
 pub trait IonMobilityFrameLike<
     C: FeatureLike<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge,
->
+>: ParamDescribed
 {
     /// The method to access the spectrum description itself, which supplies
     /// the data for most other methods on this trait.
@@ -240,11 +240,6 @@ pub trait IonMobilityFrameLike<
     #[inline]
     fn polarity(&self) -> ScanPolarity {
         self.description().polarity
-    }
-
-    #[inline]
-    fn params(&self) -> &ParamList {
-        &self.description().params
     }
 
     fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap3D>;
