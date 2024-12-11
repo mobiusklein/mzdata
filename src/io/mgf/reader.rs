@@ -21,10 +21,10 @@ use super::super::{
     utils::DetailLevel,
 };
 
-use crate::meta::{
+use crate::{meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
     MassSpectrometryRun, Sample, Software,
-};
+}, prelude::SpectrumLike};
 
 use crate::params::{ControlledVocabulary, Param, ParamDescribed};
 
@@ -220,6 +220,7 @@ pub struct MGFReaderType<
     samples: Vec<Sample>,
     data_processings: Vec<DataProcessing>,
     run: MassSpectrometryRun,
+    read_counter: usize,
     pub detail_level: DetailLevel,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
@@ -471,10 +472,16 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
     /// Read the next spectrum from the file, if there is one.
     pub fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
         let mut builder = SpectrumBuilder::<C, D>::default();
+        builder.detail_level = self.detail_level;
         self._parse_into(&mut builder)
             .ok()
             .and_then(|(_, started_spectrum)| {
-                (started_spectrum && !builder.is_empty()).then(|| builder.into())
+                let mut spec: Option<MultiLayerSpectrum<C, D>> = (started_spectrum && !builder.is_empty()).then(|| builder.into());
+                if let Some(spec) = spec.as_mut() {
+                    spec.description_mut().index = self.read_counter;
+                    self.read_counter += 1;
+                }
+                spec
             })
     }
 
@@ -538,6 +545,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
         spectrum: &mut MultiLayerSpectrum<C, D>,
     ) -> Result<usize, MGFError> {
         let mut accumulator = SpectrumBuilder::default();
+        accumulator.detail_level = self.detail_level;
         match self._parse_into(&mut accumulator) {
             Ok((sz, started_spectrum)) => {
                 if !started_spectrum {
@@ -547,6 +555,8 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
                     )))
                 } else {
                     accumulator.into_spectrum(spectrum);
+                    spectrum.description_mut().index = self.read_counter;
+                    self.read_counter += 1;
                     Ok(sz)
                 }
             }
@@ -582,6 +592,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             file_description: Self::default_file_description(),
             detail_level: DetailLevel::Full,
             run: MassSpectrometryRun::default(),
+            read_counter: 0
         }
     }
 }
@@ -644,7 +655,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             } else if found_start && buffer.starts_with(b"TITLE=") {
                 match str::from_utf8(&buffer[6..]) {
                     Ok(string) => {
-                        self.index.insert(string.to_owned(), last_start);
+                        self.index.insert(string.trim().to_owned(), last_start);
                     }
                     Err(_err) => {}
                 };
@@ -714,6 +725,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     fn reset(&mut self) {
         self.seek(SeekFrom::Start(0))
             .expect("Failed to reset file stream");
+        self.read_counter = 0;
     }
 
     fn get_index(&self) -> &OffsetIndex {
@@ -734,7 +746,10 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
-                Ok(_) => Ok(self),
+                Ok(_) => {
+                    self.read_counter = self.index.index_of(id).unwrap();
+                    Ok(self)
+                },
                 Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
             },
             None => Err(SpectrumAccessError::SpectrumIdNotFound(id.to_string())),
@@ -744,7 +759,10 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_index(index) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
-                Ok(_) => Ok(self),
+                Ok(_) => {
+                    self.read_counter = index;
+                    Ok(self)
+                },
                 Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
             },
             None => Err(SpectrumAccessError::SpectrumIndexNotFound(index)),
@@ -752,9 +770,17 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
     }
 
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
-        match self._offset_of_time(time) {
+        let scan = self.get_spectrum_by_time(time);
+        let index = match scan {
+            Some(scan) => scan.index(),
+            None => return Err(SpectrumAccessError::SpectrumNotFound),
+        };
+        match self._offset_of_index(index) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
-                Ok(_) => Ok(self),
+                Ok(_) => {
+                    self.read_counter = index;
+                    Ok(self)
+                },
                 Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
             },
             None => Err(SpectrumAccessError::SpectrumNotFound),

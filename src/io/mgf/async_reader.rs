@@ -54,6 +54,7 @@ pub struct MGFReaderType<
     pub detail_level: DetailLevel,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
+    read_counter: usize
 }
 
 
@@ -90,7 +91,12 @@ impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
             })
             .ok()
             .and_then(|(_, started_spectrum)| {
-                (started_spectrum && !builder.is_empty()).then(|| builder.into())
+                let mut spec: Option<MultiLayerSpectrum<C, D>> = (started_spectrum && !builder.is_empty()).then(|| builder.into());
+                if let Some(spec) = spec.as_mut() {
+                    spec.description_mut().index = self.read_counter;
+                    self.read_counter += 1;
+                }
+                spec
             })
     }
 
@@ -163,6 +169,8 @@ impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
                     )))
                 } else {
                     accumulator.into_spectrum(spectrum);
+                    spectrum.description_mut().index = self.read_counter;
+                    self.read_counter += 1;
                     Ok(sz)
                 }
             }
@@ -198,6 +206,7 @@ impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
             file_description: Self::default_file_description(),
             detail_level: DetailLevel::Full,
             run: MassSpectrometryRun::default(),
+            read_counter: 0,
         }
     }
 }
@@ -267,7 +276,7 @@ impl<
             } else if found_start && buffer.starts_with(b"TITLE=") {
                 match str::from_utf8(&buffer[6..]) {
                     Ok(string) => {
-                        self.index.insert(string.to_owned(), last_start);
+                        self.index.insert(string.trim().to_owned(), last_start);
                     }
                     Err(_err) => {}
                 };
