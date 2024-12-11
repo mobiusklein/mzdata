@@ -848,6 +848,8 @@ crate::cvmap! {
 
 #[cfg(test)]
 mod test {
+    use crate::params::ParamDescribed;
+
     use super::*;
 
     #[test]
@@ -864,5 +866,25 @@ mod test {
             SoftwareTerm::SCIEXTOFTOFSeriesExplorerSoftware.flags(),
             SoftwareType::Analysis | SoftwareType::Acquisition | SoftwareType::DataProcessing
         );
+        assert!(
+            SoftwareTerm::SCIEXTOFTOFSeriesExplorerSoftware.flags().is_analysis(),
+        );
+    }
+
+    #[test]
+    fn sw_test() {
+        let mut sw = Software::new("foo".into(), "v0.1.0".into(), vec![custom_software_name("foo")]);
+        assert_eq!(sw.id, "foo");
+        assert_eq!(sw.version, "v0.1.0");
+        assert!(sw.find_software_term().is_some());
+        sw.add_param(SoftwareTerm::ANNSoLo.into());
+        assert!(!sw.is_analysis());
+        sw.params_mut().reverse();
+        assert!(sw.is_analysis());
+        assert!(sw.find_software_term().is_some());
+
+
+        let id = Software::find_unique_id("foo", vec![sw].iter());
+        assert_eq!(id, "foo_0");
     }
 }
