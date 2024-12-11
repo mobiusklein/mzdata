@@ -102,7 +102,7 @@ pub trait SpectrumGrouping<
 /**
 A pairing of an optional MS1 spectrum with all its associated MSn spectra.
 */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SpectrumGroup<C = CentroidPeak, D = DeconvolutedPeak, S = MultiLayerSpectrum<C, D>>
 where
     C: CentroidLike + Default,

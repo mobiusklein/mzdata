@@ -4,7 +4,7 @@ test-units:
     cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo
 
 test-coverage:
-    cargo llvm-cov --lib --tests --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo --html
+    cargo llvm-cov --lib --tests nextest --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,mzmlb --html
 
 alias t := test-units
 

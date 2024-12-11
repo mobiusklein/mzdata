@@ -17,7 +17,7 @@ use mzsignal::{
     FittedPeak,
 };
 
-use crate::params::{ParamDescribed, ParamList, Unit, Value};
+use crate::params::{ParamDescribed, Unit, Value};
 #[allow(unused)]
 use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType};
 use crate::spectrum::peaks::{PeakDataLevel, RefPeakDataLevel, SpectrumSummary};
@@ -47,7 +47,7 @@ impl<D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak>> Deconvolute
 pub trait SpectrumLike<
     C: CentroidLike = CentroidPeak,
     D: DeconvolutedCentroidLike = DeconvolutedPeak,
->
+>: ParamDescribed
 {
     /// The method to access the spectrum description itself, which supplies
     /// the data for most other methods on this trait.
@@ -129,10 +129,10 @@ pub trait SpectrumLike<
     }
 
     /// Get the spectrum-level [`Param`] list which provides the [`ParamDescribed`] interface.
-    #[inline]
-    fn params(&self) -> &ParamList {
-        &self.description().params
-    }
+    // #[inline]
+    // fn params(&self) -> &ParamList {
+    //     &self.description().params
+    // }
 
     /// Access the point measure of ion mobility associated with the scan if present. This is distinct from
     /// having a frame-level scan across the ion mobility dimension.
@@ -483,6 +483,134 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
             Err(err) => Err(err),
         }
     }
+}
+
+impl RawSpectrum {
+    /// The method to access the spectrum description itself, which supplies
+    /// the data for most other methods on this trait.
+    pub fn description(&self) -> &SpectrumDescription {
+        <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::description(self)
+    }
+
+    /// The method to access the spectrum descript itself, mutably.
+    pub fn description_mut(&mut self) -> &mut SpectrumDescription {
+        <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::description_mut(self)
+    }
+
+    /// Access the acquisition information for this spectrum.
+    #[inline]
+    pub fn acquisition(&self) -> &Acquisition {
+        &self.description().acquisition
+    }
+
+    /// Access the precursor information, if it exists.
+    #[inline]
+    pub fn precursor(&self) -> Option<&Precursor> {
+        let desc = self.description();
+        desc.precursor.as_ref()
+    }
+
+    /// Iterate over all precursors of the spectrum
+    pub fn precursor_iter(&self) -> impl Iterator<Item = &Precursor> {
+        let desc = self.description();
+        desc.precursor.iter()
+    }
+
+    /// Mutably access the precursor information, if it exists
+    pub fn precursor_mut(&mut self) -> Option<&mut Precursor> {
+        let desc = self.description_mut();
+        desc.precursor.as_mut()
+    }
+
+    /// Iterate over all precursors of the spectrum mutably
+    pub fn precursor_iter_mut(&mut self) -> impl Iterator<Item = &mut Precursor> {
+        let desc = self.description_mut();
+        desc.precursor.iter_mut()
+    }
+
+    /// A shortcut method to retrieve the scan start time of a spectrum
+    #[inline]
+    pub fn start_time(&self) -> f64 {
+        let acq = self.acquisition();
+        match acq.scans.first() {
+            Some(evt) => evt.start_time,
+            None => 0.0,
+        }
+    }
+
+    /// Access the MS exponentiation level
+    #[inline]
+    pub fn ms_level(&self) -> u8 {
+        self.description().ms_level
+    }
+
+    /// Access the native ID string for the spectrum
+    #[inline]
+    pub fn id(&self) -> &str {
+        &self.description().id
+    }
+
+    /// Access the index of the spectrum in the source file
+    #[inline]
+    pub fn index(&self) -> usize {
+        self.description().index
+    }
+
+    /// Access a description of how raw the signal is, whether a
+    /// profile spectrum is available or only centroids are present.
+    #[inline]
+    pub fn signal_continuity(&self) -> SignalContinuity {
+        self.description().signal_continuity
+    }
+
+    /// Access a description of the spectrum polarity
+    #[inline]
+    pub fn polarity(&self) -> ScanPolarity {
+        self.description().polarity
+    }
+
+    /// Access the point measure of ion mobility associated with the scan if present. This is distinct from
+    /// having a frame-level scan across the ion mobility dimension.
+    pub fn ion_mobility(&self) -> Option<f64> {
+        <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::ion_mobility(self)
+    }
+
+    /// Check if this spectrum has a point measure of ion mobility. This is distinct from
+    /// having a frame-level scan across the ion mobility dimension.
+    pub fn has_ion_mobility(&self) -> bool {
+        <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::ion_mobility(self).is_some()
+    }
+
+    /// Retrieve the most processed representation of the mass spectrum's signal
+    pub fn peaks(&'_ self) -> RefPeakDataLevel<'_, CentroidPeak, DeconvolutedPeak> {
+        <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::peaks(self)
+    }
+
+    pub fn into_peaks_and_description(self) -> (PeakDataLevel<CentroidPeak, DeconvolutedPeak>, SpectrumDescription) {
+        <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::into_peaks_and_description(self)
+    }
+
+    /// Obtain a reference to the [`BinaryArrayMap`] if one is available for the peak
+    /// information. This may not be the most refined version of the peak signal if
+    /// it has been processed further.
+    pub fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap> {
+        <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::raw_arrays(&self)
+    }
+
+    /// Check if this spectrum has an ion mobility dimension/array. This is distinct from
+    /// having a scan-level point measure of ion mobility.
+    pub fn has_ion_mobility_dimension(&self) -> bool {
+        self.raw_arrays().map(|a| a.has_ion_mobility()).unwrap_or_default()
+    }
+
+    /// Compute and update the the total ion current, base peak, and m/z range for
+    /// the spectrum based upon its current peak data.
+    ///
+    /// Uses [`RefPeakDataLevel::fetch_summaries`]
+    pub fn update_summaries(&mut self) {
+        <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::update_summaries(self)
+    }
+
 }
 
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> SpectrumLike<C, D> for RawSpectrum {
@@ -1355,6 +1483,24 @@ mod test {
         Ok(())
     }
 
+    macro_rules! behaviors {
+        ($spec:ident) => {
+            assert_eq!($spec.id(), "controllerType=0 controllerNumber=1 scan=10014");
+            assert_eq!($spec.start_time(), 22.12829);
+            assert_eq!($spec.ms_level(), 1);
+            assert_eq!($spec.polarity(), ScanPolarity::Positive);
+            assert!($spec.precursor().is_none());
+            assert_eq!($spec.precursor_iter().count(), 0);
+            assert!(!$spec.has_ion_mobility());
+            assert!(!$spec.has_ion_mobility_dimension());
+            assert!(!$spec.params().is_empty());
+        };
+    }
+
+    fn test_spectrum_behavior<T: SpectrumLike>(spec: &T) {
+        behaviors!(spec);
+    }
+
     #[test_log::test]
     fn test_peakdata() -> io::Result<()> {
         let mut reader = MzMLReader::open_path("./test/data/small.mzML")?;
@@ -1384,10 +1530,7 @@ mod test {
         reader.reset();
         let mut scan = reader.next().expect("Failed to read spectrum");
         assert_eq!(scan.signal_continuity(), SignalContinuity::Profile);
-        assert_eq!(scan.ms_level(), 1);
-        assert_eq!(scan.polarity(), ScanPolarity::Positive);
-        assert!(scan.precursor().is_none());
-
+        test_spectrum_behavior(&scan);
         if let Err(err) = scan.pick_peaks(1.0) {
             panic!("Should not have an error! {}", err);
         }
@@ -1411,6 +1554,39 @@ mod test {
                 .expect("Expected to find peak");
             assert!((p.mz() - 563.739).abs() < 1e-3)
         }
+
+        scan.pick_peaks_with(&PeakPicker::default()).unwrap();
+        if let Some(peaks) = &scan.peaks {
+            assert_eq!(peaks.len(), 2107);
+            let n = peaks.len();
+            for i in 1..n {
+                let diff = peaks[i].get_index() - peaks[i - 1].get_index();
+                assert_eq!(diff, 1);
+            }
+
+            peaks
+                .has_peak(562.741, Tolerance::PPM(3f64))
+                .expect("Expected to find peak");
+            peaks
+                .has_peak(563.240, Tolerance::PPM(3f64))
+                .expect("Expected to find peak");
+            let p = peaks
+                .has_peak(563.739, Tolerance::PPM(1f64))
+                .expect("Expected to find peak");
+            assert!((p.mz() - 563.739).abs() < 1e-3)
+        }
+
+        let mut cent_scan = scan.clone().into_centroid().unwrap();
+        assert_eq!(cent_scan.signal_continuity(), SignalContinuity::Centroid);
+        assert_eq!(SpectrumLike::index(&cent_scan), 0);
+        behaviors!(cent_scan);
+        cent_scan.update_summaries();
+
+        let tmp: Spectrum =  cent_scan.into_spectrum().unwrap();
+        let raw_scan = tmp.into_raw().unwrap();
+        behaviors!(raw_scan);
+        assert_eq!(raw_scan.index(), 0);
+        assert_eq!(raw_scan.signal_continuity(), SignalContinuity::Centroid);
     }
 
     #[test]

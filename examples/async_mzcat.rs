@@ -1,6 +1,7 @@
 use std::time;
 use std::{env, io, path};
 
+use futures::{Stream, StreamExt};
 use tokio;
 use tokio::fs;
 
@@ -21,9 +22,11 @@ async fn load_file<P: Into<path::PathBuf> + Clone>(
 
 async fn scan_file(reader: &mut mzml::AsyncMzMLReader<fs::File>) {
     let start = time::Instant::now();
-    let n = reader.len();
     let mut i = 0;
-    while let Some(scan) = reader.get_spectrum_by_index(i).await {
+
+    let mut stream = reader.as_stream();
+
+    while let Some(scan) = stream.next().await {
         if i % 10000 == 0 {
             println!(
                 "\tScan {}: {}|{} ({} seconds)",
@@ -34,9 +37,6 @@ async fn scan_file(reader: &mut mzml::AsyncMzMLReader<fs::File>) {
             );
         }
         i += 1;
-        if i == n {
-            break;
-        }
     }
     let end = time::Instant::now();
     println!(

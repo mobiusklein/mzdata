@@ -26,7 +26,7 @@ use crate::meta::{
     ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, Software
 };
 use crate::params::{
-    AccessionIntCode, ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef
+    AccessionIntCode, ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamDescribedRead, ParamLike, ParamValue, Unit, ValueRef
 };
 use crate::spectrum::bindata::{
     to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType,
@@ -2121,17 +2121,46 @@ mod test {
         writer.copy_metadata_from(&reader);
         assert_eq!(reader.samples(), writer.samples());
         *writer.spectrum_count_mut() = reader.len() as u64;
-        for mut group in reader.groups() {
-            if let Some(prec) = group.precursor_mut() {
-                if let Some(arrays) = prec.arrays.as_mut() {
-                    arrays.iter_mut().for_each(|(_, arr)| {
-                        arr.store_compressed(BinaryCompressionType::Zlib).unwrap();
-                    });
+        for (i, mut group) in reader.groups().enumerate() {
+            if i % 6 == 0 {
+                if let Some(prec) = group.precursor_mut() {
+                    if let Some(arrays) = prec.arrays.as_mut() {
+                        arrays.iter_mut().for_each(|(_, arr)| {
+                            arr.store_compressed(BinaryCompressionType::Zlib).unwrap();
+                        });
+                    }
                 }
-                writer.write(prec)?;
-            }
-            for prod in group.products.iter() {
-                writer.write(prod)?;
+                writer.write_group(&group)?;
+            } else if i % 4 == 0 {
+                if let Some(prec) = group.precursor_mut() {
+                    if let Some(arrays) = prec.arrays.as_mut() {
+                        arrays.iter_mut().for_each(|(_, arr)| {
+                            arr.store_compressed(BinaryCompressionType::Zlib).unwrap();
+                        });
+                    }
+                }
+                writer.write_group_owned(group)?;
+            } else if i % 2 == 0 {
+                let (precursor, products) = group.into_parts();
+                if let Some(mut prec) = precursor {
+                    if let Some(arrays) = prec.arrays.as_mut() {
+                        arrays.iter_mut().for_each(|(_, arr)| {
+                            arr.store_compressed(BinaryCompressionType::Zlib).unwrap();
+                        });
+                    }
+                    writer.write_owned(prec)?;
+                    writer.write_all_owned(products.into_iter())?;
+                }
+            } else {
+                if let Some(prec) = group.precursor_mut() {
+                    if let Some(arrays) = prec.arrays.as_mut() {
+                        arrays.iter_mut().for_each(|(_, arr)| {
+                            arr.store_compressed(BinaryCompressionType::Zlib).unwrap();
+                        });
+                    }
+                    writer.write(prec)?;
+                }
+                writer.write_all(group.products.iter())?;
             }
         }
         writer.close()?;
