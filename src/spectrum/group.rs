@@ -888,7 +888,7 @@ mod mzsignal_impl {
         G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
     > {
         pub group: G,
-        ms1_context: Vec<ArcArrays>,
+        pub ms1_context: Vec<ArcArrays>,
         _c: PhantomData<C>,
         _d: PhantomData<D>,
     }

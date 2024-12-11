@@ -2041,6 +2041,78 @@ impl FromStr for ControlledVocabulary {
 
 pub type ParamList = Vec<Param>;
 
+pub trait ParamDescribedRead {
+    /// Obtain an immutable slice over the encapsulated [`Param`] list
+    fn params(&self) -> &[Param];
+
+    /// Find the first [`Param`] whose name matches `name`
+    fn get_param_by_name(&self, name: &str) -> Option<&Param> {
+        self.params().iter().find(|&param| param.name == name)
+    }
+
+    /// Find the first [`Param`] whose [`CURIE`] matches `curie`
+    fn get_param_by_curie(&self, curie: &CURIE) -> Option<&Param> {
+        self.params().iter().find(|&param| curie == param)
+    }
+
+    /// Find the first [`Param`] whose [`Param::accession`] matches `accession`
+    ///
+    /// This is equivalent to [`ParamDescribed::get_param_by_curie`] on `accession.parse::<CURIE>().unwrap()`
+    fn get_param_by_accession(&self, accession: &str) -> Option<&Param> {
+        let (cv, acc_num) = curie_to_num(accession);
+        return self
+            .params()
+            .iter()
+            .find(|&param| param.accession == acc_num && param.controlled_vocabulary == cv);
+    }
+
+    /// Iterate over the encapsulated parameter list
+    fn iter_params(&self) -> std::slice::Iter<Param> {
+        self.params().iter()
+    }
+
+}
+
+pub trait ParamDescribedMut {
+
+    /// Obtain an mutable slice over the encapsulated [`Param`] list
+    fn params_mut(&mut self) -> &mut ParamList;
+
+    /// Add a new [`Param`] to the entity
+    fn add_param(&mut self, param: Param) {
+        self.params_mut().push(param);
+    }
+
+    /// Add all parameters from an iterator of [`Param`] to the entity
+    fn extend_params(&mut self, it: impl IntoIterator<Item = Param>) {
+        self.params_mut().extend(it)
+    }
+
+    /// Remove the `i`th [`Param`] from the entity.
+    fn remove_param(&mut self, index: usize) -> Param {
+        self.params_mut().remove(index)
+    }
+
+    /// Iterate mutably over the encapsulated parameter list
+    fn iter_params_mut(&mut self) -> std::slice::IterMut<Param> {
+        self.params_mut().iter_mut()
+    }
+}
+
+
+impl ParamDescribedRead for &[Param] {
+    fn params(&self) -> &[Param] {
+        self
+    }
+}
+
+impl ParamDescribedRead for Vec<Param> {
+    fn params(&self) -> &[Param] {
+        self.as_ref()
+    }
+}
+
+
 pub trait ParamDescribed {
     /// Obtain an immutable slice over the encapsulated [`Param`] list
     fn params(&self) -> &[Param];
