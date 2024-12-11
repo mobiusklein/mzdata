@@ -260,7 +260,7 @@ pub trait SpectrumBuilding<
                 let lower_bound = param
                     .to_f32()
                     .expect("Failed to parse isolation window limit");
-                if let IsolationWindowState::Unknown = window.flags {
+                if matches!(window.flags, IsolationWindowState::Unknown | IsolationWindowState::Explicit) {
                     window.flags = IsolationWindowState::Explicit;
                     window.lower_bound = lower_bound;
                 }
@@ -269,7 +269,7 @@ pub trait SpectrumBuilding<
                 let upper_bound = param
                     .to_f32()
                     .expect("Failed to parse isolation window limit");
-                if let IsolationWindowState::Unknown = window.flags {
+                if matches!(window.flags, IsolationWindowState::Unknown | IsolationWindowState::Explicit) {
                     window.flags = IsolationWindowState::Explicit;
                     window.upper_bound = upper_bound;
                 }
@@ -359,21 +359,7 @@ impl<
     }
 
     fn scan_window_mut(&mut self) -> &mut ScanWindow {
-        if self.acquisition.scans.is_empty() {
-            let mut event = ScanEvent::default();
-            event.scan_windows.push(ScanWindow::default());
-            self.acquisition.scans.push(event);
-            return self
-                .acquisition
-                .scans
-                .last_mut()
-                .unwrap()
-                .scan_windows
-                .last_mut()
-                .unwrap();
-        }
-
-        let event = self.acquisition.scans.last_mut().unwrap();
+        let event = self.acquisition.last_scan_mut().unwrap();
         if event.scan_windows.is_empty() {
             event.scan_windows.push(ScanWindow::default());
         }
@@ -515,6 +501,7 @@ impl<
         self.arrays.clear();
         self.current_array.clear();
         self.entry_id.clear();
+        self.entry_type = EntryType::Spectrum;
 
         self.precursor = Precursor::default();
         self.index = 0;
@@ -559,7 +546,7 @@ impl<
                 }
             }
             MzMLParserState::Scan => {
-                let event = self.acquisition.scans.last_mut().unwrap();
+                let event = self.acquisition.last_scan_mut().unwrap();
                 match param.name.as_bytes() {
                     b"scan start time" => {
                         let value: f64 = param
@@ -586,7 +573,7 @@ impl<
                 }
             }
             MzMLParserState::ScanWindowList => {
-                self.acquisition.scans.last_mut().unwrap().add_param(param)
+                self.acquisition.last_scan_mut().unwrap().add_param(param)
             }
             MzMLParserState::ScanWindow => {
                 self.fill_scan_window(param);
@@ -685,7 +672,8 @@ impl<
                                     .expect("An instrument ID map was not provided")
                                     .get(&attr.unescape_value().expect("Error decoding id"));
                             } else if attr.key.as_ref() == b"spectrumRef" {
-                                let sref = attr.unescape_value().expect("Error decoding spectrumRef");
+                                let sref =
+                                    attr.unescape_value().expect("Error decoding spectrumRef");
                                 scan_event.spectrum_reference = Some(sref.into());
                             }
                         }
@@ -700,8 +688,7 @@ impl<
             b"scanWindow" => {
                 let window = ScanWindow::default();
                 self.acquisition
-                    .scans
-                    .last_mut()
+                    .last_scan_mut()
                     .expect("Scan window without scan")
                     .scan_windows
                     .push(window);
@@ -833,24 +820,22 @@ impl<
                                             value
                                         }
                                     };
-                                    self.acquisition.scans.last_mut().unwrap().start_time = value;
+                                    self.acquisition.last_scan_mut().unwrap().start_time = value;
                                 }
                                 b"ion injection time" => {
-                                    self.acquisition.scans.last_mut().unwrap().injection_time = param.to_f32().unwrap_or_else(
+                                    self.acquisition.last_scan_mut().unwrap().injection_time = param.to_f32().unwrap_or_else(
                                             |e| panic!("Expected floating point number for injection time: {e} for {}", self.warning_context())
                                         );
                                 }
                                 _ => self
                                     .acquisition
-                                    .scans
-                                    .last_mut()
+                                    .last_scan_mut()
                                     .unwrap()
                                     .add_param(param.into()),
                             },
                             MzMLParserState::ScanWindowList => self
                                 .acquisition
-                                .scans
-                                .last_mut()
+                                .last_scan_mut()
                                 .unwrap()
                                 .add_param(param.into()),
                             MzMLParserState::ScanWindow => {
@@ -1210,9 +1195,10 @@ impl<
 
         match self.state {
             MzMLParserState::SpectrumDone | MzMLParserState::ChromatogramDone => Ok(()),
-            MzMLParserState::ParserError => {
-                Err(self.error.take().unwrap_or_else(|| MzMLParserError::UnknownError(MzMLParserState::ParserError)))
-            }
+            MzMLParserState::ParserError => Err(self
+                .error
+                .take()
+                .unwrap_or_else(|| MzMLParserError::UnknownError(MzMLParserState::ParserError))),
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
@@ -1231,6 +1217,14 @@ impl<
         reader.trim_text(true);
         accumulator = accumulator.borrow_instrument_configuration(&mut self.instrument_id_map);
         let mut offset: usize = 0;
+
+        macro_rules! err_state {
+            ($message:ident) => {{
+                self.state = MzMLParserState::ParserError;
+                self.error = Some($message);
+            }};
+        }
+
         loop {
             match reader.read_event_into(&mut self.buffer) {
                 Ok(Event::Start(ref e)) => {
@@ -1250,27 +1244,19 @@ impl<
                                 );
                             }
                         }
-                        Err(message) => {
-                            self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
-                        }
+                        Err(message) => err_state!(message),
                     };
                 }
                 Ok(Event::End(ref e)) => {
-                    if log::log_enabled!(log::Level::Trace) {
-                        log::trace!(
-                            "Ending mzML element: {}",
-                            String::from_utf8_lossy(e.name().as_ref())
-                        );
-                    }
+                    log::trace!(
+                        "Ending mzML element: {}",
+                        String::from_utf8_lossy(e.name().as_ref())
+                    );
                     match accumulator.end_element(e, self.state) {
                         Ok(state) => {
                             self.state = state;
                         }
-                        Err(message) => {
-                            self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
-                        }
+                        Err(message) => err_state!(message),
                     };
                 }
                 Ok(Event::Text(ref e)) => {
@@ -1278,10 +1264,7 @@ impl<
                         Ok(state) => {
                             self.state = state;
                         }
-                        Err(message) => {
-                            self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
-                        }
+                        Err(message) => err_state!(message),
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
@@ -1289,10 +1272,7 @@ impl<
                         Ok(state) => {
                             self.state = state;
                         }
-                        Err(message) => {
-                            self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
-                        }
+                        Err(message) => err_state!(message),
                     }
                 }
                 Ok(Event::Eof) => {
@@ -1341,9 +1321,7 @@ impl<
             MzMLParserState::SpectrumDone | MzMLParserState::ChromatogramDone => {
                 Ok((accumulator, offset))
             }
-            MzMLParserState::ParserError if self.error.is_some() => {
-                Err(self.error.take().unwrap())
-            }
+            MzMLParserState::ParserError if self.error.is_some() => Err(self.error.take().unwrap()),
             MzMLParserState::ParserError if self.error.is_none() => {
                 warn!(
                     "Terminated with ParserError but no error set: {:?}",
@@ -1717,21 +1695,11 @@ impl<
     /// Construct a new MzMLReaderType and build an offset index
     /// using [`Self::build_index`]
     pub fn new_indexed(file: R) -> MzMLReaderType<R, C, D> {
-        let mut reader = Self::new(file);
-        match reader.read_index_from_end() {
-            Ok(_count) => {}
-            Err(err) => {
-                debug!("Failed to read index from the end of the file: {}", err);
-                match reader.seek(SeekFrom::Start(0)) {
-                    Ok(_) => {
-                        reader.build_index();
-                    }
-                    Err(error) => {
-                        panic!("Unrecoverable IO Error during file pointer reset {} while handling {:?}", error, err);
-                    }
-                }
-            }
-        }
+        let reader = Self::with_buffer_capacity_and_detail_level_indexed(
+            file,
+            BUFFER_SIZE,
+            DetailLevel::Full,
+        );
         reader
     }
 
@@ -2041,18 +2009,12 @@ impl<
 mod test {
     use super::*;
     use crate::io::traits::SpectrumGrouping;
+    use crate::params::ControlledVocabulary;
     use crate::spectrum::spectrum_types::SpectrumLike;
     use std::fs;
     use std::path;
 
-    #[test_log::test]
-    fn reader_from_file() {
-        let path = path::Path::new("./test/data/small.mzML");
-        let file = fs::File::open(path).expect("Test file doesn't exist");
-        let reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::new(file);
-        let mut ms1_count = 0;
-        let mut msn_count = 0;
-
+    fn test_metadata<T: MSDataFileMetadata>(reader: &T) {
         assert_eq!(reader.data_processings().len(), 1);
         assert_eq!(reader.instrument_configurations().len(), 2);
         assert_eq!(reader.softwares().len(), 2);
@@ -2064,6 +2026,65 @@ mod test {
             .get_param_by_accession("MS:1000579")
             .is_some());
         assert_eq!(reader.file_description().source_files[0].name, "small.RAW");
+
+        assert!(reader.file_description().has_ms1_spectra());
+        assert!(reader.file_description().has_msn_spectra());
+        assert!(reader.file_description().has_contents());
+        assert!(reader
+            .file_description()
+            .source_files
+            .first()
+            .unwrap()
+            .native_id_format()
+            .is_some());
+
+
+        let config = reader.instrument_configurations().get(&0).unwrap();
+        let comp = config.iter().find_map(|c| c.mass_analyzer()).unwrap();
+        assert_eq!(
+            comp.name(),
+            "fourier transform ion cyclotron resonance mass spectrometer"
+        );
+        assert_eq!(
+            config.components.get(1).unwrap().name(),
+            Some("fourier transform ion cyclotron resonance mass spectrometer")
+        );
+
+        let comp = config.iter().find_map(|c| c.detector()).unwrap();
+        assert_eq!(comp.name(), "inductive detector");
+        assert_eq!(
+            config.components.get(2).unwrap().name(),
+            Some("inductive detector")
+        );
+
+        let comp = config.iter().find_map(|c| c.ionization_type()).unwrap();
+        assert_eq!(comp.name(), "electrospray ionization");
+        assert_eq!(
+            config.components.get(0).unwrap().name(),
+            Some("electrospray ionization")
+        );
+
+        for comp in config.iter() {
+            assert!(comp.parent_types().len() > 0);
+        }
+
+        assert_eq!(config.len(), 3);
+        assert!(!config.is_empty());
+        assert_eq!(config.last().unwrap().order, 3);
+
+        assert_eq!(reader.samples().first().unwrap().number(), None);
+    }
+
+    #[test_log::test]
+    fn reader_from_file() {
+        let path = path::Path::new("./test/data/small.mzML");
+        let file = fs::File::open(path).expect("Test file doesn't exist");
+        let mut reader = MzMLReaderType::<_, CentroidPeak, DeconvolutedPeak>::new(file);
+        let mut ms1_count = 0;
+        let mut msn_count = 0;
+
+        test_metadata(&reader);
+        test_metadata(&reader.iter());
 
         for scan in reader {
             let level = scan.ms_level();
@@ -2101,11 +2122,7 @@ mod test {
         assert_eq!(ms1_count, 14);
         assert_eq!(msn_count, 34);
 
-        assert_eq!(reader.data_processings().len(), 1);
-        assert_eq!(reader.instrument_configurations().len(), 2);
-        assert_eq!(reader.softwares().len(), 2);
-        assert_eq!(reader.file_description().source_files.len(), 1);
-        assert_eq!(reader.file_description().contents.len(), 2);
+        test_metadata(&reader);
     }
 
     #[test]
@@ -2176,6 +2193,8 @@ mod test {
         }
         assert_eq!(ms1_count, 14);
         assert_eq!(msn_count, 34);
+
+        test_metadata(&reader.groups());
     }
 
     #[test_log::test]
@@ -2200,7 +2219,7 @@ mod test {
     #[test_log::test]
     fn read_index() -> io::Result<()> {
         let path = path::Path::new("./test/data/read_index_of.mzML");
-        let file = fs::File::open(path)?;
+        let file = fs::File::open(&path)?;
         let mut reader = MzMLReader::new(file);
         match reader.read_index_from_end() {
             Ok(_count) => {}
@@ -2209,6 +2228,17 @@ mod test {
             }
         };
         assert!(!reader.spectrum_index.is_empty());
+        let mut reader2 = MzMLReader::new(fs::File::open(&path)?);
+        reader2.build_index();
+        for (k, v) in reader2.spectrum_index.iter() {
+            let v2 = reader.spectrum_index.get(k);
+            assert_eq!(v2, Some(*v));
+        }
+        let checksum = reader2.read_checksum()?;
+        assert_eq!(
+            checksum,
+            Some("148ffca890b2bc1701be942a91d7d8aad56c9557".to_string())
+        );
         Ok(())
     }
 
@@ -2304,7 +2334,7 @@ mod test {
     fn test_with_detail_level() -> io::Result<()> {
         let path = path::Path::new("./test/data/small.mzML");
         let mut reader = MzMLReader::open_path(path)?;
-        assert_eq!(reader.detail_level, DetailLevel::Full);
+        assert_eq!(*reader.detail_level(), DetailLevel::Full);
 
         let scan_full = reader.get_spectrum_by_index(0).unwrap();
         scan_full
@@ -2316,7 +2346,7 @@ mod test {
                 assert!(matches!(v.compression, BinaryCompressionType::Decoded));
             });
 
-        reader.detail_level = DetailLevel::Lazy;
+        reader.set_detail_level(DetailLevel::Lazy);
         let scan_lazy = reader.get_spectrum_by_index(0).unwrap();
         scan_lazy
             .arrays
@@ -2349,6 +2379,25 @@ mod test {
     }
 
     #[test]
+    fn test_random_start() -> io::Result<()> {
+        let path = path::Path::new("./test/data/batching_test.mzML");
+        let mut reader = MzMLReader::open_path(path)?;
+
+        let scan = reader
+            .start_from_id("controllerType=0 controllerNumber=1 scan=25869")?
+            .next()
+            .unwrap();
+        assert_eq!(scan.id(), "controllerType=0 controllerNumber=1 scan=25869");
+
+        let scan2 = reader.start_from_index(scan.index())?.next().unwrap();
+        assert_eq!(scan.index(), scan2.index());
+
+        let scan2 = reader.start_from_time(scan.start_time())?.next().unwrap();
+        assert_eq!(scan.start_time(), scan2.start_time());
+        Ok(())
+    }
+
+    #[test]
     fn test_interleaved_groups() -> io::Result<()> {
         let path = path::Path::new("./test/data/batching_test.mzML");
         let mut reader = MzMLReader::open_path(path)?;
@@ -2365,6 +2414,63 @@ mod test {
             .unwrap();
         assert_eq!(min_msn_idx, 142);
         assert_eq!(groups.len(), 188);
+
+        reader.reset();
+        let mut it = reader.groups();
+
+        RandomAccessSpectrumGroupingIterator::start_from_id(
+            &mut it,
+            "controllerType=0 controllerNumber=1 scan=25869",
+        )?;
+        let grp2 = it.next().unwrap();
+        assert_eq!(
+            grp2.precursor().map(|s| s.description()),
+            grp.precursor().map(|s| s.description())
+        );
+        for (a, b) in grp2
+            .products()
+            .iter()
+            .map(|s| s.description())
+            .zip(grp.products().iter().map(|s| s.description()))
+        {
+            assert_eq!(*a, *b)
+        }
+
+        RandomAccessSpectrumGroupingIterator::start_from_index(
+            &mut it,
+            grp.precursor().unwrap().index(),
+        )?;
+        let grp2 = it.next().unwrap();
+        assert_eq!(
+            grp2.precursor().map(|s| s.description()),
+            grp.precursor().map(|s| s.description())
+        );
+        for (a, b) in grp2
+            .products()
+            .iter()
+            .map(|s| s.description())
+            .zip(grp.products().iter().map(|s| s.description()))
+        {
+            assert_eq!(*a, *b)
+        }
+
+        RandomAccessSpectrumGroupingIterator::start_from_time(
+            &mut it,
+            grp.precursor().unwrap().start_time(),
+        )?;
+        let grp2 = it.next().unwrap();
+        assert_eq!(
+            grp2.precursor().map(|s| s.description()),
+            grp.precursor().map(|s| s.description())
+        );
+        for (a, b) in grp2
+            .products()
+            .iter()
+            .map(|s| s.description())
+            .zip(grp.products().iter().map(|s| s.description()))
+        {
+            assert_eq!(*a, *b)
+        }
         Ok(())
     }
 
@@ -2414,6 +2520,15 @@ mod test {
         let chrom3 = reader.iter_chromatograms().next().unwrap();
         assert_eq!(chrom3.id(), "TIC");
         assert_eq!(chrom3.time()?.len(), 73368);
+
+        let chrom4 = ChromatogramSource::get_chromatogram_by_index(&mut reader, 0).unwrap();
+        assert_eq!(chrom4.id(), "TIC");
+        assert_eq!(chrom4.time()?.len(), 73368);
+
+        let chrom5 = ChromatogramSource::get_chromatogram_by_id(&mut reader, "TIC").unwrap();
+        assert_eq!(chrom5.id(), "TIC");
+        assert_eq!(chrom5.time()?.len(), 73368);
+
         Ok(())
     }
 
@@ -2454,5 +2569,244 @@ mod test {
         eprintln!("{base_peak:?} {tic} {raw_tic}");
 
         Ok(())
+    }
+
+    #[cfg(feature = "mzsignal")]
+    #[test_log::test]
+    fn test_averaging_deferred() -> io::Result<()> {
+        let path = path::Path::new("./test/data/small.mzML");
+        let mut reader = MzMLReader::open_path(path)?;
+        let groups: Vec<_> = reader.groups().collect();
+
+        reader.reset();
+        // let averaging_iter =
+        //     SpectrumAveragingIterator::new(reader.groups(), 1, 100.0, 2200.0, 0.005);
+        let (averaging_iter, mut averager, reprofiler) =
+            reader.groups().averaging_deferred(1, 100.0, 2200.0, 0.005);
+        let avg_groups: Vec<_> = averaging_iter
+            .map(|grp| {
+                let (mut grp, arrays) = grp.reprofile_with_average_with(&mut averager, &reprofiler);
+                *grp.precursor_mut().unwrap().arrays.as_mut().unwrap() = arrays.into();
+                grp
+            })
+            .take(2)
+            .collect();
+
+        assert_eq!(2, avg_groups.len());
+
+        let raw_tic = &groups[0].precursor.as_ref().unwrap().peaks().tic();
+        let avg_group = &avg_groups[0];
+        let prec = avg_group.precursor().unwrap();
+        let prec_arrays = prec.arrays.as_ref().unwrap();
+
+        let avg_mzs = prec_arrays.mzs()?;
+        let avg_intens = prec_arrays.intensities()?;
+
+        assert_eq!(avg_mzs.len(), avg_intens.len());
+
+        let low = avg_mzs.first().unwrap();
+        let high = avg_mzs.last().unwrap();
+        eprintln!("{low} {high}");
+        assert!((low - 100.0).abs() < 1e-3);
+        assert!((high - (2200.0 - 0.005)).abs() < 1e-3);
+
+        let tic = prec.peaks().tic();
+        let base_peak = prec.peaks().base_peak();
+        eprintln!("{base_peak:?} {tic} {raw_tic}");
+
+        Ok(())
+    }
+
+    #[cfg(feature = "mzsignal")]
+    #[test_log::test]
+    fn test_averaging_deferred_partial() -> io::Result<()> {
+        let path = path::Path::new("./test/data/small.mzML");
+        let mut reader = MzMLReader::open_path(path)?;
+        let groups: Vec<_> = reader.groups().collect();
+
+        reader.reset();
+        // let averaging_iter =
+        //     SpectrumAveragingIterator::new(reader.groups(), 1, 100.0, 2200.0, 0.005);
+        let (averaging_iter, mut averager, reprofiler) = reader
+            .groups()
+            .map(|mut grp| {
+                grp.precursor_mut().unwrap().pick_peaks(1.0).unwrap();
+                grp.precursor_mut()
+                    .unwrap()
+                    .description_mut()
+                    .signal_continuity = SignalContinuity::Centroid;
+                grp
+            })
+            .averaging_deferred(1, 100.0, 2200.0, 0.005);
+        let avg_groups: Vec<_> = averaging_iter
+            .map(|grp| {
+                let grp = grp.reprofile_with(&reprofiler, 0.002);
+                let (mut grp, ctx) = grp.average_with(&mut averager);
+                *grp.precursor_mut().unwrap().arrays.as_mut().unwrap() = ctx.into();
+                grp
+            })
+            .take(2)
+            .collect();
+
+        assert_eq!(2, avg_groups.len());
+
+        let raw_tic = &groups[0].precursor.as_ref().unwrap().peaks().tic();
+        let avg_group = &avg_groups[0];
+        let prec = avg_group.precursor().unwrap();
+        let prec_arrays = prec.arrays.as_ref().unwrap();
+
+        let avg_mzs = prec_arrays.mzs()?;
+        let avg_intens = prec_arrays.intensities()?;
+
+        assert_eq!(avg_mzs.len(), avg_intens.len());
+
+        let low = avg_mzs.first().unwrap();
+        let high = avg_mzs.last().unwrap();
+        eprintln!("{low} {high}");
+        assert!((low - 100.0).abs() < 1e-3);
+        assert!((high - (2200.0 - 0.005)).abs() < 1e-3);
+
+        let tic = prec.peaks().tic();
+        let base_peak = prec.peaks().base_peak();
+        eprintln!("{base_peak:?} {tic} {raw_tic}");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_spectrum_builder() {
+        let mut builder: MzMLSpectrumBuilder<'_, CentroidPeak, DeconvolutedPeak> =
+            MzMLSpectrumBuilder::new();
+        assert!(builder.is_spectrum_entry());
+        assert!(!builder.is_chromatogram_entry());
+        assert_eq!(builder.entry_type(), EntryType::Spectrum);
+        assert_eq!(builder.warning_context(), "spectrum entry 0 ()");
+        builder.set_entry_type(EntryType::Chromatogram);
+        assert_eq!(builder.warning_context(), "chromatogram entry 0 ()");
+        builder._reset();
+
+        builder.fill_binary_data_array(ControlledVocabulary::MS.param(1002312, "numpress linear"));
+        assert_eq!(
+            builder.current_array.compression,
+            BinaryCompressionType::NumpressLinear
+        );
+
+        let pairs = [
+            (1000574, BinaryCompressionType::Zlib),
+            (1000576, BinaryCompressionType::NoCompression),
+            (1002312, BinaryCompressionType::NumpressLinear),
+            (1002313, BinaryCompressionType::NumpressPIC),
+            (1002314, BinaryCompressionType::NumpressSLOF),
+            (1002746, BinaryCompressionType::NumpressLinearZlib),
+            (1002747, BinaryCompressionType::NumpressPICZlib),
+            (1002748, BinaryCompressionType::NumpressSLOFZlib),
+            (1003089, BinaryCompressionType::DeltaPrediction),
+            (1003090, BinaryCompressionType::LinearPrediction),
+        ];
+
+        for (acc, term) in pairs {
+            builder.fill_binary_data_array(ControlledVocabulary::MS.param(acc, term.to_string()));
+            assert_eq!(builder.current_array.compression, term);
+            builder._reset();
+        }
+
+        let pairs = [
+            (1000523, BinaryDataArrayType::Float64),
+            (1000521, BinaryDataArrayType::Float32),
+            (1000522, BinaryDataArrayType::Int64),
+            (1000519, BinaryDataArrayType::Int32),
+            (1001479, BinaryDataArrayType::ASCII),
+        ];
+
+        for (acc, term) in pairs {
+            builder.fill_binary_data_array(ControlledVocabulary::MS.param(acc, term.to_string()));
+            assert_eq!(builder.current_array.dtype, term);
+            builder._reset();
+        }
+        let pairs = [
+            (1002477, ArrayType::MeanIonMobilityArray, Unit::Millisecond),
+            (
+                1003006,
+                ArrayType::MeanIonMobilityArray,
+                Unit::VoltSecondPerSquareCentimeter,
+            ),
+            (1003007, ArrayType::IonMobilityArray, Unit::Unknown),
+            (1003153, ArrayType::IonMobilityArray, Unit::Unknown),
+            (1003156, ArrayType::IonMobilityArray, Unit::Millisecond),
+            (
+                1003008,
+                ArrayType::IonMobilityArray,
+                Unit::VoltSecondPerSquareCentimeter,
+            ),
+            (
+                1003154,
+                ArrayType::DeconvolutedIonMobilityArray,
+                Unit::Millisecond,
+            ),
+            (
+                1003155,
+                ArrayType::DeconvolutedIonMobilityArray,
+                Unit::VoltSecondPerSquareCentimeter,
+            ),
+        ];
+
+        for (acc, term, unit) in pairs {
+            builder.fill_binary_data_array(ControlledVocabulary::MS.param(acc, term.to_string()));
+            assert_eq!(builder.current_array.name, term);
+            assert_eq!(builder.current_array.unit, unit);
+            builder._reset();
+        }
+
+        let param = ControlledVocabulary::MS.const_param(
+            "ion injection time",
+            crate::params::ValueRef::Float(50.0),
+            0,
+            Unit::Millisecond,
+        );
+        builder.fill_param_into(param.into(), MzMLParserState::Scan);
+        assert_eq!(builder.acquisition.first_scan().unwrap().injection_time, 50.0);
+
+        let param = ControlledVocabulary::MS.const_param(
+            "scan start time",
+            crate::params::ValueRef::Float(50.0),
+            0,
+            Unit::Minute,
+        );
+        builder.fill_param_into(param.into(), MzMLParserState::Scan);
+        assert_eq!(builder.acquisition.first_scan().unwrap().start_time, 50.0);
+
+        let param = ScanCombination::NoCombination.to_param();
+        builder.fill_param_into(param.into(), MzMLParserState::ScanList);
+        assert_eq!(builder.acquisition.combination, ScanCombination::NoCombination);
+
+        builder._reset();
+
+
+        let param = ControlledVocabulary::MS.const_param(
+            "isolation window target m/z",
+            crate::params::ValueRef::Float(50.0),
+            0,
+            Unit::MZ,
+        );
+        builder.fill_param_into(param.into(), MzMLParserState::IsolationWindow);
+        assert_eq!(builder.isolation_window_mut().target, 50.0);
+
+        builder._reset();
+        let param = ControlledVocabulary::MS.const_param(
+            "isolation window lower limit",
+            crate::params::ValueRef::Float(48.0),
+            0,
+            Unit::MZ,
+        );
+        builder.fill_param_into(param.into(), MzMLParserState::IsolationWindow);
+        assert_eq!(builder.isolation_window_mut().lower_bound, 48.0);
+        let param = ControlledVocabulary::MS.const_param(
+            "isolation window upper limit",
+            crate::params::ValueRef::Float(52.0),
+            0,
+            Unit::MZ,
+        );
+        builder.fill_param_into(param.into(), MzMLParserState::IsolationWindow);
+        assert_eq!(builder.isolation_window_mut().upper_bound, 52.0);
     }
 }

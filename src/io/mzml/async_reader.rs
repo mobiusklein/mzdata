@@ -614,13 +614,13 @@ impl<
 {
 
     pub fn as_stream<'a>(&'a mut self) -> impl Stream<Item=MultiLayerSpectrum<C, D>> + 'a {
-        stream::unfold(self, |reader| async {
+        Box::pin(stream::unfold(self, |reader| async {
             let spec = reader.read_next();
             match spec.await {
                 Some(val) => Some((val, reader)),
                 None => None
             }
-        })
+        }))
     }
 
     /// Jump to the end of the document and read the offset indices, if they are available
