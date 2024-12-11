@@ -155,9 +155,9 @@ macro_rules! cvmap {
             /// parents of this term.
             pub fn parents(&self) -> Vec<Self> {
                 match self {
-                    $(Self::$variant => $parents.iter().map(|s: &&str| {
+                    $(Self::$variant => $parents.iter().flat_map(|s: &&str| {
                         let curie = s.parse::<$crate::params::CURIE>().unwrap();
-                        Self::from_accession(curie.accession).unwrap()
+                        Self::from_accession(curie.accession)
                     }).collect(),)*
                 }
             }
@@ -321,9 +321,9 @@ macro_rules! cvmap {
             /// parents of this term.
             pub fn parents(&self) -> Vec<Self> {
                 match self {
-                    $(Self::$variant(_) => $parents.iter().map(|s: &&str| {
+                    $(Self::$variant(_) => $parents.iter().flat_map(|s: &&str| {
                         let curie = s.parse::<$crate::params::CURIE>().unwrap();
-                        Self::from_accession(curie.accession, Default::default()).unwrap()
+                        Self::from_accession(curie.accession, Default::default())
                     }).collect(),)*
                 }
             }

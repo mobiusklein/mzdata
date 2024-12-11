@@ -15,8 +15,7 @@ impl Sample {
     }
 
     pub fn number(&self) -> Option<ValueRef> {
-        let p = self.get_param_by_curie(&crate::curie!(MS:1000001));
-        p.map(|p| p.value.as_ref())
+        self.get_param_by_curie(&crate::curie!(MS:1000001)).map(|p| p.value.as_ref())
     }
 }
 
