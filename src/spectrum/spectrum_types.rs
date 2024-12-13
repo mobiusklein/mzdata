@@ -747,9 +747,9 @@ where
         self.peaks.search_by(query)
     }
 
-    fn iter(&self) -> impl Iterator<Item = &C>
+    fn iter<'a>(&'a self) -> impl Iterator<Item = &'a C>
     where
-        C: 'static,
+        C: 'a,
     {
         self.peaks.iter()
     }
@@ -858,9 +858,9 @@ where
         self.deconvoluted_peaks.search_by(query)
     }
 
-    fn iter(&self) -> impl Iterator<Item = &D>
+    fn iter<'a>(&'a self) -> impl Iterator<Item = &'a D>
     where
-        D: 'static,
+        D: 'a,
     {
         self.deconvoluted_peaks.iter()
     }
