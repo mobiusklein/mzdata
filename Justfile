@@ -4,7 +4,7 @@ test-units:
     cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo
 
 test-coverage:
-    cargo llvm-cov --lib --tests --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo --html
+    cargo llvm-cov --lib --tests nextest --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,mzmlb --html
 
 alias t := test-units
 
@@ -15,7 +15,7 @@ quick-docs:
     cargo doc --no-deps -p mzdata
 
 docs:
-    cargo doc --no-deps --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,thermo,async -p mzdata
+    cargo doc --no-deps --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,thermo,async,proxi -p mzdata -p mzsignal -p mzpeaks
 
 install-mzdata:
     cargo install --path . --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,hdf5_static

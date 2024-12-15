@@ -433,7 +433,7 @@ impl BuildArrayMapFrom for Feature<MZ, IonMobility> {
         let mut acc = Vec::with_capacity(n);
         source.iter().enumerate().for_each(|(i, f)| {
             f.iter()
-                .for_each(|(mz, im, inten)| acc.push((*mz, *im, *inten, i)))
+                .for_each(|(mz, im, inten)| acc.push((mz, im, inten, i)))
         });
         acc.sort_by(|(mz_a, im_a, _, key_a), (mz_b, im_b, _, key_b)| {
             mz_a.total_cmp(mz_b)
@@ -549,7 +549,7 @@ impl BuildArrayMapFrom for ChargedFeature<Mass, IonMobility> {
         let mut acc = Vec::with_capacity(n);
         source.iter().enumerate().for_each(|(i, f)| {
             f.iter().for_each(|(mass, im, inten)| {
-                acc.push((mass_charge_ratio(*mass, f.charge), *im, *inten, f.charge, i))
+                acc.push((mass_charge_ratio(mass, f.charge), im, inten, f.charge, i))
             })
         });
         acc.sort_by(|(mz_a, im_a, _, _, key_a), (mz_b, im_b, _, _, key_b)| {

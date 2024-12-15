@@ -7,7 +7,7 @@ use num_traits::Float;
 use super::spectrum_types::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
 use crate::io::traits::SpectrumSource;
 use crate::params::{
-    AccessionIntCode, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef, CURIE
+    AccessionIntCode, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit, CURIE
 };
 use crate::meta::DissociationMethodTerm;
 use crate::{curie, impl_param_described, ParamList};
@@ -189,18 +189,9 @@ impl ScanEvent {
         }
     }
 
-    pub fn filter_string(&self) -> Option<Cow<'_, str>> {
-        self.get_param_by_curie(&FILTER_STRING).map(|p| p.as_str())
-    }
-
-    pub fn resolution(&self) -> Option<ValueRef> {
-        self.get_param_by_curie(&MASS_RESOLUTION).map(|p| p.value())
-    }
-
-    pub fn scan_configuration(&self) -> Option<ValueRef> {
-        self.get_param_by_curie(&PRESET_SCAN_CONFIGURATION)
-            .map(|p| p.value())
-    }
+    crate::find_param_method!(filter_string, &FILTER_STRING, |p| { p.as_str() }, Option<Cow<'_, str>>);
+    crate::find_param_method!(resolution, &MASS_RESOLUTION);
+    crate::find_param_method!(scan_configuration, &PRESET_SCAN_CONFIGURATION);
 }
 
 impl IonMobilityMeasure for ScanEvent {}
@@ -712,9 +703,7 @@ impl SpectrumDescription {
         }
     }
 
-    pub fn title(&self) -> Option<Cow<'_, str>> {
-        self.get_param_by_curie(&SCAN_TITLE).map(|p| p.as_str())
-    }
+    crate::find_param_method!(title, &SCAN_TITLE, |p| p.as_str(), Option<Cow<'_, str>>);
 }
 
 impl_param_described!(Activation, SpectrumDescription);

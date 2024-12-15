@@ -43,9 +43,13 @@ macro_rules! param {
 /// Thermo RAW files start with a UTF-16 header with "Finnigan" at
 /// codepoints 1-9.
 pub fn is_thermo_raw_prefix(buffer: &[u8]) -> bool {
+    if buffer.len() < 18 {
+        debug!("Attempted to test a byte buffer for the Thermo prefix, buffer was less than 18 bytes long");
+        return false
+    }
     let view: &[u16] = unsafe { mem::transmute(&buffer[2..18]) };
     let prefix = String::from_utf16_lossy(view);
-    prefix == "Finnigan"
+    prefix.starts_with("Finnigan")
 }
 
 impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
@@ -92,9 +96,9 @@ pub(crate) mod sealed {
 
     use thermorawfilereader::{
         schema::{
-            AcquisitionT, DissociationMethod, Polarity, PrecursorT, SpectrumData, SpectrumMode,
+            AcquisitionT, DissociationMethod, Polarity, PrecursorT, SpectrumData, SpectrumMode
         },
-        FileDescription as ThermoFileDescription, IonizationMode, MassAnalyzer, RawFileReader,
+        FileDescription as ThermoFileDescription, IonizationMode, MassAnalyzer, RawFileReader
     };
 
     /**
@@ -682,6 +686,7 @@ pub(crate) mod sealed {
                     )
                 }
                 _ => {
+                    warn!("No activation translation found for {:?}", vact);
                     activation
                         .methods_mut()
                         .push(DissociationMethodTerm::CollisionInducedDissociation);
@@ -825,68 +830,46 @@ pub(crate) mod sealed {
                 }
             }
 
+            macro_rules! trailer {
+                ($kv:ident) => {
+                    let name = format!("[Thermo Trailer Extra]{}", $kv.label);
+                    if !$kv.value.is_empty() {
+                        let param = Param::new_key_value(
+                            name,
+                            $kv.value.parse::<Value>().unwrap(),
+                        );
+                        spec.params_mut().push(param);
+                    }
+                };
+            }
+
+            spec.update_summaries();
+            let ms_level = spec.ms_level();
+
             let trailers = self.handle.get_raw_trailers_for(index)?;
             for kv in trailers.iter() {
                 match kv.label {
                     "Micro Scan Count" => {
-                        if !kv.value.is_empty() {
-                            let param = Param::new_key_value(
-                                "[Thermo Trailer Extra]Micro Scan Count",
-                                kv.value.parse::<Value>().unwrap(),
-                            );
-                            spec.params_mut().push(param);
-                        }
+                        trailer!(kv);
                     }
                     "Scan Segment" => {
-                        if !kv.value.is_empty() {
-                            let param = Param::new_key_value(
-                                "[Thermo Trailer Extra]Scan Segment",
-                                kv.value.parse::<Value>().unwrap(),
-                            );
-                            spec.params_mut().push(param);
-                        }
+                        trailer!(kv);
                     }
                     "Scan Event" => {
-                        if !kv.value.is_empty() {
-                            let param = Param::new_key_value(
-                                "[Thermo Trailer Extra]Scan Event",
-                                kv.value.parse::<Value>().unwrap(),
-                            );
-                            spec.params_mut().push(param);
-                        }
+                        trailer!(kv);
                     }
-                    "Monoisotopic M/Z" => {
-                        if !kv.value.is_empty() {
-                            let param = Param::new_key_value(
-                                "[Thermo Trailer Extra]Monoisotopic M/Z",
-                                kv.value.parse::<Value>().unwrap(),
-                            );
-                            spec.params_mut().push(param);
-                        }
+                    "Monoisotopic M/Z" if ms_level > 1 && kv.value != "0" => {
+                        trailer!(kv);
                     }
-                    "HCD Energy eV" => {
-                        if !kv.value.is_empty() {
-                            let param = Param::new_key_value(
-                                "[Thermo Trailer Extra]HCD Energy eV",
-                                kv.value.parse::<Value>().unwrap(),
-                            );
-                            spec.params_mut().push(param);
-                        }
+                    "HCD Energy eV" if ms_level > 1 && kv.value != "0" => {
+                        trailer!(kv);
                     }
-                    "HCD Energy" => {
-                        if !kv.value.is_empty() {
-                            let param = Param::new_key_value(
-                                "[Thermo Trailer Extra]HCD Energy",
-                                kv.value.parse::<Value>().unwrap(),
-                            );
-                            spec.params_mut().push(param);
-                        }
+                    "HCD Energy" if ms_level > 1 && kv.value != "0" => {
+                        trailer!(kv);
                     }
                     _ => {}
                 }
             }
-
-            spec.update_summaries();
             Some(spec)
         }
 
@@ -1176,6 +1159,8 @@ pub type ThermoRawReader = ThermoRawReaderType<CentroidPeak, DeconvolutedPeak>;
 
 #[cfg(test)]
 mod test {
+    use std::fs;
+
     use super::*;
     use crate::MzMLReader;
 
@@ -1287,13 +1272,14 @@ mod test {
 
     #[test]
     fn test_read_spectra() -> io::Result<()> {
-        let mut reader = ThermoRawReader::open_path("./test/data/small.RAW")?;
+        let mut reader = ThermoRawReader::new_with_detail_level_and_centroiding("./test/data/small.RAW", DetailLevel::Lazy, false)?;
         assert_eq!(reader.len(), 48);
 
         let groups: Vec<_> = reader.groups().collect();
         assert_eq!(groups.len(), 14);
 
         let spec = reader.get_spectrum_by_index(0).unwrap();
+        let first_sid = spec.id();
         assert_eq!(spec.peaks().len(), 19913);
         assert!(
             (spec.peaks().tic() - 71263170.0).abs() < 1.0,
@@ -1320,20 +1306,62 @@ mod test {
         assert!((event.injection_time - 68.227486).abs() < 1e-3);
         assert!((event.start_time - 0.004935).abs() < 1e-3);
 
-        for (k, v) in reader.instrument_configurations().iter() {
-            eprintln!("{k} -> {v:?}");
-        }
+        for _ in reader.instrument_configurations().iter() {}
 
+        assert_eq!(reader.get_centroiding(), false);
+        reader.set_centroiding(true);
+        assert_eq!(reader.get_centroiding(), true);
+        let spec_centr = reader.get_spectrum_by_index(spec.index()).unwrap();
+        assert_eq!(spec_centr.signal_continuity(), SignalContinuity::Centroid);
+        assert!(spec_centr.peaks.is_some());
+
+        let scan = reader.start_from_index(20).unwrap().next().unwrap();
+        assert_eq!(scan.index(), 20);
+        let time = scan.start_time();
+        let scan = reader.start_from_id(first_sid).ok().and_then(|it| it.next()).unwrap();
+        assert_eq!(scan.index(), 0);
+        let scan = reader.start_from_time(time).ok().and_then(|it| it.next()).unwrap();
+        assert_eq!(scan.index(), 20);
+
+        reader.reset();
         Ok(())
     }
 
     #[test]
-    fn test_read_tic() -> io::Result<()> {
+    fn test_sniff() -> io::Result<()> {
+        let mut handle = fs::File::open("./test/data/small.RAW")?;
+        let mut buf: [u8; 128] = [0; 128];
+        handle.read_exact(&mut buf)?;
+        assert!(is_thermo_raw_prefix(&buf));
+        buf.reverse();
+        assert!(!is_thermo_raw_prefix(&buf));
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_chromatograms() -> io::Result<()> {
         let mut reader = ThermoRawReader::open_path("./test/data/small.RAW")?;
         let tic= reader.get_chromatogram_by_id("TIC").unwrap();
         let exp_n = reader.len();
         let obs_n = tic.time()?.len();
         assert_eq!(obs_n, exp_n);
+
+        let tic= reader.get_chromatogram_by_id("BPC").unwrap();
+        let exp_n = reader.len();
+        let obs_n = tic.time()?.len();
+        assert_eq!(obs_n, exp_n);
+
+        let tic= reader.get_chromatogram_by_index(0).unwrap();
+        let exp_n = reader.len();
+        let obs_n = tic.time()?.len();
+        assert_eq!(obs_n, exp_n);
+
+        let tic= reader.get_chromatogram_by_index(1).unwrap();
+        let exp_n = reader.len();
+        let obs_n = tic.time()?.len();
+        assert_eq!(obs_n, exp_n);
+
+        assert_eq!(reader.iter_chromatograms().count(), 2);
         Ok(())
     }
 }

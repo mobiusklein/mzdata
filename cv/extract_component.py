@@ -9,7 +9,7 @@ from enum import IntFlag
 from typing import Tuple, Dict, Set, List
 
 import fastobo
-from fastobo.term import TermFrame, IsAClause, NameClause, RelationshipClause
+from fastobo.term import TermFrame, IsAClause, NameClause, RelationshipClause, DefClause
 
 from fastobo.doc import OboDoc
 
@@ -113,6 +113,7 @@ def find_name(term: TermFrame):
 def make_entry_for(term: TermFrame):
     name = None
     flags = ValueType.NoType
+    descr = ""
     parents = []
     for clause in term:
         if isinstance(clause, NameClause):
@@ -122,6 +123,12 @@ def make_entry_for(term: TermFrame):
         if isinstance(clause, RelationshipClause):
             if str(clause.typedef) == 'has_value_type':
                 flags |= xsd_to_type[str(clause.term)]
+        if isinstance(clause, DefClause):
+            descr = re.sub(
+                r"(\[|\])",
+                lambda m: "\\\\" + m.group(1),
+                str(clause.definition).replace('"', "'"),
+            )
 
     vname = name
     if "-" in vname:
@@ -145,6 +152,7 @@ def make_entry_for(term: TermFrame):
 
     return f"""
     #[term(cv=MS, accession={term.id.local}, name="{name}", flags={{{int(flags)}}}, parents={{{json.dumps(parents)}}})]
+    #[doc="{name} - {descr}"]
     {vname},"""
 
 

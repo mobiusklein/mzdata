@@ -1289,7 +1289,7 @@ mod test {
     }
 }
 
-#[cfg(all(feature = "proxi-async", feature = "tokio"))]
+#[cfg(all(feature = "proxi-async", feature = "async"))]
 #[cfg(test)]
 mod test_async {
     use super::*;

@@ -716,7 +716,6 @@ impl<
 
 #[cfg(feature = "mzsignal")]
 mod mzsignal_impl {
-    use std::borrow::Cow;
     use std::sync::Arc;
 
     use crate::spectrum::bindata::{to_bytes, BuildArrayMapFrom, BuildFromArrayMap};
@@ -815,7 +814,7 @@ mod mzsignal_impl {
             let reprofiler = PeakSetReprofiler::new(mz_start, mz_end, dx);
 
             for peaks in to_be_reprofiled {
-                let models: Vec<PeakShapeModel<'_>> = peaks.iter().map(|p| p.into()).collect();
+                let models: Vec<PeakShapeModel> = peaks.iter().map(|p| p.into()).collect();
                 if models.is_empty() {
                     profiles.push(ArrayPair::from((Vec::new(), Vec::new())));
                 } else {
@@ -888,7 +887,7 @@ mod mzsignal_impl {
         G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
     > {
         pub group: G,
-        ms1_context: Vec<ArcArrays>,
+        pub ms1_context: Vec<ArcArrays>,
         _c: PhantomData<C>,
         _d: PhantomData<D>,
     }
@@ -1324,7 +1323,7 @@ mod mzsignal_impl {
                                 let mut fp = FittedPeak::from(p.as_centroid());
                                 fp.full_width_at_half_max = FWHM_DEFAULT;
                                 PeakShapeModel {
-                                    peak: Cow::Owned(fp),
+                                    peak: fp,
                                     shape: PeakShape::Gaussian,
                                 }
                             })
@@ -1633,6 +1632,7 @@ mod test {
         assert_eq!(entries.len(), 0);
     }
 
+    #[cfg(feature = "mzsignal")]
     #[test]
     fn test_average_single() {
         let mut reader = MzMLReader::open_path("./test/data/three_test_scans.mzML")

@@ -10,7 +10,7 @@ use mzpeaks::{
     PeakCollection,
 };
 
-use super::super::traits::SpectrumWriter;
+use crate::prelude::*;
 
 use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
@@ -93,8 +93,8 @@ pub struct SimpleMGFStyle();
 
 impl MGFHeaderStyle for SimpleMGFStyle {}
 
-/// An MGF style that writes the contents of [`SpectrumLike::params`]
-/// as spectrum header entries. This is the default style.
+/// An MGF style that writes the contents of [`SpectrumLike`]'s
+/// [`Param`](crate::params::Param) as spectrum header entries. This is the default style.
 #[derive(Debug, Clone, Copy)]
 pub struct MZDataMGFStyle();
 

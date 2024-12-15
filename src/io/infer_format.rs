@@ -5,7 +5,7 @@ use std::io::{self, prelude::*, BufReader};
 use std::marker::PhantomData;
 use std::path::{self, Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender, SyncSender};
-
+use std::any::Any;
 
 use flate2::{bufread::GzDecoder, write::GzEncoder};
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
@@ -33,7 +33,7 @@ use super::thermo::{ThermoRawReaderType, is_thermo_raw_prefix};
 use super::tdf::{is_tdf, TDFSpectrumReaderType};
 
 use super::traits::{ChromatogramSource, SeekRead, SpectrumReceiver, StreamingSpectrumIterator};
-use super::DetailLevel;
+use super::{DetailLevel, SpectrumSourceWithMetadata};
 
 /// Mass spectrometry file formats that [`mzdata`](crate)
 /// supports
@@ -127,7 +127,8 @@ pub enum MZReaderType<
     #[cfg(feature = "mzmlb")]
     MzMLb(MzMLbReaderType<C, D>),
     #[cfg(feature = "bruker_tdf")]
-    BrukerTDF(TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D>)
+    BrukerTDF(TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D>),
+    Unknown(Box<dyn SpectrumSourceWithMetadata<C, D, MultiLayerSpectrum<C, D>> + Send>),
 }
 
 
@@ -219,6 +220,7 @@ macro_rules! msfmt_dispatch {
             MZReaderType::MzMLb($r) => $e,
             #[cfg(feature = "bruker_tdf")]
             MZReaderType::BrukerTDF($r) => $e,
+            MZReaderType::Unknown($r) => $e,
         }
     };
 }
@@ -246,7 +248,8 @@ impl<R: io::Read + io::Seek,
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(_) => MassSpectrometryFormat::MzMLb,
             #[cfg(feature = "bruker_tdf")]
-            MZReaderType::BrukerTDF(_) => MassSpectrometryFormat::BrukerTDF
+            MZReaderType::BrukerTDF(_) => MassSpectrometryFormat::BrukerTDF,
+            _ => MassSpectrometryFormat::Unknown
         }
     }
 
@@ -306,6 +309,7 @@ impl<R: io::Read + io::Seek,
             MZReaderType::MzMLb(r) => r.get_chromatogram_by_id(id),
             #[cfg(feature = "bruker_tdf")]
             MZReaderType::BrukerTDF(r) => r.get_chromatogram_by_id(id),
+            _ => None
         }
     }
 
@@ -318,7 +322,8 @@ impl<R: io::Read + io::Seek,
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(r) => r.get_chromatogram_by_index(index),
             #[cfg(feature = "bruker_tdf")]
-            MZReaderType::BrukerTDF(r) => r.get_chromatogram_by_index(index)
+            MZReaderType::BrukerTDF(r) => r.get_chromatogram_by_index(index),
+            _ => None
         }
     }
 }
@@ -386,7 +391,17 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
      D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MZReaderType<fs::File, C, D> {
 
     fn construct_index_from_stream(&mut self) -> u64 {
-        msfmt_dispatch!(self, reader, reader.construct_index_from_stream())
+        match self {
+            MZReaderType::MzML(reader) => reader.construct_index_from_stream(),
+            MZReaderType::MGF(reader) => reader.construct_index_from_stream(),
+            #[cfg(feature = "thermo")]
+            MZReaderType::ThermoRaw(reader) => reader.construct_index_from_stream(),
+            #[cfg(feature = "mzmlb")]
+            MZReaderType::MzMLb(reader) => reader.construct_index_from_stream(),
+            #[cfg(feature = "bruker_tdf")]
+            MZReaderType::BrukerTDF(reader) => reader.construct_index_from_stream(),
+            MZReaderType::Unknown(reader) => reader.get_index().len() as u64,
+        }
     }
 
     fn open_path<P>(path: P) -> io::Result<Self>
@@ -498,7 +513,8 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(reader) => reader.get_spectrum_by_time(time),
             #[cfg(feature = "bruker_tdf")]
-            MZReaderType::BrukerTDF(r) => r.get_spectrum_by_time(time)
+            MZReaderType::BrukerTDF(r) => r.get_spectrum_by_time(time),
+            MZReaderType::Unknown(r) => r.get_spectrum_by_time(time),
         }
     }
 
@@ -584,6 +600,9 @@ macro_rules! msfmt_dispatch_cap {
             #[cfg(feature = "bruker_tdf")]
             MZReaderType::BrukerTDF($r) => {
                 $e?;
+            }
+            MZReaderType::Unknown(_) => {
+                Err(super::SpectrumAccessError::IOError(Some(io::Error::new(io::ErrorKind::Unsupported, "Dynamic adaptor doesn't know how to do random access iterators"))))?
             }
         };
     };
@@ -1068,7 +1087,7 @@ pub trait MassSpectrometryReadWriteProcess<
     /// Opens the writer, transforms it with [`MassSpectrometryReadWriteProcess::transform_writer`], and then passes control to [`MassSpectrometryReadWriteProcess::task`]
     fn open_writer<
         Q: Into<Sink<C, D>>,
-        R: RandomAccessSpectrumIterator<C, D> + MSDataFileMetadata + SpectrumSource<C, D> + Send + 'static,
+        R: RandomAccessSpectrumIterator<C, D> + MSDataFileMetadata + SpectrumSource<C, D> + Send + Any + 'static,
     >(
         &self,
         reader: R,
@@ -1198,7 +1217,7 @@ pub trait MassSpectrometryReadWriteProcess<
     /// A no-op by default.
     #[allow(unused)]
     fn transform_reader<
-        R: RandomAccessSpectrumIterator<C, D> + MSDataFileMetadata + SpectrumSource<C, D> + Send + 'static,
+        R: RandomAccessSpectrumIterator<C, D> + MSDataFileMetadata + SpectrumSource<C, D> + Send + Any + 'static,
     >(
         &self,
         reader: R,
@@ -1217,7 +1236,7 @@ pub trait MassSpectrometryReadWriteProcess<
     /// The caller already invokes [`MSDataFileMetadata::copy_metadata_from`]
     #[allow(unused)]
     fn transform_writer<
-        R: RandomAccessSpectrumIterator<C, D> + MSDataFileMetadata + SpectrumSource<C, D> + Send + 'static,
+        R: RandomAccessSpectrumIterator<C, D> + MSDataFileMetadata + SpectrumSource<C, D> + Any + Send + 'static,
         W: SpectrumWriter<C, D> + MSDataFileMetadata + Send + 'static,
     >(
         &self,
@@ -1232,8 +1251,8 @@ pub trait MassSpectrometryReadWriteProcess<
     /// The place where the work happens to transmit data from `reader` to `writer` with whatever transformations
     /// need to take place.
     fn task<
-        R: RandomAccessSpectrumIterator<C, D> + MSDataFileMetadata + SpectrumSource<C, D> + Send + 'static,
-        W: SpectrumWriter<C, D> + Send + 'static,
+        R: RandomAccessSpectrumIterator<C, D> + MSDataFileMetadata + SpectrumSource<C, D> + Send + Any + 'static,
+        W: SpectrumWriter<C, D> + Send + Any + 'static,
     >(
         &self,
         reader: R,
@@ -1364,6 +1383,25 @@ mod test {
 
         assert_eq!(n, 48);
         assert_eq!(n, n_ms1 + n_msn);
+        Ok(())
+    }
+
+    #[test]
+    fn test_infer_stream() -> io::Result<()> {
+        let mut mzml_file = fs::File::open("./test/data/small.mzML")?;
+        let (form, gzip) = infer_from_stream(&mut mzml_file)?;
+        assert_eq!(form, MassSpectrometryFormat::MzML);
+        assert!(!gzip);
+
+        mzml_file = fs::File::open("./test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz")?;
+        let (form, gzip) = infer_from_stream(&mut mzml_file)?;
+        assert_eq!(form, MassSpectrometryFormat::MzML);
+        assert!(gzip);
+
+        let mut mgf_file = fs::File::open("./test/data/small.mgf")?;
+        let (form, gzip) = infer_from_stream(&mut mgf_file)?;
+        assert_eq!(form, MassSpectrometryFormat::MGF);
+        assert!(!gzip);
         Ok(())
     }
 }

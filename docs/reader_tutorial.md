@@ -31,7 +31,7 @@ whether it is random access, or what format it is stored in.
 
 ### From a file path
 
-`mzdata` can read files on disk, accessed by path, easily. In this example we'll use the [`MZReader`](crate::io::MZReader) type
+`mzdata` can read files on disk, accessed by path, easily. In this example we'll use the [`MZReader`] type
 to figure out which reader to use for us automatically.
 
 ```rust
@@ -50,7 +50,7 @@ fn from_path() -> io::Result<()> {
 
 When reading a file from disk, `mzdata` can make certain assumptions like that the file supports
 the [`io::Seek`](std::io::Seek) trait and can read or build indices over the file quickly and guarantee
-that the file supports full random access, like [`RandomAccessSpectrumIterator`](crate::io::traits::RandomAccessSpectrumIterator).
+that the file supports full random access, like [`RandomAccessSpectrumIterator`].
 
 Additionally, some binary formats like [`ThermoRawReader`] or [`MzMLbReader`] _require_ that there be a file on disk that
 exists outside of the Rust model of the file system in order to read it.
@@ -157,7 +157,7 @@ you want to use.
 
 All of the added complexity introduced by the type system can make anything that is flexible over how you come
 to open a mass spectrometry data source cumbersome. When you don't _need_ to keep the reader around beyond the
-current scope, the [`mz_read!`](crate::mz_read) macro can substantially simplify matters. It is like [`MZReader`](crate::MZReader),
+current scope, the [`mz_read!`](crate::mz_read) macro can substantially simplify matters. It is like [`MZReader`],
 but it is even more flexible, provided that the reader instance only lives as long as the enclosing scope:
 
 ```rust

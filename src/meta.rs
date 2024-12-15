@@ -155,9 +155,9 @@ macro_rules! cvmap {
             /// parents of this term.
             pub fn parents(&self) -> Vec<Self> {
                 match self {
-                    $(Self::$variant => $parents.iter().map(|s: &&str| {
+                    $(Self::$variant => $parents.iter().flat_map(|s: &&str| {
                         let curie = s.parse::<$crate::params::CURIE>().unwrap();
-                        Self::from_accession(curie.accession).unwrap()
+                        Self::from_accession(curie.accession)
                     }).collect(),)*
                 }
             }
@@ -284,6 +284,17 @@ macro_rules! cvmap {
                 )
             }
 
+            /// Convert this term into a [`ParamCow`](crate::params::ParamCow) a specific boxed value.
+            pub const fn to_param_value(self, value: $crate::params::ValueRef<'static>) -> $crate::params::ParamCow<'static> {
+                $crate::params::ParamCow::const_new(
+                    self.name(),
+                    value,
+                    Some(self.accession()),
+                    Some(self.controlled_vocabulary()),
+                    $crate::params::Unit::Unknown
+                )
+            }
+
             /// Convert a [`CURIE`]($crate::params::CURIE) by accession.
             ///
             /// If no match is found, [`None`] is returned.
@@ -321,9 +332,9 @@ macro_rules! cvmap {
             /// parents of this term.
             pub fn parents(&self) -> Vec<Self> {
                 match self {
-                    $(Self::$variant(_) => $parents.iter().map(|s: &&str| {
+                    $(Self::$variant(_) => $parents.iter().flat_map(|s: &&str| {
                         let curie = s.parse::<$crate::params::CURIE>().unwrap();
-                        Self::from_accession(curie.accession, Default::default()).unwrap()
+                        Self::from_accession(curie.accession, Default::default())
                     }).collect(),)*
                 }
             }
@@ -374,6 +385,7 @@ macro_rules! cvmap {
 }
 
 bitflags::bitflags! {
+    #[doc="A bit mask encoding the different value types a [`Param`](crate::params::Param) can take on, associated with a term."]
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct ValueType: u16 {
         const NoType = 0;

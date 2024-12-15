@@ -482,6 +482,16 @@ impl PartialEq<f64> for Value {
     }
 }
 
+impl PartialEq<bool> for Value {
+    fn eq(&self, other: &bool) -> bool {
+        if let Self::Boolean(val) = self {
+            val == other
+        } else {
+            false
+        }
+    }
+}
+
 impl Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         core::mem::discriminant(self).hash(state);
@@ -637,6 +647,16 @@ impl<'a> PartialEq<i64> for ValueRef<'a> {
 impl<'a> PartialEq<f64> for ValueRef<'a> {
     fn eq(&self, other: &f64) -> bool {
         if let Self::Float(val) = self {
+            val == other
+        } else {
+            false
+        }
+    }
+}
+
+impl<'a> PartialEq<bool> for ValueRef<'a> {
+    fn eq(&self, other: &bool) -> bool {
+        if let Self::Boolean(val) = self {
             val == other
         } else {
             false
@@ -1092,7 +1112,13 @@ impl Display for AccessionCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AccessionCode::Int(v) => write!(f, "{v:07}"),
-            AccessionCode::Byte7(v) => write!(f, "{}", core::str::from_utf8(v).map_err(|e| format!("ERROR:{e}")).unwrap()),
+            AccessionCode::Byte7(v) => write!(
+                f,
+                "{}",
+                core::str::from_utf8(v)
+                    .map_err(|e| format!("ERROR:{e}"))
+                    .unwrap()
+            ),
         }
     }
 }
@@ -1102,19 +1128,20 @@ pub enum AccessionCodeParseError {
     #[error("The acccession code was too long: {0}")]
     AccessionCodeTooLong(String),
     #[error("The acccession code was not in range: {0}")]
-    AccessionCodeNotInRange(String)
+    AccessionCodeNotInRange(String),
 }
-
 
 impl FromStr for AccessionCode {
     type Err = AccessionCodeParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.len() > 7 {
-            return Err(AccessionCodeParseError::AccessionCodeTooLong(s.to_string()))
+            return Err(AccessionCodeParseError::AccessionCodeTooLong(s.to_string()));
         }
         if !s.is_ascii() {
-            return Err(AccessionCodeParseError::AccessionCodeNotInRange(s.to_string()))
+            return Err(AccessionCodeParseError::AccessionCodeNotInRange(
+                s.to_string(),
+            ));
         }
         if let Ok(u) = s.parse::<AccessionIntCode>() {
             Ok(Self::Int(u))
@@ -1143,12 +1170,37 @@ macro_rules! accessioncode {
     ($acc:tt) => {
         match stringify!($acc).as_bytes() {
             [a, b, c, d, e, f, g] => AccessionCode::Byte7([*a, *b, *c, *d, *e, *f, *g]),
-            _ => panic!(concat!("Cannot convert ", stringify!($acc), " to accession code. Expected exactly 7 bytes"))
+            _ => panic!(concat!(
+                "Cannot convert ",
+                stringify!($acc),
+                " to accession code. Expected exactly 7 bytes"
+            )),
         }
     };
 }
 
-
+#[macro_export]
+macro_rules! find_param_method {
+    ($meth:ident, $curie:expr) => {
+        $crate::find_param_method!($meth, $curie, "");
+    };
+    ($meth:ident, $curie:expr, $desc:literal) => {
+        #[doc=$desc]
+        pub fn $meth(&self) -> Option<$crate::params::ValueRef> {
+            self.get_param_by_curie($curie)
+                .map(|p| $crate::params::ParamLike::value(p))
+        }
+    };
+    ($meth:ident, $curie:expr, $conv:expr, $result:ty) => {
+        $crate::find_param_method!($meth, $curie, $conv, $result, "");
+    };
+    ($meth:ident, $curie:expr, $conv:expr, $result:ty, $desc:literal) => {
+        #[doc=$desc]
+        pub fn $meth(&self) -> $result {
+            self.get_param_by_curie($curie).map($conv)
+        }
+    };
+}
 
 #[macro_export]
 macro_rules! curie {
@@ -1178,7 +1230,7 @@ macro_rules! curie {
     };
     (PRIDE:$acc:literal) => {
         $crate::params::CURIE::new($crate::params::ControlledVocabulary::PRIDE, $acc)
-    }
+    };
 }
 
 impl CURIE {
@@ -1610,7 +1662,6 @@ impl Display for Param {
     }
 }
 
-
 /// Incrementally build up a [`Param`]
 #[derive(Default, Debug, Clone)]
 pub struct ParamBuilder {
@@ -1668,7 +1719,6 @@ impl ParamBuilder {
 }
 
 impl Param {
-
     /// Create a new, empty [`Param`].
     ///
     /// # See also
@@ -1802,19 +1852,19 @@ pub enum ControlledVocabulary {
     MS,
     /// The Unit Ontology [https://www.ebi.ac.uk/ols4/ontologies/uo](https://www.ebi.ac.uk/ols4/ontologies/uo)
     UO,
-    /// The Experimental Factor Ontology [https://www.ebi.ac.uk/ols4/ontologies/efo]
+    /// The Experimental Factor Ontology <https://www.ebi.ac.uk/ols4/ontologies/efo>
     EFO,
-    /// The Ontology for Biomedical Investigations [https://www.ebi.ac.uk/ols4/ontologies/obi]
+    /// The Ontology for Biomedical Investigations <https://www.ebi.ac.uk/ols4/ontologies/obi>
     OBI,
-    /// The Human Ancestry Ontology [https://www.ebi.ac.uk/ols4/ontologies/hancestro]
+    /// The Human Ancestry Ontology <https://www.ebi.ac.uk/ols4/ontologies/hancestro>
     HANCESTRO,
-    /// The Basic Formal Ontology [https://www.ebi.ac.uk/ols4/ontologies/bfo]
+    /// The Basic Formal Ontology <https://www.ebi.ac.uk/ols4/ontologies/bfo>
     BFO,
-    /// The NCI Thesaurus OBO Edition [https://www.ebi.ac.uk/ols4/ontologies/ncit]
+    /// The NCI Thesaurus OBO Edition <https://www.ebi.ac.uk/ols4/ontologies/ncit>
     NCIT,
-    /// The BRENDA Tissue Ontology [https://www.ebi.ac.uk/ols4/ontologies/bto]
+    /// The BRENDA Tissue Ontology <https://www.ebi.ac.uk/ols4/ontologies/bto>
     BTO,
-    /// The PRIDE Controlled Vocabulary [https://www.ebi.ac.uk/ols4/ontologies/pride]
+    /// The PRIDE Controlled Vocabulary <https://www.ebi.ac.uk/ols4/ontologies/pride>
     PRIDE,
     Unknown,
 }
@@ -1974,7 +2024,11 @@ impl<'a> ControlledVocabulary {
     /// value and no unit.
     ///
     /// See [`ControlledVocabulary::const_param`] for more details.
-    pub const fn const_param_ident(&self, name: &'static str, accession: AccessionIntCode) -> ParamCow<'static> {
+    pub const fn const_param_ident(
+        &self,
+        name: &'static str,
+        accession: AccessionIntCode,
+    ) -> ParamCow<'static> {
         self.const_param(name, ValueRef::Empty, accession, Unit::Unknown)
     }
 
@@ -2040,6 +2094,74 @@ impl FromStr for ControlledVocabulary {
 }
 
 pub type ParamList = Vec<Param>;
+
+pub trait ParamDescribedRead {
+    /// Obtain an immutable slice over the encapsulated [`Param`] list
+    fn params(&self) -> &[Param];
+
+    /// Find the first [`Param`] whose name matches `name`
+    fn get_param_by_name(&self, name: &str) -> Option<&Param> {
+        self.params().iter().find(|&param| param.name == name)
+    }
+
+    /// Find the first [`Param`] whose [`CURIE`] matches `curie`
+    fn get_param_by_curie(&self, curie: &CURIE) -> Option<&Param> {
+        self.params().iter().find(|&param| curie == param)
+    }
+
+    /// Find the first [`Param`] whose [`Param::accession`] matches `accession`
+    ///
+    /// This is equivalent to [`ParamDescribed::get_param_by_curie`] on `accession.parse::<CURIE>().unwrap()`
+    fn get_param_by_accession(&self, accession: &str) -> Option<&Param> {
+        let (cv, acc_num) = curie_to_num(accession);
+        return self
+            .params()
+            .iter()
+            .find(|&param| param.accession == acc_num && param.controlled_vocabulary == cv);
+    }
+
+    /// Iterate over the encapsulated parameter list
+    fn iter_params(&self) -> std::slice::Iter<Param> {
+        self.params().iter()
+    }
+}
+
+pub trait ParamDescribedMut {
+    /// Obtain an mutable slice over the encapsulated [`Param`] list
+    fn params_mut(&mut self) -> &mut ParamList;
+
+    /// Add a new [`Param`] to the entity
+    fn add_param(&mut self, param: Param) {
+        self.params_mut().push(param);
+    }
+
+    /// Add all parameters from an iterator of [`Param`] to the entity
+    fn extend_params(&mut self, it: impl IntoIterator<Item = Param>) {
+        self.params_mut().extend(it)
+    }
+
+    /// Remove the `i`th [`Param`] from the entity.
+    fn remove_param(&mut self, index: usize) -> Param {
+        self.params_mut().remove(index)
+    }
+
+    /// Iterate mutably over the encapsulated parameter list
+    fn iter_params_mut(&mut self) -> std::slice::IterMut<Param> {
+        self.params_mut().iter_mut()
+    }
+}
+
+impl ParamDescribedRead for &[Param] {
+    fn params(&self) -> &[Param] {
+        self
+    }
+}
+
+impl ParamDescribedRead for Vec<Param> {
+    fn params(&self) -> &[Param] {
+        self.as_ref()
+    }
+}
 
 pub trait ParamDescribed {
     /// Obtain an immutable slice over the encapsulated [`Param`] list
@@ -2195,7 +2317,9 @@ impl Unit {
             Self::Millisecond => ("UO:0000028", "millisecond"),
             Self::Second => ("UO:0000010", "second"),
             Self::Minute => ("UO:0000031", "minute"),
-            Self::VoltSecondPerSquareCentimeter => ("MS:1002814", "volt-second per square centimeter"),
+            Self::VoltSecondPerSquareCentimeter => {
+                ("MS:1002814", "volt-second per square centimeter")
+            }
 
             Self::MZ => ("MS:1000040", "m/z"),
             Self::Mass => ("UO:000221", "dalton"),
@@ -2323,7 +2447,7 @@ impl Unit {
             } => Self::Dimensionless,
             CURIE {
                 controlled_vocabulary: ControlledVocabulary::MS,
-                accession: 1002814
+                accession: 1002814,
             } => Self::VoltSecondPerSquareCentimeter,
             _ => Unit::Unknown,
         }
@@ -2386,7 +2510,7 @@ impl Unit {
 
             Self::VoltSecondPerSquareCentimeter => Some(CURIE {
                 controlled_vocabulary: ControlledVocabulary::MS,
-                accession: 1002814
+                accession: 1002814,
             }),
             _ => None,
         }
@@ -2409,3 +2533,137 @@ impl Display for Unit {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_build_param() {
+        assert_eq!(
+            ParamBuilder::default()
+                .name("dalton")
+                .curie(curie!(UO:000221))
+                .build(),
+            ControlledVocabulary::UO.param("UO:000221", "dalton")
+        );
+        // <cvParam cvRef="MS" accession="MS:1000529" name="instrument serial number" value="FSN10375"/>
+        let p = ParamBuilder::default()
+            .controlled_vocabulary(ControlledVocabulary::MS)
+            .accession(1000529)
+            .name("instrument serial number")
+            .value("FSN10375")
+            .unit(Unit::Unknown)
+            .build();
+        assert_eq!(p.value(), "FSN10375");
+        assert_eq!(p.unit(), Unit::Unknown);
+    }
+
+    #[test]
+    fn test_value() {
+        let x = 42;
+        let mut val: Value = x.into();
+        let mut val_ref: ValueRef = x.into();
+        let mut val_ref2: ValueRef = (&x).into();
+        assert_eq!(val, x);
+        assert_eq!(val_ref, x);
+        assert_eq!(val_ref, val);
+        assert_eq!(val_ref2, val_ref);
+        assert!(val.to_bool().unwrap());
+        assert!(val_ref.to_bool().unwrap());
+        assert_eq!(val.to_str(), x.to_string());
+        assert_eq!(val_ref.to_str(), x.to_string());
+        val = x.to_string().parse().unwrap();
+        val_ref = x.to_string().parse().unwrap();
+        assert_eq!(val, x);
+        assert_eq!(val_ref, x);
+        assert_eq!(val_ref, val);
+
+
+        let x2 = Some(x);
+        val = x2.into();
+        val_ref = x2.into();
+        val_ref2 = (&x).into();
+        assert_eq!(val, x);
+        assert_eq!(val_ref, x);
+        assert_eq!(val_ref, val);
+        assert_eq!(val_ref2, val_ref);
+        assert!(val.to_bool().unwrap());
+        assert!(val_ref.to_bool().unwrap());
+        assert_eq!(val.to_str(), x.to_string());
+        assert_eq!(val_ref.to_str(), x.to_string());
+        val = x.to_string().parse().unwrap();
+        val_ref = x.to_string().parse().unwrap();
+        assert_eq!(val, x);
+        assert_eq!(val_ref, x);
+        assert_eq!(val_ref, val);
+
+        let x = 42.01;
+        val = x.into();
+        val_ref = x.into();
+        val_ref2 = (&x).into();
+        assert_eq!(val, x);
+        assert_eq!(val_ref, x);
+        assert_eq!(val_ref, val);
+        assert_eq!(val_ref2, val_ref);
+        assert!(val.to_bool().unwrap());
+        assert!(val_ref.to_bool().unwrap());
+        assert_eq!(val.to_str(), x.to_string());
+        assert_eq!(val_ref.to_str(), x.to_string());
+        val = x.to_string().parse().unwrap();
+        val_ref = x.to_string().parse().unwrap();
+        assert_eq!(val, x);
+        assert_eq!(val_ref, x);
+        assert_eq!(val_ref, val);
+
+        let x2 = Some(x);
+        val = x2.into();
+        val_ref = x2.into();
+        assert_eq!(val, x);
+        assert_eq!(val_ref, x);
+        assert_eq!(val_ref, val);
+        assert!(val.to_bool().unwrap());
+        assert!(val_ref.to_bool().unwrap());
+        assert_eq!(val.to_str(), x.to_string());
+        assert_eq!(val_ref.to_str(), x.to_string());
+        val = x.to_string().parse().unwrap();
+        val_ref = x.to_string().parse().unwrap();
+        assert_eq!(val, x);
+        assert_eq!(val_ref, x);
+        assert_eq!(val_ref, val);
+
+        let x = true;
+        val = x.into();
+        val_ref = x.into();
+        assert_eq!(val, x);
+        assert_eq!(val_ref, x);
+        assert_eq!(val_ref, val);
+        assert!(val.to_bool().unwrap());
+        assert!(val_ref.to_bool().unwrap());
+        assert_eq!(val.to_str(), x.to_string());
+        assert_eq!(val_ref.to_str(), x.to_string());
+        val = x.to_string().parse().unwrap();
+        val_ref = x.to_string().parse().unwrap();
+        assert_eq!(val, x);
+        assert_eq!(val_ref, x);
+        assert_eq!(val_ref, val);
+
+        let x = "Foobar".to_string();
+        val = x.clone().into();
+        val_ref = x.clone().into();
+        val_ref2 = x.as_str().into();
+        assert_eq!(val, x);
+        assert_eq!(val_ref, x);
+        assert_eq!(val_ref, val);
+        assert_eq!(val_ref2, val_ref);
+        assert_eq!(val.to_str(), x.to_string());
+        assert_eq!(val_ref.to_str(), x.to_string());
+        val = x.to_string().parse().unwrap();
+        val_ref = x.to_string().parse().unwrap();
+        assert_eq!(val, x);
+        assert_eq!(val_ref, x);
+        assert_eq!(val_ref, val);
+        assert_eq!(val.to_buffer().unwrap(), x.as_bytes());
+        assert_eq!(val_ref.to_buffer().unwrap(), x.as_bytes());
+        assert_eq!(val_ref.to_buffer().unwrap(), val.to_buffer().unwrap());
+    }
+}

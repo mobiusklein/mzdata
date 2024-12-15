@@ -4,7 +4,9 @@ use crate::params::{ControlledVocabulary, ParamList};
 use crate::{impl_param_described, Param};
 
 /// A piece of software that was associated with the acquisition, transformation or otherwise
-/// processing of mass spectrometry data. See <https://peptideatlas.org/tmp/mzML1.1.0.html#software>
+/// processing of mass spectrometry data.
+///
+/// See <https://peptideatlas.org/tmp/mzML1.1.0.html#software>
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Software {
     /// A unique identifier for the software within processing metadata
@@ -16,6 +18,7 @@ pub struct Software {
 }
 
 bitflags::bitflags! {
+    #[doc="A bit mask encoding the different kinds of software."]
     #[derive(Debug, Clone, Copy, PartialEq)]
     pub struct SoftwareType: u8 {
         const None = 0;
@@ -646,8 +649,8 @@ crate::cvmap! {
         Amanda,
         #[term(cv=MS, accession=1002337, name="Andromeda", flags={1}, parents={["MS:1001456"]})]
         Andromeda,
-        #[term(cv=MS, accession=1002342, name="MZmine", flags={3}, parents={["MS:1001456", "MS:1001457"]})]
-        MZmine,
+        #[term(cv=MS, accession=1002342, name="mzmine", flags={3}, parents={["MS:1001456", "MS:1001457"]})]
+        Mzmine,
         #[term(cv=MS, accession=1002344, name="Maltcms", flags={3}, parents={["MS:1001456", "MS:1001457"]})]
         Maltcms,
         #[term(cv=MS, accession=1002381, name="MALDI Solutions LC-MALDI", flags={7}, parents={["MS:1001455", "MS:1001456", "MS:1001457", "MS:1001557"]})]
@@ -840,14 +843,34 @@ crate::cvmap! {
         SpectrumClusteringSoftware,
         #[term(cv=MS, accession=1003407, name="Scout", flags={1}, parents={["MS:1001456"]})]
         Scout,
+        #[term(cv=MS, accession=1003413, name="Kojak", flags={1}, parents={["MS:1001456"]})]
+        Kojak,
+        #[term(cv=MS, accession=1003425, name="quantms", flags={1}, parents={["MS:1001456", "MS:1001139"]})]
+        Quantms,
+        #[term(cv=MS, accession=1003426, name="xQuest/xProphet", flags={1}, parents={["MS:1001139", "MS:1001456"]})]
+        XQuestXProphet,
+        #[term(cv=MS, accession=1003427, name="PeakView", flags={1}, parents={["MS:1001139", "MS:1001456"]})]
+        PeakView,
+        #[term(cv=MS, accession=1003428, name="Perseus", flags={1}, parents={["MS:1001139", "MS:1001456"]})]
+        Perseus,
+        #[term(cv=MS, accession=1003429, name="FragPipe", flags={1}, parents={["MS:1001139", "MS:1001456"]})]
+        FragPipe,
+        #[term(cv=MS, accession=1003430, name="OpenMS", flags={1}, parents={["MS:1001139", "MS:1001456"]})]
+        OpenMS,
+        #[term(cv=MS, accession=1003431, name="pLink", flags={1}, parents={["MS:1001139", "MS:1001456"]})]
+        PLink,
+        #[term(cv=MS, accession=1003432, name="pLink2", flags={1}, parents={["MS:1003431", "MS:1001139", "MS:1001456"]})]
+        PLink2,
         #[term(cv=MS, accession=4000151, name="MsQuality", flags={1}, parents={["MS:1001456"]})]
         MsQuality,
     }
-    //[[[end]]] (checksum: d5462cd300dc95d12f301bba900962a3)
+    //[[[end]]] (checksum: ef73f9f08114185c6c9e5395d215df54)
 }
 
 #[cfg(test)]
 mod test {
+    use crate::params::ParamDescribed;
+
     use super::*;
 
     #[test]
@@ -864,5 +887,25 @@ mod test {
             SoftwareTerm::SCIEXTOFTOFSeriesExplorerSoftware.flags(),
             SoftwareType::Analysis | SoftwareType::Acquisition | SoftwareType::DataProcessing
         );
+        assert!(
+            SoftwareTerm::SCIEXTOFTOFSeriesExplorerSoftware.flags().is_analysis(),
+        );
+    }
+
+    #[test]
+    fn sw_test() {
+        let mut sw = Software::new("foo".into(), "v0.1.0".into(), vec![custom_software_name("foo")]);
+        assert_eq!(sw.id, "foo");
+        assert_eq!(sw.version, "v0.1.0");
+        assert!(sw.find_software_term().is_some());
+        sw.add_param(SoftwareTerm::ANNSoLo.into());
+        assert!(!sw.is_analysis());
+        sw.params_mut().reverse();
+        assert!(sw.is_analysis());
+        assert!(sw.find_software_term().is_some());
+
+
+        let id = Software::find_unique_id("foo", vec![sw].iter());
+        assert_eq!(id, "foo_0");
     }
 }

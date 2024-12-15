@@ -1,5 +1,5 @@
 use core::str;
-use std::{future::Future, io::SeekFrom};
+use std::io::SeekFrom;
 use std::marker::PhantomData;
 
 use std::collections::HashMap;
@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use tokio::io::{self, AsyncBufReadExt, AsyncSeekExt};
 use futures::stream::{self, Stream};
 
-use log::warn;
+use log::{error, warn};
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
@@ -54,6 +54,7 @@ pub struct MGFReaderType<
     pub detail_level: DetailLevel,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
+    read_counter: usize
 }
 
 
@@ -85,9 +86,17 @@ impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
         let mut builder = SpectrumBuilder::<C, D>::default();
         self._parse_into(&mut builder)
             .await
+            .inspect_err(|e| {
+                error!("An error occurred while reading MGF spectrum: {e}")
+            })
             .ok()
             .and_then(|(_, started_spectrum)| {
-                (started_spectrum && !builder.is_empty()).then(|| builder.into())
+                let mut spec: Option<MultiLayerSpectrum<C, D>> = (started_spectrum && !builder.is_empty()).then(|| builder.into());
+                if let Some(spec) = spec.as_mut() {
+                    spec.description_mut().index = self.read_counter;
+                    self.read_counter += 1;
+                }
+                spec
             })
     }
 
@@ -160,6 +169,8 @@ impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
                     )))
                 } else {
                     accumulator.into_spectrum(spectrum);
+                    spectrum.description_mut().index = self.read_counter;
+                    self.read_counter += 1;
                     Ok(sz)
                 }
             }
@@ -195,20 +206,9 @@ impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
             file_description: Self::default_file_description(),
             detail_level: DetailLevel::Full,
             run: MassSpectrometryRun::default(),
+            read_counter: 0,
         }
     }
-}
-
-#[pin_project::pin_project]
-pub struct SpectrumStream<
-        R: io::AsyncRead + io::AsyncSeek + Unpin,
-        C: CentroidPeakAdapting,
-        D: DeconvolutedPeakAdapting,
-    > {
-        #[pin]
-        source: MGFReaderType<R, C, D>,
-        #[pin]
-        state: Box<dyn Future<Output = Option<MultiLayerSpectrum<C, D>>> + Unpin>,
 }
 
 impl<
@@ -219,13 +219,13 @@ impl<
 {
 
     pub fn as_stream<'a>(&'a mut self) -> impl Stream<Item=MultiLayerSpectrum<C, D>> + 'a {
-        stream::unfold(self, |reader| async {
+        Box::pin(stream::unfold(self, |reader| async {
             let spec = reader.read_next();
             match spec.await {
                 Some(val) => Some((val, reader)),
                 None => None
             }
-        })
+        }))
     }
 
     /// Construct a new MGFReaderType and build an offset index
@@ -276,7 +276,7 @@ impl<
             } else if found_start && buffer.starts_with(b"TITLE=") {
                 match str::from_utf8(&buffer[6..]) {
                     Ok(string) => {
-                        self.index.insert(string.to_owned(), last_start);
+                        self.index.insert(string.trim().to_owned(), last_start);
                     }
                     Err(_err) => {}
                 };

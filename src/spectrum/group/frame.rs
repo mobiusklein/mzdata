@@ -105,7 +105,7 @@ pub trait IonMobilityFrameGrouping<
 /**
 A pairing of an optional MS1 ion mobility frame with all its associated MSn ion mobility frames.
 */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IonMobilityFrameGroup<C, D, S>
 where
     C: FeatureLike<MZ, IonMobility>,

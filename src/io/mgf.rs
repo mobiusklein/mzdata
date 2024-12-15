@@ -1,28 +1,28 @@
 /*!
 Read and write [MGF](https://www.matrixscience.com/help/data_file_help.html#GEN) files.
-Supports random access when reading from a source that supports [`io::Seek`].
+Supports random access when reading from a source that supports [`io::Seek`](std::io::Seek).
 */
 mod reader;
 mod writer;
 
-pub use reader::{MGFReaderType, MGFReader, is_mgf, MGFError, MGFParserState};
-pub use writer::{MGFHeaderStyle, MGFWriter, MGFWriterType, SimpleMGFStyle, MZDataMGFStyle};
+pub use reader::{is_mgf, MGFError, MGFParserState, MGFReader, MGFReaderType};
+pub use writer::{MGFHeaderStyle, MGFWriter, MGFWriterType, MZDataMGFStyle, SimpleMGFStyle};
 
 #[cfg(feature = "async")]
 mod async_reader;
 
 #[cfg(feature = "async")]
 pub use crate::io::mgf::async_reader::{
-    MGFReaderType as AsyncMGFReaderType,
-    MGFReader as AsyncMGFReader
+    MGFReader as AsyncMGFReader, MGFReaderType as AsyncMGFReaderType,
 };
-
 
 #[cfg(test)]
 mod test {
-    use mzpeaks::{IndexedCoordinate, CentroidPeak, DeconvolutedPeak};
-    use crate::prelude::*;
+    use crate::io::DetailLevel;
+    use crate::spectrum::RefPeakDataLevel;
     use crate::CentroidSpectrum;
+    use crate::{io::RestartableGzDecoder, prelude::*};
+    use mzpeaks::{CentroidPeak, DeconvolutedPeak, IndexedCoordinate};
 
     use super::*;
     use std::{fs, io, path};
@@ -96,10 +96,86 @@ mod test {
         Ok(())
     }
 
+    #[test]
+    fn test_read_unsupported() -> io::Result<()> {
+        let path = path::Path::new("./test/data/small.mgf");
+        let file = fs::File::open(&path).expect("Test file doesn't exist");
+        let mut reader = MGFReaderType::<_>::new(file);
+
+        assert!(reader.get_chromatogram_by_id("not real").is_none());
+        assert!(reader.get_chromatogram_by_index(0).is_none());
+        assert!(reader.spectrum_count_hint().is_none());
+
+        reader = MGFReaderType::<_>::open_path(&path)?;
+        assert_eq!(reader.spectrum_count_hint().unwrap() as usize, reader.len());
+
+        assert!(reader.run_description().is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_charged_complex() -> io::Result<()> {
+        let fh = io::BufReader::new(fs::File::open("./test/data/processed_batch.mgf.gz")?);
+        let fh = RestartableGzDecoder::new(fh);
+        let mut reader = MGFReader::new_indexed(fh);
+
+        let mut scan = reader.next().unwrap();
+        scan.try_build_deconvoluted_centroids().unwrap();
+        assert!(matches!(scan.peaks(), RefPeakDataLevel::Deconvoluted(_)));
+        scan.try_build_centroids()
+            .expect_err("Expected not to find");
+        assert!(matches!(scan.peaks(), RefPeakDataLevel::Deconvoluted(_)));
+        scan.update_summaries();
+
+        assert_eq!(scan.index(), 0);
+        let summaries = scan.peaks().fetch_summaries();
+        assert!(
+            (summaries.tic - 3758148.3).abs() < 1e-3,
+            "TIC error {}",
+            summaries.tic - 3758148.3
+        );
+        assert!(
+            (summaries.base_peak.mz - 443.2600402832031).abs() < 1e-3,
+            "BP m/z {}",
+            (summaries.base_peak.mz - 443.2600402832031)
+        );
+        assert!(
+            (summaries.mz_range.0 > 120.0 && summaries.mz_range.0 < 120.1),
+            "{:?}",
+            summaries.mz_range
+        );
+        assert_eq!(summaries.count, 492);
+
+        reader.read_into(&mut scan).unwrap();
+        assert_eq!(scan.index(), 1);
+
+        let sid = "MouseBrain-Z-T-1.25740.25740.2 File:\"MouseBrain-Z-T-1.raw\", NativeID:\"controllerType=0 controllerNumber=1 scan=25740\"";
+        scan = reader.get_spectrum_by_id(sid).unwrap();
+        assert_eq!(scan.id(), sid);
+        assert_eq!(scan.index(), 0);
+        reader.reset();
+
+        assert_eq!(*reader.detail_level(), DetailLevel::Full);
+        scan = reader.start_from_index(30).unwrap().next().unwrap();
+        assert!(scan.peaks().len() > 0);
+        assert_eq!(scan.index(), 30);
+        let time = scan.start_time();
+
+        reader.set_detail_level(DetailLevel::MetadataOnly);
+        scan = reader.start_from_id(sid).unwrap().next().unwrap();
+        assert_eq!(scan.index(), 0);
+        assert_eq!(scan.peaks().len(), 0);
+
+        scan = reader.start_from_time(time).unwrap().next().unwrap();
+        assert_eq!(scan.index(), 30);
+        assert_eq!(scan.peaks().len(), 0);
+        Ok(())
+    }
 
     #[cfg(feature = "async")]
     mod async_tests {
         use super::*;
+        use futures::StreamExt;
         use tokio::fs;
 
         #[tokio::test]
@@ -125,14 +201,15 @@ mod test {
         async fn test_reader_indexed() {
             let path = path::Path::new("./test/data/small.mgf");
             let file = fs::File::open(path).await.expect("Test file doesn't exist");
-            let mut reader = AsyncMGFReaderType::<_, CentroidPeak, DeconvolutedPeak>::new_indexed(file).await;
+            let mut reader =
+                AsyncMGFReaderType::<_, CentroidPeak, DeconvolutedPeak>::new_indexed(file).await;
 
             let n = reader.len();
             let mut ms1_count = 0;
             let mut msn_count = 0;
 
             for i in (0..n).rev() {
-                let scan = reader.get_spectrum_by_index(i).await.expect("Missing spectrum");
+                let scan = reader.get_spectrum_by_index(i).await.unwrap();
                 let level = scan.ms_level();
                 if level == 1 {
                     ms1_count += 1;
@@ -146,7 +223,27 @@ mod test {
             }
             assert_eq!(ms1_count, 0);
             assert_eq!(msn_count, 35);
-        }
 
+            ms1_count = 0;
+            msn_count = 0;
+            reader.reset().await;
+
+            let mut stream = reader.as_stream();
+            while let Some(scan) = stream.next().await {
+                let level = scan.ms_level();
+                if level == 1 {
+                    ms1_count += 1;
+                } else {
+                    msn_count += 1;
+                }
+                let centroided: CentroidSpectrum = scan.try_into().unwrap();
+                centroided.peaks.iter().for_each(|p| {
+                    (centroided.peaks[p.get_index() as usize]).mz();
+                })
+            }
+
+            assert_eq!(ms1_count, 0);
+            assert_eq!(msn_count, 35);
+        }
     }
 }

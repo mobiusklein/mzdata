@@ -225,3 +225,127 @@ pub enum DissociationEnergy {
     Combined { primary: DissociationEnergyTerm, supplementary: DissociationEnergyTerm}
 }
 
+#[cfg(test)]
+mod test {
+    use crate::{params::{ControlledVocabulary, ParamCow, ValueRef}, Param};
+
+    use super::*;
+
+    #[test]
+    fn test_categories() {
+        assert!(DissociationMethodTerm::CollisionInducedDissociation.is_collisional());
+        assert!(DissociationMethodTerm::BeamTypeCollisionInducedDissociation.is_collisional());
+        assert!(!DissociationMethodTerm::BeamTypeCollisionInducedDissociation.is_electronic());
+        assert!(!DissociationMethodTerm::ElectronTransferDissociation.is_collisional());
+        assert!(DissociationMethodTerm::ElectronTransferDissociation.is_electronic());
+
+        assert_eq!(DissociationEnergyTerm::CollisionEnergy(30.0).to_string(), "CollisionEnergy(30.0)");
+
+        assert!(!DissociationEnergyTerm::CollisionEnergy(30.0).is_ramp_end());
+        assert!(!DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).is_ramp_start());
+        assert!(*DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).as_ref() == 30.0);
+
+        let mut energies = [
+            DissociationEnergyTerm::CollisionEnergy(10.0),
+            DissociationEnergyTerm::NormalizedCollisionEnergy(10.0),
+            DissociationEnergyTerm::CollisionEnergyRampStart(10.0),
+            DissociationEnergyTerm::CollisionEnergyRampEnd(10.0),
+            DissociationEnergyTerm::PercentCollisionEnergyRampStart(10.0),
+            DissociationEnergyTerm::PercentCollisionEnergyRampEnd(10.0),
+            DissociationEnergyTerm::SupplementalCollisionEnergy(10.0),
+            DissociationEnergyTerm::ElectronBeamEnergy(10.0),
+        ];
+        for e in energies.iter_mut() {
+            assert_eq!(e.energy(), 10.0);
+            assert_eq!(*e.energy_mut(), 10.0);
+            assert_eq!(*e.as_ref(), 10.0);
+        }
+    }
+
+    #[test]
+    fn test_meta() {
+        // #[term(cv=MS, accession=1000138, name="normalized collision energy", flags={0}, parents={["MS:1000510"]})]
+        // #[doc = "normalized collision energy - Instrument setting, expressed in percent, for adjusting collisional energies of ions in an effort to provide equivalent excitation of all ions."]
+        // NormalizedCollisionEnergy(f32),
+
+        assert_eq!(
+            DissociationEnergyTerm::from_accession(1000138, 0.0),
+            Some(DissociationEnergyTerm::NormalizedCollisionEnergy(0.0))
+        );
+
+        let mut param = DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).to_param();
+        param.value = 30.0.into();
+        assert_eq!(
+            DissociationEnergyTerm::from_param(&param),
+            Some(DissociationEnergyTerm::NormalizedCollisionEnergy(30.0))
+        );
+
+        let term: DissociationEnergyTerm = param.clone().into();
+        assert_eq!(
+            term,
+            DissociationEnergyTerm::NormalizedCollisionEnergy(30.0)
+        );
+
+        let p: Param = DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).into();
+        param.value = ValueRef::Empty;
+        assert_eq!(
+            p,
+            param
+        );
+
+        let p: Param = (&DissociationEnergyTerm::NormalizedCollisionEnergy(30.0)).into();
+        assert_eq!(
+            p,
+            param
+        );
+
+        let p: ParamCow = DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).into();
+        assert_eq!(
+            p,
+            param
+        );
+
+        let p: ParamCow = (&DissociationEnergyTerm::NormalizedCollisionEnergy(30.0)).into();
+        assert_eq!(
+            p,
+            param
+        );
+
+        param.value = 30.0.into();
+        let term: DissociationEnergyTerm = Param::from(param.clone()).into();
+        assert_eq!(
+            term,
+            DissociationEnergyTerm::NormalizedCollisionEnergy(30.0)
+        );
+
+        assert_eq!(
+            DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).accession(),
+            1000138
+        );
+
+        assert_eq!(
+            DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).parents(),
+            []
+        );
+
+        assert_eq!(
+            DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).flags(),
+            0,
+        );
+
+        assert_eq!(
+            DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).controlled_vocabulary(),
+            ControlledVocabulary::MS,
+        );
+
+        assert_eq!(
+            DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).name(),
+            "normalized collision energy"
+        );
+
+        assert_eq!(
+            DissociationEnergyTerm::from_name("normalized collision energy"),
+            Some(DissociationEnergyTerm::NormalizedCollisionEnergy(Default::default()))
+        );
+    }
+}

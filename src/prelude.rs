@@ -8,7 +8,7 @@ pub use crate::io::traits::{
 };
 
 pub use crate::meta::MSDataFileMetadata;
-pub use crate::params::{ParamDescribed, ParamLike, ParamValue};
+pub use crate::params::{ParamDescribed, ParamLike, ParamValue, ParamDescribedRead};
 pub use crate::spectrum::bindata::{
     BuildArrayMapFrom, BuildFromArrayMap, ByteArrayView, ByteArrayViewMut,
 };

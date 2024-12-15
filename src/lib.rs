@@ -63,7 +63,7 @@ pub mod prelude;
 pub mod spectrum;
 pub mod utils;
 
-pub use crate::io::MZReader;
+pub use crate::io::{MZReader, MZReaderBuilder};
 pub use crate::io::mgf::{MGFReader, MGFWriter};
 pub use crate::io::mzml::{MzMLReader, MzMLWriter};
 
@@ -83,3 +83,6 @@ pub use crate::spectrum::{CentroidSpectrum, RawSpectrum, Spectrum};
 pub mod tutorial;
 
 pub use mzpeaks;
+
+#[cfg(feature = "mzsignal")]
+pub use mzsignal;

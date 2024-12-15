@@ -101,13 +101,13 @@ chrono = "0.4.37"
 bitflags = "2.5.0"
 identity-hash = "0.1.0"
 thiserror = "2.0.2"
-mzpeaks = { version = ">=0.23.0,<1.0.0" }
+mzpeaks = { version = ">=1.0.0,<1.1.0" }
 
 # Internal parallelism
 rayon = { version = ">=1.8.0,<2.0", optional = true }
 
 # Internal signal processing
-mzsignal = { version = ">=0.27.0,<1.0.0", default-features = false, optional = true, features = [
+mzsignal = { version = ">=1.0.0,<1.1.0", default-features = false, optional = true, features = [
     'avx',
 ] }
 
@@ -123,7 +123,7 @@ bytemuck = { version = "1.18.0", features = ["extern_crate_alloc"] }
 base64-simd = "0.8.0"
 
 # Async reader features
-tokio = { version = "1.32.0", optional = true, features = [
+tokio = { version = "1.32", optional = true, features = [
     "macros",
     "rt",
     "fs",
@@ -144,7 +144,7 @@ reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
 futures = { version = "0.3", optional = true }
 
 # Thermo RAW-related features
-thermorawfilereader = { version = "0.3.0", default-features = false, optional = true }
+thermorawfilereader = { version = "0.3.1", default-features = false, optional = true }
 
 # Bruker TDF-related features
 rusqlite = { version = "0.31.0", optional = true }

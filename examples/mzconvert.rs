@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::env;
 use std::io;
 use std::path::PathBuf;
@@ -6,6 +7,7 @@ use std::sync::mpsc::sync_channel;
 use std::thread;
 use std::time;
 
+use log::info;
 use mzdata::io::MassSpectrometryFormat;
 use mzdata::io::{checksum_file, MassSpectrometryReadWriteProcess, Sink, Source};
 use mzdata::meta::custom_software_name;
@@ -80,8 +82,9 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
         R: RandomAccessSpectrumIterator<CentroidPeak, DeconvolutedPeak>
             + SpectrumSource<CentroidPeak, DeconvolutedPeak>
             + Send
+            + Any
             + 'static,
-        W: SpectrumWriter<CentroidPeak, DeconvolutedPeak> + Send + 'static,
+        W: SpectrumWriter<CentroidPeak, DeconvolutedPeak> + Send + Any + 'static,
     >(
         &self,
         reader: R,
@@ -95,8 +98,9 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
             + MSDataFileMetadata
             + SpectrumSource<CentroidPeak, DeconvolutedPeak>
             + Send
+            + Any
             + 'static,
-        W: SpectrumWriter<CentroidPeak, DeconvolutedPeak> + MSDataFileMetadata + Send + 'static,
+        W: SpectrumWriter<CentroidPeak, DeconvolutedPeak> + MSDataFileMetadata + Send + Any + 'static,
     >(
         &self,
         reader: R,
@@ -106,6 +110,7 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
     ) -> Result<(R, W), Self::ErrorType> {
         if self.inpath != "-" {
             let pb: PathBuf = self.inpath.clone().into();
+            info!("Computing checksum for {}", pb.display());
             let checksum = checksum_file(&pb)?;
             let has_already = reader
                 .file_description()

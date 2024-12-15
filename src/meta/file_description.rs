@@ -5,9 +5,14 @@ use std::path::Path;
 use crate::impl_param_described;
 use crate::io::infer_format;
 use crate::params::{
-    ControlledVocabulary, Param, ParamDescribed, ParamList, ParamValue, ValueRef, CURIE
+    ControlledVocabulary, Param, ParamDescribed, ParamList, ParamValue, ValueRef, CURIE,
 };
 
+/// Description of a source file, including location and type.
+///
+/// This is usually another mass spectrometry data file. For some
+/// vendor raw formats that are directories, there can be many files.
+/// See <https://peptideatlas.org/tmp/mzML1.1.0.html#sourceFile>.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SourceFile {
     /// The name of the source file without any path or location information
@@ -18,7 +23,7 @@ pub struct SourceFile {
     pub id: String,
     /// The [`MassSpectrometerFileFormatTerm`]-defined parameter for this file
     pub file_format: Option<Param>,
-    /// The [`NativeSpectrumIdentifierFormat`]-defined parameter for this file
+    /// The [`NativeSpectrumIdentifierFormatTerm`]-defined parameter for this file
     pub id_format: Option<Param>,
     /// The rest of the parameters for this file.
     pub params: ParamList,
@@ -169,6 +174,9 @@ crate::cvmap! {
         #[term(cv=MS, accession=1000929, name="Shimadzu Biotech nativeID format", flags={r"source=(?<source>\S+) start=(?<start>\d+) end=(?<end>\d+)"}, parents={["MS:1000767"]})]
         #[doc = r"Shimadzu Biotech nativeID format - `source=(?<source>\S+) start=(?<start>\d+) end=(?<end>\d+)`"]
         ShimadzuBiotechNativeIDFormat,
+        #[term(cv=MS, accession=1001186, name="Mobilion MBI nativeID format", flags={r"frame=(?<frame>\d+) scan=(?<scan>\d+)"}, parents={["MS:1000767"]})]
+        #[doc = r"Mobilion MBI nativeID format - `frame=(?<frame>\d+) scan=(?<scan>\d+)`"]
+        MobilionMBINativeIDFormat,
         #[term(cv=MS, accession=1001480, name="SCIEX TOF/TOF nativeID format", flags={r"jobRun=(?<jobRun>\d+) spotLabel=(?<spotLabel>\S+) spectrum=(?<spectrum>\d+)"}, parents={["MS:1000767"]})]
         #[doc = r"SCIEX TOF/TOF nativeID format - `jobRun=(?<jobRun>\d+) spotLabel=(?<spotLabel>\S+) spectrum=(?<spectrum>\d+)`"]
         SCIEXTOFTOFNativeIDFormat,
@@ -209,7 +217,7 @@ crate::cvmap! {
         #[doc = r"Bruker TSF nativeID format - `frame=(?<frame>\d+)`"]
         BrukerTSFNativeIDFormat,
     }
-    //[[[end]]] (checksum: 09215365fe33b7f82c1ce9ac64aab99a)
+    //[[[end]]] (checksum: abe810fc9e7449c83803cd458f5cdc6c)
 }
 
 /// A text-based schema that defines how native spectrum identifiers are formatted.
@@ -236,12 +244,14 @@ impl From<NativeSpectrumIdentifierFormatTerm> for NativeSpectrumIDFormat {
 
 #[derive(Debug, Clone, thiserror::Error, PartialEq)]
 pub enum NativeIDFormatError {
+    /// The ID format required a different number of groups than what were found
     #[error("{term:?} required {expected} arguments, but received {received} arguments")]
     IncorrectArgumentNumber {
         term: NativeSpectrumIdentifierFormatTerm,
         expected: usize,
         received: usize,
     },
+    /// The ID format's pattern did not match the provided string
     #[error("{term:?} did not match {text}")]
     PatternMismatch {
         term: NativeSpectrumIdentifierFormatTerm,
@@ -358,8 +368,8 @@ impl NativeSpectrumIdentifierFormatTerm {
         parser.captures(ident)
     }
 
-    /// Create a [`NativeIDFormat`] that owns the [`Regex`] produced
-    /// by [`NativeSpectrumIdentifierFormat::parser`]
+    /// Create a [`NativeSpectrumIDFormat`] that owns the [`Regex`] produced
+    /// by [`NativeSpectrumIdentifierFormatTerm::parser`]
     pub fn build(&self) -> NativeSpectrumIDFormat {
         (*self).into()
     }
@@ -451,6 +461,9 @@ crate::cvmap! {
         #[term(cv=MS, accession=1001062, name="Mascot MGF format", flags={0}, parents={["MS:1000560"]})]
         #[doc = "Mascot MGF format - Mascot MGF file format."]
         MascotMGF,
+        #[term(cv=MS, accession=1001185, name="Mobilion MBI format", flags={0}, parents={["MS:1000560"]})]
+        #[doc = "Mobilion MBI format - Mobilion MBI file format."]
+        MobilionMBI,
         #[term(cv=MS, accession=1001245, name="PerSeptive PKS format", flags={0}, parents={["MS:1000560"]})]
         #[doc = "PerSeptive PKS format - PerSeptive peak list file format."]
         PerSeptivePKS,
@@ -527,17 +540,22 @@ crate::cvmap! {
         #[doc = "Open Chromatography Binary OCB format - ChemClipse/OpenChrom file format."]
         OpenChromatographyBinaryOCB,
     }
-    //[[[end]]] (checksum: 144dff32032929c664857bb8d843810a)
+    //[[[end]]] (checksum: 7e00698426115a6a91ea38badd77a05d)
 }
 
 #[cfg(test)]
 mod test {
+    use crate::params::ParamCow;
+
     use super::*;
 
     #[test]
     fn test_source_file() -> io::Result<()> {
         let sf = SourceFile::from_path("test/data/small.mzML")?;
-        assert_eq!(MassSpectrometerFileFormatTerm::MzML.to_param(), sf.file_format.clone().unwrap());
+        assert_eq!(
+            MassSpectrometerFileFormatTerm::MzML.to_param(),
+            sf.file_format.clone().unwrap()
+        );
         Ok(())
     }
 
@@ -548,6 +566,69 @@ mod test {
             .unwrap();
         let scan_number = ident.name("scan").unwrap().as_str();
         assert_eq!(scan_number, "25788");
+    }
+
+    #[test]
+    fn test_meta() {
+        assert_eq!(
+            NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat.flags(),
+            r"frame=(?<frame>\d+) scan=(?<scan>\d+)"
+        );
+        assert_eq!(
+            NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat.parents(),
+            [NativeSpectrumIdentifierFormatTerm::NativeSpectrumIdentifierFormat]
+        );
+        let param: ParamCow<'static> =
+            (NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat).into();
+        assert_eq!(
+            param.curie().unwrap(),
+            CURIE::new(ControlledVocabulary::MS, 1002818)
+        );
+        let param: ParamCow<'static> =
+            (&NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat).into();
+        assert_eq!(
+            param.curie().unwrap(),
+            CURIE::new(ControlledVocabulary::MS, 1002818)
+        );
+
+        assert_eq!(
+            NativeSpectrumIdentifierFormatTerm::from_param(&param),
+            Some(NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat)
+        );
+
+        let param: Param = (NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat).into();
+        assert_eq!(
+            param.curie().unwrap(),
+            CURIE::new(ControlledVocabulary::MS, 1002818)
+        );
+        let param: Param = (&NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat).into();
+        assert_eq!(
+            param.curie().unwrap(),
+            CURIE::new(ControlledVocabulary::MS, 1002818)
+        );
+
+        assert_eq!(
+            NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat.accession(),
+            1002818
+        );
+        assert_eq!(
+            NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat.controlled_vocabulary(),
+            ControlledVocabulary::MS
+        );
+        assert_eq!(
+            NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat.name(),
+            "Bruker TDF nativeID format"
+        );
+
+        assert_eq!(
+            NativeSpectrumIdentifierFormatTerm::from_name("Bruker TDF nativeID format"),
+            Some(NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat)
+        );
+
+        assert_eq!(
+            NativeSpectrumIdentifierFormatTerm::from_curie(&CURIE::new(ControlledVocabulary::MS, 1002818)),
+            Some(NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat)
+        )
     }
 
     #[test]

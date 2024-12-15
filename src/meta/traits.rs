@@ -36,7 +36,7 @@ pub trait MSDataFileMetadata {
 
     /// Copy the metadata from another [`MSDataFileMetadata`] implementation into
     /// this one.
-    fn copy_metadata_from(&mut self, source: &impl MSDataFileMetadata) {
+    fn copy_metadata_from(&mut self, source: &impl MSDataFileMetadata) where Self: Sized {
         *self.data_processings_mut() = source.data_processings().clone();
         *self.instrument_configurations_mut() = source.instrument_configurations().clone();
         *self.file_description_mut() = source.file_description().clone();
