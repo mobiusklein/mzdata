@@ -83,3 +83,6 @@ pub use crate::spectrum::{CentroidSpectrum, RawSpectrum, Spectrum};
 pub mod tutorial;
 
 pub use mzpeaks;
+
+#[cfg(feature = "mzsignal")]
+pub use mzsignal;
