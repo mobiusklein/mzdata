@@ -30,8 +30,7 @@ use crate::params::{ControlledVocabulary, Param, ParamDescribed};
 
 use crate::spectrum::{
     bindata::{
-        vec_as_bytes, ArrayType, BinaryArrayMap, BinaryDataArrayType, BuildArrayMapFrom,
-        BuildFromArrayMap, DataArray,
+        BuildArrayMapFrom, BuildFromArrayMap,
     },
     spectrum_types::{
         CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
@@ -113,31 +112,6 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Default for SpectrumB
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<SpectrumBuilder<C, D>>
-    for BinaryArrayMap
-{
-    fn from(val: SpectrumBuilder<C, D>) -> Self {
-        let mut arrays = BinaryArrayMap::new();
-        arrays.add(DataArray::wrap(
-            &ArrayType::MZArray,
-            BinaryDataArrayType::Float64,
-            vec_as_bytes(val.mz_array),
-        ));
-        arrays.add(DataArray::wrap(
-            &ArrayType::IntensityArray,
-            BinaryDataArrayType::Float32,
-            vec_as_bytes(val.intensity_array),
-        ));
-        if val.has_charge > 0 {
-            arrays.add(DataArray::wrap(
-                &ArrayType::ChargeArray,
-                BinaryDataArrayType::Int32,
-                vec_as_bytes(val.charge_array),
-            ));
-        }
-        arrays
-    }
-}
 
 impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> SpectrumBuilder<C, D> {
     pub fn into_spectrum(self, spectrum: &mut MultiLayerSpectrum<C, D>) {
@@ -637,7 +611,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             .expect("Failed to reset stream to beginning");
 
         let mut buffer: Vec<u8> = Vec::new();
-
+        let mut index = OffsetIndex::new("spectrum".into());
         loop {
             buffer.clear();
             let b = match self.handle.read_until(b'\n', &mut buffer) {
@@ -655,7 +629,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             } else if found_start && buffer.starts_with(b"TITLE=") {
                 match str::from_utf8(&buffer[6..]) {
                     Ok(string) => {
-                        self.index.insert(string.trim().to_owned(), last_start);
+                        index.insert(string.trim().to_owned(), last_start);
                     }
                     Err(_err) => {}
                 };
@@ -666,7 +640,8 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
         }
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore location");
-        self.index.init = true;
+        index.init = true;
+        self.set_index(index);
         if self.index.is_empty() {
             warn!("An index was built but no entries were found")
         }
