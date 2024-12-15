@@ -1,7 +1,7 @@
 use std::time;
 use std::{env, io, path};
 
-use futures::{Stream, StreamExt};
+use futures::StreamExt;
 use tokio;
 use tokio::fs;
 
