@@ -15,7 +15,7 @@ quick-docs:
     cargo doc --no-deps -p mzdata
 
 docs:
-    cargo doc --no-deps --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,thermo,async -p mzdata
+    cargo doc --no-deps --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,thermo,async -p mzdata -p mzsignal -p mzpeaks
 
 install-mzdata:
     cargo install --path . --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,hdf5_static

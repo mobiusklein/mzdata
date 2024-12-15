@@ -102,7 +102,7 @@ appropriate.
 #    let mut spectrum = reader.get_spectrum_by_index(15).unwrap();
     // An error might occur during reprofiling, or there may not be
     // any peaks to transform.
-    spectrum.reprofile_with_shape(0.025, 0.015).unwrap();
+    spectrum.reprofile_with_shape(0.0025, 0.015).unwrap();
     spectrum.description_mut().signal_continuity = SignalContinuity::Profile;
 #    Ok(())
 # }

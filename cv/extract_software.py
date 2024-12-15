@@ -12,6 +12,7 @@ from fastobo.term import (
     TermFrame,
     IsAClause,
     NameClause,
+    DefClause,
 )
 
 from fastobo.doc import OboDoc
@@ -52,6 +53,7 @@ def make_entry_for(term: TermFrame):
     name = None
     flags = SoftwareType.NoType
     parents = []
+    descr = ''
     for clause in term:
         if isinstance(clause, NameClause):
             name = str(clause.name)
@@ -63,6 +65,12 @@ def make_entry_for(term: TermFrame):
                 flags |= SoftwareType.Analysis
             elif clause.term == ACQUISITION_SW:
                 flags |= SoftwareType.Acquisition
+        if isinstance(clause, DefClause):
+            descr = re.sub(
+                r"(\[|\])",
+                lambda m: "\\\\" + m.group(1),
+                str(clause.definition).replace('"', "'"),
+            )
 
     vname: str = name
     if "-" in vname:
@@ -84,6 +92,7 @@ def make_entry_for(term: TermFrame):
 
     return f"""
     #[term(cv=MS, accession={term.id.local}, name="{name}", flags={{{int(flags)}}}, parents={{{json.dumps(parents)}}})]
+    #[doc="{name} - {descr}"]
     {vname},"""
 
 
