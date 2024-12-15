@@ -1583,6 +1583,7 @@ mod test {
         assert_eq!(raw_scan.signal_continuity(), SignalContinuity::Centroid);
     }
 
+    #[cfg(feature = "mzsignal")]
     #[test]
     fn test_reprofile() {
         let mut reader = MzMLReader::open_path("./test/data/three_test_scans.mzML")

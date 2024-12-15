@@ -1632,6 +1632,7 @@ mod test {
         assert_eq!(entries.len(), 0);
     }
 
+    #[cfg(feature = "mzsignal")]
     #[test]
     fn test_average_single() {
         let mut reader = MzMLReader::open_path("./test/data/three_test_scans.mzML")
