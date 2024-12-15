@@ -144,6 +144,12 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    fn set_buffer_of_type(&mut self, data_buffer: Vec<u8>) -> Result<usize, ArrayRetrievalError> {
+        self.item_count = Some(data_buffer.len() / self.dtype().size_of());
+        self.data = data_buffer;
+        Ok(self.data.len())
+    }
+
     pub fn update_buffer<T: Pod>(
         &mut self,
         data_buffer: &[T],
@@ -410,7 +416,8 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                     Err(err) => return Err(err),
                 };
                 let recast = to_bytes(&view);
-                self.update_buffer(&recast)
+                self.dtype = dtype;
+                self.set_buffer_of_type(recast)
             }
             BinaryDataArrayType::Float64 => {
                 let view = match self.to_f64() {
@@ -418,7 +425,8 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                     Err(err) => return Err(err),
                 };
                 let recast = to_bytes(&view);
-                self.update_buffer(&recast)
+                self.dtype = dtype;
+                self.set_buffer_of_type(recast)
             }
             BinaryDataArrayType::Int32 => {
                 let view = match self.to_i32() {
@@ -426,7 +434,8 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                     Err(err) => return Err(err),
                 };
                 let recast = to_bytes(&view);
-                self.update_buffer(&recast)
+                self.dtype = dtype;
+                self.set_buffer_of_type(recast)
             }
             BinaryDataArrayType::Int64 => {
                 let view = match self.to_i64() {
@@ -434,11 +443,11 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                     Err(err) => return Err(err),
                 };
                 let recast = to_bytes(&view);
-                self.update_buffer(&recast)
+                self.dtype = dtype;
+                self.set_buffer_of_type(recast)
             }
             _ => Ok(0),
         };
-        self.dtype = dtype;
         result
     }
 
@@ -553,6 +562,10 @@ mod test {
         let bytes: Vec<u8> = buf.into();
         let mut da = DataArray::wrap(&ArrayType::MZArray, BinaryDataArrayType::Float64, bytes);
         da.compression = BinaryCompressionType::Zlib;
+        *da.unit_mut() = Unit::MZ;
+        assert_eq!(da.unit(), Unit::MZ);
+        assert!(!da.is_ion_mobility());
+        assert_eq!(da.name(), &ArrayType::MZArray);
         Ok(da)
     }
 
@@ -562,6 +575,32 @@ mod test {
         da.decode_and_store()?;
         let view = da.to_f64()?;
         assert_eq!(view.len(), 19800);
+        Ok(())
+    }
+
+    #[test]
+    fn test_decode_store() -> io::Result<()> {
+        let mut da = make_array_from_file()?;
+        da.decode_and_store()?;
+        let back = da.clone();
+        da.store_as(BinaryDataArrayType::Float32)?;
+        let view = da.to_f64()?;
+        assert_eq!(view.len(), 19800);
+        for (a, b) in back.iter_f64()?.zip(view.iter().copied()) {
+            let err= (a as f64 - b).abs();
+            assert!((a as f64 - b).abs() < 1e-3, "{} - {} = {}", a, b, err);
+        }
+        for (a, b) in back.iter_f64()?.zip(da.iter_f32()?.map(|x| x as f64)) {
+            let err= (a as f64 - b).abs();
+            assert!((a as f64 - b).abs() < 1e-3, "{} - {} = {}", a, b, err);
+        }
+        da.store_as(BinaryDataArrayType::Float64)?;
+        let view = da.to_f64()?;
+        assert_eq!(view.len(), 19800);
+        for (a, b) in back.iter_f64()?.zip(view.iter().copied()) {
+            let err= (a as f64 - b).abs();
+            assert!((a as f64 - b).abs() < 1e-3, "{} - {} = {}", a, b, err);
+        }
         Ok(())
     }
 
