@@ -834,14 +834,17 @@ pub(crate) mod sealed {
                 ($kv:ident) => {
                     let name = format!("[Thermo Trailer Extra]{}", $kv.label);
                     if !$kv.value.is_empty() {
-                            let param = Param::new_key_value(
-                                name,
-                                $kv.value.parse::<Value>().unwrap(),
-                            );
-                            spec.params_mut().push(param);
-                        }
+                        let param = Param::new_key_value(
+                            name,
+                            $kv.value.parse::<Value>().unwrap(),
+                        );
+                        spec.params_mut().push(param);
+                    }
                 };
             }
+
+            spec.update_summaries();
+            let ms_level = spec.ms_level();
 
             let trailers = self.handle.get_raw_trailers_for(index)?;
             for kv in trailers.iter() {
@@ -855,20 +858,18 @@ pub(crate) mod sealed {
                     "Scan Event" => {
                         trailer!(kv);
                     }
-                    "Monoisotopic M/Z" => {
+                    "Monoisotopic M/Z" if ms_level > 1 && kv.value != "0" => {
                         trailer!(kv);
                     }
-                    "HCD Energy eV" => {
+                    "HCD Energy eV" if ms_level > 1 && kv.value != "0" => {
                         trailer!(kv);
                     }
-                    "HCD Energy" => {
+                    "HCD Energy" if ms_level > 1 && kv.value != "0" => {
                         trailer!(kv);
                     }
                     _ => {}
                 }
             }
-
-            spec.update_summaries();
             Some(spec)
         }
 
