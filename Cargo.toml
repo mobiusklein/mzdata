@@ -123,7 +123,7 @@ bytemuck = { version = "1.18.0", features = ["extern_crate_alloc"] }
 base64-simd = "0.8.0"
 
 # Async reader features
-tokio = { version = "1.32.0", optional = true, features = [
+tokio = { version = "1.32", optional = true, features = [
     "macros",
     "rt",
     "fs",
