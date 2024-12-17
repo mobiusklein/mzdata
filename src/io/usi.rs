@@ -123,25 +123,10 @@ impl FromStr for USI {
                         };
 
                         let tail = tokens.next().map_or((None, None), |tail| {
-                            let mut open: usize = 0;
-                            let bytes = tail.as_bytes();
-                            let mut index = tail.len() - 1;
-                            loop {
-                                if !tail.is_char_boundary(index) {
-                                } else if bytes[index] == b']' {
-                                    open += 1;
-                                } else if bytes[index] == b'[' {
-                                    open = open.saturating_sub(1);
-                                } else if bytes[index] == b':' && open == 0 {
-                                    return (
-                                        Some(tail[..index].to_string()),
-                                        Some(tail[index + 1..].to_string()),
-                                    );
-                                }
-                                if index == 0 {
-                                    break;
-                                } else {
-                                    index -= 1;
+                            const REPOSITORY_CODES: &[&str] = &["PR", "PA", "MA", "JP", "IP", "PP"];
+                            for code in REPOSITORY_CODES {
+                                if let Some((i, p)) = tail.split_once(&format!(":{code}-")) {
+                                    return (Some(i.to_string()), Some(p.to_string()));
                                 }
                             }
                             (Some(tail.to_string()), None)
@@ -236,7 +221,7 @@ mod test {
     }
 
     #[test]
-    fn test_example_with_colon_in_interpretation() -> Result<(), USIParseError> {
+    fn test_example_modification_shielded() -> Result<(), USIParseError> {
         let usi: USI = "mzspec:PXD047679:20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw:scan:40889:GGK[xlink:dss[138]#XLDSS]IEVQLK//KVESELIK[#XLDSS]PINPR/4".parse()?;
         assert_eq!(usi.dataset, "PXD047679");
         assert_eq!(
@@ -247,6 +232,57 @@ mod test {
         assert_eq!(
             usi.interpretation,
             Some("GGK[xlink:dss[138]#XLDSS]IEVQLK//KVESELIK[#XLDSS]PINPR/4".to_string())
+        );
+        assert_eq!(usi.provenance, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_example_labile_shielded() -> Result<(), USIParseError> {
+        let usi: USI = "mzspec:PXD047679:20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw:scan:40889:{Cation:K}GGKIEVQLK/4".parse()?;
+        assert_eq!(usi.dataset, "PXD047679");
+        assert_eq!(
+            usi.run_name,
+            "20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw"
+        );
+        assert_eq!(usi.identifier, Some(Identifier::Scan(40889)));
+        assert_eq!(
+            usi.interpretation,
+            Some("{Cation:K}GGKIEVQLK/4".to_string())
+        );
+        assert_eq!(usi.provenance, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_example_global_shielded() -> Result<(), USIParseError> {
+        let usi: USI = "mzspec:PXD047679:20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw:scan:40889:<[Glu->pyro-Glu]@N-term:E>GGKIEVQLK/4".parse()?;
+        assert_eq!(usi.dataset, "PXD047679");
+        assert_eq!(
+            usi.run_name,
+            "20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw"
+        );
+        assert_eq!(usi.identifier, Some(Identifier::Scan(40889)));
+        assert_eq!(
+            usi.interpretation,
+            Some("<[Glu->pyro-Glu]@N-term:E>GGKIEVQLK/4".to_string())
+        );
+        assert_eq!(usi.provenance, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_example_many_shielded() -> Result<(), USIParseError> {
+        let usi: USI = "mzspec:PXD047679:20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw:scan:40889:<[Cation:K]@N-term:E>GGKIE[Cation:K|Info:(((((([]}}}}}}}}<<<<<<{{{)(>>[((((){>>>><>>))}}{}]}]VQLK/4".parse()?;
+        assert_eq!(usi.dataset, "PXD047679");
+        assert_eq!(
+            usi.run_name,
+            "20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw"
+        );
+        assert_eq!(usi.identifier, Some(Identifier::Scan(40889)));
+        assert_eq!(
+            usi.interpretation,
+            Some("<[Cation:K]@N-term:E>GGKIE[Cation:K|Info:(((((([]}}}}}}}}<<<<<<{{{)(>>[((((){>>>><>>))}}{}]}]VQLK/4".to_string())
         );
         assert_eq!(usi.provenance, None);
         Ok(())
