@@ -52,7 +52,7 @@ impl FromStr for USI {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut this = Self::default();
-        let mut tokens = s.split(':');
+        let mut tokens = s.splitn(6, ':');
         if let Some(protocol) = tokens.next() {
             match protocol {
                 "mzspec" => {
@@ -122,8 +122,32 @@ impl FromStr for USI {
                             }
                         };
 
-                        this.interpretation = tokens.next().map(|s| s.to_string());
-                        this.provenance = tokens.next_back().map(|s| s.to_string());
+                        let tail = tokens.next().map_or((None, None), |tail| {
+                            let mut open: usize = 0;
+                            let bytes = tail.as_bytes();
+                            let mut index = tail.len() - 1;
+                            loop {
+                                if !tail.is_char_boundary(index) {
+                                } else if bytes[index] == b']' {
+                                    open += 1;
+                                } else if bytes[index] == b'[' {
+                                    open = open.saturating_sub(1);
+                                } else if bytes[index] == b':' && open == 0 {
+                                    return (
+                                        Some(tail[..index].to_string()),
+                                        Some(tail[index + 1..].to_string()),
+                                    );
+                                }
+                                if index == 0 {
+                                    break;
+                                } else {
+                                    index -= 1;
+                                }
+                            }
+                            (Some(tail.to_string()), None)
+                        });
+                        this.interpretation = tail.0;
+                        this.provenance = tail.1;
                     }
                     Ok(this)
                 } else {
@@ -207,6 +231,24 @@ mod test {
             usi.interpretation,
             Some("SAGQGEVLVYVEDPAGHQEEAK/3".to_string())
         );
+        assert_eq!(usi.provenance, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_example_with_colon_in_interpretation() -> Result<(), USIParseError> {
+        let usi: USI = "mzspec:PXD047679:20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw:scan:40889:GGK[xlink:dss[138]#XLDSS]IEVQLK//KVESELIK[#XLDSS]PINPR/4".parse()?;
+        assert_eq!(usi.dataset, "PXD047679");
+        assert_eq!(
+            usi.run_name,
+            "20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw"
+        );
+        assert_eq!(usi.identifier, Some(Identifier::Scan(40889)));
+        assert_eq!(
+            usi.interpretation,
+            Some("GGK[xlink:dss[138]#XLDSS]IEVQLK//KVESELIK[#XLDSS]PINPR/4".to_string())
+        );
+        assert_eq!(usi.provenance, None);
         Ok(())
     }
 }
