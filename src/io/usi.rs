@@ -125,7 +125,7 @@ impl FromStr for USI {
                         let tail = tokens.next().map_or((None, None), |tail| {
                             const REPOSITORY_CODES: &[&str] = &["PR", "PA", "MA", "JP", "IP", "PP"];
                             for code in REPOSITORY_CODES {
-                                if let Some((i, p)) = tail.split_once(&format!(":{code}-")) {
+                                if let Some((i, p)) = tail.rsplit_once(&format!(":{code}-")) {
                                     return (Some(i.to_string()), Some(p.to_string()));
                                 }
                             }
