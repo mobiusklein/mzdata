@@ -44,7 +44,7 @@ pub struct USI {
     pub run_name: String,
     pub identifier: Option<Identifier>,
     pub interpretation: Option<String>,
-    pub provenance: Option<String>,
+    pub provenance: Option<(Repository, String)>,
 }
 
 impl FromStr for USI {
@@ -52,7 +52,7 @@ impl FromStr for USI {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut this = Self::default();
-        let mut tokens = s.split(':');
+        let mut tokens = s.splitn(6, ':');
         if let Some(protocol) = tokens.next() {
             match protocol {
                 "mzspec" => {
@@ -122,8 +122,21 @@ impl FromStr for USI {
                             }
                         };
 
-                        this.interpretation = tokens.next().map(|s| s.to_string());
-                        this.provenance = tokens.next_back().map(|s| s.to_string());
+                        let tail = tokens.next().map_or((None, None), |tail| {
+                            for repository in Repository::ALL {
+                                if let Some((i, p)) =
+                                    tail.rsplit_once(&format!(":{}-", repository.code()))
+                                {
+                                    return (
+                                        Some(i.to_string()),
+                                        Some((*repository, p.to_string())),
+                                    );
+                                }
+                            }
+                            (Some(tail.to_string()), None)
+                        });
+                        this.interpretation = tail.0;
+                        this.provenance = tail.1;
                     }
                     Ok(this)
                 } else {
@@ -164,13 +177,56 @@ impl Display for USI {
             if let Some(interp) = self.interpretation.as_ref() {
                 write!(f, ":{}", interp)?;
                 if let Some(provenance) = self.provenance.as_ref() {
-                    write!(f, ":{}", provenance)?;
+                    write!(f, ":{}-{}", provenance.0, provenance.1)?;
                 }
             }
             Ok(())
         } else {
             write!(f, "{}:{}:{}", self.protocol, self.dataset, self.run_name)
         }
+    }
+}
+
+/// A repository that can be used for provenance IDs.
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq, Hash, Default)]
+pub enum Repository {
+    #[default]
+    Pride,
+    PeptideAtlas,
+    MassIVE,
+    jPOST,
+    iProx,
+    PanoramaPublic,
+}
+
+impl Repository {
+    /// All repositories listed for programmatic access
+    const ALL: &[Self] = &[
+        Self::Pride,
+        Self::PeptideAtlas,
+        Self::MassIVE,
+        Self::jPOST,
+        Self::iProx,
+        Self::PanoramaPublic,
+    ];
+
+    /// Get the repository code as used in a USI provenance ID
+    pub const fn code(&self) -> &'static str {
+        match self {
+            Self::Pride => "PR",
+            Self::PeptideAtlas => "PA",
+            Self::MassIVE => "MA",
+            Self::jPOST => "JP",
+            Self::iProx => "IP",
+            Self::PanoramaPublic => "PP",
+        }
+    }
+}
+
+impl std::fmt::Display for Repository {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.code())
     }
 }
 
@@ -207,6 +263,89 @@ mod test {
             usi.interpretation,
             Some("SAGQGEVLVYVEDPAGHQEEAK/3".to_string())
         );
+        assert_eq!(usi.provenance, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_example_modification_shielded() -> Result<(), USIParseError> {
+        let usi: USI = "mzspec:PXD047679:20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw:scan:40889:GGK[xlink:dss[138]#XLDSS]IEVQLK//KVESELIK[#XLDSS]PINPR/4".parse()?;
+        assert_eq!(usi.dataset, "PXD047679");
+        assert_eq!(
+            usi.run_name,
+            "20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw"
+        );
+        assert_eq!(usi.identifier, Some(Identifier::Scan(40889)));
+        assert_eq!(
+            usi.interpretation,
+            Some("GGK[xlink:dss[138]#XLDSS]IEVQLK//KVESELIK[#XLDSS]PINPR/4".to_string())
+        );
+        assert_eq!(usi.provenance, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_example_labile_shielded() -> Result<(), USIParseError> {
+        let usi: USI = "mzspec:PXD047679:20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw:scan:40889:{Cation:K}GGKIEVQLK/4".parse()?;
+        assert_eq!(usi.dataset, "PXD047679");
+        assert_eq!(
+            usi.run_name,
+            "20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw"
+        );
+        assert_eq!(usi.identifier, Some(Identifier::Scan(40889)));
+        assert_eq!(
+            usi.interpretation,
+            Some("{Cation:K}GGKIEVQLK/4".to_string())
+        );
+        assert_eq!(usi.provenance, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_example_global_shielded() -> Result<(), USIParseError> {
+        let usi: USI = "mzspec:PXD047679:20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw:scan:40889:<[Glu->pyro-Glu]@N-term:E>GGKIEVQLK/4".parse()?;
+        assert_eq!(usi.dataset, "PXD047679");
+        assert_eq!(
+            usi.run_name,
+            "20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw"
+        );
+        assert_eq!(usi.identifier, Some(Identifier::Scan(40889)));
+        assert_eq!(
+            usi.interpretation,
+            Some("<[Glu->pyro-Glu]@N-term:E>GGKIEVQLK/4".to_string())
+        );
+        assert_eq!(usi.provenance, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_example_many_shielded() -> Result<(), USIParseError> {
+        let usi: USI = "mzspec:PXD047679:20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw:scan:40889:<[Cation:K]@N-term:E>GGKIE[Cation:K|Info:(((((([]}}}}}}}}<<<<<<{{{)(>>[((((){>>>><>>))}}{}]}]VQLK/4".parse()?;
+        assert_eq!(usi.dataset, "PXD047679");
+        assert_eq!(
+            usi.run_name,
+            "20221122_EX3_UM7_Kadav001_SA_EXT00_16_DSS_11.raw"
+        );
+        assert_eq!(usi.identifier, Some(Identifier::Scan(40889)));
+        assert_eq!(
+            usi.interpretation,
+            Some("<[Cation:K]@N-term:E>GGKIE[Cation:K|Info:(((((([]}}}}}}}}<<<<<<{{{)(>>[((((){>>>><>>))}}{}]}]VQLK/4".to_string())
+        );
+        assert_eq!(usi.provenance, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_provenance() -> Result<(), USIParseError> {
+        let usi: USI = "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555:VLH[UNIMOD:1]PLEGAVVIIFK/2:PR-G47".parse()?;
+        assert_eq!(usi.dataset, "PXD000561");
+        assert_eq!(usi.run_name, "Adult_Frontalcortex_bRP_Elite_85_f09");
+        assert_eq!(usi.identifier, Some(Identifier::Scan(17555)));
+        assert_eq!(
+            usi.interpretation,
+            Some("VLH[UNIMOD:1]PLEGAVVIIFK/2".to_string())
+        );
+        assert_eq!(usi.provenance, Some((Repository::Pride, "G47".to_string())));
         Ok(())
     }
 }
