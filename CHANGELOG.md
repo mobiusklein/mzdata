@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.41.0] - 2025-01-02
+
+### Added
+
+- Add `AsyncSpectrumSource` trait and add `async_partial` for WASM-compatibility
+- Add feature-gated `serde` support for `mzdata` types
+
+### Fixed
+
+- Make USI provenance identifer parsing more robust and abstract over repository codes
+* Fixed parsing bug for USI continaining a 'shielded' colon.
+
+* Changed USI parsing of provinances to use hardcoded provinance identifiers
+
+* Moved to rsplit_once
+
+* Handled provenance repositories better
+
 ## [0.40.0] - 2024-12-15
 
 ### Added
@@ -586,7 +604,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.40.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.41.0...HEAD
+[0.41.0]: https://github.com/mobiusklein/mzdata/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/mobiusklein/mzdata/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/mobiusklein/mzdata/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/mobiusklein/mzdata/compare/v0.37.0...v0.38.0
