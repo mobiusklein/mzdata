@@ -7,6 +7,9 @@ pub use crate::io::traits::{
     IonMobilityFrameWriter, RandomAccessIonMobilityFrameGroupingIterator,
 };
 
+#[cfg(feature = "async_partial")]
+pub use crate::io::traits::AsyncSpectrumSource;
+
 pub use crate::meta::MSDataFileMetadata;
 pub use crate::params::{ParamDescribed, ParamLike, ParamValue, ParamDescribedRead};
 pub use crate::spectrum::bindata::{

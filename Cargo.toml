@@ -44,7 +44,7 @@ debug = true
 
 [features]
 # default = ["nalgebra", "parallelism", "mzsignal", "zlib-ng-compat"]
-default = ["zlib-ng-compat"]
+default = ["zlib-ng-compat", ]
 
 openblas = ["mzsignal", "mzsignal/openblas"]
 netlib = ["mzsignal", "mzsignal/netlib"]
@@ -84,7 +84,10 @@ bruker_tdf = [
 
 doc-only = []
 
-async = ["dep:tokio", "quick-xml/async-tokio", "dep:futures", "dep:pin-project"]
+serde = ["mzpeaks/serde", "mzsignal/serde", "chrono/serde"]
+
+async = ["async_partial", "tokio/fs"]
+async_partial = ["dep:tokio", "quick-xml/async-tokio", "dep:futures", "dep:pin-project"]
 
 proxi = ["dep:reqwest"]
 proxi-async = ["proxi", "dep:futures"]
@@ -123,11 +126,8 @@ bytemuck = { version = "1.18.0", features = ["extern_crate_alloc"] }
 base64-simd = "0.8.0"
 
 # Async reader features
-tokio = { version = "1.32", optional = true, features = [
+tokio = { version = "1.42", optional = true, features = [
     "macros",
-    "rt",
-    "fs",
-    "rt-multi-thread",
 ] }
 
 # mzMLb-related features
@@ -158,6 +158,12 @@ test-log = "0.2.12 "
 env_logger = "0.10.0"
 tempfile = "3.10"
 clap = { version = "4.4.11", features = ["derive"] }
+tokio = { version = "1.42", features = [
+    "macros",
+    "fs",
+    "rt-multi-thread"
+] }
+
 
 [[bench]]
 name = "mzml"

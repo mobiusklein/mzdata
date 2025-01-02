@@ -30,6 +30,7 @@ use crate::spectrum::spectrum_types::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
 };
 
+use crate::io::traits::AsyncSpectrumSource;
 use super::super::offset_index::OffsetIndex;
 // Need to learn more about async traits
 // use super::super::traits::{
@@ -613,6 +614,12 @@ impl<
     > MzMLReaderType<R, C, D>
 {
 
+    pub async fn new_indexed(file: R) -> MzMLReaderType<R, C, D> {
+        let mut this = Self::new(file).await;
+        this.read_index_from_end().await.expect("Failed to read mzML index");
+        this
+    }
+
     pub fn as_stream<'a>(&'a mut self) -> impl Stream<Item=MultiLayerSpectrum<C, D>> + 'a {
         Box::pin(stream::unfold(self, |reader| async {
             let spec = reader.read_next();
@@ -823,6 +830,48 @@ impl<
     }
 }
 
+
+
+impl<
+        R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Send,
+        C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
+    > AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D> {
+
+    async fn reset(&mut self) {
+        self.reset().await;
+    }
+
+    async fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
+        self.get_spectrum_by_id(id).await
+    }
+
+    async fn get_spectrum_by_index(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
+        self.get_spectrum_by_index(index).await
+    }
+
+    fn detail_level(&self) -> &DetailLevel {
+        &self.detail_level
+    }
+
+    fn set_detail_level(&mut self, detail_level: DetailLevel) {
+        self.detail_level = detail_level;
+    }
+
+    fn get_index(&self) -> &OffsetIndex {
+        &self.index
+    }
+
+    fn set_index(&mut self, index: OffsetIndex) {
+        self.index = index;
+    }
+
+    async fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
+        self.read_next().await
+    }
+}
+
+
 #[cfg(test)]
 mod test {
     use std::path;
@@ -830,7 +879,42 @@ mod test {
     use super::*;
     use tokio::{fs, io};
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[tokio::test(flavor="multi_thread", worker_threads=4)]
+    async fn test_trait() -> io::Result<()> {
+        let path = path::Path::new("./test/data/read_index_of.mzML");
+        let file = fs::File::open(path).await?;
+        let mut reader = MzMLReader::new_indexed(file).await;
+
+        let mut ms1_counter = 0;
+        let mut msn_counter = 0;
+        while let Some(spec) = AsyncSpectrumSource::read_next(&mut reader).await {
+            if spec.ms_level() > 1 {
+                msn_counter += 1;
+            } else {
+                ms1_counter += 1;
+            }
+        }
+
+        assert_eq!(ms1_counter, 14);
+        assert_eq!(msn_counter, 34);
+
+        ms1_counter = 0;
+        msn_counter = 0;
+        for i in 0..reader.len() {
+            let spec = AsyncSpectrumSource::get_spectrum_by_index(&mut reader,i).await.unwrap();
+            if spec.ms_level() > 1 {
+                msn_counter += 1;
+            } else {
+                ms1_counter += 1;
+            }
+        }
+
+        assert_eq!(ms1_counter, 14);
+        assert_eq!(msn_counter, 34);
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_open() -> io::Result<()> {
         let path = path::Path::new("./test/data/read_index_of.mzML");
         let file = fs::File::open(path).await?;

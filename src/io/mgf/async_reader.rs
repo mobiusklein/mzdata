@@ -31,6 +31,8 @@ use crate::spectrum::spectrum_types::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
 };
 
+use crate::io::traits::AsyncSpectrumSource;
+
 /// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
 /// The parser produces [`Spectrum`](crate::spectrum::Spectrum) instances. These may be
 /// converted directly into [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum)
@@ -451,5 +453,44 @@ impl<
 
     pub fn set_index(&mut self, index: OffsetIndex) {
         self.index = index
+    }
+}
+
+impl<
+        R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin + Send,
+        C: CentroidPeakAdapting + Send + Sync,
+        D: DeconvolutedPeakAdapting + Send + Sync,
+    > AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D> {
+
+    async fn reset(&mut self) {
+        self.reset().await;
+    }
+
+    async fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
+        self.get_spectrum_by_id(id).await
+    }
+
+    async fn get_spectrum_by_index(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
+        self.get_spectrum_by_index(index).await
+    }
+
+    fn detail_level(&self) -> &DetailLevel {
+        &self.detail_level
+    }
+
+    fn set_detail_level(&mut self, detail_level: DetailLevel) {
+        self.detail_level = detail_level;
+    }
+
+    fn get_index(&self) -> &OffsetIndex {
+        &self.index
+    }
+
+    fn set_index(&mut self, index: OffsetIndex) {
+        self.index = index;
+    }
+
+    async fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
+        self.read_next().await
     }
 }
