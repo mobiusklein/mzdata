@@ -15,6 +15,7 @@ use thiserror::Error;
 ///
 /// The borrowed equivalent of this type is [`ValueRef`].
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Value {
     /// A text value of arbitrary length
     String(String),
@@ -577,6 +578,7 @@ param_value_float!(f64);
 ///
 /// The owned equivalent of this type is [`Value`].
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum ValueRef<'a> {
     /// A text value of arbitrary length
     String(Cow<'a, str>),
@@ -1157,6 +1159,7 @@ impl FromStr for AccessionCode {
 
 /// A CURIE is a namespace + accession identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CURIE {
     pub controlled_vocabulary: ControlledVocabulary,
     pub accession: AccessionIntCode,
@@ -1397,6 +1400,7 @@ pub trait ParamLike {
 
 /// A statically allocate-able or non-owned data version of [`Param`]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ParamCow<'a> {
     pub name: Cow<'a, str>,
     pub value: ValueRef<'a>,
@@ -1566,6 +1570,7 @@ impl<'a> AsRef<ValueRef<'a>> for ParamCow<'a> {
 
 /// A controlled vocabulary or user parameter
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Param {
     pub name: String,
     pub value: Value,
@@ -1847,6 +1852,7 @@ impl Hash for Param {
 
 /// Controlled vocabularies used in mass spectrometry data files
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ControlledVocabulary {
     /// The PSI-MS Controlled Vocabulary [https://www.ebi.ac.uk/ols4/ontologies/ms](https://www.ebi.ac.uk/ols4/ontologies/ms)
     MS,
@@ -2279,6 +2285,7 @@ macro_rules! impl_param_described_deferred {
 
 /// Units that a term's value might have
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Unit {
     Unknown,
 

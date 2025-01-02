@@ -9,6 +9,7 @@ use mzpeaks::coordinate::{Time, MZ};
 use mzpeaks::feature::{FeatureView, SimpleFeature, TimeInterval};
 
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Chromatogram {
     description: ChromatogramDescription,
     pub arrays: BinaryArrayMap,

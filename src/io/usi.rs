@@ -17,6 +17,7 @@ pub enum USIParseError {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Protocol {
     #[default]
     MZSpec,
@@ -31,6 +32,7 @@ impl Display for Protocol {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Identifier {
     Scan(u64),
     Index(u64),
@@ -38,6 +40,7 @@ pub enum Identifier {
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct USI {
     pub protocol: Protocol,
     pub dataset: String,
@@ -190,6 +193,7 @@ impl Display for USI {
 /// A repository that can be used for provenance IDs.
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Repository {
     #[default]
     Pride,

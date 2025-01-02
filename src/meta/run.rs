@@ -3,6 +3,7 @@ use chrono::{DateTime, FixedOffset};
 /// Metadata describing the experiment that does not belong in any other section
 /// that covers some default options.
 #[derive(Debug, Default, PartialEq, Hash, Eq, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MassSpectrometryRun {
     pub id: Option<String>,
     pub default_data_processing_id: Option<String>,

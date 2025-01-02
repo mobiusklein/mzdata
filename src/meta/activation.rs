@@ -7,6 +7,7 @@ crate::cvmap! {
     #[allow(unused)]
     #[doc = "A method used for dissociation or fragmentation."]
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     /*[[[cog
     import cog
     import subprocess

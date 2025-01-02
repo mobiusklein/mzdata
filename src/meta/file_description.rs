@@ -14,6 +14,7 @@ use crate::params::{
 /// vendor raw formats that are directories, there can be many files.
 /// See <https://peptideatlas.org/tmp/mzML1.1.0.html#sourceFile>.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SourceFile {
     /// The name of the source file without any path or location information
     pub name: String,
@@ -68,6 +69,7 @@ impl SourceFile {
 
 /// A description of the file data file and its contents
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FileDescription {
     /// Descriptors of the content spectra
     pub contents: ParamList,
@@ -124,6 +126,7 @@ crate::cvmap! {
     #[doc = "A text-based schema that defines how native spectrum identifiers are formatted.
     These patterns are often found in mzML-compatible formats."]
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     /*[[[cog
     import cog
     import subprocess

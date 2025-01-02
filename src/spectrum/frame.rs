@@ -29,6 +29,7 @@ use crate::{prelude::*, RawSpectrum};
 /// # See also
 /// [`RefFeatureDataLevel`] for borrowed version.
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FeatureDataLevel<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
@@ -61,6 +62,7 @@ trait.
 This is the equivalent of the [`SpectrumDescription`] type.
 */
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IonMobilityFrameDescription {
     /// The spectrum's native identifier
     pub id: String,
@@ -250,6 +252,7 @@ pub trait IonMobilityFrameLike<
 }
 
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MultiLayerIonMobilityFrame<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
@@ -417,7 +420,7 @@ mod mzsignal_impl {
     use mzpeaks::{feature::Feature, peak_set::PeakSetVec, CentroidPeak, Tolerance};
     use mzsignal::{
         feature_mapping::{
-            graph::FeatureGraphBuilder, FeatureExtracterType, MapState, PeakMapState,
+            FeatureGraphBuilder, FeatureExtracterType, MapState, PeakMapState,
         },
         peak_picker::PeakPicker,
         FittedPeak, PeakFitType,

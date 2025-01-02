@@ -18,6 +18,7 @@ use super::BinaryDataArrayType;
 
 /// A collection of [`DataArray`]s that are identified by name.
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BinaryArrayMap {
     pub byte_buffer_map: HashMap<ArrayType, DataArray>,
 }
@@ -304,6 +305,7 @@ impl IntoIterator for BinaryArrayMap {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct NonNaNF64(f64);
 
 impl std::hash::Hash for NonNaNF64 {
@@ -363,6 +365,7 @@ macro_rules! _populate_stacked_array_from {
 /// Represent a set of [`BinaryArrayMap`] that has been split across the
 /// ion mobility dimension.
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BinaryArrayMap3D {
     pub ion_mobility_dimension: Vec<f64>,
     pub ion_mobility_type: ArrayType,

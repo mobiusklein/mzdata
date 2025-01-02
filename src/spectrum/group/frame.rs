@@ -106,6 +106,7 @@ pub trait IonMobilityFrameGrouping<
 A pairing of an optional MS1 ion mobility frame with all its associated MSn ion mobility frames.
 */
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IonMobilityFrameGroup<C, D, S>
 where
     C: FeatureLike<MZ, IonMobility>,

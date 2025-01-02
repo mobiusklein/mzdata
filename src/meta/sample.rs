@@ -3,6 +3,7 @@ use crate::params::{ParamDescribed, ParamList};
 
 
 #[derive(Debug, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Sample {
     pub id: String,
     pub name: Option<String>,

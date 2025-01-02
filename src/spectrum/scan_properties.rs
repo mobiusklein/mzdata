@@ -32,6 +32,7 @@ impl Display for IsolationWindowState {
 }
 
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The interval around the precursor ion that was isolated in the precursor scan.
 /// Although an isolation window may be specified either with explicit bounds or
 /// offsets from the target, this data structure always uses explicit bounds once
@@ -49,6 +50,7 @@ pub struct IsolationWindow {
     pub upper_bound: f32,
     /// Describes the decision making process used to establish the bounds of the
     /// window from the source file.
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub flags: IsolationWindowState,
 }
 
@@ -98,6 +100,7 @@ impl PartialEq for IsolationWindow {
 
 /// The m/z range which was scanned
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ScanWindow {
     /// The minimum m/z scanned
     pub lower_bound: f32,
@@ -126,6 +129,7 @@ impl ScanWindow {
 type ScanWindowList = Vec<ScanWindow>;
 
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Describes a single scan event. Unless additional post-processing is done,
 /// there is usually only one event per spectrum.
 pub struct ScanEvent {
@@ -201,6 +205,7 @@ type ScanEventList = Vec<ScanEvent>;
 /// Represents means by which a spectrum is generated using
 /// one or more instrument analyzers
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ScanCombination {
     // MS:1000795
     #[default]
@@ -261,6 +266,7 @@ impl ScanCombination {
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Describe the series of acquisition events that constructed the spectrum
 /// being described.
 pub struct Acquisition {
@@ -334,6 +340,7 @@ pub trait IonProperties {
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Describes a single selected ion from a precursor isolation
 pub struct SelectedIon {
     /// The selected ion's m/z as reported, may not be the monoisotopic peak.
@@ -365,6 +372,7 @@ impl IonProperties for SelectedIon {
 impl IonMobilityMeasure for SelectedIon {}
 
 #[derive(Debug, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Describes the activation method used to dissociate the precursor ion
 pub struct Activation {
     _methods: Vec<DissociationMethodTerm>,
@@ -429,6 +437,7 @@ impl Activation {
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Describes the precursor ion of the owning spectrum.
 pub struct Precursor {
     /// Describes the selected ion's properties
@@ -591,6 +600,7 @@ or `Unknown` (0). The `Unknown` state is the default.
 */
 #[repr(i8)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ScanPolarity {
     #[default]
     /// The polarity of the spectrum is unknown
@@ -630,6 +640,7 @@ or an assumed level, the `Unknown` option is retained for partial initialization
 */
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default, Hash, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SignalContinuity {
     #[default]
     Unknown = 0,
@@ -654,6 +665,7 @@ within a particular run. This forms the basis for a large portion of the [`Spect
 trait.
 */
 #[derive(Debug, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SpectrumDescription {
     /// The spectrum's native identifier
     pub id: String,
@@ -711,6 +723,7 @@ impl_param_described_deferred!(SelectedIon, Acquisition, ScanEvent);
 
 /// Types of chromatograms enumerated in the PSI-MS controlled vocabulary
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ChromatogramType {
     #[default]
     Unknown,
@@ -794,6 +807,7 @@ impl ChromatogramType {
 /// The set of descriptive metadata that give context for how a chromatogram was
 /// recorded.
 #[derive(Debug, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChromatogramDescription {
     pub id: String,
     pub index: usize,

@@ -1160,3 +1160,150 @@ pub trait SpectrumWriter<
     /// data. Does not formally close the underlying writing stream.
     fn close(&mut self) -> io::Result<()>;
 }
+
+
+#[cfg(feature = "async_partial")]
+mod async_traits {
+    use std::future::Future;
+
+    use futures::{stream, Stream};
+
+    use super::*;
+
+    pub trait AsyncSpectrumSource<
+        C: CentroidLike + Default = CentroidPeak,
+        D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+        S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
+    >: Send
+    {
+
+        /// Rewind the current position of the source to the beginning
+        fn reset(&mut self) -> impl Future<Output=()>;
+
+        /// Get the [`DetailLevel`] the reader currently uses
+        fn detail_level(&self) -> &DetailLevel;
+
+        /// Set the [`DetailLevel`] for the reader, changing
+        /// the amount of work done immediately on loading a
+        /// spectrum.
+        ///
+        /// # Note
+        /// Not all readers support all detail levels, and the
+        /// behavior when requesting one of those levels will
+        /// depend upon the underlying reader.
+        fn set_detail_level(&mut self, detail_level: DetailLevel);
+
+        /// Retrieve a spectrum by it's native ID
+        fn get_spectrum_by_id(&mut self, id: &str) -> impl Future<Output=Option<S>>;
+
+        /// Retrieve a spectrum by it's integer index
+        fn get_spectrum_by_index(&mut self, index: usize) -> impl Future<Output=Option<S>>;
+
+
+        /// Retrieve a spectrum by its scan start time
+        /// Considerably more complex than seeking by ID or index, this involves
+        /// a binary search over the spectrum index and assumes that spectra are stored
+        /// in chronological order.
+        #[allow(async_fn_in_trait)]
+        async fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {{
+            let n = self.len();
+            if n == 0 {
+                if !self.get_index().init {
+                    warn!("Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized.");
+                    return None;
+                }
+            }
+            let mut lo: usize = 0;
+            let mut hi: usize = n;
+
+            let mut best_error: f64 = f64::INFINITY;
+            let mut best_match: Option<S> = None;
+
+            if lo == hi {
+                return None;
+            }
+
+            let original_detail_level = *self.detail_level();
+            self.set_detail_level(DetailLevel::MetadataOnly);
+            while hi != lo {
+                let mid = (hi + lo) / 2;
+                let scan = self.get_spectrum_by_index(mid).await?;
+                let scan_time = scan.start_time();
+                let err = (scan_time - time).abs();
+
+                if err < best_error {
+                    best_error = err;
+                    best_match = Some(scan);
+                }
+                if hi.saturating_sub(1) == lo {
+                    self.set_detail_level(original_detail_level);
+                    return best_match
+                }
+                else if scan_time > time {
+                    hi = mid;
+                } else {
+                    lo = mid;
+                }
+            }
+            self.set_detail_level(original_detail_level);
+            best_match
+        }}
+
+        /// Retrieve the number of spectra in source file, usually by getting
+        /// the length of the index. If the index isn't initialized, this will
+        /// be 0.
+        fn len(&self) -> usize {
+            self.get_index().len()
+        }
+
+        fn is_empty(&self) -> bool {
+            self.len() == 0
+        }
+
+        /// Access the spectrum offset index to enumerate all spectra by ID
+        fn get_index(&self) -> &OffsetIndex;
+
+        /// Set the spectrum offset index. This method shouldn't be needed if not writing
+        /// a new adapter
+        fn set_index(&mut self, index: OffsetIndex);
+
+        /// Helper method to support seeking to an ID
+        fn _offset_of_id(&self, id: &str) -> Option<u64> {
+            self.get_index().get(id)
+        }
+
+        /// Helper method to support seeking to an index
+        fn _offset_of_index(&self, index: usize) -> Option<u64> {
+            self.get_index()
+                .get_index(index)
+                .map(|(_id, offset)| offset)
+        }
+
+        /// Helper method to support seeking to a specific time.
+        /// Considerably more complex than seeking by ID or index.
+        #[allow(async_fn_in_trait)]
+        async fn _offset_of_time(&mut self, time: f64) -> Option<u64> {
+            {
+                match self.get_spectrum_by_time(time).await {
+                    Some(scan) => self._offset_of_index(scan.index()),
+                    None => None,
+                }
+            }
+        }
+
+        fn read_next(&mut self) -> impl Future<Output=Option<S>>;
+
+        fn as_stream<'a>(&'a mut self) -> impl Stream<Item=S> + 'a {
+            Box::pin(stream::unfold(self, |reader| async {
+                let spec = reader.read_next();
+                match spec.await {
+                    Some(val) => Some((val, reader)),
+                    None => None
+                }
+            }))
+        }
+    }
+}
+
+#[cfg(feature = "async_partial")]
+pub use async_traits::AsyncSpectrumSource;

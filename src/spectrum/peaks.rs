@@ -289,6 +289,7 @@ impl<D: DeconvolutedCentroidLike> SummaryOps for MassPeakSetType<D> {
 /// # See also
 /// [`RefPeakDataLevel`] for borrowed version.
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PeakDataLevel<
     C: CentroidLike = CentroidPeak,
     D: DeconvolutedCentroidLike = DeconvolutedPeak,

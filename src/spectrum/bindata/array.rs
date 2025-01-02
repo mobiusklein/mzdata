@@ -37,6 +37,7 @@ use super::vec_as_bytes;
 /// explicitly, again using [`DataArray::decode_and_store`] or operations should make as much use of the
 /// copied arrays as possible instead.
 #[derive(Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataArray {
     pub data: Bytes,
     pub dtype: BinaryDataArrayType,

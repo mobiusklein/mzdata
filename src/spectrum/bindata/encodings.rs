@@ -32,6 +32,7 @@ pub fn vec_as_bytes<T: Pod>(data: Vec<T>) -> Bytes {
 /// The kinds of data arrays found in mass spectrometry data files governed
 /// by the PSI-MS controlled vocabulary.
 #[derive(Debug, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ArrayType {
     #[default]
     Unknown,
@@ -197,6 +198,7 @@ impl ArrayType {
 /// The canonical primitive data types found in MS data file formats
 /// supported by the PSI-MS controlled vocabulary
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BinaryDataArrayType {
     #[default]
     Unknown,
@@ -227,6 +229,7 @@ impl BinaryDataArrayType {
 /// might be in during different stages of decoding. Other than `Decoded`,
 /// these states may or may not include intermediate base64 encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BinaryCompressionType {
     #[default]
     NoCompression,

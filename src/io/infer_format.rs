@@ -39,6 +39,7 @@ use super::{DetailLevel, SpectrumSourceWithMetadata};
 /// supports
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MassSpectrometryFormat {
     MGF,
     MzML,

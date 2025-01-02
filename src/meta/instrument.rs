@@ -5,6 +5,7 @@ use crate::params::{ParamCow, ParamLike, ParamList};
 
 /// A distinguishing tag describing the part of an instrument a [`Component`] refers to
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ComponentType {
     /// A mass analyzer
     Analyzer,
@@ -28,6 +29,7 @@ impl Display for ComponentType {
 ///
 /// A component may also be described by more than one [`Param`](crate::params::Param), such as the
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Component {
     /// The kind of component this describes
     pub component_type: ComponentType,
@@ -146,6 +148,7 @@ impl Component {
 
 /// A series of mass spectrometer components that together were engaged to acquire a mass spectrum
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct InstrumentConfiguration {
     /// The set of components involved
     pub components: Vec<Component>,
@@ -201,6 +204,7 @@ crate::cvmap! {
     #[flag_type=i32]
     #[allow(unused)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     /*[[[cog
     import cog
     import subprocess
@@ -262,6 +266,7 @@ crate::cvmap! {
     #[flag_type=i32]
     #[allow(unused)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     /*[[[cog
     import cog
     import subprocess
@@ -425,6 +430,7 @@ crate::cvmap! {
     #[flag_type=i32]
     #[allow(unused)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     /*[[[cog
     import cog
     import subprocess
@@ -501,6 +507,7 @@ crate::cvmap! {
     #[flag_type=i32]
     #[allow(unused)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     /*[[[cog
     import cog
     import subprocess

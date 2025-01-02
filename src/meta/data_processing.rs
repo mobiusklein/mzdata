@@ -10,6 +10,7 @@ use super::Software;
 ///
 /// See <https://peptideatlas.org/tmp/mzML1.1.0.html#processingMethod>
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProcessingMethod {
     pub order: i8,
     pub software_reference: String,
@@ -21,6 +22,7 @@ pub struct ProcessingMethod {
 ///
 /// See <https://peptideatlas.org/tmp/mzML1.1.0.html#dataProcessing>
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataProcessing {
     pub id: String,
     pub methods: Vec<ProcessingMethod>,

@@ -8,6 +8,7 @@ use crate::{impl_param_described, Param};
 ///
 /// See <https://peptideatlas.org/tmp/mzML1.1.0.html#software>
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Software {
     /// A unique identifier for the software within processing metadata
     pub id: String,
@@ -107,6 +108,7 @@ crate::cvmap! {
     #[flag_type=SoftwareType]
     #[allow(unused, clippy::upper_case_acronyms)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     /*[[[cog
     import cog
     import subprocess

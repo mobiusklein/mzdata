@@ -232,6 +232,7 @@ pub trait SpectrumLike<
 }
 
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Represents a spectrum that hasn't been processed yet, with only
 /// data arrays, potentially no discrete peaks. A raw spectrum may still
 /// be centroided, but the peaks still need to be decoded.
@@ -631,6 +632,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> SpectrumLike<C, D> for RawSpe
 }
 
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Represents a spectrum that has been centroided into discrete m/z points, a
 /// process also called "peak picking".
 ///
@@ -759,6 +761,7 @@ where
 ///
 /// This type of spectrum represents data in exactly one format.
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DeconvolutedSpectrumType<D: DeconvolutedCentroidLike + Default> {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
@@ -867,6 +870,7 @@ where
 }
 
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Represent a spectrum with multiple layers of representation of the
 /// peak data.
 ///
