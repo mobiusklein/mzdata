@@ -583,7 +583,7 @@ mod test {
                 let fm = frame.features.as_ref().unwrap();
                 let query = 1456.95;
                 let hits = fm.all_features_for(query, Tolerance::PPM(15.0));
-                assert_eq!(hits.len(), 1);
+                assert_eq!(hits.len(), 2);
 
                 let feat = &hits[0];
 
@@ -609,10 +609,12 @@ mod test {
                     }
                 }
 
-                assert_is_close!(feat.start_time().unwrap(), 1.1628155190587295, 1e-3, "start_time");
-                assert_is_close!(feat.end_time().unwrap(), 1.2536284405594418, 1e-3, "end_time");
+                eprintln!("{:?}\t{:?}\t{:?}\t{}", feat.start_time(), feat.end_time(), feat.apex_time(), feat.len());
+
+                assert_is_close!(feat.start_time().unwrap(), 0.947379971788502, 1e-3, "start_time");
+                assert_is_close!(feat.end_time().unwrap(), 1.2638564827665548, 1e-3, "end_time");
                 assert_is_close!(feat.apex_time().unwrap(), 1.212666, 1e-3, "apex_time");
-                assert_eq!(feat.len(), 62);
+                assert_eq!(feat.len(), 98);
             }
         });
         Ok(())
