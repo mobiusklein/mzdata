@@ -1,26 +1,24 @@
-
 use std::collections::{HashMap, VecDeque};
+use std::marker::PhantomData;
+use std::ops::Index;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::{fs, io, path};
-use std::ops::Index;
-use std::marker::PhantomData;
 
 use log::warn;
-use mzpeaks::{
-    CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak,
-};
+use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 use thiserror::Error;
 
 use crate::io::utils::FileSource;
 use crate::io::{DetailLevel, OffsetIndex};
-use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software};
+use crate::meta::{
+    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software,
+};
 use crate::prelude::MSDataFileMetadata;
 use crate::spectrum::group::{SpectrumGroup, SpectrumGroupingIterator};
 use crate::spectrum::spectrum_types::{MultiLayerSpectrum, SpectrumLike};
 
 use super::SpectrumGrouping;
-
 
 /// A base trait defining the behaviors of a source of spectra.
 ///
@@ -32,7 +30,6 @@ pub trait SpectrumSource<
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 >: Iterator<Item = S>
 {
-
     /// Rewind the current position of the source to the beginning
     fn reset(&mut self);
 
@@ -91,9 +88,8 @@ pub trait SpectrumSource<
             }
             if hi.saturating_sub(1) == lo {
                 self.set_detail_level(original_detail_level);
-                return best_match
-            }
-            else if scan_time > time {
+                return best_match;
+            } else if scan_time > time {
                 hi = mid;
             } else {
                 lo = mid;
@@ -266,9 +262,6 @@ impl<
         R: SpectrumSource<C, D, S>,
     > SpectrumSource<C, D, S> for SpectrumIterator<'lifespan, C, D, S, R>
 {
-
-
-
     fn reset(&mut self) {
         self.index = 0;
         self.back_index = 0;
@@ -410,7 +403,6 @@ fn _save_index<
     }
     Ok(())
 }
-
 
 /// Errors that may occur when reading a spectrum from a [`RandomAccessSpectrumIterator`]
 #[derive(Debug, Error)]
@@ -1161,12 +1153,14 @@ pub trait SpectrumWriter<
     fn close(&mut self) -> io::Result<()>;
 }
 
-
 #[cfg(feature = "async_partial")]
 mod async_traits {
     use std::future::Future;
 
-    use futures::{stream, Stream};
+    use futures::{
+        stream::{self, FusedStream},
+        Stream,
+    };
 
     use super::*;
 
@@ -1176,9 +1170,8 @@ mod async_traits {
         S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
     >: Send
     {
-
         /// Rewind the current position of the source to the beginning
-        fn reset(&mut self) -> impl Future<Output=()>;
+        fn reset(&mut self) -> impl Future<Output = ()>;
 
         /// Get the [`DetailLevel`] the reader currently uses
         fn detail_level(&self) -> &DetailLevel;
@@ -1194,60 +1187,61 @@ mod async_traits {
         fn set_detail_level(&mut self, detail_level: DetailLevel);
 
         /// Retrieve a spectrum by it's native ID
-        fn get_spectrum_by_id(&mut self, id: &str) -> impl Future<Output=Option<S>>;
+        fn get_spectrum_by_id(&mut self, id: &str) -> impl Future<Output = Option<S>>;
 
         /// Retrieve a spectrum by it's integer index
-        fn get_spectrum_by_index(&mut self, index: usize) -> impl Future<Output=Option<S>>;
-
+        fn get_spectrum_by_index(&mut self, index: usize)
+            -> impl Future<Output = Option<S>> + Send;
 
         /// Retrieve a spectrum by its scan start time
         /// Considerably more complex than seeking by ID or index, this involves
         /// a binary search over the spectrum index and assumes that spectra are stored
         /// in chronological order.
         #[allow(async_fn_in_trait)]
-        async fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {{
-            let n = self.len();
-            if n == 0 {
-                if !self.get_index().init {
-                    warn!("Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized.");
+        async fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {
+            {
+                let n = self.len();
+                if n == 0 {
+                    if !self.get_index().init {
+                        warn!("Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized.");
+                        return None;
+                    }
+                }
+                let mut lo: usize = 0;
+                let mut hi: usize = n;
+
+                let mut best_error: f64 = f64::INFINITY;
+                let mut best_match: Option<S> = None;
+
+                if lo == hi {
                     return None;
                 }
-            }
-            let mut lo: usize = 0;
-            let mut hi: usize = n;
 
-            let mut best_error: f64 = f64::INFINITY;
-            let mut best_match: Option<S> = None;
+                let original_detail_level = *self.detail_level();
+                self.set_detail_level(DetailLevel::MetadataOnly);
+                while hi != lo {
+                    let mid = (hi + lo) / 2;
+                    let scan = self.get_spectrum_by_index(mid).await?;
+                    let scan_time = scan.start_time();
+                    let err = (scan_time - time).abs();
 
-            if lo == hi {
-                return None;
-            }
-
-            let original_detail_level = *self.detail_level();
-            self.set_detail_level(DetailLevel::MetadataOnly);
-            while hi != lo {
-                let mid = (hi + lo) / 2;
-                let scan = self.get_spectrum_by_index(mid).await?;
-                let scan_time = scan.start_time();
-                let err = (scan_time - time).abs();
-
-                if err < best_error {
-                    best_error = err;
-                    best_match = Some(scan);
+                    if err < best_error {
+                        best_error = err;
+                        best_match = Some(scan);
+                    }
+                    if hi.saturating_sub(1) == lo {
+                        self.set_detail_level(original_detail_level);
+                        return best_match;
+                    } else if scan_time > time {
+                        hi = mid;
+                    } else {
+                        lo = mid;
+                    }
                 }
-                if hi.saturating_sub(1) == lo {
-                    self.set_detail_level(original_detail_level);
-                    return best_match
-                }
-                else if scan_time > time {
-                    hi = mid;
-                } else {
-                    lo = mid;
-                }
+                self.set_detail_level(original_detail_level);
+                best_match
             }
-            self.set_detail_level(original_detail_level);
-            best_match
-        }}
+        }
 
         /// Retrieve the number of spectra in source file, usually by getting
         /// the length of the index. If the index isn't initialized, this will
@@ -1291,19 +1285,108 @@ mod async_traits {
             }
         }
 
-        fn read_next(&mut self) -> impl Future<Output=Option<S>>;
+        fn read_next(&mut self) -> impl Future<Output = Option<S>>;
 
-        fn as_stream<'a>(&'a mut self) -> impl Stream<Item=S> + 'a {
+        fn as_stream<'a>(&'a mut self) -> impl SpectrumStream<C, D, S> + 'a {
             Box::pin(stream::unfold(self, |reader| async {
                 let spec = reader.read_next();
                 match spec.await {
                     Some(val) => Some((val, reader)),
-                    None => None
+                    None => None,
                 }
             }))
         }
     }
+
+    pub trait AsyncRandomAccessSpectrumIterator<
+        C: CentroidLike + Default = CentroidPeak,
+        D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+        S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
+    >: AsyncSpectrumSource<C, D, S> + Sized
+    {
+        fn start_from_id(
+            &mut self,
+            id: &str,
+        ) -> impl Future<Output = Result<&mut Self, SpectrumAccessError>>;
+        fn start_from_index(
+            &mut self,
+            index: usize,
+        ) -> impl Future<Output = Result<&mut Self, SpectrumAccessError>>;
+        fn start_from_time(
+            &mut self,
+            time: f64,
+        ) -> impl Future<Output = Result<&mut Self, SpectrumAccessError>>;
+    }
+
+    #[cfg(feature = "async")]
+    pub trait AsyncMZFileReader<
+        C: CentroidLike + Default = CentroidPeak,
+        D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+        S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
+    >: AsyncSpectrumSource<C, D, S> + Sized
+    {
+        /// An on-trait method of constructing an index. Assumed
+        /// to be a trivial wrapper.
+        fn construct_index_from_stream(&mut self) -> impl Future<Output = u64>;
+
+        /// The preferred method of opening a file from a path-like object.
+        /// This method will open the file at the provided path, test whether
+        /// there is an accompanied index file next to it on the file system,
+        /// and if not, build one and save it or otherwise read in the index.
+        ///
+        /// The index building process is usually neglible on "regular" IO file
+        /// systems.
+        fn open_path<P>(path: P) -> impl Future<Output = io::Result<Self>>
+        where
+            P: Into<path::PathBuf>,
+        {
+            open_path_inner(path)
+        }
+
+        /// Given a regular file, construct a new instance without indexing.
+        fn open_file(source: tokio::fs::File) -> impl Future<Output = io::Result<Self>>;
+    }
+
+    #[cfg(feature = "async")]
+    pub(crate) async fn open_path_inner<
+        C: CentroidLike + Default,
+        D: DeconvolutedCentroidLike + Default,
+        S: SpectrumLike<C, D>,
+        R: AsyncSpectrumSource<C, D, S> + AsyncMZFileReader<C, D, S>,
+        P: Into<path::PathBuf>,
+    >(
+        path: P,
+    ) -> io::Result<R> {
+        match tokio::fs::File::open(path.into()).await {
+            Ok(file) => {
+                let mut reader = R::open_file(file).await?;
+                reader.construct_index_from_stream().await;
+                Ok(reader)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    pub trait SpectrumStream<
+        C: CentroidLike + Default = CentroidPeak,
+        D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+        S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
+    >: Stream<Item = S> + FusedStream
+    {
+    }
+
+    impl<
+            C: CentroidLike + Default,
+            D: DeconvolutedCentroidLike + Default,
+            S: SpectrumLike<C, D>,
+            T: Stream<Item = S> + FusedStream,
+        > SpectrumStream<C, D, S> for T
+    {
+    }
 }
 
 #[cfg(feature = "async_partial")]
-pub use async_traits::AsyncSpectrumSource;
+pub use async_traits::{AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource, SpectrumStream};
+
+#[cfg(feature = "async")]
+pub use async_traits::AsyncMZFileReader;

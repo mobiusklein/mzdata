@@ -4,8 +4,8 @@ use std::marker::PhantomData;
 
 use std::collections::HashMap;
 
+use futures::stream::{self};
 use tokio::io::{self, AsyncBufReadExt, AsyncSeekExt};
-use futures::stream::{self, Stream};
 
 use log::{error, warn};
 
@@ -18,11 +18,12 @@ use super::{
 };
 
 use crate::{
+    io::traits::{AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, SpectrumStream},
     meta::{
         DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
         MassSpectrometryRun, Sample, Software,
     },
-    prelude::SpectrumLike,
+    prelude::{SpectrumAccessError, SpectrumLike},
 };
 
 use crate::params::{ControlledVocabulary, Param, ParamDescribed};
@@ -56,9 +57,25 @@ pub struct MGFReaderType<
     pub detail_level: DetailLevel,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
-    read_counter: usize
+    read_counter: usize,
 }
 
+#[cfg(feature = "async")]
+impl<
+        C: CentroidPeakAdapting + Send + Sync,
+        D: DeconvolutedPeakAdapting + Send + Sync,
+    > AsyncMZFileReader<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<tokio::fs::File, C, D>
+{
+    async fn construct_index_from_stream(&mut self) -> u64 {
+        self.build_index().await
+    }
+
+    async fn open_file(
+        source: tokio::fs::File,
+    ) -> std::io::Result<Self> {
+        Ok(Self::new(source).await)
+    }
+}
 
 impl<R: io::AsyncRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFLineParsing<C, D>
     for MGFReaderType<R, C, D>
@@ -88,12 +105,11 @@ impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
         let mut builder = SpectrumBuilder::<C, D>::default();
         self._parse_into(&mut builder)
             .await
-            .inspect_err(|e| {
-                error!("An error occurred while reading MGF spectrum: {e}")
-            })
+            .inspect_err(|e| error!("An error occurred while reading MGF spectrum: {e}"))
             .ok()
             .and_then(|(_, started_spectrum)| {
-                let mut spec: Option<MultiLayerSpectrum<C, D>> = (started_spectrum && !builder.is_empty()).then(|| builder.into());
+                let mut spec: Option<MultiLayerSpectrum<C, D>> =
+                    (started_spectrum && !builder.is_empty()).then(|| builder.into());
                 if let Some(spec) = spec.as_mut() {
                     spec.description_mut().index = self.read_counter;
                     self.read_counter += 1;
@@ -191,7 +207,7 @@ impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
     }
 
     /// Create a new, unindexed MGF parser
-    pub fn new(file: R) -> MGFReaderType<R, C, D> {
+    pub async fn new(file: R) -> MGFReaderType<R, C, D> {
         let handle = io::BufReader::with_capacity(500, file);
         MGFReaderType {
             handle,
@@ -219,13 +235,12 @@ impl<
         D: DeconvolutedPeakAdapting,
     > MGFReaderType<R, C, D>
 {
-
-    pub fn as_stream<'a>(&'a mut self) -> impl Stream<Item=MultiLayerSpectrum<C, D>> + 'a {
+    pub fn as_stream<'a>(&'a mut self) -> impl SpectrumStream<C, D, MultiLayerSpectrum<C, D>> + 'a {
         Box::pin(stream::unfold(self, |reader| async {
             let spec = reader.read_next();
             match spec.await {
                 Some(val) => Some((val, reader)),
-                None => None
+                None => None,
             }
         }))
     }
@@ -233,7 +248,7 @@ impl<
     /// Construct a new MGFReaderType and build an offset index
     /// using [`Self::build_index`]
     pub async fn new_indexed(file: R) -> MGFReaderType<R, C, D> {
-        let mut reader = Self::new(file);
+        let mut reader = Self::new(file).await;
         reader.build_index().await;
         reader
     }
@@ -460,8 +475,8 @@ impl<
         R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin + Send,
         C: CentroidPeakAdapting + Send + Sync,
         D: DeconvolutedPeakAdapting + Send + Sync,
-    > AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D> {
-
+    > AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+{
     async fn reset(&mut self) {
         self.reset().await;
     }
@@ -492,5 +507,42 @@ impl<
 
     async fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
         self.read_next().await
+    }
+}
+
+impl<
+        R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin + Send,
+        C: CentroidPeakAdapting + Send + Sync,
+        D: DeconvolutedPeakAdapting + Send + Sync,
+    > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D> {
+
+    async fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
+        let idx = match self._offset_of_id(id) {
+            Some(i) => i,
+            None => return Err(crate::io::SpectrumAccessError::SpectrumIdNotFound(id.to_string())),
+        };
+
+        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        Ok(self)
+    }
+
+    async fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
+        let idx = match self._offset_of_index(index) {
+            Some(i) => i,
+            None => return Err(crate::io::SpectrumAccessError::SpectrumIndexNotFound(index)),
+        };
+
+        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        Ok(self)
+    }
+
+    async fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
+        let idx = match self._offset_of_time(time).await {
+            Some(i) => i,
+            None => return Err(crate::io::SpectrumAccessError::SpectrumNotFound),
+        };
+
+        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        Ok(self)
     }
 }

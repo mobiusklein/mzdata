@@ -10,7 +10,7 @@ use super::reading_shared::{
     MzMLParserState, MzMLSAX, XMLParseBase,
 };
 
-use futures::{stream, Stream};
+use futures::stream;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, BufReader};
 use tokio::{self, io};
 
@@ -30,7 +30,8 @@ use crate::spectrum::spectrum_types::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
 };
 
-use crate::io::traits::AsyncSpectrumSource;
+use crate::io::traits::{AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource, SpectrumStream};
+use crate::spectrum::Chromatogram;
 use super::super::offset_index::OffsetIndex;
 // Need to learn more about async traits
 // use super::super::traits::{
@@ -59,7 +60,8 @@ pub struct MzMLReaderType<
     /// A place to store the last error the parser encountered
     error: Option<MzMLParserError>,
     /// A spectrum ID to byte offset for fast random access
-    pub index: OffsetIndex,
+    pub spectrum_index: OffsetIndex,
+    pub chromatogram_index: OffsetIndex,
     /// The description of the file's contents and the previous data files that were
     /// consumed to produce it.
     pub(crate) file_description: FileDescription,
@@ -114,8 +116,8 @@ impl<
             state: MzMLParserState::Start,
             error: None,
             buffer: Bytes::new(),
-            index: OffsetIndex::new("spectrum".to_owned()),
-
+            spectrum_index: OffsetIndex::new("spectrum".to_owned()),
+            chromatogram_index: OffsetIndex::new("chromatogram".into()),
             file_description: FileDescription::default(),
             instrument_configurations: HashMap::new(),
             softwares: Vec::new(),
@@ -427,6 +429,41 @@ impl<
             }
         }
     }
+
+    async fn _read_next_chromatogram(&mut self) -> Result<Chromatogram, MzMLParserError> {
+        let accumulator = MzMLSpectrumBuilder::<C, D>::with_detail_level(self.detail_level);
+
+        match self.state {
+            MzMLParserState::ChromatogramDone => {
+                self.state = MzMLParserState::Resume;
+            }
+            MzMLParserState::ParserError => {
+                warn!("Starting parsing from error: {:?}", self.error);
+            }
+            state
+                if state > MzMLParserState::ChromatogramDone
+                    && state < MzMLParserState::Chromatogram =>
+            {
+                warn!(
+                    "Attempting to start parsing a spectrum in state {}",
+                    self.state
+                );
+            }
+            _ => {}
+        }
+        match self._parse_into(accumulator).await {
+            Ok((_sz, accumulator)) => {
+                if accumulator.is_chromatogram_entry() {
+                    let mut chrom = Chromatogram::default();
+                    accumulator.into_chromatogram(&mut chrom);
+                    Ok(chrom)
+                } else {
+                    Err(MzMLParserError::UnknownError(self.state))
+                }
+            }
+            Err(err) => Err(err),
+        }
+    }
 }
 
 impl<
@@ -620,7 +657,7 @@ impl<
         this
     }
 
-    pub fn as_stream<'a>(&'a mut self) -> impl Stream<Item=MultiLayerSpectrum<C, D>> + 'a {
+    pub fn as_stream<'a>(&'a mut self) -> impl SpectrumStream<C, D, MultiLayerSpectrum<C, D>> + 'a {
         Box::pin(stream::unfold(self, |reader| async {
             let spec = reader.read_next();
             match spec.await {
@@ -695,13 +732,15 @@ impl<
             }
         }
         self.buffer.clear();
-        self.index = indexer.spectrum_index;
-        self.index.init = true;
+        self.spectrum_index = indexer.spectrum_index;
+        self.spectrum_index.init = true;
+        self.chromatogram_index = indexer.chromatogram_index;
+        self.chromatogram_index.init = true;
         self.handle
             .seek(SeekFrom::Start(current_position))
             .await
             .unwrap();
-        Ok(self.index.len() as u64)
+        Ok(self.spectrum_index.len() as u64)
     }
 
     /// Helper method to support seeking to an ID
@@ -727,7 +766,7 @@ impl<
 
     /// Read the length of the spectrum offset index
     pub fn len(&self) -> usize {
-        self.index.len()
+        self.spectrum_index.len()
     }
 
     /// Retrieve a spectrum by its scan start time
@@ -768,7 +807,7 @@ impl<
 
     /// Retrieve a spectrum by it's native ID
     pub async fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
-        let offset = self.index.get(id)?;
+        let offset = self.spectrum_index.get(id)?;
         let start = self
             .handle
             .stream_position()
@@ -792,7 +831,7 @@ impl<
         &mut self,
         index: usize,
     ) -> Option<MultiLayerSpectrum<C, D>> {
-        let (_id, offset) = self.index.get_index(index)?;
+        let (_id, offset) = self.spectrum_index.get_index(index)?;
         let byte_offset = offset;
         let start = self
             .handle
@@ -818,15 +857,63 @@ impl<
             .expect("Failed to reset file stream");
     }
 
+    pub async fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
+        let offset = self.chromatogram_index.get(id)?;
+        let start = self
+            .handle
+            .stream_position()
+            .await
+            .expect("Failed to save checkpoint");
+        self.handle.seek(SeekFrom::Start(offset)).await
+            .expect("Failed to move seek to offset");
+        // debug_assert!(
+        //     self.check_stream("chromatogram").unwrap(),
+        //     "The next XML tag was not `chromatogram`"
+        // );
+        self.state = MzMLParserState::Resume;
+        let result = self._read_next_chromatogram().await;
+        self.handle.seek(SeekFrom::Start(start)).await
+            .expect("Failed to restore offset");
+        if let Ok(chrom) = result {
+            Some(chrom)
+        } else {
+            None
+        }
+    }
+
+    pub async fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
+        let (_key, offset) = self.chromatogram_index.get_index(index)?;
+        let start = self
+            .handle
+            .stream_position()
+            .await
+            .expect("Failed to save checkpoint");
+        self.handle.seek(SeekFrom::Start(offset)).await
+            .expect("Failed to move seek to offset");
+        // debug_assert!(
+        //     self.check_stream("chromatogram").unwrap(),
+        //     "The next XML tag was not `chromatogram`"
+        // );
+        self.state = MzMLParserState::Resume;
+        let result = self._read_next_chromatogram().await;
+        self.handle.seek(SeekFrom::Start(start)).await
+            .expect("Failed to restore offset");
+        if let Ok(chrom) = result {
+            Some(chrom)
+        } else {
+            None
+        }
+    }
+
     pub fn get_index(&self) -> &OffsetIndex {
-        if !self.index.init {
+        if !self.spectrum_index.init {
             warn!("Attempting to use an uninitialized offset index on MzMLReaderType")
         }
-        &self.index
+        &self.spectrum_index
     }
 
     pub fn set_index(&mut self, index: OffsetIndex) {
-        self.index = index
+        self.spectrum_index = index
     }
 }
 
@@ -859,11 +946,11 @@ impl<
     }
 
     fn get_index(&self) -> &OffsetIndex {
-        &self.index
+        &self.spectrum_index
     }
 
     fn set_index(&mut self, index: OffsetIndex) {
-        self.index = index;
+        self.spectrum_index = index;
     }
 
     async fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
@@ -871,6 +958,66 @@ impl<
     }
 }
 
+
+#[cfg(feature = "async")]
+impl<
+        C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
+    > AsyncMZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<tokio::fs::File, C, D>
+{
+    async fn construct_index_from_stream(&mut self) -> u64 {
+        match self.read_index_from_end().await {
+            Ok(val) => val,
+            Err(e) => {
+                panic!("Building an index from byte stream not yet implemented. Failed to parse index: {}", e)
+            },
+        }
+    }
+
+    async fn open_file(
+        source: tokio::fs::File,
+    ) -> std::io::Result<Self> {
+        Ok(Self::new(source).await)
+    }
+}
+
+
+impl<
+        R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Send,
+        C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
+    > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D> {
+
+    async fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
+        let idx = match self._offset_of_id(id) {
+            Some(i) => i,
+            None => return Err(crate::io::SpectrumAccessError::SpectrumIdNotFound(id.to_string())),
+        };
+
+        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        Ok(self)
+    }
+
+    async fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
+        let idx = match self._offset_of_index(index) {
+            Some(i) => i,
+            None => return Err(crate::io::SpectrumAccessError::SpectrumIndexNotFound(index)),
+        };
+
+        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        Ok(self)
+    }
+
+    async fn start_from_time(&mut  self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
+        let idx = match self._offset_of_time(time).await {
+            Some(i) => i,
+            None => return Err(crate::io::SpectrumAccessError::SpectrumNotFound),
+        };
+
+        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        Ok(self)
+    }
+}
 
 #[cfg(test)]
 mod test {

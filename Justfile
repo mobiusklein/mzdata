@@ -1,10 +1,10 @@
 set dotenv-load := true
 
 test-units:
-    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo
+    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async
 
 test-coverage:
-    cargo llvm-cov --lib --tests nextest --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,mzmlb --html
+    cargo llvm-cov --lib --tests nextest --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,mzmlb,async --html
 
 alias t := test-units
 

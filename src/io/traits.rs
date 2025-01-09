@@ -23,8 +23,10 @@ pub use chromatogram::{ChromatogramIterator, ChromatogramSource};
 pub use crate::spectrum::group::{SpectrumGrouping, IonMobilityFrameGrouping};
 
 #[cfg(feature = "async_partial")]
-pub use spectrum::AsyncSpectrumSource;
+pub use spectrum::{AsyncSpectrumSource, AsyncRandomAccessSpectrumIterator, SpectrumStream};
 
+#[cfg(feature = "async")]
+pub use spectrum::AsyncMZFileReader;
 
 #[cfg(test)]
 mod test {

@@ -398,3 +398,5 @@ impl<W: io::Write, C: CentroidPeakAdapting + 'static, D: DeconvolutedPeakAdaptin
 
 /// A convenient alias for [`MGFWriterType`] with the peak types specified
 pub type MGFWriter<W> = MGFWriterType<W, CentroidPeak, DeconvolutedPeak, MZDataMGFStyle>;
+pub type SimpleMGFWriter<W> = MGFWriterType<W, CentroidPeak, DeconvolutedPeak, SimpleMGFStyle>;
+pub type SimpleMGFWriterType<W, C, D> = MGFWriterType<W, C, D, SimpleMGFStyle>;

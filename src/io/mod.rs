@@ -39,6 +39,12 @@ pub use crate::io::traits::{
     SpectrumSourceWithMetadata, SpectrumWriter, StreamingSpectrumIterator,
     RandomAccessIonMobilityFrameGroupingIterator,
 };
+
+#[cfg(feature = "async_partial")]
+pub use crate::io::traits::AsyncSpectrumSource;
+#[cfg(feature = "async")]
+pub use crate::io::traits::AsyncMZFileReader;
+
 pub use crate::io::utils::{checksum_file, DetailLevel, PreBufferedStream};
 pub use compression::RestartableGzDecoder;
 
@@ -46,6 +52,12 @@ pub use compression::RestartableGzDecoder;
 pub mod thermo;
 #[cfg(any(feature = "thermo", feature="doc-only"))]
 pub use thermo::ThermoRawReader;
+
+#[cfg(feature = "async_partial")]
+pub use thermo::AsyncThermoRawReader;
+
+#[cfg(feature = "async_partial")]
+pub use infer_format::{AsyncMZReader, AsyncMZReaderType, AsyncMZReaderBuilder};
 
 #[cfg(feature = "bruker_tdf")]
 pub mod tdf;

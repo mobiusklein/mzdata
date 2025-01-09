@@ -6,7 +6,10 @@ mod reader;
 mod writer;
 
 pub use reader::{is_mgf, MGFError, MGFParserState, MGFReader, MGFReaderType};
-pub use writer::{MGFHeaderStyle, MGFWriter, MGFWriterType, MZDataMGFStyle, SimpleMGFStyle};
+pub use writer::{
+    MGFHeaderStyle, MGFWriter, MGFWriterType, MZDataMGFStyle, SimpleMGFStyle, SimpleMGFWriter,
+    SimpleMGFWriterType,
+};
 
 #[cfg(feature = "async")]
 mod async_reader;
@@ -182,7 +185,7 @@ mod test {
         async fn test_reader() {
             let path = path::Path::new("./test/data/small.mgf");
             let file = fs::File::open(path).await.expect("Test file doesn't exist");
-            let mut reader = AsyncMGFReaderType::<_>::new(file);
+            let mut reader = AsyncMGFReaderType::<_>::new(file).await;
             let mut ms1_count = 0;
             let mut msn_count = 0;
             while let Some(scan) = reader.read_next().await {

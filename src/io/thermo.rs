@@ -22,7 +22,14 @@
 //! # Licensing
 //! By using this library, you agree to the [RawFileReader License](https://github.com/thermofisherlsms/RawFileReader/blob/main/License.doc)
 //!
-mod reader;
 mod instruments;
+mod reader;
 
-pub use reader::{ThermoRawReaderType, ThermoRawReader, is_thermo_raw_prefix};
+pub use reader::{is_thermo_raw_prefix, ThermoRawReader, ThermoRawReaderType};
+
+#[cfg(feature = "async")]
+mod async_reader;
+#[cfg(feature = "async")]
+pub use async_reader::{
+    ThermoRawReader as AsyncThermoRawReader, ThermoRawReaderType as AsyncThermoRawReaderType,
+};
