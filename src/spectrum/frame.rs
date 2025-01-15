@@ -9,11 +9,11 @@ use mzpeaks::{
 
 use super::{
     bindata::{
-        ArrayRetrievalError, BinaryArrayMap3D, BinaryCompressionType, BinaryDataArrayType,
-        BuildArrayMap3DFrom,
+        ArrayRetrievalError, ArraysAvailable, BinaryArrayMap3D, BinaryCompressionType,
+        BinaryDataArrayType, BuildArrayMap3DFrom, BuildFromArrayMap3D,
     },
     Acquisition, ArrayType, BinaryArrayMap, CentroidPeakAdapting, DeconvolutedPeakAdapting,
-    Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
+    Precursor, ScanPolarity, SignalContinuity, SpectrumConversionError, SpectrumDescription,
 };
 use super::{scan_properties::SCAN_TITLE, MultiLayerSpectrum};
 use crate::{
@@ -21,7 +21,6 @@ use crate::{
     params::{ParamDescribed, ParamList},
 };
 use crate::{prelude::*, RawSpectrum};
-
 
 /// Represent an owned representation of one the kinds of feature data that a [`IonMobilityFrameLike`](crate::spectrum::IonMobilityFrameLike) instance
 /// might otherwise carry.
@@ -263,7 +262,40 @@ pub struct MultiLayerIonMobilityFrame<
     description: IonMobilityFrameDescription,
 }
 
-impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge> ParamDescribed for MultiLayerIonMobilityFrame<C, D> {
+impl<
+        C: FeatureLike<MZ, IonMobility> + BuildFromArrayMap3D,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge + BuildFromArrayMap3D,
+    > MultiLayerIonMobilityFrame<C, D>
+{
+    pub fn try_build_features(
+        &mut self,
+    ) -> Result<RefFeatureDataLevel<'_, C, D>, SpectrumConversionError> {
+        if matches!(self.signal_continuity(), SignalContinuity::Centroid) {
+            if let Some(arrays) = self.arrays.as_ref() {
+                if let ArraysAvailable::Ok = D::has_arrays_3d_for(arrays) {
+                    let peaks = FeatureMap::new(D::try_from_arrays_3d(arrays)?);
+                    self.deconvoluted_features = Some(peaks);
+                    return Ok(self.features());
+                }
+
+                if let ArraysAvailable::Ok = C::has_arrays_3d_for(arrays) {
+                    let peaks = FeatureMap::new(C::try_from_arrays_3d(arrays)?);
+                    self.features = Some(peaks);
+                    return Ok(self.features());
+                }
+                return Ok(RefFeatureDataLevel::Missing);
+            } else {
+                return Ok(self.features());
+            }
+        } else {
+            return Ok(self.features());
+        }
+    }
+}
+
+impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge>
+    ParamDescribed for MultiLayerIonMobilityFrame<C, D>
+{
     fn params(&self) -> &[crate::Param] {
         &self.description().params
     }
@@ -419,9 +451,7 @@ mod mzsignal_impl {
 
     use mzpeaks::{feature::Feature, peak_set::PeakSetVec, CentroidPeak, Tolerance};
     use mzsignal::{
-        feature_mapping::{
-            FeatureGraphBuilder, FeatureExtracterType, MapState, PeakMapState,
-        },
+        feature_mapping::{FeatureExtracterType, FeatureGraphBuilder, MapState, PeakMapState},
         peak_picker::PeakPicker,
         FittedPeak, PeakFitType,
     };
