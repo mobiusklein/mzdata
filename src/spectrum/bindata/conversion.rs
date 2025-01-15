@@ -643,7 +643,7 @@ impl BuildFromArrayMap3D for Feature<MZ, IonMobility> {
         if n == 0 {
             return Ok(Vec::new());
         }
-
+        n += 1;
         let mut index = Vec::with_capacity(n);
         index.resize(n, Feature::default());
 
@@ -691,7 +691,7 @@ impl BuildFromArrayMap3D for ChargedFeature<Mass, IonMobility> {
         if n == 0 {
             return Ok(Vec::new());
         }
-
+        n += 1;
         let mut index = Vec::with_capacity(n);
         index.resize(n, ChargedFeature::default());
 
