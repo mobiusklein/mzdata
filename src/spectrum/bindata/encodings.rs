@@ -46,6 +46,11 @@ pub enum ArrayType {
     MeanIonMobilityArray,
     RawIonMobilityArray,
     DeconvolutedIonMobilityArray,
+    BaselineArray,
+    ResolutionArray,
+    PressureArray,
+    TemperatureArray,
+    FlowRateArray,
     NonStandardDataArray {
         name: Box<String>,
     },
@@ -127,6 +132,27 @@ impl ArrayType {
                 p.unit = unit.unwrap_or_default();
                 p
             }
+            ArrayType::BaselineArray => {
+                CV.const_param_ident("baseline array", 1002530).into()
+            },
+            ArrayType::ResolutionArray => {
+                CV.const_param_ident("resolution array", 1002529).into()
+            },
+            ArrayType::PressureArray => {
+                let mut p = CV.const_param_ident("pressure array", 1000821);
+                p.unit = unit.unwrap_or_default();
+                p.into()
+            },
+            ArrayType::TemperatureArray => {
+                let mut p = CV.const_param_ident("temperature array", 1000822);
+                p.unit = unit.unwrap_or_default();
+                p.into()
+            },
+            ArrayType::FlowRateArray => {
+                let mut p = CV.const_param_ident("flow rate array", 1000820);
+                p.unit = unit.unwrap_or_default();
+                p.into()
+            },
             _ => {
                 panic!("Could not determine how to name for array {}", self);
             }
@@ -159,6 +185,24 @@ impl ArrayType {
                     "Cannot format NonStandardDataArray in a const context, please use `as_param`"
                 );
             }
+            ArrayType::BaselineArray => {
+                CV.const_param_ident("baseline array", 1002530)
+            },
+            ArrayType::ResolutionArray => {
+                CV.const_param_ident("resolution array", 1002529)
+            },
+            ArrayType::PressureArray => {
+                let p = CV.const_param_ident("pressure array", 1000821);
+                p
+            },
+            ArrayType::TemperatureArray => {
+                let p = CV.const_param_ident("temperature array", 1000822);
+                p
+            },
+            ArrayType::FlowRateArray => {
+                let p = CV.const_param_ident("flow rate array", 1000820);
+                p
+            },
             _ => {
                 panic!("Could not determine how to name for array");
             }
@@ -188,6 +232,24 @@ impl ArrayType {
                     "Cannot format NonStandardDataArray in a const context, please use `as_param`"
                 );
             }
+            ArrayType::BaselineArray => {
+                CV.const_param_ident_unit("baseline array", 1002530, unit)
+            },
+            ArrayType::ResolutionArray => {
+                CV.const_param_ident_unit("resolution array", 1002529, unit)
+            },
+            ArrayType::PressureArray => {
+                let p = CV.const_param_ident_unit("pressure array", 1000821, unit);
+                p
+            },
+            ArrayType::TemperatureArray => {
+                let p = CV.const_param_ident_unit("temperature array", 1000822, unit);
+                p
+            },
+            ArrayType::FlowRateArray => {
+                let p = CV.const_param_ident_unit("flow rate array", 1000820, unit);
+                p
+            },
             _ => {
                 panic!("Could not determine how to name for array");
             }

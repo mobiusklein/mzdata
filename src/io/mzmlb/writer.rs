@@ -197,6 +197,9 @@ impl ToString for BufferName {
             ArrayType::RawIonMobilityArray => Cow::Borrowed("raw_ion_mobility"),
             ArrayType::DeconvolutedIonMobilityArray => Cow::Borrowed("deconvoluted_ion_mobility"),
             ArrayType::NonStandardDataArray { name } => Cow::Owned(name.replace(['/', ' '], "_")),
+            ArrayType::BaselineArray => Cow::Borrowed("baseline"),
+            ArrayType::ResolutionArray => Cow::Borrowed("resolution"),
+            _ => Cow::Owned(self.array_type.to_string())
         };
         let dtype = match self.dtype {
             BinaryDataArrayType::Unknown => "unknown",
@@ -1013,6 +1016,7 @@ impl<
 
 pub type MzMLbWriter = MzMLbWriterType<CentroidPeak, DeconvolutedPeak>;
 
+#[allow(unexpected_cfgs)]
 fn build_nullterm_fixed_ascii_type_id(size: usize) -> Result<hid_t, hdf5::Error> {
     let string_id = hdf5::h5try!(H5Tcopy(*H5T_C_S1));
     h5try!(H5Tset_cset(string_id, H5T_cset_t::H5T_CSET_ASCII));
@@ -1021,6 +1025,7 @@ fn build_nullterm_fixed_ascii_type_id(size: usize) -> Result<hid_t, hdf5::Error>
     Ok(string_id)
 }
 
+#[allow(unexpected_cfgs)]
 fn create_fixed_length_str_attribute(
     dset: &mut hdf5::Dataset,
     name: &str,

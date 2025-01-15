@@ -736,6 +736,7 @@ pub enum ChromatogramType {
     EmissionChromatogram,
     FlowRateChromatogram,
     PressureChromatogram,
+    TemperatureChromatogram,
 }
 
 impl ChromatogramType {
@@ -751,6 +752,7 @@ impl ChromatogramType {
             1003020 => Self::FlowRateChromatogram,
             1003019 => Self::PressureChromatogram,
             1000626 => Self::Unknown,
+            1002715 => Self::TemperatureChromatogram,
             _ => return None,
         };
         Some(tp)
@@ -799,6 +801,7 @@ impl ChromatogramType {
             Self::EmissionChromatogram => CURIE::new(ControlledVocabulary::MS, 1000813),
             Self::FlowRateChromatogram => CURIE::new(ControlledVocabulary::MS, 1003020),
             Self::PressureChromatogram => CURIE::new(ControlledVocabulary::MS, 1003019),
+            Self::TemperatureChromatogram => CURIE::new(ControlledVocabulary::MS, 1002715),
             Self::Unknown => CURIE::new(ControlledVocabulary::MS, 100626),
         }
     }
