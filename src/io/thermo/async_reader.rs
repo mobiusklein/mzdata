@@ -143,6 +143,24 @@ impl<C: CentroidPeakAdapting + Send + 'static, D: DeconvolutedPeakAdapting + Sen
         self.inner.as_mut().unwrap().set_centroiding(value)
     }
 
+
+    /// Get whether or not to load extended spectrum signal information for the spectrum.
+    ///
+    /// The loaded data isn't incorporated into a peak list, instead access them under
+    /// the binary data arrays.
+    pub fn get_load_extended_spectrum_data(&self) -> bool {
+        self.inner.as_ref().unwrap().get_load_extended_spectrum_data()
+    }
+
+    /// Set whether or not to load extended spectrum signal information for the spectrum.
+    ///
+    /// The loaded data isn't incorporated into a peak list, instead access them under
+    /// the binary data arrays.
+    pub fn set_load_extended_spectrum_data(&mut self, load_extended_spectrum_data: bool) {
+        self.inner.as_mut().unwrap().set_load_extended_spectrum_data(load_extended_spectrum_data)
+    }
+
+
     pub fn get_index(&self) -> &crate::io::OffsetIndex {
         self.inner.as_ref().unwrap().get_index()
     }

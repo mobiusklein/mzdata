@@ -45,7 +45,7 @@ macro_rules! param {
 pub fn is_thermo_raw_prefix(buffer: &[u8]) -> bool {
     if buffer.len() < 18 {
         debug!("Attempted to test a byte buffer for the Thermo prefix, buffer was less than 18 bytes long");
-        return false
+        return false;
     }
     let view: &[u16] = unsafe { mem::transmute(&buffer[2..18]) };
     let prefix = String::from_utf16_lossy(view);
@@ -92,13 +92,15 @@ const SOURCE_FILE_ID: &'static str = "RAW1";
 
 #[cfg(not(feature = "doc-only"))]
 pub(crate) mod sealed {
-    use super::*;
+    use crate::spectrum::bindata::to_bytes;
 
+    use super::*;
     use thermorawfilereader::{
         schema::{
-            AcquisitionT, DissociationMethod, Polarity, PrecursorT, SpectrumData, SpectrumMode
+            AcquisitionT, DissociationMethod, Polarity, PrecursorT, SpectrumData, SpectrumMode,
         },
-        FileDescription as ThermoFileDescription, IonizationMode, MassAnalyzer, RawFileReader
+        ExtendedSpectrumData, FileDescription as ThermoFileDescription, IonizationMode,
+        MassAnalyzer, RawFileReader,
     };
 
     /**
@@ -122,6 +124,7 @@ pub(crate) mod sealed {
         pub(crate) ms_run: MassSpectrometryRun,
         _c: PhantomData<C>,
         _d: PhantomData<D>,
+        load_extended_spectrum_data: bool,
     }
 
     // The public API
@@ -176,6 +179,7 @@ pub(crate) mod sealed {
                 ms_run: ms_run,
                 _c: PhantomData,
                 _d: PhantomData,
+                load_extended_spectrum_data: false,
             })
         }
 
@@ -203,7 +207,10 @@ pub(crate) mod sealed {
             self.handle.set_centroid_spectra(value)
         }
 
-        fn unpack_chromatogram_signal(&self, descr: thermorawfilereader::ChromatogramDescription) -> BinaryArrayMap {
+        fn unpack_chromatogram_signal(
+            &self,
+            descr: thermorawfilereader::ChromatogramDescription,
+        ) -> BinaryArrayMap {
             let mut array_map = BinaryArrayMap::default();
             if let Some(data) = descr.data() {
                 let time_array = data.time();
@@ -263,6 +270,143 @@ pub(crate) mod sealed {
             descr.chromatogram_type = ChromatogramType::BasePeakChromatogram;
             descr.id = "BPC".to_string();
             Chromatogram::new(descr, array_map)
+        }
+
+        /// Get whether or not to load extended spectrum signal information for the spectrum.
+        ///
+        /// The loaded data isn't incorporated into a peak list, instead access them under
+        /// the binary data arrays.
+        pub fn get_load_extended_spectrum_data(&self) -> bool {
+            self.load_extended_spectrum_data
+        }
+
+        /// Set whether or not to load extended spectrum signal information for the spectrum.
+        ///
+        /// The loaded data isn't incorporated into a peak list, instead access them under
+        /// the binary data arrays.
+        pub fn set_load_extended_spectrum_data(&mut self, load_extended_spectrum_data: bool) {
+            self.load_extended_spectrum_data = load_extended_spectrum_data;
+        }
+
+        /// Enumerate the available status logs' names
+        pub fn status_log_names(&self) -> impl Iterator<Item = String> {
+            let it = self
+                .handle
+                .get_status_logs()
+                .into_iter()
+                .next()
+                .map(|logs| {
+                    let names: Vec<_> = logs
+                        .str_logs()
+                        .map(|log| log.name.clone())
+                        .chain(logs.float_logs().map(|log| log.name.clone()))
+                        .chain(logs.int_logs().map(|log| log.name.clone()))
+                        .chain(logs.bool_logs().map(|log| log.name.clone()))
+                        .collect();
+                    names.into_iter()
+                })
+                .into_iter()
+                .flatten();
+            it
+        }
+
+        /// Get a status log as a [`Chromatogram`]
+        pub fn get_status_log_trace_by_name(&self, trace_id: &str) -> Option<Chromatogram> {
+            let temperature_pattern = regex::Regex::new(r#"Temp\S?\s|Temperature|°C"#).unwrap();
+            if let Some(logs) = self.handle.get_status_logs() {
+                macro_rules! make_description {
+                    ($descr:ident, $log:ident) => {
+                        $descr.id = $log.name.clone();
+                        if temperature_pattern.is_match(&($log.name)) {
+                            $descr.chromatogram_type = ChromatogramType::TemperatureChromatogram;
+                        }
+                    };
+                }
+                macro_rules! make_arrays {
+                    ($log:ident, $arrays:ident) => {
+                        let times = $log.times();
+
+                        let mut time_array = DataArray::from_name_type_size(
+                            &ArrayType::TimeArray,
+                            BinaryDataArrayType::Float64,
+                            times.len(),
+                        );
+                        time_array.unit = Unit::Minute;
+                        time_array.extend(&times).unwrap();
+
+                        $arrays.add(time_array);
+                    };
+                }
+                let chrom = logs
+                    .str_logs()
+                    .filter_map(|log| -> Option<Chromatogram> {
+                        if log.name == trace_id {
+                            let mut descr = ChromatogramDescription::default();
+                            let mut arrays = BinaryArrayMap::new();
+                            make_description!(descr, log);
+                            make_arrays!(log, arrays);
+
+                            let mut str_array = DataArray::from_name_and_type(
+                                &ArrayType::nonstandard(&log.name),
+                                BinaryDataArrayType::ASCII,
+                            );
+                            for s in log.strings() {
+                                str_array.extend(s.as_bytes()).unwrap();
+                                str_array.push(b'\0').unwrap();
+                            }
+                            arrays.add(str_array);
+                            Some(Chromatogram::new(descr, arrays))
+                        } else {
+                            None
+                        }
+                    })
+                    .chain(logs.float_logs().filter_map(|log| {
+                        if log.name == trace_id {
+                            let mut descr = ChromatogramDescription::default();
+                            let mut arrays = BinaryArrayMap::new();
+                            make_description!(descr, log);
+                            make_arrays!(log, arrays);
+
+                            let data = log.values();
+                            let mut array = DataArray::from_name_type_size(
+                                &ArrayType::nonstandard(&log.name),
+                                BinaryDataArrayType::Float64,
+                                data.len(),
+                            );
+
+                            array.extend(&data).unwrap();
+                            arrays.add(array);
+                            Some(Chromatogram::new(descr, arrays))
+                        } else {
+                            None
+                        }
+                    }))
+                    .chain(logs.int_logs().flat_map(|log| {
+                        if log.name == trace_id {
+                            let mut descr = ChromatogramDescription::default();
+                            let mut arrays = BinaryArrayMap::new();
+                            make_description!(descr, log);
+                            make_arrays!(log, arrays);
+
+                            let data = log.values();
+                            let mut array = DataArray::from_name_type_size(
+                                &ArrayType::nonstandard(&log.name),
+                                BinaryDataArrayType::Int64,
+                                data.len(),
+                            );
+
+                            array.extend(&data).unwrap();
+                            arrays.add(array);
+                            Some(Chromatogram::new(descr, arrays))
+                        } else {
+                            None
+                        }
+                    }))
+                    .next();
+                chrom
+            } else {
+                None
+            }
         }
     }
 
@@ -769,6 +913,40 @@ pub(crate) mod sealed {
             arrays
         }
 
+        fn populate_extended_data(&self, arrays: &mut BinaryArrayMap, data: &ExtendedSpectrumData) {
+            if let Some(charge) = data.charge() {
+                let mut array = DataArray::from_name_type_size(
+                    &ArrayType::ChargeArray,
+                    BinaryDataArrayType::Int32,
+                    charge.len(),
+                );
+                for z in charge.iter() {
+                    array.push(*z as i32).unwrap();
+                }
+                arrays.add(array)
+            }
+
+            if let Some(baseline) = data.baseline() {
+                let buffer = to_bytes(baseline.as_ref());
+                let intensity_array = DataArray::wrap(
+                    &ArrayType::BaselineArray,
+                    BinaryDataArrayType::Float32,
+                    buffer,
+                );
+                arrays.add(intensity_array);
+            }
+
+            if let Some(noise) = data.noise() {
+                let buffer = to_bytes(noise.as_ref());
+                let intensity_array = DataArray::wrap(
+                    &ArrayType::SignalToNoiseArray,
+                    BinaryDataArrayType::Float32,
+                    buffer,
+                );
+                arrays.add(intensity_array);
+            }
+        }
+
         fn populate_peaks(&self, data: &SpectrumData) -> PeakSetVec<C, MZ> {
             let mut peaks = PeakSetVec::empty();
             if let (Some(mz), Some(intensity)) = (data.mz(), data.intensity()) {
@@ -823,10 +1001,18 @@ pub(crate) mod sealed {
             }
 
             if let Some(data) = view.data() {
+                let extra = self.handle.get_extended_spectrum_data(index, false);
                 if spec.signal_continuity() == SignalContinuity::Centroid {
                     spec.peaks = Some(self.populate_peaks(&data));
+                    if let Some(extra) = extra {
+                        spec.arrays = Some(self.populate_raw_signal(&data));
+                        self.populate_extended_data(spec.arrays.as_mut().unwrap(), &extra);
+                    }
                 } else {
                     spec.arrays = Some(self.populate_raw_signal(&data));
+                    if let Some(extra) = extra {
+                        self.populate_extended_data(spec.arrays.as_mut().unwrap(), &extra);
+                    }
                 }
             }
 
@@ -834,10 +1020,7 @@ pub(crate) mod sealed {
                 ($kv:ident) => {
                     let name = format!("[Thermo Trailer Extra]{}", $kv.label);
                     if !$kv.value.is_empty() {
-                        let param = Param::new_key_value(
-                            name,
-                            $kv.value.parse::<Value>().unwrap(),
-                        );
+                        let param = Param::new_key_value(name, $kv.value.parse::<Value>().unwrap());
                         spec.params_mut().push(param);
                     }
                 };
@@ -920,6 +1103,20 @@ pub(crate) mod stub {
     impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
         ThermoRawReaderType<C, D>
     {
+        /// Get whether or not to load extended spectrum signal information for the spectrum.
+        ///
+        /// The loaded data isn't incorporated into a peak list, instead access them under
+        /// the binary data arrays.
+        pub fn get_load_extended_spectrum_data(&self) -> bool {
+            false
+        }
+
+        /// Set whether or not to load extended spectrum signal information for the spectrum.
+        ///
+        /// The loaded data isn't incorporated into a peak list, instead access them under
+        /// the binary data arrays.
+        pub fn set_load_extended_spectrum_data(&mut self, load_extended_spectrum_data: bool) {}
+
         /// Create a new [`ThermoRawReaderType`] from a path.
         /// This may trigger an expensive I/O operation to checksum the file
         pub fn new_with_detail_level_and_centroiding<P: Into<PathBuf>>(
@@ -997,6 +1194,16 @@ pub(crate) mod stub {
                 None
             }
         }
+
+        /// Get a status log as a [`Chromatogram`]
+        pub fn get_status_log_trace_by_name(&self, trace_id: &str) -> Option<Chromatogram> {
+            None
+        }
+
+        /// Enumerate the available status logs' names
+        pub fn status_log_names(&self) -> impl Iterator<Item = String> {
+            Option::<String>::None.into_iter()
+        }
     }
 }
 
@@ -1019,7 +1226,6 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
 impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
     SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
 {
-
     fn detail_level(&self) -> &DetailLevel {
         &self.detail_level
     }
@@ -1197,7 +1403,11 @@ mod test {
             "LTQ FT"
         );
 
-        let sw = reader.softwares().iter().find(|s| s.id == "thermo_xcalibur").unwrap();
+        let sw = reader
+            .softwares()
+            .iter()
+            .find(|s| s.id == "thermo_xcalibur")
+            .unwrap();
         assert!(sw.is_acquisition());
         assert!(sw.is_data_processing());
 
@@ -1272,7 +1482,11 @@ mod test {
 
     #[test]
     fn test_read_spectra() -> io::Result<()> {
-        let mut reader = ThermoRawReader::new_with_detail_level_and_centroiding("./test/data/small.RAW", DetailLevel::Lazy, false)?;
+        let mut reader = ThermoRawReader::new_with_detail_level_and_centroiding(
+            "./test/data/small.RAW",
+            DetailLevel::Lazy,
+            false,
+        )?;
         assert_eq!(reader.len(), 48);
 
         let groups: Vec<_> = reader.groups().collect();
@@ -1318,9 +1532,17 @@ mod test {
         let scan = reader.start_from_index(20).unwrap().next().unwrap();
         assert_eq!(scan.index(), 20);
         let time = scan.start_time();
-        let scan = reader.start_from_id(first_sid).ok().and_then(|it| it.next()).unwrap();
+        let scan = reader
+            .start_from_id(first_sid)
+            .ok()
+            .and_then(|it| it.next())
+            .unwrap();
         assert_eq!(scan.index(), 0);
-        let scan = reader.start_from_time(time).ok().and_then(|it| it.next()).unwrap();
+        let scan = reader
+            .start_from_time(time)
+            .ok()
+            .and_then(|it| it.next())
+            .unwrap();
         assert_eq!(scan.index(), 20);
 
         reader.reset();
@@ -1341,27 +1563,39 @@ mod test {
     #[test]
     fn test_read_chromatograms() -> io::Result<()> {
         let mut reader = ThermoRawReader::open_path("./test/data/small.RAW")?;
-        let tic= reader.get_chromatogram_by_id("TIC").unwrap();
+        let tic = reader.get_chromatogram_by_id("TIC").unwrap();
         let exp_n = reader.len();
         let obs_n = tic.time()?.len();
         assert_eq!(obs_n, exp_n);
 
-        let tic= reader.get_chromatogram_by_id("BPC").unwrap();
+        let tic = reader.get_chromatogram_by_id("BPC").unwrap();
         let exp_n = reader.len();
         let obs_n = tic.time()?.len();
         assert_eq!(obs_n, exp_n);
 
-        let tic= reader.get_chromatogram_by_index(0).unwrap();
+        let tic = reader.get_chromatogram_by_index(0).unwrap();
         let exp_n = reader.len();
         let obs_n = tic.time()?.len();
         assert_eq!(obs_n, exp_n);
 
-        let tic= reader.get_chromatogram_by_index(1).unwrap();
+        let tic = reader.get_chromatogram_by_index(1).unwrap();
         let exp_n = reader.len();
         let obs_n = tic.time()?.len();
         assert_eq!(obs_n, exp_n);
 
         assert_eq!(reader.iter_chromatograms().count(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn test_extended_data_model() -> io::Result<()> {
+        let mut reader = ThermoRawReader::open_path("./test/data/small.RAW")?;
+        reader.set_centroiding(true);
+        reader.set_load_extended_spectrum_data(true);
+
+        let spec = reader.get_spectrum_by_index(0).unwrap();
+        let arrays = spec.arrays.as_ref().unwrap();
+        arrays.iter().find(|(k, _)| **k == ArrayType::ChargeArray);
         Ok(())
     }
 }
