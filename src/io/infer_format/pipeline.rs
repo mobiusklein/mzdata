@@ -16,6 +16,7 @@ pub use crate::io::mzmlb::{MzMLbReaderType, MzMLbWriterBuilder};
 use crate::io::compression::RestartableGzDecoder;
 use crate::io::mgf::{MGFReaderType, MGFWriterType};
 use crate::io::mzml::{MzMLReaderType, MzMLWriterType};
+#[allow(unused)]
 use crate::io::traits::{RandomAccessSpectrumIterator, SpectrumSource, SpectrumWriter, MZFileReader};
 use crate::io::SpectrumReceiver;
 use crate::io::StreamingSpectrumIterator;
