@@ -2,9 +2,9 @@
 
 use std::fs;
 use std::io;
+use std::io::prelude::*;
 use std::path;
 use std::path::PathBuf;
-use std::io::prelude::*;
 
 use md5::Context as MD5Context;
 use md5::Digest;
@@ -181,15 +181,22 @@ impl<R: io::Read> io::Seek for PreBufferedStream<R> {
                 }
                 self.position = offset as usize;
                 let r = self.buffer.seek(pos);
-                log::trace!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
+                if log::log_enabled!(log::Level::Trace) {
+                    log::trace!(
+                        "{pos:?} Position {0} -> {1}: {r:?}",
+                        self.position,
+                        self.buffer
+                            .stream_position()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|e| format!("err: {e}"))
+                    );
+                }
                 r
             }
-            io::SeekFrom::End(_) => {
-                Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "Cannot seek relative the end of PreBufferedStream",
-                ))
-            }
+            io::SeekFrom::End(_) => Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "Cannot seek relative the end of PreBufferedStream",
+            )),
             io::SeekFrom::Current(offset) => {
                 if self.position > self.buffer_size {
                     return Err(io::Error::new(
@@ -204,9 +211,19 @@ impl<R: io::Read> io::Seek for PreBufferedStream<R> {
                             "Cannot seek to negative position",
                         ))
                     } else {
-                        self.position = self.position.saturating_sub(offset.unsigned_abs() as usize);
+                        self.position =
+                            self.position.saturating_sub(offset.unsigned_abs() as usize);
                         let r = self.buffer.seek(io::SeekFrom::Start(self.position as u64));
-                        log::trace!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
+                        if log::log_enabled!(log::Level::Trace) {
+                            log::trace!(
+                                "{pos:?} Position {0} -> {1}: {r:?}",
+                                self.position,
+                                self.buffer
+                                    .stream_position()
+                                    .map(|s| s.to_string())
+                                    .unwrap_or_else(|e| format!("err: {e}"))
+                            );
+                        }
                         r
                     }
                 } else if offset as usize + self.position > self.buffer_size {
@@ -216,7 +233,16 @@ impl<R: io::Read> io::Seek for PreBufferedStream<R> {
                     ))
                 } else {
                     let r = self.buffer.seek(io::SeekFrom::Current(offset));
-                    log::trace!("{pos:?} Position {0} -> {1}: {r:?}", self.position, self.buffer.stream_position().unwrap());
+                    if log::log_enabled!(log::Level::Trace) {
+                        log::trace!(
+                            "{pos:?} Position {0} -> {1}: {r:?}",
+                            self.position,
+                            self.buffer
+                                .stream_position()
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|e| format!("err: {e}"))
+                        );
+                    }
                     r
                 }
             }

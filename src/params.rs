@@ -1266,11 +1266,17 @@ impl Display for CURIE {
 impl<T: ParamLike> PartialEq<T> for CURIE {
     fn eq(&self, other: &T) -> bool {
         if !other.is_controlled()
-            || other.controlled_vocabulary().unwrap() != self.controlled_vocabulary
+            || other
+                .controlled_vocabulary()
+                .map(|c| c != self.controlled_vocabulary)
+                .unwrap_or_default()
         {
             false
         } else {
-            other.accession().unwrap() == self.accession
+            other
+                .accession()
+                .map(|a| a == self.accession)
+                .unwrap_or_default()
         }
     }
 }
@@ -1298,7 +1304,7 @@ impl FromStr for CURIE {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut tokens = s.split(':');
-        let cv = tokens.next().unwrap();
+        let cv = tokens.next().ok_or(CURIEParsingError::MissingNamespaceSeparator)?;
         let accession = tokens.next();
         if accession.is_none() {
             Err(CURIEParsingError::MissingNamespaceSeparator)
@@ -2584,7 +2590,6 @@ mod test {
         assert_eq!(val, x);
         assert_eq!(val_ref, x);
         assert_eq!(val_ref, val);
-
 
         let x2 = Some(x);
         val = x2.into();

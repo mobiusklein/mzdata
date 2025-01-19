@@ -792,7 +792,7 @@ mod async_impl {
         }
 
         async fn open_file(mut source: tokio::fs::File) -> io::Result<Self> {
-            let mut sync_source = source.try_into_std().unwrap();
+            let mut sync_source = source.into_std().await;
             let (ms_format, compressed) = infer_from_stream(&mut sync_source)?;
             if compressed {
                 return Err(io::Error::new(io::ErrorKind::Unsupported, "Compressed files are not supported"))

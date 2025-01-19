@@ -21,17 +21,18 @@ use super::super::{
     utils::DetailLevel,
 };
 
-use crate::{meta::{
-    DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
-    MassSpectrometryRun, Sample, Software,
-}, prelude::SpectrumLike};
+use crate::{
+    meta::{
+        DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
+        MassSpectrometryRun, Sample, Software,
+    },
+    prelude::SpectrumLike,
+};
 
 use crate::params::{ControlledVocabulary, Param, ParamDescribed};
 
 use crate::spectrum::{
-    bindata::{
-        BuildArrayMapFrom, BuildFromArrayMap,
-    },
+    bindata::{BuildArrayMapFrom, BuildFromArrayMap},
     spectrum_types::{
         CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
     },
@@ -111,7 +112,6 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Default for SpectrumB
         }
     }
 }
-
 
 impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> SpectrumBuilder<C, D> {
     pub fn into_spectrum(self, spectrum: &mut MultiLayerSpectrum<C, D>) {
@@ -200,11 +200,15 @@ pub struct MGFReaderType<
     deconvoluted_type: PhantomData<D>,
 }
 
-
 pub(crate) trait MGFLineParsing<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> {
     fn state(&self) -> &MGFParserState;
     fn state_mut(&mut self) -> &mut MGFParserState;
     fn error_mut(&mut self) -> &mut Option<MGFError>;
+
+    fn set_error(&mut self, error: MGFError) {
+        *self.state_mut() = MGFParserState::Error;
+        *self.error_mut() = Some(error);
+    }
 
     fn parse_peak_from_line(
         &mut self,
@@ -212,12 +216,13 @@ pub(crate) trait MGFLineParsing<C: CentroidPeakAdapting, D: DeconvolutedPeakAdap
         builder: &mut SpectrumBuilder<C, D>,
     ) -> Option<bool> {
         let mut chars = line.chars();
-        let first = chars.next().unwrap();
+        let first = chars.next()?;
         if first.is_numeric() {
             let mut it = line.split_ascii_whitespace();
-            let mz_token = it.next().unwrap();
+            let mz_token = it.next()?;
             let mut intensity_token = "";
             let mut charge_token_opt = None;
+
             let nparts = if let Some(i) = it.next() {
                 intensity_token = i;
                 charge_token_opt = it.next();
@@ -231,25 +236,34 @@ pub(crate) trait MGFLineParsing<C: CentroidPeakAdapting, D: DeconvolutedPeakAdap
             };
 
             if nparts < 2 {
-                *self.state_mut() = MGFParserState::Error;
-                *self.error_mut() = Some(MGFError::NotEnoughColumnsForPeakLine);
+                self.set_error(MGFError::NotEnoughColumnsForPeakLine);
                 return None;
             }
             if !matches!(builder.detail_level, DetailLevel::MetadataOnly) {
-                let mz: f64 = mz_token.parse().unwrap();
-                let intensity: f32 = intensity_token.parse().unwrap();
+                let Ok(mz) = mz_token.parse::<f64>() else {
+                    self.set_error(MGFError::MalformedPeakLine);
+                    return None;
+                };
+
+                let Ok(intensity) = intensity_token.parse::<f32>() else {
+                    self.set_error(MGFError::MalformedPeakLine);
+                    return None;
+                };
+
                 builder.mz_array.push(mz);
                 builder.intensity_array.push(intensity);
 
                 if nparts == 3 {
-                    let charge = charge_token_opt.unwrap().parse().unwrap();
+                    let Ok(charge) =   charge_token_opt.unwrap().parse::<i32>() else {
+                        self.set_error(MGFError::MalformedPeakLine);
+                        return None;
+                    };
                     builder.charge_array.push(charge);
                     builder.has_charge += 1;
                 } else {
                     builder.charge_array.push(0);
                 }
             }
-
             Some(true)
         } else {
             None
@@ -344,8 +358,7 @@ pub(crate) trait MGFLineParsing<C: CentroidPeakAdapting, D: DeconvolutedPeakAdap
 
             true
         } else {
-            *self.state_mut() = MGFParserState::Error;
-            *self.error_mut() = Some(MGFError::MalformedHeaderLine(
+            self.set_error(MGFError::MalformedHeaderLine(
                 "No '=' in header line".into(),
             ));
             false
@@ -362,8 +375,7 @@ pub(crate) trait MGFLineParsing<C: CentroidPeakAdapting, D: DeconvolutedPeakAdap
         };
 
         if tail_sign && (value.starts_with('-') || value.starts_with('+')) {
-            *self.state_mut() = MGFParserState::Error;
-            *self.error_mut() = Some(MGFError::MalformedHeaderLine(format!(
+            self.set_error(MGFError::MalformedHeaderLine(format!(
                 "Could not parse charge value {value}"
             )));
             return None;
@@ -372,8 +384,7 @@ pub(crate) trait MGFLineParsing<C: CentroidPeakAdapting, D: DeconvolutedPeakAdap
         match value.parse::<i32>() {
             Ok(z) => Some(sign * z),
             Err(e) => {
-                *self.state_mut() = MGFParserState::Error;
-                *self.error_mut() = Some(MGFError::MalformedHeaderLine(format!(
+                self.set_error(MGFError::MalformedHeaderLine(format!(
                     "Could not parse charge value {value} : {e}"
                 )));
                 return None;
@@ -389,8 +400,7 @@ pub(crate) trait MGFLineParsing<C: CentroidPeakAdapting, D: DeconvolutedPeakAdap
             *self.state_mut() = MGFParserState::Between;
             false
         } else {
-            *self.state_mut() = MGFParserState::Error;
-            *self.error_mut() = Some(MGFError::MalformedPeakLine);
+            self.set_error(MGFError::MalformedPeakLine);
             false
         }
     }
@@ -419,11 +429,11 @@ pub(crate) trait MGFLineParsing<C: CentroidPeakAdapting, D: DeconvolutedPeakAdap
         }
         true
     }
-
 }
 
-
-impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFLineParsing<C, D> for MGFReaderType<R, C, D> {
+impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFLineParsing<C, D>
+    for MGFReaderType<R, C, D>
+{
     fn state(&self) -> &MGFParserState {
         &self.state
     }
@@ -437,7 +447,6 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFLineP
     }
 }
 
-
 impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReaderType<R, C, D> {
     fn read_line(&mut self, buffer: &mut String) -> io::Result<usize> {
         self.handle.read_line(buffer)
@@ -450,7 +459,8 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
         self._parse_into(&mut builder)
             .ok()
             .and_then(|(_, started_spectrum)| {
-                let mut spec: Option<MultiLayerSpectrum<C, D>> = (started_spectrum && !builder.is_empty()).then(|| builder.into());
+                let mut spec: Option<MultiLayerSpectrum<C, D>> =
+                    (started_spectrum && !builder.is_empty()).then(|| builder.into());
                 if let Some(spec) = spec.as_mut() {
                     spec.description_mut().index = self.read_counter;
                     self.read_counter += 1;
@@ -566,7 +576,7 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
             file_description: Self::default_file_description(),
             detail_level: DetailLevel::Full,
             run: MassSpectrometryRun::default(),
-            read_counter: 0
+            read_counter: 0,
         }
     }
 }
@@ -724,7 +734,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
                 Ok(_) => {
                     self.read_counter = self.index.index_of(id).unwrap();
                     Ok(self)
-                },
+                }
                 Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
             },
             None => Err(SpectrumAccessError::SpectrumIdNotFound(id.to_string())),
@@ -737,7 +747,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
                 Ok(_) => {
                     self.read_counter = index;
                     Ok(self)
-                },
+                }
                 Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
             },
             None => Err(SpectrumAccessError::SpectrumIndexNotFound(index)),
@@ -755,7 +765,7 @@ impl<R: SeekRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
                 Ok(_) => {
                     self.read_counter = index;
                     Ok(self)
-                },
+                }
                 Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
             },
             None => Err(SpectrumAccessError::SpectrumNotFound),

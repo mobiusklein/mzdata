@@ -69,7 +69,7 @@ impl TimeInterval<Time> for Chromatogram {
         as_feature_view!(self, view => {
             view.area()
         })
-        .unwrap()
+        .unwrap_or_default()
     }
 
     fn iter_time(&self) -> impl Iterator<Item = f64> {
