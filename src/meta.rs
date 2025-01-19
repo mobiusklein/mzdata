@@ -34,7 +34,7 @@ pub use instrument::{
 pub use activation::{DissociationEnergy, DissociationEnergyTerm, DissociationMethodTerm};
 pub use run::MassSpectrometryRun;
 pub use sample::Sample;
-pub use traits::MSDataFileMetadata;
+pub use traits::{MSDataFileMetadata, FileMetadataConfig};
 
 use crate::params::{ParamValueParseError, Value, ValueRef};
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::{
-    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software
+    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software,
 };
 
 /// Mass spectrometry data files have several facets of descriptive metadata
@@ -36,7 +36,10 @@ pub trait MSDataFileMetadata {
 
     /// Copy the metadata from another [`MSDataFileMetadata`] implementation into
     /// this one.
-    fn copy_metadata_from(&mut self, source: &impl MSDataFileMetadata) where Self: Sized {
+    fn copy_metadata_from(&mut self, source: &impl MSDataFileMetadata)
+    where
+        Self: Sized,
+    {
         *self.data_processings_mut() = source.data_processings().clone();
         *self.instrument_configurations_mut() = source.instrument_configurations().clone();
         *self.file_description_mut() = source.file_description().clone();
@@ -77,10 +80,81 @@ pub trait MSDataFileMetadata {
 
     /// Get the name of the primary source file, if available
     fn source_file_name(&self) -> Option<&str> {
-        self.file_description().source_files.first().map(|s| s.name.as_str())
+        self.file_description()
+            .source_files
+            .first()
+            .map(|s| s.name.as_str())
     }
 }
 
+/// A helper data structure for implementing [`MSDataFileMetadata`] in a single common
+/// implementation.
+#[derive(Debug, Default, Clone)]
+pub struct FileMetadataConfig {
+    /// The description of the file's contents and the previous data files that were
+    /// consumed to produce it.
+    pub(crate) file_description: FileDescription,
+
+    /// A mapping of different instrument configurations (source, analyzer, detector) components
+    /// by ID string.
+    pub(crate) instrument_configurations: HashMap<u32, InstrumentConfiguration>,
+
+    /// The different software components that were involved in the processing and creation of this
+    /// file.
+    pub(crate) softwares: Vec<Software>,
+
+    pub(crate) samples: Vec<Sample>,
+
+    /// The data processing and signal transformation operations performed on the raw data in previous
+    /// source files to produce this file's contents.
+    pub(crate) data_processings: Vec<DataProcessing>,
+
+    // MS run attributes
+    pub(crate) run: MassSpectrometryRun,
+    pub(crate) num_spectra: Option<u64>,
+}
+
+impl FileMetadataConfig {
+    pub fn new(
+        file_description: FileDescription,
+        instrument_configurations: HashMap<u32, InstrumentConfiguration>,
+        softwares: Vec<Software>,
+        samples: Vec<Sample>,
+        data_processings: Vec<DataProcessing>,
+        run: MassSpectrometryRun,
+        num_spectra: Option<u64>,
+    ) -> Self {
+        Self {
+            file_description,
+            instrument_configurations,
+            softwares,
+            samples,
+            data_processings,
+            run,
+            num_spectra,
+        }
+    }
+}
+
+impl MSDataFileMetadata for FileMetadataConfig {
+    crate::impl_metadata_trait!();
+
+    fn run_description(&self) -> Option<&MassSpectrometryRun> {
+        Some(&self.run)
+    }
+
+    fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
+        Some(&mut self.run)
+    }
+
+    fn set_spectrum_count_hint(&mut self, _value: Option<u64>) {
+        self.num_spectra = _value
+    }
+
+    fn spectrum_count_hint(&self) -> Option<u64> {
+        self.num_spectra
+    }
+}
 
 #[macro_export]
 /// Assumes a field for the non-`Option` facets of the [`MSDataFileMetadata`]
@@ -107,7 +181,9 @@ macro_rules! impl_metadata_trait {
             &self.data_processings
         }
 
-        fn instrument_configurations(&self) -> &std::collections::HashMap<u32, $crate::meta::InstrumentConfiguration> {
+        fn instrument_configurations(
+            &self,
+        ) -> &std::collections::HashMap<u32, $crate::meta::InstrumentConfiguration> {
             &self.instrument_configurations
         }
         fn file_description(&self) -> &$crate::meta::FileDescription {
@@ -121,7 +197,9 @@ macro_rules! impl_metadata_trait {
             &mut self.data_processings
         }
 
-        fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, $crate::meta::InstrumentConfiguration> {
+        fn instrument_configurations_mut(
+            &mut self,
+        ) -> &mut std::collections::HashMap<u32, $crate::meta::InstrumentConfiguration> {
             &mut self.instrument_configurations
         }
 
@@ -142,7 +220,6 @@ macro_rules! impl_metadata_trait {
         }
     };
 }
-
 
 #[macro_export]
 /// Delegates the implementation of [`MSDataFileMetadata`] to a member. Passing an extra
