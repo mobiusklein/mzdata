@@ -574,8 +574,10 @@ mod async_impl {
     use crate::io::{
         mgf::AsyncMGFReaderType,
         mzml::AsyncMzMLReaderType,
-        thermo::AsyncThermoRawReaderType,
         traits::{AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource}};
+
+    #[cfg(feature = "thermo")]
+    use crate::io::thermo::AsyncThermoRawReaderType;
 
     #[non_exhaustive]
     pub enum AsyncMZReaderType<

@@ -53,7 +53,7 @@ pub mod thermo;
 #[cfg(any(feature = "thermo", feature="doc-only"))]
 pub use thermo::ThermoRawReader;
 
-#[cfg(feature = "async_partial")]
+#[cfg(all(feature = "async_partial", any(feature = "thermo", feature="doc-only")))]
 pub use thermo::AsyncThermoRawReader;
 
 #[cfg(feature = "async_partial")]

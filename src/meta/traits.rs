@@ -136,6 +136,14 @@ impl FileMetadataConfig {
     }
 }
 
+impl<T> From<&T> for FileMetadataConfig where T: MSDataFileMetadata {
+    fn from(value: &T) -> Self {
+        let mut this = Self::default();
+        this.copy_metadata_from(value);
+        this
+    }
+}
+
 impl MSDataFileMetadata for FileMetadataConfig {
     crate::impl_metadata_trait!();
 
