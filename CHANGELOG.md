@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.42.0] - 2025-01-26
+
+### Added
+
+- Add `AsyncThermoRawReaderType` and `AsyncMZReaderType`, with associated supporting types
+- Add support for more `ArrayType`s
+- Add optional arrays when available to Thermo data
+- Add `MultiLayerIonMobilityFrame::try_build_features`
+- Add `FileMetadataConfig` to consolidate `MSDataFileMetadata` details into a single type that's easier to compose.
+- Async thermo import in doc-only mode
+- Add ion mobility frame dispatch via `IntoIonMobilityFrameSource` and `IMMZReaderType`
+
+### Fixed
+
+- Fix off-by-one error in feature conversion
+
 ## [0.41.0] - 2025-01-02
 
 ### Added
@@ -604,7 +620,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.41.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/mobiusklein/mzdata/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/mobiusklein/mzdata/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/mobiusklein/mzdata/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/mobiusklein/mzdata/compare/v0.38.0...v0.39.0
