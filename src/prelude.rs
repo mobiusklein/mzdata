@@ -5,6 +5,7 @@ pub use crate::io::traits::{
     SpectrumWriter, SeekRead, SpectrumAccessError, IonMobilityFrameSource,
     RandomAccessIonMobilityFrameIterator, ChromatogramSource,
     IonMobilityFrameWriter, RandomAccessIonMobilityFrameGroupingIterator,
+    IntoIonMobilityFrameSource,
 };
 
 #[cfg(feature = "async_partial")]

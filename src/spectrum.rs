@@ -78,6 +78,9 @@ pub use crate::spectrum::peaks::{
     SpectrumSummary,
 };
 
+#[doc(hidden)]
+pub use utils::HasIonMobility;
+
 pub use frame::{
     FeatureDataLevel, IonMobilityFrameDescription, IonMobilityFrameLike,
     MultiLayerIonMobilityFrame, RefFeatureDataLevel

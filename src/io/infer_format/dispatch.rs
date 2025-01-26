@@ -1,10 +1,9 @@
-use std::{fs, io, marker::PhantomData, path::{self, Path}};
+use std::{fmt::Debug, fs, io, marker::PhantomData, path::{self, Path}};
 
-use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
-#[cfg(feature = "bruker_tdf")]
+use mzpeaks::{prelude::FeatureLike, CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, KnownCharge};
 use mzpeaks::{feature::{ChargedFeature, Feature}, IonMobility, Mass, MZ};
 
-use crate::io::PreBufferedStream;
+use crate::{io::{Generic3DIonMobilityFrameSource, IonMobilityFrameSource, IntoIonMobilityFrameSource, PreBufferedStream, RandomAccessIonMobilityFrameIterator}, spectrum::MultiLayerIonMobilityFrame};
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::MzMLbReaderType;
 
@@ -19,7 +18,7 @@ use crate::spectrum::MultiLayerSpectrum;
 use crate::io::thermo::ThermoRawReaderType;
 
 #[cfg(feature = "bruker_tdf")]
-use crate::io::tdf::TDFSpectrumReaderType;
+use crate::io::tdf::{TDFSpectrumReaderType, TDFFrameReaderType};
 
 use crate::io::traits::{ChromatogramSource, StreamingSpectrumIterator};
 use crate::io::{DetailLevel, SpectrumSourceWithMetadata};
@@ -55,6 +54,27 @@ pub enum MZReaderType<
     BrukerTDF(TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D>),
     Unknown(Box<dyn SpectrumSourceWithMetadata<C, D, MultiLayerSpectrum<C, D>> + Send>),
 }
+
+impl<
+        R: io::Read + io::Seek,
+        C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> Debug for MZReaderType<R, C, D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+        match self {
+            Self::MzML(arg0) => f.debug_tuple("MzML").field(&arg0.source_file_name()).finish(),
+            Self::MGF(arg0) => f.debug_tuple("MGF").field(&arg0.source_file_name()).finish(),
+            #[cfg(feature = "thermo")]
+            Self::ThermoRaw(arg0) => f.debug_tuple("ThermoRaw").field(&arg0.source_file_name()).finish(),
+            #[cfg(feature = "mzmlb")]
+            Self::MzMLb(arg0) => f.debug_tuple("MzMLb").field(&arg0.source_file_name()).finish(),
+            #[cfg(feature = "bruker_tdf")]
+            Self::BrukerTDF(arg0) => f.debug_tuple("BrukerTDF").field(&arg0.source_file_name()).finish(),
+            Self::Unknown(arg0) => f.debug_tuple("Unknown").field(&arg0.source_file_name()).finish(),
+        }
+    }
+}
+
 
 
 /// A builder type for [`MZReaderType`].
@@ -564,7 +584,27 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
     }
 }
 
+impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap,
+     R: io::Read + io::Seek> IntoIonMobilityFrameSource<C, D> for MZReaderType<R, C, D> {
 
+    type IonMobilityFrameSource<CF: FeatureLike<MZ, IonMobility>, DF: FeatureLike<Mass, IonMobility> + KnownCharge> = IMMZReaderType<R, CF, DF, C, D>;
+
+    fn try_into_frame_source<CF: FeatureLike<MZ, IonMobility>, DF: FeatureLike<Mass, IonMobility> + KnownCharge>(self) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError> {
+        let view = match self {
+            MZReaderType::MzML(reader) => IMMZReaderType::MzML(reader.try_into_frame_source()?),
+            MZReaderType::MGF(_) => return Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound),
+            #[cfg(feature="thermo")]
+            MZReaderType::ThermoRaw(_) => return Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound),
+            #[cfg(feature="mzmlb")]
+            MZReaderType::MzMLb(reader) => IMMZReaderType::MzMLb(reader.try_into_frame_source()?),
+            #[cfg(feature="bruker_tdf")]
+            MZReaderType::BrukerTDF(reader) => IMMZReaderType::BrukerTDF(reader.try_into_frame_source()?),
+            MZReaderType::Unknown(_) => todo!(),
+        };
+        Ok(view)
+    }
+}
 
 #[cfg(feature = "async_partial")]
 mod async_impl {
@@ -899,3 +939,141 @@ mod async_impl {
 
 #[cfg(feature = "async_partial")]
 pub use async_impl::{AsyncMZReaderType, AsyncMZReader, AsyncMZReaderBuilder};
+
+pub enum IMMZReaderType<
+        R: io::Read + io::Seek,
+        C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
+        CP: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap=CentroidPeak,
+        DP: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap=DeconvolutedPeak,
+    > {
+    MzML(Generic3DIonMobilityFrameSource<CP, DP, MzMLReaderType<R, CP, DP>, C, D>),
+    #[cfg(feature = "mzmlb")]
+    MzMLb(Generic3DIonMobilityFrameSource<CP, DP, MzMLbReaderType<CP, DP>, C, D>),
+    #[cfg(feature = "bruker_tdf")]
+    BrukerTDF(TDFFrameReaderType<C, D>),
+}
+
+
+macro_rules! immsfmt_dispatch {
+    ($d:ident, $r:ident, $e:expr) => {
+        match $d {
+            IMMZReaderType::MzML($r) => $e,
+            #[cfg(feature = "mzmlb")]
+            IMMZReaderType::MzMLb($r) => $e,
+            #[cfg(feature = "bruker_tdf")]
+            IMMZReaderType::BrukerTDF($r) => $e,
+        }
+    };
+}
+
+
+impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge, CP: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap, DP: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> MSDataFileMetadata for IMMZReaderType<R, C, D, CP, DP> {
+    fn data_processings(&self) -> &Vec<crate::meta::DataProcessing> {
+        immsfmt_dispatch!(self, reader, reader.data_processings())
+    }
+
+    fn instrument_configurations(&self) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+        immsfmt_dispatch!(self, reader, reader.instrument_configurations())
+    }
+
+    fn file_description(&self) -> &crate::meta::FileDescription {
+        immsfmt_dispatch!(self, reader, reader.file_description())
+    }
+
+    fn softwares(&self) -> &Vec<crate::meta::Software> {
+        immsfmt_dispatch!(self, reader, reader.softwares())
+    }
+
+    fn samples(&self) -> &Vec<crate::meta::Sample> {
+        immsfmt_dispatch!(self, reader, reader.samples())
+    }
+
+    fn data_processings_mut(&mut self) -> &mut Vec<crate::meta::DataProcessing> {
+        immsfmt_dispatch!(self, reader, reader.data_processings_mut())
+    }
+
+    fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+        immsfmt_dispatch!(self, reader, reader.instrument_configurations_mut())
+    }
+
+    fn file_description_mut(&mut self) -> &mut crate::meta::FileDescription {
+        immsfmt_dispatch!(self, reader, reader.file_description_mut())
+    }
+
+    fn softwares_mut(&mut self) -> &mut Vec<crate::meta::Software> {
+        immsfmt_dispatch!(self, reader, reader.softwares_mut())
+    }
+
+    fn samples_mut(&mut self) -> &mut Vec<crate::meta::Sample> {
+        immsfmt_dispatch!(self, reader, reader.samples_mut())
+    }
+
+    fn source_file_name(&self) -> Option<&str> {
+        immsfmt_dispatch!(self, reader, reader.source_file_name())
+    }
+
+    fn run_description(&self) -> Option<&crate::meta::MassSpectrometryRun> {
+        immsfmt_dispatch!(self, reader, reader.run_description())
+    }
+
+    fn spectrum_count_hint(&self) -> Option<u64> {
+        immsfmt_dispatch!(self, reader, reader.spectrum_count_hint())
+    }
+}
+
+impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge, CP: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap, DP: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> Iterator for IMMZReaderType<R, C, D, CP, DP> {
+    type Item = MultiLayerIonMobilityFrame<C, D>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        immsfmt_dispatch!(self, reader, reader.next())
+    }
+}
+
+impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge, CP: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap, DP: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>> for IMMZReaderType<R, C, D, CP, DP> {
+    fn reset(&mut self) {
+        immsfmt_dispatch!(self, reader, reader.reset())
+    }
+
+    fn detail_level(&self) -> &DetailLevel {
+        immsfmt_dispatch!(self, reader, reader.detail_level())
+    }
+
+    fn set_detail_level(&mut self, detail_level: DetailLevel) {
+        immsfmt_dispatch!(self, reader, reader.set_detail_level(detail_level))
+    }
+
+    fn get_frame_by_id(&mut self, id: &str) -> Option<MultiLayerIonMobilityFrame<C, D>> {
+        immsfmt_dispatch!(self, reader, reader.get_frame_by_id(id))
+    }
+
+    fn get_frame_by_index(&mut self, index: usize) -> Option<MultiLayerIonMobilityFrame<C, D>> {
+        immsfmt_dispatch!(self, reader, reader.get_frame_by_index(index))
+    }
+
+    fn get_index(&self) -> &crate::io::OffsetIndex {
+        immsfmt_dispatch!(self, reader, reader.get_index())
+    }
+
+    fn set_index(&mut self, index: crate::io::OffsetIndex) {
+        immsfmt_dispatch!(self, reader, reader.set_index(index))
+    }
+}
+
+impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge, CP: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap, DP: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak> + BuildFromArrayMap> RandomAccessIonMobilityFrameIterator<C, D, MultiLayerIonMobilityFrame<C, D>> for IMMZReaderType<R, C, D, CP, DP> {
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
+        immsfmt_dispatch!(self, reader, {reader.start_from_id(id)?;});
+        Ok(self)
+    }
+
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
+        immsfmt_dispatch!(self, reader, {reader.start_from_index(index)?;});
+        Ok(self)
+    }
+
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
+        immsfmt_dispatch!(self, reader, {reader.start_from_time(time)?;});
+        Ok(self)
+    }
+}
+

@@ -12,19 +12,22 @@ use log::{debug, warn};
 use ndarray::Ix1;
 use thiserror::Error;
 
-use mzpeaks::{CentroidPeak, DeconvolutedPeak};
+use mzpeaks::{prelude::*, CentroidPeak, DeconvolutedPeak};
 
-use crate::io::mzml::{
-    CVParamParse, EntryType, IncrementingIdMap, MzMLParserError, MzMLParserState, MzMLReaderType,
-    MzMLSAX, MzMLSpectrumBuilder, ParserResult, SpectrumBuilding,
+use crate::io::{
+    mzml::{
+        CVParamParse, EntryType, IncrementingIdMap, MzMLParserError, MzMLParserState,
+        MzMLReaderType, MzMLSAX, MzMLSpectrumBuilder, ParserResult, SpectrumBuilding,
+    },
+    traits::{ChromatogramSource, MZFileReader},
+    utils::DetailLevel,
+    Generic3DIonMobilityFrameSource, OffsetIndex, RandomAccessSpectrumIterator,
+    SpectrumAccessError, SpectrumSource,
 };
-use crate::io::traits::{ChromatogramSource, MZFileReader};
-use crate::io::utils::DetailLevel;
-use crate::io::{OffsetIndex, RandomAccessSpectrumIterator, SpectrumSource, SpectrumAccessError};
-use crate::prelude::{MSDataFileMetadata, ParamLike};
+use crate::prelude::*;
 
 use crate::meta::{
-    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software
+    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software,
 };
 use crate::params::{ControlledVocabulary, Param, ParamValue};
 use crate::spectrum::bindata::{
@@ -41,7 +44,7 @@ use numpress::numpress_decompress;
 use crate::spectrum::spectrum_types::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
 };
-use crate::spectrum::{Chromatogram, IsolationWindow, ScanWindow, SelectedIon};
+use crate::spectrum::{Chromatogram, HasIonMobility, IsolationWindow, ScanWindow, SelectedIon};
 
 #[derive(Debug, Error)]
 pub enum MzMLbError {
@@ -565,13 +568,15 @@ impl<
                                                     self.current_data_range_query.offset = param
                                                         .value
                                                         .to_u64()
-                                                        .expect("Failed to extract external offset") as usize
+                                                        .expect("Failed to extract external offset")
+                                                        as usize
                                                 }
                                                 // external array length
                                                 1002843 => self.current_data_range_query.length =
                                                     param.value.to_u64().expect(
                                                         "Failed to extract external array length",
-                                                    ) as usize,
+                                                    )
+                                                        as usize,
                                                 _ => self.inner.fill_param_into(param, state),
                                             }
                                         }
@@ -1085,7 +1090,6 @@ impl<
         D: DeconvolutedPeakAdapting + BuildFromArrayMap,
     > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
 {
-
     fn detail_level(&self) -> &DetailLevel {
         &self.detail_level
     }
@@ -1293,16 +1297,44 @@ impl<
 }
 
 impl<
-    C: CentroidPeakAdapting + BuildFromArrayMap,
-    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > ChromatogramSource for MzMLbReaderType<C, D> {
-
+        C: CentroidPeakAdapting + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > ChromatogramSource for MzMLbReaderType<C, D>
+{
     fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
         self.get_chromatogram_by_id(id)
     }
 
     fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
         self.get_chromatogram_by_index(index)
+    }
+}
+
+impl<
+        C: CentroidPeakAdapting + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > IntoIonMobilityFrameSource<C, D> for MzMLbReaderType<C, D>
+{
+    type IonMobilityFrameSource<
+        CF: FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility>,
+        DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge,
+    > = Generic3DIonMobilityFrameSource<C, D, Self, CF, DF>;
+
+    fn try_into_frame_source<
+        CF: FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility>,
+        DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge,
+    >(
+        mut self,
+    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError> {
+        if let Some(state) = self.has_ion_mobility() {
+            if matches!(state, HasIonMobility::Dimension) {
+                Ok(Self::IonMobilityFrameSource::new(self))
+            } else {
+                Err(crate::io::IntoIonMobilityFrameSourceError::ConversionNotPossible)
+            }
+        } else {
+            Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound)
+        }
     }
 }
 

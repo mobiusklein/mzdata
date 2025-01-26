@@ -2,7 +2,7 @@ mod inference;
 mod dispatch;
 mod pipeline;
 
-pub use dispatch::{MZReader, MZReaderType, MZReaderBuilder};
+pub use dispatch::{MZReader, MZReaderType, MZReaderBuilder, IMMZReaderType};
 #[cfg(feature = "async_partial")]
 pub use dispatch::{AsyncMZReaderType, AsyncMZReader, AsyncMZReaderBuilder};
 

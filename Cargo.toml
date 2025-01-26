@@ -104,13 +104,13 @@ chrono = "0.4.37"
 bitflags = "2.5.0"
 identity-hash = "0.1.0"
 thiserror = "2.0.2"
-mzpeaks = { version = ">=1.0.0,<1.1.0" }
+mzpeaks = { version = ">=1.0.6,<1.1.0" }
 
 # Internal parallelism
 rayon = { version = ">=1.8.0,<2.0", optional = true }
 
 # Internal signal processing
-mzsignal = { version = ">=1.0.0,<1.1.0", default-features = false, optional = true, features = [
+mzsignal = { version = ">=1.1.0,<1.2.0", default-features = false, optional = true, features = [
     'avx',
 ] }
 

@@ -13,9 +13,12 @@ use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Error as XMLError;
 use quick_xml::Reader;
 
+use crate::io::Generic3DIonMobilityFrameSource;
+use crate::io::IntoIonMobilityFrameSource;
 use crate::meta::DissociationEnergyTerm;
 use crate::meta::Sample;
 use crate::prelude::*;
+use crate::spectrum::HasIonMobility;
 
 use super::super::offset_index::OffsetIndex;
 use super::super::traits::{
@@ -260,7 +263,10 @@ pub trait SpectrumBuilding<
                 let lower_bound = param
                     .to_f32()
                     .expect("Failed to parse isolation window limit");
-                if matches!(window.flags, IsolationWindowState::Unknown | IsolationWindowState::Explicit) {
+                if matches!(
+                    window.flags,
+                    IsolationWindowState::Unknown | IsolationWindowState::Explicit
+                ) {
                     window.flags = IsolationWindowState::Explicit;
                     window.lower_bound = lower_bound;
                 }
@@ -269,7 +275,10 @@ pub trait SpectrumBuilding<
                 let upper_bound = param
                     .to_f32()
                     .expect("Failed to parse isolation window limit");
-                if matches!(window.flags, IsolationWindowState::Unknown | IsolationWindowState::Explicit) {
+                if matches!(
+                    window.flags,
+                    IsolationWindowState::Unknown | IsolationWindowState::Explicit
+                ) {
                     window.flags = IsolationWindowState::Explicit;
                     window.upper_bound = upper_bound;
                 }
@@ -1020,6 +1029,35 @@ pub struct MzMLReaderType<
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
     instrument_id_map: IncrementingIdMap,
+}
+
+impl<
+        R: Read + Seek,
+        C: CentroidPeakAdapting + BuildFromArrayMap,
+        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    > IntoIonMobilityFrameSource<C, D> for MzMLReaderType<R, C, D>
+{
+    type IonMobilityFrameSource<
+        CF: FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility>,
+        DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge,
+    > = Generic3DIonMobilityFrameSource<C, D, Self, CF, DF>;
+
+    fn try_into_frame_source<
+        CF: FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility>,
+        DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge,
+    >(
+        mut self,
+    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError> {
+        if let Some(state) = self.has_ion_mobility() {
+            if matches!(state, HasIonMobility::Dimension) {
+                Ok(Self::IonMobilityFrameSource::new(self))
+            } else {
+                Err(crate::io::IntoIonMobilityFrameSourceError::ConversionNotPossible)
+            }
+        } else {
+            Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound)
+        }
+    }
 }
 
 impl<
@@ -2038,7 +2076,6 @@ mod test {
             .native_id_format()
             .is_some());
 
-
         let config = reader.instrument_configurations().get(&0).unwrap();
         let comp = config.iter().find_map(|c| c.mass_analyzer()).unwrap();
         assert_eq!(
@@ -2764,7 +2801,10 @@ mod test {
             Unit::Millisecond,
         );
         builder.fill_param_into(param.into(), MzMLParserState::Scan);
-        assert_eq!(builder.acquisition.first_scan().unwrap().injection_time, 50.0);
+        assert_eq!(
+            builder.acquisition.first_scan().unwrap().injection_time,
+            50.0
+        );
 
         let param = ControlledVocabulary::MS.const_param(
             "scan start time",
@@ -2777,10 +2817,12 @@ mod test {
 
         let param = ScanCombination::NoCombination.to_param();
         builder.fill_param_into(param.into(), MzMLParserState::ScanList);
-        assert_eq!(builder.acquisition.combination, ScanCombination::NoCombination);
+        assert_eq!(
+            builder.acquisition.combination,
+            ScanCombination::NoCombination
+        );
 
         builder._reset();
-
 
         let param = ControlledVocabulary::MS.const_param(
             "isolation window target m/z",

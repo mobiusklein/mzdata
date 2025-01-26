@@ -552,7 +552,7 @@ mod mzsignal_impl {
 
 #[cfg(test)]
 mod test {
-    use std::io;
+    use std::{fs, io};
 
     use super::*;
 
@@ -581,6 +581,17 @@ mod test {
                 $obj
             );
         };
+    }
+
+    #[test]
+    fn test_loader_conversion() -> io::Result<()> {
+        let fh = fs::File::open("./test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz")?;
+        let handle = crate::io::compression::RestartableGzDecoder::new(io::BufReader::new(fh));
+        let mzml_reader = crate::MzMLReader::new_indexed(handle);
+        let mut frame_reader = mzml_reader.try_into_frame_source::<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>().unwrap();
+        let frame = frame_reader.get_frame_by_id("merged=42926 frame=9728 scanStart=1 scanEnd=705").unwrap();
+        assert_eq!(frame.ms_level(), 1);
+        Ok(())
     }
 
     #[test]

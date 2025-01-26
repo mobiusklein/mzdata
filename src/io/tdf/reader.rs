@@ -5,7 +5,10 @@ use std::{
 
 use chrono::DateTime;
 
-use crate::mzpeaks::{CentroidPeak, DeconvolutedPeak};
+use crate::{
+    io::IntoIonMobilityFrameSource,
+    mzpeaks::{CentroidPeak, DeconvolutedPeak},
+};
 
 #[allow(unused)]
 use crate::io::checksum_file;
@@ -47,8 +50,8 @@ use super::arrays::consolidate_peaks;
 pub use super::arrays::FrameToArraysMapper;
 use super::constants::{InstrumentSource, MsMsType};
 use super::sql::{
-    FromSQL, PasefPrecursor, RawTDFSQLReader,
-    SQLDIAFrameMsMsWindow, SQLFrame, SQLPasefFrameMsMs, SQLPrecursor, TDFMSnFacet,
+    FromSQL, PasefPrecursor, RawTDFSQLReader, SQLDIAFrameMsMsWindow, SQLFrame, SQLPasefFrameMsMs,
+    SQLPrecursor, TDFMSnFacet,
 };
 
 const PEAK_MERGE_TOLERANCE: Tolerance = Tolerance::Da(0.01);
@@ -126,7 +129,6 @@ impl IndexExtry {
         self.tdf_facet.dia_window()
     }
 }
-
 
 /// An ion mobility frame reader for Bruker TDF file format. It supports the same
 /// kind of PASEF frame traversal that is supported by [ProteoWizard](https://github.com/ProteoWizard/pwiz).
@@ -511,14 +513,17 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         DP: DeconvolutedCentroidLike + Default,
     >(
         &self,
-        frame: MultiLayerIonMobilityFrame,
+        frame: MultiLayerIonMobilityFrame<C, D>,
         error_tolerance: Tolerance,
     ) -> MultiLayerSpectrum<CP, DP> {
         let (feature_d, descr) = frame.into_features_and_parts();
         match feature_d {
-            crate::spectrum::FeatureDataLevel::Missing => {
-                MultiLayerSpectrum { description: descr.into(), arrays: None, peaks: None,  deconvoluted_peaks: None }
-            }
+            crate::spectrum::FeatureDataLevel::Missing => MultiLayerSpectrum {
+                description: descr.into(),
+                arrays: None,
+                peaks: None,
+                deconvoluted_peaks: None,
+            },
             crate::spectrum::FeatureDataLevel::RawData(arrays) => {
                 let peaks = consolidate_peaks(
                     &arrays,
@@ -528,7 +533,12 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                 )
                 .unwrap();
                 let arrays = arrays.unstack().unwrap();
-                MultiLayerSpectrum { description: descr.into(), arrays: Some(arrays), peaks: Some(peaks),  deconvoluted_peaks: None }
+                MultiLayerSpectrum {
+                    description: descr.into(),
+                    arrays: Some(arrays),
+                    peaks: Some(peaks),
+                    deconvoluted_peaks: None,
+                }
             }
             _ => panic!("Failed to extract array data"),
         }
@@ -537,7 +547,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     pub(crate) fn get(
         &self,
         index: usize,
-    ) -> Result<Option<MultiLayerIonMobilityFrame>, TimsRustError> {
+    ) -> Result<Option<MultiLayerIonMobilityFrame<C, D>>, TimsRustError> {
         if let Some(entry) = self.entry_index.get(index) {
             // `timsrust` uses base-zero indexing, but frame IDs start at 1
             let frame = self
@@ -854,7 +864,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge> Iterator
     for TDFFrameReaderType<C, D>
 {
-    type Item = MultiLayerIonMobilityFrame;
+    type Item = MultiLayerIonMobilityFrame<C, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let frame = self.get(self.index);
@@ -864,37 +874,22 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 }
 
 impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge>
-    IonMobilityFrameSource for TDFFrameReaderType<C, D>
+    IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>> for TDFFrameReaderType<C, D>
 {
     fn reset(&mut self) {
         self.index = 0;
     }
 
-    fn get_frame_by_id(
-        &mut self,
-        id: &str,
-    ) -> Option<
-        MultiLayerIonMobilityFrame<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>,
-    > {
+    fn get_frame_by_id(&mut self, id: &str) -> Option<MultiLayerIonMobilityFrame<C, D>> {
         let offset = self.offset_index.get(id)?;
         self.get(offset as usize).ok().unwrap_or_default()
     }
 
-    fn get_frame_by_index(
-        &mut self,
-        index: usize,
-    ) -> Option<
-        MultiLayerIonMobilityFrame<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>,
-    > {
+    fn get_frame_by_index(&mut self, index: usize) -> Option<MultiLayerIonMobilityFrame<C, D>> {
         self.get(index).ok().unwrap_or_default()
     }
 
-    fn get_frame_by_time(
-        &mut self,
-        time: f64,
-    ) -> Option<
-        MultiLayerIonMobilityFrame<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>,
-    > {
+    fn get_frame_by_time(&mut self, time: f64) -> Option<MultiLayerIonMobilityFrame<C, D>> {
         self.index_by_time(time)
             .and_then(|e| self.get(e.index).ok().unwrap_or_default())
     }
@@ -922,7 +917,8 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 }
 
 impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge>
-    RandomAccessIonMobilityFrameIterator for TDFFrameReaderType<C, D>
+    RandomAccessIonMobilityFrameIterator<C, D, MultiLayerIonMobilityFrame<C, D>>
+    for TDFFrameReaderType<C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError> {
         match self.offset_index.index_of(id) {
@@ -976,8 +972,49 @@ impl<
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
         CP: CentroidLike + Default + From<CentroidPeak>,
+        DP: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak>,
+    > IntoIonMobilityFrameSource<CP, DP> for TDFSpectrumReaderType<C, D, CP, DP>
+{
+    type IonMobilityFrameSource<
+        CF: FeatureLike<MZ, IonMobility>,
+        DF: FeatureLike<Mass, IonMobility> + KnownCharge,
+    > = TDFFrameReaderType<CF, DF>;
+
+    fn try_into_frame_source<
+        CF: FeatureLike<MZ, IonMobility>,
+        DF: FeatureLike<Mass, IonMobility> + KnownCharge,
+    >(
+        self,
+    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError> {
+        let view = self.into_frame_reader();
+
+        Ok(TDFFrameReaderType {
+            tdf_reader: view.tdf_reader,
+            metadata: view.metadata,
+            frame_reader: view.frame_reader,
+            entry_index: view.entry_index,
+            index: view.index,
+            offset_index: view.offset_index,
+            file_description: view.file_description,
+            instrument_configurations: view.instrument_configurations,
+            softwares: view.softwares,
+            samples: view.samples,
+            data_processings: view.data_processings,
+            detail_level: view.detail_level,
+            run: view.run,
+            _c: PhantomData,
+            _d: PhantomData,
+        })
+    }
+}
+
+impl<
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        CP: CentroidLike + Default + From<CentroidPeak>,
         DP: DeconvolutedCentroidLike + Default,
-    > RandomAccessSpectrumIterator<CP, DP, MultiLayerSpectrum<CP, DP>> for TDFSpectrumReaderType<C, D, CP, DP>
+    > RandomAccessSpectrumIterator<CP, DP, MultiLayerSpectrum<CP, DP>>
+    for TDFSpectrumReaderType<C, D, CP, DP>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         self.frame_reader

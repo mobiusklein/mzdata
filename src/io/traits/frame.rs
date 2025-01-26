@@ -11,7 +11,7 @@ use mzpeaks::{
     feature::{ChargedFeature, Feature, FeatureLike}
 };
 
-use crate::{io::{DetailLevel, OffsetIndex}, prelude::MSDataFileMetadata, spectrum::IonMobilityFrameGroup};
+use crate::{io::{DetailLevel, OffsetIndex}, prelude::{MSDataFileMetadata, SpectrumLike}, spectrum::{HasIonMobility, IonMobilityFrameGroup}};
 use crate::spectrum::group::IonMobilityFrameGroupingIterator;
 use crate::spectrum::spectrum_types::MultiLayerSpectrum;
 use crate::spectrum::{
@@ -944,4 +944,55 @@ pub trait RandomAccessIonMobilityFrameGroupingIterator<
     fn start_from_index(&mut self, index: usize) -> Result<&mut Self, IonMobilityFrameAccessError>;
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, IonMobilityFrameAccessError>;
     fn reset_state(&mut self);
+}
+
+
+#[derive(Debug, Error)]
+pub enum IntoIonMobilityFrameSourceError {
+    #[error("No ion mobility frames were found")]
+    NoIonMobilityFramesFound,
+
+    #[error("Cannot convert to requested frame type")]
+    ConversionNotPossible
+}
+
+
+/// Convert a [`SpectrumSource`] to an [`IonMobilityFrameSource`] if it detects ion mobility frames (3D spectra)
+pub trait IntoIonMobilityFrameSource<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>: SpectrumSource<C, D, MultiLayerSpectrum<C, D>> + Sized {
+
+    /// The [`IonMobilityFrameSource`]-implementing type for this [`SpectrumSource`].
+    ///
+    /// When another type isn't available, [`Generic3DIonMobilityFrameSource`]
+    type IonMobilityFrameSource<CF: FeatureLike<MZ, IonMobility>, DF: FeatureLike<Mass, IonMobility> + KnownCharge>: IonMobilityFrameSource<CF, DF, MultiLayerIonMobilityFrame<CF, DF>>;
+
+    /// Attempt to convert the [`SpectrumSource`] into an [`IonMobilityFrameSource`], returning [`IntoIonMobilityFrameSourceError`]
+    /// if it is not possible
+    fn try_into_frame_source<CF: FeatureLike<MZ, IonMobility>, DF: FeatureLike<Mass, IonMobility> + KnownCharge>(self) -> Result<Self::IonMobilityFrameSource<CF, DF>, IntoIonMobilityFrameSourceError>;
+
+
+    /// Call [`IonMobilityLoadable::try_into_frame_source`], panicking if an error is returned.
+    fn into_frame_source<CF: FeatureLike<MZ, IonMobility>, DF: FeatureLike<Mass, IonMobility> + KnownCharge>(self) -> Self::IonMobilityFrameSource<CF, DF> {
+        self.try_into_frame_source().unwrap()
+    }
+
+    /// Reads a sparse 1% of the entries from the [`SpectrumSource`], testing
+    /// for the presence of ion mobility data.
+    fn has_ion_mobility(&mut self) -> Option<HasIonMobility>
+    {
+        let details = *self.detail_level();
+        self.set_detail_level(DetailLevel::Lazy);
+        let n = self.len();
+        let mut handle = self.iter();
+        let mut status = HasIonMobility::None;
+        let step_size = if n > 100 { n / 100 } else { n };
+        for i in (0..n).step_by(step_size) {
+            let spec = handle.get_spectrum_by_index(i)?;
+            status = status.max(spec.has_ion_mobility_class());
+            if status > HasIonMobility::None {
+                break;
+            }
+        }
+        self.set_detail_level(details);
+        Some(status)
+    }
 }

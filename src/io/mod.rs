@@ -20,7 +20,7 @@ pub(crate) mod compression;
 pub use crate::io::infer_format::{
     infer_format, infer_from_path, infer_from_stream, MZReader, MZReaderType,
     MassSpectrometryFormat, MassSpectrometryReadWriteProcess, Sink, Source,
-    MZReaderBuilder,
+    MZReaderBuilder, IMMZReaderType
 };
 pub use crate::io::mgf::{MGFError, MGFReader, MGFWriter};
 #[cfg(feature = "async")]
@@ -37,7 +37,7 @@ pub use crate::io::traits::{
     RandomAccessSpectrumIterator, RandomAccessSpectrumSource, SpectrumAccessError,
     SpectrumGrouping, SpectrumIterator, SpectrumReceiver, SpectrumSource,
     SpectrumSourceWithMetadata, SpectrumWriter, StreamingSpectrumIterator,
-    RandomAccessIonMobilityFrameGroupingIterator,
+    RandomAccessIonMobilityFrameGroupingIterator, IntoIonMobilityFrameSource, IntoIonMobilityFrameSourceError,
 };
 
 #[cfg(feature = "async_partial")]

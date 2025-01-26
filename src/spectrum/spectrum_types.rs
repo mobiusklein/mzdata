@@ -28,6 +28,7 @@ use crate::spectrum::scan_properties::{
 use super::bindata::{ArrayRetrievalError, ArraysAvailable, BuildArrayMapFrom, BuildFromArrayMap};
 #[allow(unused)]
 use super::DataArray;
+use super::HasIonMobility;
 
 /// A blanket trait that ties together all the assumed behaviors of an m/z coordinate centroid peak
 pub trait CentroidPeakAdapting: CentroidLike + Default + From<CentroidPeak> {}
@@ -157,6 +158,17 @@ pub trait SpectrumLike<
     /// having a scan-level point measure of ion mobility.
     fn has_ion_mobility_dimension(&self) -> bool {
         self.raw_arrays().map(|a| a.has_ion_mobility()).unwrap_or_default()
+    }
+
+    /// A single point of entry for checking if ion mobility is present.
+    fn has_ion_mobility_class(&self) -> HasIonMobility {
+        if self.has_ion_mobility_dimension() {
+            HasIonMobility::Dimension
+        } else if self.has_ion_mobility() {
+            HasIonMobility::Point
+        } else {
+            HasIonMobility::None
+        }
     }
 
     /// Compute and update the the total ion current, base peak, and m/z range for

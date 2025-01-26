@@ -4,7 +4,10 @@ use chrono::DateTime;
 use log::{debug, warn};
 
 use crate::{
-    io::{traits::ChromatogramSource, utils::checksum_file, DetailLevel, OffsetIndex},
+    io::{
+        traits::ChromatogramSource, utils::checksum_file, DetailLevel,
+        Generic3DIonMobilityFrameSource, OffsetIndex,
+    },
     meta::{
         Component, ComponentType, DataProcessing, DetectorTypeTerm, DissociationMethodTerm,
         FileDescription, InstrumentConfiguration, IonizationTypeTerm, MassAnalyzerTerm,
@@ -1362,6 +1365,32 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ChromatogramSource
 
 /// A convenience alias for [`ThermoRawReaderType`] with peak types specified.
 pub type ThermoRawReader = ThermoRawReaderType<CentroidPeak, DeconvolutedPeak>;
+
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> IntoIonMobilityFrameSource<C, D>
+    for ThermoRawReaderType<C, D>
+{
+    type IonMobilityFrameSource<
+        CF: FeatureLike<MZ, mzpeaks::IonMobility>,
+        DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge,
+    > = Generic3DIonMobilityFrameSource<C, D, Self, CF, DF>;
+
+    fn try_into_frame_source<
+        CF: FeatureLike<MZ, mzpeaks::IonMobility>,
+        DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge,
+    >(
+        mut self,
+    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError> {
+        if let Some(state) = self.has_ion_mobility() {
+            if matches!(state, crate::spectrum::HasIonMobility::Dimension) {
+                Ok(Self::IonMobilityFrameSource::new(self))
+            } else {
+                Err(crate::io::IntoIonMobilityFrameSourceError::ConversionNotPossible)
+            }
+        } else {
+            Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound)
+        }
+    }
+}
 
 #[cfg(test)]
 mod test {
