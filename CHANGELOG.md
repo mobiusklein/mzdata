@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.43.0] - 2025-02-01
+
+### Added
+
+- Add `IntoIonMobilityFrameSource` for `StreamingSpectrumIterator`
+
+### Fixed
+
+- Fix error in `is_tdf`
+
 ## [0.42.0] - 2025-01-26
 
 ### Added
@@ -620,7 +630,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.42.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/mobiusklein/mzdata/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/mobiusklein/mzdata/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/mobiusklein/mzdata/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/mobiusklein/mzdata/compare/v0.39.0...v0.40.0
