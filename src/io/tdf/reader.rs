@@ -1409,7 +1409,9 @@ pub fn is_tdf<P: AsRef<Path>>(path: P) -> bool {
         return false;
     }
 
-    if !path.join("analysis.tdf").exists() {
+    let tdf_path = path.join("analysis.tdf");
+
+    if !tdf_path.exists() {
         return false;
     }
 
@@ -1417,7 +1419,7 @@ pub fn is_tdf<P: AsRef<Path>>(path: P) -> bool {
         return false;
     }
 
-    if MetadataReader::new(path).is_err() {
+    if MetadataReader::new(tdf_path).is_err() {
         return false;
     }
     return true;
