@@ -668,6 +668,47 @@ impl<
 }
 
 impl<
+        C: CentroidLike + Default + From<CentroidPeak>,
+        D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak>,
+        I: Iterator<Item = MultiLayerSpectrum<C, D>>,
+    > super::frame::IntoIonMobilityFrameSource<C, D>
+    for StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, I>
+{
+    type IonMobilityFrameSource<
+        CF: mzpeaks::prelude::FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility>,
+        DF: mzpeaks::prelude::FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + mzpeaks::KnownCharge,
+    > = super::frame::Generic3DIonMobilityFrameSource<C, D, Self, CF, DF>;
+
+    fn has_ion_mobility(&mut self) -> Option<crate::spectrum::HasIonMobility> {
+        if self.buffer.is_empty() {
+            self.populate_buffer(5);
+        }
+
+        self.buffer
+            .iter()
+            .map(|s| s.has_ion_mobility_class())
+            .reduce(|a, b| a.max(b))
+    }
+
+    fn try_into_frame_source<
+        CF: mzpeaks::prelude::FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility>,
+        DF: mzpeaks::prelude::FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + mzpeaks::KnownCharge,
+    >(
+        mut self,
+    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, super::IntoIonMobilityFrameSourceError> {
+        if let Some(state) = self.has_ion_mobility() {
+            if matches!(state, crate::spectrum::HasIonMobility::Dimension) {
+                Ok(Self::IonMobilityFrameSource::new(self))
+            } else {
+                Err(crate::io::IntoIonMobilityFrameSourceError::ConversionNotPossible)
+            }
+        } else {
+            Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound)
+        }
+    }
+}
+
+impl<
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D>,
@@ -694,6 +735,17 @@ impl<
 
     fn push_front(&mut self, spectrum: S) {
         self.buffer.push_front(spectrum);
+    }
+
+    /// Fill the buffer with at most `size` spectra
+    pub fn populate_buffer(&mut self, size: usize) {
+        for _ in 0..size {
+            if let Some(value) = self.source.next() {
+                self.buffer.push_back(value);
+            } else {
+                break;
+            }
+        }
     }
 }
 
