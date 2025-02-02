@@ -15,6 +15,7 @@ pub use crate::meta::MSDataFileMetadata;
 pub use crate::params::{ParamDescribed, ParamLike, ParamValue, ParamDescribedRead};
 pub use crate::spectrum::bindata::{
     BuildArrayMapFrom, BuildFromArrayMap, ByteArrayView, ByteArrayViewMut,
+    BuildArrayMap3DFrom, BuildFromArrayMap3D
 };
 pub use crate::spectrum::{
     IonProperties, PrecursorSelection, SpectrumLike, IonMobilityMeasure, IonMobilityFrameLike,
