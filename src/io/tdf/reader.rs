@@ -745,7 +745,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         };
         let mut config = InstrumentConfiguration::default();
         config.components = components;
-        config.id = 1;
+        config.id = 0;
         if let Some(serial) = metadata.get("InstrumentSerialNumber").cloned() {
             config.add_param(
                 Param::builder()
@@ -811,7 +811,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 
         self.softwares = self.build_software_from_metadata(&metadata);
         self.instrument_configurations
-            .insert(1, self.build_instrument_configuration(&metadata));
+            .insert(0, self.build_instrument_configuration(&metadata));
         self.samples.extend(self.build_sample(&metadata));
         self.run = self.build_ms_run(&metadata, &file_description);
         self.file_description = file_description;
@@ -985,7 +985,8 @@ impl<
         DF: FeatureLike<Mass, IonMobility> + KnownCharge,
     >(
         self,
-    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError> {
+    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError>
+    {
         let view = self.into_frame_reader();
 
         Ok(TDFFrameReaderType {
@@ -1240,12 +1241,18 @@ fn index_to_precursor(
         let mut ion = SelectedIon {
             mz: prec.mz,
             intensity: prec.intensity as f32,
-            charge: Some(prec.charge),
+            charge: if prec.charge != 0 {
+                Some(prec.charge)
+            } else {
+                None
+            },
             ..Default::default()
         };
 
         let im = metadata.im_converter.convert(prec.scan_average);
-        let p = ControlledVocabulary::MS.param_val(1002815, "inverse reduced ion mobility", im);
+        let p = ControlledVocabulary::MS
+            .param_val(1002815, "inverse reduced ion mobility", im)
+            .with_unit_t(&Unit::VoltSecondPerSquareCentimeter);
         ion.add_param(p);
         let mut act = Activation::default();
         let mut isolation = IsolationWindow::default();
