@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.44.0] - 2025-02-02
+
+### Added
+
+- Add `BuildArrayMap3DFrom` and `BuildFromArrayMap3D` to the prelude
+
+### Fixed
+
+- Fix first instrument configuration to in TDF to count ID from 0
+- Prevent TDF reader index-out-of-bounds slice in `FrameToArrayMapper`
+
 ## [0.43.0] - 2025-02-01
 
 ### Added
@@ -630,7 +641,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.43.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/mobiusklein/mzdata/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/mobiusklein/mzdata/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/mobiusklein/mzdata/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/mobiusklein/mzdata/compare/v0.40.0...v0.41.0
