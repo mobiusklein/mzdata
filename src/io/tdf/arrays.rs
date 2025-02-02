@@ -45,11 +45,18 @@ impl<'a> FrameToArraysMapper<'a> {
         let mut arrays = Vec::with_capacity(final_scan - first_scan + 1);
 
         let mut scan_begin = first_scan;
-        for (i, scan_end) in self.frame.scan_offsets[first_scan..final_scan]
+        for (i, mut scan_end) in self.frame.scan_offsets[first_scan..final_scan]
             .iter()
             .copied()
             .enumerate()
         {
+            if scan_begin > self.frame.tof_indices.len() {
+                break;
+            }
+            if scan_end > self.frame.tof_indices.len() {
+                log::warn!("Limiting scan_end {scan_end} for index {i} ({}, {})", self.frame.tof_indices.len(), self.frame.intensities.len());
+                scan_end = self.frame.tof_indices.len();
+            }
             let width = scan_end.saturating_sub(scan_begin);
 
             let mut mz_array_bytes: Vec<u8> =
