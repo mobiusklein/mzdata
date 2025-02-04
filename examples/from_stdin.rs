@@ -50,6 +50,6 @@ fn main() -> io::Result<()> {
         spectra.len(),
         end - start
     );
-    assert!(spectra.len() > 0);
+    assert!(!spectra.is_empty());
     Ok(())
 }

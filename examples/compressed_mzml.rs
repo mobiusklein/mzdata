@@ -12,7 +12,7 @@ use mzdata::io::{MzMLReader, RestartableGzDecoder};
 use mzdata::prelude::*;
 
 fn main() -> io::Result<()> {
-    let input = env::args().skip(1).next().unwrap_or_else(|| {
+    let input = env::args().nth(1).unwrap_or_else(|| {
         eprintln!("Please provide a file path or '-' for STDIN");
         exit(1)
     });
@@ -40,7 +40,7 @@ fn main() -> io::Result<()> {
         spectra.len(),
         end - start
     );
-    assert!(spectra.len() > 0);
+    assert!(!spectra.is_empty());
 
     Ok(())
 }

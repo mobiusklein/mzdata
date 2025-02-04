@@ -16,7 +16,6 @@ use mzdata::meta::{DataProcessing, ProcessingMethod, SourceFile};
 use mzdata::params::ControlledVocabulary;
 use mzdata::prelude::*;
 
-use env_logger;
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 #[derive(Debug, Clone)]
@@ -158,7 +157,7 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
             method.add_param(conv.into())
         }
 
-        if writer.data_processings().len() == 0 {
+        if writer.data_processings().is_empty() {
             let mut dp = DataProcessing::default();
             method.order = 0;
             dp.push(method.clone());

@@ -175,11 +175,11 @@ impl<R: SpectrumSource> MSnTargetTrackingIterator<R> {
     }
 
     fn get_current_window_end(&self) -> f64 {
-        if self.buffer.len() == 0 {
+        if self.buffer.is_empty() {
             return f64::NEG_INFINITY;
         }
-        let start = self.buffer.front().and_then(|(_, t)| Some(*t)).unwrap();
-        let end = self.buffer.back().and_then(|(_, t)| Some(*t)).unwrap();
+        let start = self.buffer.front().map(|(_, t)| *t).unwrap();
+        let end = self.buffer.back().map(|(_, t)| *t).unwrap();
         let mid = start + (end - start) / 2.0;
         mid + self.time_width
     }

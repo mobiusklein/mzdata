@@ -9,7 +9,7 @@ use std::process::exit;
 use mzdata::io::{infer_format, infer_from_stream, PreBufferedStream};
 
 fn main() -> io::Result<()> {
-    let input = env::args().skip(1).next().unwrap_or_else(|| {
+    let input = env::args().nth(1).unwrap_or_else(|| {
         eprintln!("Please provide a file path or '-' for STDIN");
         exit(1)
     });
