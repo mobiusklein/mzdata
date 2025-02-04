@@ -411,7 +411,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
     }
 
     /// Apply a local denoising algorithm to the signal that is suitable for profile mode
-    /// data.
+    /// data using [`mzsignal::denoise`].
     #[cfg(feature = "mzsignal")]
     pub fn denoise(&mut self, scale: f32) -> Result<(), SpectrumProcessingError> {
         let mut intensities_copy = self.arrays.intensities()?.into_owned();
@@ -887,6 +887,7 @@ where
 /// peak data.
 ///
 /// This type is useful because it permits us to hold spectra in incrementally
+/// more processed representations without loss of information.
 pub struct MultiLayerSpectrum<
     C: CentroidLike + Default = CentroidPeak,
     D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
@@ -1076,6 +1077,8 @@ where
     }
 
     #[cfg(feature = "mzsignal")]
+    /// Apply a local denoising algorithm to the signal that is suitable for profile mode
+    /// data using [`mzsignal::denoise`].
     pub fn denoise(&mut self, scale: f32) -> Result<(), SpectrumProcessingError> {
         match &mut self.arrays {
             Some(arrays) => {

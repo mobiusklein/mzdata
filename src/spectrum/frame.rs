@@ -53,13 +53,11 @@ pub enum RefFeatureDataLevel<
     Deconvoluted(&'a FeatureMap<Mass, IonMobility, D>),
 }
 
-/**
-The set of descriptive metadata that give context for how an ion mobility frame was acquired
-within a particular run. This forms the basis for a large portion of the [`IonMobilityFrameLike`]
-trait.
-
-This is the equivalent of the [`SpectrumDescription`] type.
-*/
+/// The set of descriptive metadata that give context for how an ion mobility frame was acquired
+/// within a particular run. This forms the basis for a large portion of the [`IonMobilityFrameLike`]
+/// trait.
+///
+/// This is the equivalent of the [`SpectrumDescription`] type.
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IonMobilityFrameDescription {
@@ -250,16 +248,27 @@ pub trait IonMobilityFrameLike<
     fn into_features_and_parts(self) -> (FeatureDataLevel<C, D>, IonMobilityFrameDescription);
 }
 
+/// An ion mobility dimension-equivalent of [`MultiLayerSpectrum`].
+///
+/// An ion mobility frame is just like a mass spectrum, except the signal
+/// is spread across multiple ion mobility "points". This means that instead
+/// producing "points" in the mass coordinate system, this produces traces-over-time
+/// or "features".
+///
+/// An ion mobility frames can usually be inter-converted with spectra.
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MultiLayerIonMobilityFrame<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
 > {
+    /// The raw data arrays, split by ion mobility point
     pub arrays: Option<BinaryArrayMap3D>,
+    /// The (potentially absent) m/z coordinate feature map
     pub features: Option<FeatureMap<MZ, IonMobility, C>>,
+    /// The (potentially absent) neutral mass coordinate feature map
     pub deconvoluted_features: Option<FeatureMap<Mass, IonMobility, D>>,
-    description: IonMobilityFrameDescription,
+    pub description: IonMobilityFrameDescription,
 }
 
 impl<

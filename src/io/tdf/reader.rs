@@ -56,6 +56,12 @@ use super::sql::{
 
 const PEAK_MERGE_TOLERANCE: Tolerance = Tolerance::Da(0.01);
 
+fn inverse_reduce_ion_mobility_param(value: f64) -> Param {
+    ControlledVocabulary::MS
+        .param_val(1002815, "inverse reduced ion mobility", value)
+        .with_unit_t(&Unit::VoltSecondPerSquareCentimeter)
+}
+
 #[derive(Debug, Clone)]
 pub struct IndexExtry {
     pub frame: Arc<SQLFrame>,
@@ -1250,9 +1256,9 @@ fn index_to_precursor(
         };
 
         let im = metadata.im_converter.convert(prec.scan_average);
-        let p = ControlledVocabulary::MS
-            .param_val(1002815, "inverse reduced ion mobility", im)
-            .with_unit_t(&Unit::VoltSecondPerSquareCentimeter);
+
+
+        let p = inverse_reduce_ion_mobility_param(im);
         ion.add_param(p);
         let mut act = Activation::default();
         let mut isolation = IsolationWindow::default();
@@ -1315,6 +1321,25 @@ fn frame_to_description(
             .build(),
     );
 
+    let mut scan = ScanEvent::new(
+        index_entry.frame.time / 60.0,
+        index_entry.frame.accumulation_time,
+        vec![ScanWindow {
+            lower_bound: metadata.lower_mz as f32,
+            upper_bound: metadata.upper_mz as f32,
+        }],
+        0,
+        None,
+    );
+
+    if let Some(scan_range) = frame_slice.as_ref() {
+        let im = (metadata.im_converter.convert(scan_range.start)
+            + metadata.im_converter.convert(scan_range.end))
+            / 2.0;
+        let p = inverse_reduce_ion_mobility_param(im);
+        scan.add_param(p);
+    }
+
     if let Some(pasef) = index_entry.pasef_msms() {
         let im_low = metadata.im_converter.convert(pasef.scan_start as u32);
         let im_high = metadata.im_converter.convert(pasef.scan_end as u32);
@@ -1327,6 +1352,10 @@ fn frame_to_description(
             Param::new_key_value("ion mobility upper limit", im_high)
                 .with_unit_t(&Unit::VoltSecondPerSquareCentimeter),
         );
+
+        if frame_slice.is_none() {
+            scan.add_param(inverse_reduce_ion_mobility_param((im_low + im_high) / 2.0));
+        }
     }
 
     if let Some(pasef) = index_entry.dia_window() {
@@ -1341,25 +1370,12 @@ fn frame_to_description(
             Param::new_key_value("ion mobility upper limit", im_high)
                 .with_unit_t(&Unit::VoltSecondPerSquareCentimeter),
         );
+
+        if frame_slice.is_none() {
+            scan.add_param(inverse_reduce_ion_mobility_param((im_low + im_high) / 2.0));
+        }
     }
 
-    let mut scan = ScanEvent::new(
-        index_entry.frame.time / 60.0,
-        index_entry.frame.accumulation_time,
-        vec![ScanWindow {
-            lower_bound: metadata.lower_mz as f32,
-            upper_bound: metadata.upper_mz as f32,
-        }],
-        0,
-        None,
-    );
-    if let Some(scan_range) = frame_slice.as_ref() {
-        let im = (metadata.im_converter.convert(scan_range.start)
-            + metadata.im_converter.convert(scan_range.end))
-            / 2.0;
-        let p = ControlledVocabulary::MS.param_val(1002815, "inverse reduced ion mobility", im);
-        scan.add_param(p);
-    }
     *descr.acquisition.first_scan_mut().unwrap() = scan;
     descr.acquisition.combination = ScanCombination::Sum;
     descr
