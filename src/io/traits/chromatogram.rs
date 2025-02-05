@@ -32,7 +32,7 @@ impl<'a, R: ChromatogramSource> ChromatogramIterator<'a, R> {
     }
 }
 
-impl<'a, R: ChromatogramSource> Iterator for ChromatogramIterator<'a, R> {
+impl<R: ChromatogramSource> Iterator for ChromatogramIterator<'_, R> {
     type Item = Chromatogram;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -45,4 +45,4 @@ impl<'a, R: ChromatogramSource> Iterator for ChromatogramIterator<'a, R> {
     }
 }
 
-impl<'a, R: ChromatogramSource> FusedIterator for ChromatogramIterator<'a, R> {}
+impl<R: ChromatogramSource> FusedIterator for ChromatogramIterator<'_, R> {}

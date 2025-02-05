@@ -235,13 +235,10 @@ impl<
         D: DeconvolutedPeakAdapting,
     > MGFReaderType<R, C, D>
 {
-    pub fn as_stream<'a>(&'a mut self) -> impl SpectrumStream<C, D, MultiLayerSpectrum<C, D>> + 'a {
+    pub fn as_stream(&mut self) -> impl SpectrumStream<C, D, MultiLayerSpectrum<C, D>> + '_ {
         Box::pin(stream::unfold(self, |reader| async {
             let spec = reader.read_next();
-            match spec.await {
-                Some(val) => Some((val, reader)),
-                None => None,
-            }
+            spec.await.map(|val| (val, reader))
         }))
     }
 
@@ -369,6 +366,10 @@ impl<
     /// Read the length of the spectrum offset index
     pub fn len(&self) -> usize {
         self.index.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.index.is_empty()
     }
 
     /// Retrieve a spectrum by its scan start time

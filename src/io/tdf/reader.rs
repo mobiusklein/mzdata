@@ -97,7 +97,7 @@ impl IndexExtry {
             }
             MsMsType::DIAPASEF => {
                 if let Some(pasef) = self.tdf_facet.dia_window() {
-                    (pasef.scan_start as usize, pasef.scan_end as usize)
+                    (pasef.scan_start, pasef.scan_end)
                 } else {
                     (0, self.frame.num_scans)
                 }
@@ -174,6 +174,10 @@ pub struct TDFFrameReaderType<
     _d: PhantomData<D>,
 }
 
+
+type DIAFrameWindowMap = HashMap<u32, Vec<Arc<SQLDIAFrameMsMsWindow>>, BuildIdentityHasher<u32>>;
+
+
 impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge>
     TDFFrameReaderType<C, D>
 {
@@ -205,7 +209,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         }
 
         let metadata = MetadataReader::new(&tdf_path)?;
-        let frame_reader = FrameReader::new(&path)?;
+        let frame_reader = FrameReader::new(path)?;
         let tdf_reader = RawTDFSQLReader::new(&tdf_path)
             .map_err(|e| TimsRustError::FrameReaderError(FrameReaderError::SqlError(e.into())))?;
 
@@ -296,10 +300,12 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                     JOIN
                     (SELECT WindowGroup AS WindowGroup, COUNT(1) AS GroupSize FROM DiaFrameMsMsWindows GROUP BY WindowGroup) as window_group_size
                     ON frames_of.WindowGroup = window_group_size.WindowGroup GROUP BY frames_of.WindowGroup"#)?;
+
                     let total = q.query_map([], |row| {
                         let count: usize = row.get(1)?;
                         Ok(count)
-                    })?.flatten().sum();
+                    })?.flatten().sum::<usize>();
+                    #[allow(clippy::let_and_return)]
                     total
                 },
                 MsMsType::PRMPASEF => todo!(),
@@ -312,7 +318,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 
     fn build_window_index(
         &self,
-    ) -> Result<HashMap<u32, Vec<Arc<SQLDIAFrameMsMsWindow>>, BuildIdentityHasher<u32>>, Error>
+    ) -> Result<DIAFrameWindowMap, Error>
     {
         let conn = self.tdf_reader.connection();
         let dia_windows = SQLDIAFrameMsMsWindow::read_from(&conn, [])?;
@@ -339,13 +345,13 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 
         let precursors: Vec<_> = SQLPrecursor::read_from(&conn, [])?
             .into_iter()
-            .map(|p| Arc::new(p))
+            .map(Arc::new)
             .collect();
 
         let pasef_msms_info: HashMap<u32, Vec<Arc<SQLPasefFrameMsMs>>, BuildIdentityHasher<u32>> =
             SQLPasefFrameMsMs::read_from(&conn, [])?
                 .into_iter()
-                .map(|p| Arc::new(p))
+                .map(Arc::new)
                 .fold(HashMap::default(), |mut index, p| {
                     index.entry(p.frame as u32).or_default().push(p);
                     index
@@ -356,7 +362,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         let mut frame_index = Vec::with_capacity(frames.len());
         let mut parent_index: HashMap<usize, usize> = HashMap::new();
         let mut last_parent = 0usize;
-        for frame in frames.into_iter().map(|f| Arc::new(f)) {
+        for frame in frames.into_iter().map(Arc::new) {
             frame_index.push(frame.clone());
             if frame.num_peaks == 0 {
                 continue;
@@ -441,11 +447,11 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             match chromatogram_type {
                 ChromatogramType::TotalIonCurrentChromatogram => {
                     intensity_array
-                        .extend_from_slice(&(entry.frame.summed_intensities as f32).to_le_bytes());
+                        .extend_from_slice(&entry.frame.summed_intensities.to_le_bytes());
                 }
                 ChromatogramType::BasePeakChromatogram => {
                     intensity_array
-                        .extend_from_slice(&(entry.frame.max_intensity as f32).to_le_bytes());
+                        .extend_from_slice(&entry.frame.max_intensity.to_le_bytes());
                 }
                 _ => {
                     unimplemented!()
@@ -723,35 +729,45 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             let mut components = Vec::new();
             components.push(source);
 
-            let mut analyzer = Component::default();
-            analyzer.order = 2;
-            analyzer.component_type = ComponentType::Analyzer;
+            let mut analyzer = Component {
+                order: 2,
+                component_type: ComponentType::Analyzer,
+                ..Default::default()
+            };
             analyzer.add_param(MassAnalyzerTerm::Quadrupole.into());
             components.push(analyzer);
 
-            let mut analyzer = Component::default();
-            analyzer.order = 3;
-            analyzer.component_type = ComponentType::Analyzer;
+            let mut analyzer = Component {
+                component_type: ComponentType::Analyzer,
+                order: 3,
+                ..Default::default()
+            };
             analyzer.add_param(MassAnalyzerTerm::TimeOfFlight.into());
             components.push(analyzer);
 
-            let mut detector = Component::default();
-            detector.component_type = ComponentType::Detector;
-            detector.order = 4;
+            let mut detector = Component {
+                component_type: ComponentType::Detector,
+                order: 4,
+                ..Default::default()
+            };
             detector.add_param(DetectorTypeTerm::MicrochannelPlateDetector.into());
             components.push(detector);
 
-            let mut detector = Component::default();
-            detector.component_type = ComponentType::Detector;
-            detector.order = 5;
+            detector = Component {
+                component_type: ComponentType::Detector,
+                order: 5,
+                ..Default::default()
+            };
             detector.add_param(DetectorTypeTerm::Photomultiplier.into());
             components.push(detector);
 
             components
         };
-        let mut config = InstrumentConfiguration::default();
-        config.components = components;
-        config.id = 0;
+        let mut config = InstrumentConfiguration {
+            components,
+            id: 0,
+            ..Default::default()
+        };
         if let Some(serial) = metadata.get("InstrumentSerialNumber").cloned() {
             config.add_param(
                 Param::builder()
@@ -1190,6 +1206,10 @@ impl<
         self.frame_reader.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.frame_reader.is_empty()
+    }
+
     /// Retrieve a spectrum by index
     pub fn get(&self, index: usize) -> Result<Option<MultiLayerSpectrum>, TimsRustError> {
         self.frame_reader.get(index).map(|f| {
@@ -1273,7 +1293,7 @@ fn index_to_precursor(
             isolation.flags = IsolationWindowState::Complete;
         }
         if let Some(pasef) = index_entry.dia_window() {
-            act.energy = pasef.collision_energy as f32;
+            act.energy = pasef.collision_energy;
             act.methods_mut().push(CollisionInducedDissociation);
 
             let iso_width = pasef.isolation_width / 2.0;
@@ -1299,12 +1319,14 @@ fn frame_to_description(
     index_entry: &IndexExtry,
     frame_slice: Option<Range<u32>>,
 ) -> IonMobilityFrameDescription {
-    let mut descr = IonMobilityFrameDescription::default();
-    descr.id = index_entry.format_native_id();
-    descr.index = index_entry.index;
-    descr.ms_level = index_entry.ms_level();
-    descr.signal_continuity = SignalContinuity::Centroid;
-    descr.polarity = index_entry.frame.polarity;
+    let mut descr = IonMobilityFrameDescription {
+        id: index_entry.format_native_id(),
+        index: index_entry.index,
+        ms_level: index_entry.ms_level(),
+        signal_continuity: SignalContinuity::Centroid,
+        polarity: index_entry.frame.polarity,
+        ..Default::default()
+    };
 
     descr.add_param(
         Param::builder()
@@ -1445,5 +1467,5 @@ pub fn is_tdf<P: AsRef<Path>>(path: P) -> bool {
     if MetadataReader::new(tdf_path).is_err() {
         return false;
     }
-    return true;
+    true
 }

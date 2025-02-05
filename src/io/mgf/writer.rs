@@ -233,11 +233,8 @@ impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting, Y: MGFH
         self.handle
             .write_all((spectrum.start_time() * 60.0).to_string().as_bytes())?;
         self.handle.write_all(b"\n")?;
-        match &desc.precursor {
-            Some(precursor) => {
-                self.write_precursor(precursor)?;
-            }
-            None => {}
+        if let Some(precursor) = &desc.precursor {
+            self.write_precursor(precursor)?;
         }
 
         Y::write_header(self, spectrum)?;

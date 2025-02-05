@@ -72,13 +72,12 @@ impl<'a> FrameToArraysMapper<'a> {
                     )
                 });
             (scan_begin..(scan_begin + width))
-                .into_iter()
                 .for_each(|idx| {
                     intensity_array_bytes.extend_from_slice(
                         &((self.frame.intensities[idx] as u64) as f32).to_le_bytes(),
                     );
                 });
-            let drift = self.metadata.im_converter.convert((i + first_scan) as u32) as f64;
+            let drift = self.metadata.im_converter.convert((i + first_scan) as u32);
             im_dimension.push(drift);
 
             let mz_array = DataArray::wrap(
@@ -104,13 +103,13 @@ impl<'a> FrameToArraysMapper<'a> {
         im_dimension.reverse();
         arrays.reverse();
 
-        let arrays = BinaryArrayMap3D::from_ion_mobility_dimension_and_arrays(
+
+        BinaryArrayMap3D::from_ion_mobility_dimension_and_arrays(
             im_dimension,
             ArrayType::IonMobilityArray,
             Unit::VoltSecondPerSquareCentimeter,
             arrays,
-        );
-        arrays
+        )
     }
 }
 
@@ -121,8 +120,7 @@ pub fn consolidate_peaks<CP: CentroidLike + From<CentroidPeak>>(
     error_tolerance: Tolerance,
 ) -> Result<MZPeakSetType<CP>, ArrayRetrievalError> {
     let peaks: Result<Vec<_>, ArrayRetrievalError> = scan_range
-        .clone()
-        .into_iter().rev()
+        .clone().rev()
         .map(|i| -> Result<(f64, PeakSet), ArrayRetrievalError> {
             let im = metadata.im_converter.convert(i);
             if let Some(arrays_point) = arrays.get_ion_mobility(im) {

@@ -335,11 +335,11 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
     ///
     /// # See also
     /// To pick peaks from profile data, see [`RawSpectrum::pick_peaks_into`]
-    pub fn into_centroid<C: CentroidLike + Default>(
+    pub fn into_centroid<C>(
         self,
     ) -> Result<CentroidSpectrumType<C>, SpectrumConversionError>
     where
-        C: BuildFromArrayMap,
+        C: BuildFromArrayMap + CentroidLike + Default
     {
         if !matches!(
             self.description.signal_continuity,
@@ -397,11 +397,11 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
     }
 
     /// Convert a spectrum into a [`MultiLayerSpectrum`].
-    pub fn into_spectrum<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>(
+    pub fn into_spectrum<C, D>(
         self,
     ) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
     where
-        C: BuildFromArrayMap,
+        C: BuildFromArrayMap, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default
     {
         Ok(MultiLayerSpectrum::<C, D> {
             arrays: Some(self.arrays),
@@ -601,7 +601,7 @@ impl RawSpectrum {
     /// information. This may not be the most refined version of the peak signal if
     /// it has been processed further.
     pub fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap> {
-        <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::raw_arrays(&self)
+        <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::raw_arrays(self)
     }
 
     /// Check if this spectrum has an ion mobility dimension/array. This is distinct from
@@ -1149,8 +1149,7 @@ where
                 BinaryDataArrayType::Float64,
                 pair.mz_array
                     .iter()
-                    .map(|i| i.to_le_bytes())
-                    .flatten()
+                    .flat_map(|i| i.to_le_bytes())
                     .collect(),
             ));
 
@@ -1159,8 +1158,7 @@ where
                 BinaryDataArrayType::Float32,
                 pair.intensity_array
                     .iter()
-                    .map(|i| i.to_le_bytes())
-                    .flatten()
+                    .flat_map(|i| i.to_le_bytes())
                     .collect(),
             ));
             Ok(())
@@ -1197,12 +1195,12 @@ where
                     self.peaks = Some(peaks);
                     return Ok(self.peaks());
                 }
-                return Ok(RefPeakDataLevel::Missing);
+                Ok(RefPeakDataLevel::Missing)
             } else {
-                return Ok(self.peaks());
+                Ok(self.peaks())
             }
         } else {
-            return Ok(self.peaks());
+            Ok(self.peaks())
         }
     }
 

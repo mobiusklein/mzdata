@@ -3,7 +3,7 @@ use crate::{
     params::ParamDescribed,
 };
 
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InstrumentSource {
     AlsoUnknown = 0,
@@ -27,10 +27,12 @@ pub enum InstrumentSource {
 }
 
 impl InstrumentSource {
-    pub fn to_component(&self) -> Component {
-        let mut comp = Component::default();
-        comp.order = 1;
-        comp.component_type = ComponentType::IonSource;
+    pub fn to_component(self) -> Component {
+        let mut comp = Component {
+            order: 1,
+            component_type: ComponentType::IonSource,
+            ..Default::default()
+        };
 
         match self {
             Self::ESI | Self::MultiMode | Self::Ultraspray | Self::VIP_HESI => {
@@ -91,6 +93,8 @@ impl From<u8> for InstrumentSource {
     }
 }
 
+
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MsMsType {
     MS1 = 0,

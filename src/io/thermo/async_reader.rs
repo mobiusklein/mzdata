@@ -60,7 +60,8 @@ impl<C: CentroidPeakAdapting + Send + 'static, D: DeconvolutedPeakAdapting + Sen
     AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
 {
     fn reset(&mut self) -> impl std::future::Future<Output = ()> {
-        futures::future::ready(self.inner.as_mut().unwrap().reset())
+        self.inner.as_mut().unwrap().reset();
+        futures::future::ready(())
     }
 
     fn detail_level(&self) -> &DetailLevel {
@@ -135,6 +136,10 @@ impl<C: CentroidPeakAdapting + Send + 'static, D: DeconvolutedPeakAdapting + Sen
         self.inner.as_ref().unwrap().len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.inner.as_ref().unwrap().is_empty()
+    }
+
     pub fn get_centroiding(&self) -> bool {
         self.inner.as_ref().unwrap().get_centroiding()
     }
@@ -165,13 +170,10 @@ impl<C: CentroidPeakAdapting + Send + 'static, D: DeconvolutedPeakAdapting + Sen
         self.inner.as_ref().unwrap().get_index()
     }
 
-    pub fn as_stream<'a>(&'a mut self) -> impl SpectrumStream<C, D, MultiLayerSpectrum<C, D>> + 'a {
+    pub fn as_stream(&mut self) -> impl SpectrumStream<C, D, MultiLayerSpectrum<C, D>> + '_ {
         Box::pin(stream::unfold(self, |reader| async {
             let spec = reader.read_next();
-            match spec.await {
-                Some(val) => Some((val, reader)),
-                None => None,
-            }
+            spec.await.map(|val| (val, reader))
         }))
     }
 

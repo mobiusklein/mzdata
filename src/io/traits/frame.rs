@@ -172,12 +172,11 @@ pub struct IonMobilityFrameIterator<
 }
 
 impl<
-        'lifespan,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
         S: IonMobilityFrameLike<C, D>,
         R: IonMobilityFrameSource<C, D, S>,
-    > IonMobilityFrameIterator<'lifespan, C, D, S, R>
+    > IonMobilityFrameIterator<'_, C, D, S, R>
 {
     pub fn new(source: &mut R) -> IonMobilityFrameIterator<C, D, S, R> {
         IonMobilityFrameIterator::<C, D, S, R> {
@@ -192,12 +191,11 @@ impl<
 }
 
 impl<
-        'lifespan,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
         S: IonMobilityFrameLike<C, D>,
         R: IonMobilityFrameSource<C, D, S>,
-    > Iterator for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+    > Iterator for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     type Item = S;
 
@@ -212,12 +210,11 @@ impl<
 }
 
 impl<
-        'lifespan,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
         S: IonMobilityFrameLike<C, D>,
         R: IonMobilityFrameSource<C, D, S>,
-    > ExactSizeIterator for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+    > ExactSizeIterator for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     fn len(&self) -> usize {
         self.source.len()
@@ -225,12 +222,11 @@ impl<
 }
 
 impl<
-        'lifespan,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
         S: IonMobilityFrameLike<C, D>,
         R: IonMobilityFrameSource<C, D, S>,
-    > DoubleEndedIterator for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+    > DoubleEndedIterator for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.index + self.back_index >= self.len() {
@@ -244,12 +240,11 @@ impl<
 }
 
 impl<
-        'lifespan,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
         S: IonMobilityFrameLike<C, D>,
         R: IonMobilityFrameSource<C, D, S>,
-    > IonMobilityFrameSource<C, D, S> for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+    > IonMobilityFrameSource<C, D, S> for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     fn reset(&mut self) {
         self.index = 0;
@@ -288,12 +283,11 @@ impl<
 /// If the underlying iterator implements [`MSDataFileMetadata`] then [`IonMobilityFrameIterator`] will
 /// forward that implementation, assuming it is available.
 impl<
-        'lifespan,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
         S: IonMobilityFrameLike<C, D>,
         R: IonMobilityFrameSource<C, D, S>,
-    > MSDataFileMetadata for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+    > MSDataFileMetadata for IonMobilityFrameIterator<'_, C, D, S, R>
 where
     R: MSDataFileMetadata,
 {
@@ -359,7 +353,7 @@ impl<
                     warn!("Failed to convert {id} to MultiLayerIonMobilityFrame: {err}");
                     None
                 },
-                |val| Some(val),
+                Some,
             )
         })
     }
@@ -371,7 +365,7 @@ impl<
                     warn!("Failed to convert {index} to MultiLayerIonMobilityFrame: {err}");
                     None
                 },
-                |val| Some(val),
+                Some
             )
         })
     }
@@ -383,7 +377,7 @@ impl<
                     warn!("Failed to convert {time} to MultiLayerIonMobilityFrame: {err}");
                     None
                 },
-                |val| Some(val),
+                Some
             )
         })
     }
@@ -408,14 +402,8 @@ impl<
     type Item = MultiLayerIonMobilityFrame<C, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(s) = self.source.next() {
-            Some(
-                MultiLayerIonMobilityFrame::try_from(s)
-                    .expect("Failed to convert spectrum into frame"),
-            )
-        } else {
-            None
-        }
+        self.source.next().map(|s| MultiLayerIonMobilityFrame::try_from(s)
+                    .expect("Failed to convert spectrum into frame"))
     }
 }
 
@@ -565,13 +553,12 @@ where
 }
 
 impl<
-        'lifespan,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
         S: IonMobilityFrameLike<C, D>,
         R: IonMobilityFrameSource<C, D, S>,
     > RandomAccessIonMobilityFrameIterator<C, D, S>
-    for IonMobilityFrameIterator<'lifespan, C, D, S, R>
+    for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     /// Start iterating from the spectrum whose native ID matches `id`
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError> {
@@ -646,7 +633,7 @@ pub trait IonMobilityFrameWriter<
     }
 
     /// Consume an [`Iterator`] over [`IonMobilityFrameLike`]
-    fn write_all_frames_owned<'b, S: IonMobilityFrameLike<C, D> + 'static, T: Iterator<Item = S>>(
+    fn write_all_frames_owned<S: IonMobilityFrameLike<C, D> + 'static, T: Iterator<Item = S>>(
         &mut self,
         iterator: T,
     ) -> io::Result<usize> {
@@ -712,7 +699,6 @@ pub trait IonMobilityFrameWriter<
 
     /// Consume an [`Iterator`] over [`IonMobilityFrameGrouping`]
     fn write_all_frame_groups_owned<
-        'b,
         S: IonMobilityFrameLike<C, D> + 'static,
         G: IonMobilityFrameGrouping<C, D, S> + 'static,
         T: Iterator<Item = G>,
@@ -752,13 +738,12 @@ pub struct BorrowedGeneric3DIonMobilityFrameSource<
 }
 
 impl<
-        'a,
         CP: CentroidPeakAdapting,
         DP: DeconvolutedPeakAdapting,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > MSDataFileMetadata for BorrowedGeneric3DIonMobilityFrameSource<'a, CP, DP, R, C, D>
+    > MSDataFileMetadata for BorrowedGeneric3DIonMobilityFrameSource<'_, CP, DP, R, C, D>
 where
     R: MSDataFileMetadata,
 {
@@ -766,14 +751,13 @@ where
 }
 
 impl<
-        'a,
         CP: CentroidPeakAdapting,
         DP: DeconvolutedPeakAdapting,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
     > IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>>
-    for BorrowedGeneric3DIonMobilityFrameSource<'a, CP, DP, R, C, D>
+    for BorrowedGeneric3DIonMobilityFrameSource<'_, CP, DP, R, C, D>
 {
 
     fn detail_level(&self) -> &DetailLevel {
@@ -795,7 +779,7 @@ impl<
                     warn!("Failed to convert {id} to MultiLayerIonMobilityFrame: {err}");
                     None
                 },
-                |val| Some(val),
+                Some,
             )
         })
     }
@@ -807,7 +791,7 @@ impl<
                     warn!("Failed to convert {index} to MultiLayerIonMobilityFrame: {err}");
                     None
                 },
-                |val| Some(val),
+                Some,
             )
         })
     }
@@ -819,7 +803,7 @@ impl<
                     warn!("Failed to convert {time} to MultiLayerIonMobilityFrame: {err}");
                     None
                 },
-                |val| Some(val),
+                Some,
             )
         })
     }
@@ -835,25 +819,17 @@ impl<
 
 
 impl<
-        'a,
         CP: CentroidPeakAdapting,
         DP: DeconvolutedPeakAdapting,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > Iterator for BorrowedGeneric3DIonMobilityFrameSource<'a, CP, DP, R, C, D>
+    > Iterator for BorrowedGeneric3DIonMobilityFrameSource<'_, CP, DP, R, C, D>
 {
     type Item = MultiLayerIonMobilityFrame<C, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(s) = self.source.next() {
-            Some(
-                MultiLayerIonMobilityFrame::try_from(s)
-                    .expect("Failed to convert spectrum into frame"),
-            )
-        } else {
-            None
-        }
+        self.source.next().map(|s| MultiLayerIonMobilityFrame::try_from(s).expect("Failed to convert spectrum into frame"))
     }
 }
 
@@ -880,14 +856,13 @@ impl<
 
 
 impl<
-        'a,
         CP: CentroidPeakAdapting,
         DP: DeconvolutedPeakAdapting,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
     > RandomAccessIonMobilityFrameIterator<C, D, MultiLayerIonMobilityFrame<C, D>>
-    for BorrowedGeneric3DIonMobilityFrameSource<'a, CP, DP, R, C, D>
+    for BorrowedGeneric3DIonMobilityFrameSource<'_, CP, DP, R, C, D>
 where
     R: RandomAccessSpectrumIterator<CP, DP, MultiLayerSpectrum<CP, DP>>,
 {

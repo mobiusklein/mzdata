@@ -9,7 +9,7 @@ pub fn is_gzipped(header: &[u8]) -> bool {
 
 pub fn is_gzipped_extension(path: path::PathBuf) -> (bool, path::PathBuf) {
     if let Some(ext) = path.extension() {
-        if ext.to_ascii_lowercase() == "gz" {
+        if ext.eq_ignore_ascii_case("gz") {
             (true, path.with_extension(""))
         } else {
             (false, path)

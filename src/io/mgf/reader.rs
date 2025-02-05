@@ -95,9 +95,11 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> SpectrumBuilder<C, D>
 
 impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Default for SpectrumBuilder<C, D> {
     fn default() -> Self {
-        let mut description = SpectrumDescription::default();
-        description.signal_continuity = SignalContinuity::Centroid;
-        description.ms_level = 2;
+        let description = SpectrumDescription {
+            signal_continuity: SignalContinuity::Centroid,
+            ms_level: 2,
+            ..Default::default()
+        };
         Self {
             description,
             empty_metadata: true,
@@ -387,7 +389,7 @@ pub(crate) trait MGFLineParsing<C: CentroidPeakAdapting, D: DeconvolutedPeakAdap
                 self.set_error(MGFError::MalformedHeaderLine(format!(
                     "Could not parse charge value {value} : {e}"
                 )));
-                return None;
+                None
             }
         }
     }
@@ -454,8 +456,10 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
 
     /// Read the next spectrum from the file, if there is one.
     pub fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
-        let mut builder = SpectrumBuilder::<C, D>::default();
-        builder.detail_level = self.detail_level;
+        let mut builder = SpectrumBuilder {
+            detail_level: self.detail_level,
+            ..Default::default()
+        };
         self._parse_into(&mut builder)
             .ok()
             .and_then(|(_, started_spectrum)| {
@@ -528,8 +532,10 @@ impl<R: io::Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFReade
         &mut self,
         spectrum: &mut MultiLayerSpectrum<C, D>,
     ) -> Result<usize, MGFError> {
-        let mut accumulator = SpectrumBuilder::default();
-        accumulator.detail_level = self.detail_level;
+        let mut accumulator = SpectrumBuilder {
+            detail_level: self.detail_level,
+            ..Default::default()
+        };
         match self._parse_into(&mut accumulator) {
             Ok((sz, started_spectrum)) => {
                 if !started_spectrum {

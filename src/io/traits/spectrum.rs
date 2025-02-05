@@ -58,11 +58,9 @@ pub trait SpectrumSource<
     /// in chronological order.
     fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {
         let n = self.len();
-        if n == 0 {
-            if !self.get_index().init {
-                warn!("Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized.");
-                return None;
-            }
+        if n == 0 && !self.get_index().init {
+            warn!("Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized.");
+            return None;
         }
         let mut lo: usize = 0;
         let mut hi: usize = n;
@@ -183,12 +181,11 @@ pub struct SpectrumIterator<
 }
 
 impl<
-        'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
-    > SpectrumIterator<'lifespan, C, D, S, R>
+    > SpectrumIterator<'_, C, D, S, R>
 {
     pub fn new(source: &mut R) -> SpectrumIterator<C, D, S, R> {
         SpectrumIterator::<C, D, S, R> {
@@ -203,12 +200,11 @@ impl<
 }
 
 impl<
-        'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
-    > Iterator for SpectrumIterator<'lifespan, C, D, S, R>
+    > Iterator for SpectrumIterator<'_, C, D, S, R>
 {
     type Item = S;
 
@@ -223,12 +219,11 @@ impl<
 }
 
 impl<
-        'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
-    > ExactSizeIterator for SpectrumIterator<'lifespan, C, D, S, R>
+    > ExactSizeIterator for SpectrumIterator<'_, C, D, S, R>
 {
     fn len(&self) -> usize {
         self.source.len()
@@ -236,12 +231,11 @@ impl<
 }
 
 impl<
-        'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
-    > DoubleEndedIterator for SpectrumIterator<'lifespan, C, D, S, R>
+    > DoubleEndedIterator for SpectrumIterator<'_, C, D, S, R>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.index + self.back_index >= self.len() {
@@ -255,12 +249,11 @@ impl<
 }
 
 impl<
-        'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D>,
         R: SpectrumSource<C, D, S>,
-    > SpectrumSource<C, D, S> for SpectrumIterator<'lifespan, C, D, S, R>
+    > SpectrumSource<C, D, S> for SpectrumIterator<'_, C, D, S, R>
 {
     fn reset(&mut self) {
         self.index = 0;
@@ -299,12 +292,11 @@ impl<
 /// If the underlying iterator implements [`MSDataFileMetadata`] then [`SpectrumIterator`] will
 /// forward that implementation, assuming it is available.
 impl<
-        'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
-    > MSDataFileMetadata for SpectrumIterator<'lifespan, C, D, S, R>
+    > MSDataFileMetadata for SpectrumIterator<'_, C, D, S, R>
 where
     R: MSDataFileMetadata,
 {
@@ -459,12 +451,11 @@ pub trait RandomAccessSpectrumIterator<
 }
 
 impl<
-        'lifespan,
         C: CentroidLike + Default,
         D: DeconvolutedCentroidLike + Default,
         S: SpectrumLike<C, D>,
         R: SpectrumSource<C, D, S>,
-    > RandomAccessSpectrumIterator<C, D, S> for SpectrumIterator<'lifespan, C, D, S, R>
+    > RandomAccessSpectrumIterator<C, D, S> for SpectrumIterator<'_, C, D, S, R>
 {
     /// Start iterating from the spectrum whose native ID matches `id`
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
@@ -902,7 +893,7 @@ impl<
         S: SpectrumLike<C, D> + Send,
     > SpectrumReceiver<C, D, S>
 {
-    #[allow(unused)]
+    #[allow(unused, clippy::too_many_arguments)]
     pub fn new(
         receiver: Receiver<S>,
         file_description: FileDescription,
@@ -1119,7 +1110,7 @@ pub trait SpectrumWriter<
     }
 
     /// Consume an [`Iterator`] over [`MultiLayerSpectrum`]
-    fn write_all_owned<'b, S: SpectrumLike<C, D> + 'static, T: Iterator<Item = S>>(
+    fn write_all_owned<S: SpectrumLike<C, D> + 'static, T: Iterator<Item = S>>(
         &mut self,
         iterator: T,
     ) -> io::Result<usize> {
@@ -1185,7 +1176,6 @@ pub trait SpectrumWriter<
 
     /// Consume an [`Iterator`] over [`SpectrumGroup`]
     fn write_all_groups_owned<
-        'b,
         S: SpectrumLike<C, D> + 'static,
         G: SpectrumGrouping<C, D, S> + 'static,
         T: Iterator<Item = G>,
@@ -1253,11 +1243,9 @@ mod async_traits {
         async fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {
             {
                 let n = self.len();
-                if n == 0 {
-                    if !self.get_index().init {
-                        warn!("Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized.");
-                        return None;
-                    }
+                if n == 0 && !self.get_index().init {
+                    warn!("Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized.");
+                    return None;
                 }
                 let mut lo: usize = 0;
                 let mut hi: usize = n;
@@ -1339,13 +1327,10 @@ mod async_traits {
 
         fn read_next(&mut self) -> impl Future<Output = Option<S>>;
 
-        fn as_stream<'a>(&'a mut self) -> impl SpectrumStream<C, D, S> + 'a {
+        fn as_stream(&mut self) -> impl SpectrumStream<C, D, S> + '_ {
             Box::pin(stream::unfold(self, |reader| async {
                 let spec = reader.read_next();
-                match spec.await {
-                    Some(val) => Some((val, reader)),
-                    None => None,
-                }
+                spec.await.map(|val| (val, reader))
             }))
         }
     }

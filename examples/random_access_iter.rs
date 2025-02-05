@@ -41,8 +41,8 @@ fn main() -> io::Result<()> {
     let g = group_iter.next().unwrap();
     eprintln!(
         "Resuming at group having {:?} at time {:?}",
-        g.earliest_spectrum().and_then(|s| Some(s.id())),
-        g.earliest_spectrum().and_then(|s| Some(s.start_time()))
+        g.earliest_spectrum().map(|s| s.id()),
+        g.earliest_spectrum().map(|s| s.start_time())
     );
 
     // Convert the group iterator into an averaging group iterator
@@ -52,8 +52,8 @@ fn main() -> io::Result<()> {
     let g = avg_iter.next().unwrap();
     eprintln!(
         "Resuming at group having {:?} at time {:?}",
-        g.earliest_spectrum().and_then(|s| Some(s.id())),
-        g.earliest_spectrum().and_then(|s| Some(s.start_time()))
+        g.earliest_spectrum().map(|s| s.id()),
+        g.earliest_spectrum().map(|s| s.start_time())
     );
 
     Ok(())

@@ -138,10 +138,7 @@ impl<
     }
 
     fn pop_precursor(&mut self, precursor_id: &str) -> Vec<S> {
-        match self.product_scan_mapping.remove(precursor_id) {
-            Some(v) => v,
-            None => Vec::new(),
-        }
+        self.product_scan_mapping.remove(precursor_id).unwrap_or_default()
     }
 
     fn flush_first_ms1(&mut self, group: &mut G) {
@@ -499,10 +496,7 @@ impl<
     }
 
     fn pop_precursor(&mut self, precursor_id: &str) -> Vec<S> {
-        match self.product_frame_mapping.remove(precursor_id) {
-            Some(v) => v,
-            None => Vec::new(),
-        }
+        self.product_frame_mapping.remove(precursor_id).unwrap_or_default()
     }
 
     fn flush_first_ms1(&mut self, group: &mut G) {
@@ -1131,27 +1125,25 @@ mod mzsignal_impl {
                         warn!("{} did not have raw data arrays", scan.id());
                         None
                     }
-                } else {
-                    if let Some(peaks) = &scan.peaks {
-                        let mut mz = Vec::with_capacity(peaks.len());
-                        let mut inten = Vec::with_capacity(peaks.len());
-                        for p in peaks {
-                            mz.push(p.mz());
-                            inten.push(p.intensity());
-                        }
-                        let mz_a = Arc::new(mz);
-                        let inten_a = Arc::new(inten);
-                        Some(ArcArrays::new(mz_a, inten_a, false))
-                    } else if let Some(array_map) = scan.raw_arrays() {
-                        let mz = array_map.mzs().unwrap().to_vec();
-                        let inten = array_map.intensities().unwrap().to_vec();
-                        let mz_a = Arc::new(mz);
-                        let inten_a = Arc::new(inten);
-                        Some(ArcArrays::new(mz_a, inten_a, false))
-                    } else {
-                        warn!("{} did not have raw data arrays", scan.id());
-                        None
+                } else if let Some(peaks) = &scan.peaks {
+                    let mut mz = Vec::with_capacity(peaks.len());
+                    let mut inten = Vec::with_capacity(peaks.len());
+                    for p in peaks {
+                        mz.push(p.mz());
+                        inten.push(p.intensity());
                     }
+                    let mz_a = Arc::new(mz);
+                    let inten_a = Arc::new(inten);
+                    Some(ArcArrays::new(mz_a, inten_a, false))
+                } else if let Some(array_map) = scan.raw_arrays() {
+                    let mz = array_map.mzs().unwrap().to_vec();
+                    let inten = array_map.intensities().unwrap().to_vec();
+                    let mz_a = Arc::new(mz);
+                    let inten_a = Arc::new(inten);
+                    Some(ArcArrays::new(mz_a, inten_a, false))
+                } else {
+                    warn!("{} did not have raw data arrays", scan.id());
+                    None
                 }
             })
         }
@@ -1176,23 +1168,19 @@ mod mzsignal_impl {
                 }
             }
             let next_group = self._next_group_no_pop();
-            self.output_buffer.extend(next_group.into_iter());
+            self.output_buffer.extend(next_group);
             for _ in 0..self.averaging_width_index {
                 if let Some(pair) = arrays.pop_front() {
                     self.context_buffer.push_back(pair);
                     let next_group = self._next_group_no_pop();
-                    self.output_buffer.extend(next_group.into_iter());
+                    self.output_buffer.extend(next_group);
                 }
             }
         }
 
         fn _next_group_no_pop(&mut self) -> Option<SpectrumAveragingContext<C, D, G>> {
             let ms1_context = self.process_block();
-            if let Some(group) = self.buffer.pop_front() {
-                Some(SpectrumAveragingContext::new(group, ms1_context))
-            } else {
-                None
-            }
+            self.buffer.pop_front().map(|group| SpectrumAveragingContext::new(group, ms1_context))
         }
 
         fn update_group(&mut self) -> Option<SpectrumAveragingContext<C, D, G>> {
@@ -1241,12 +1229,11 @@ mod mzsignal_impl {
     /// If the underlying iterator implements [`MSDataFileMetadata`] then [`SpectrumAveragingIterator`] will
     /// forward that implementation, assuming it is available.
     impl<
-            'lifespan,
             C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
             R: Iterator<Item = G>,
-        > MSDataFileMetadata for SpectrumAveragingIterator<'lifespan, C, D, G, R>
+        > MSDataFileMetadata for SpectrumAveragingIterator<'_, C, D, G, R>
     where
         R: MSDataFileMetadata,
     {
@@ -1254,12 +1241,11 @@ mod mzsignal_impl {
     }
 
     impl<
-            'lifespan,
             C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
             R: Iterator<Item = G>,
-        > SpectrumAveragingIterator<'lifespan, C, D, G, R>
+        > SpectrumAveragingIterator<'_, C, D, G, R>
     {
         pub fn new(
             source: R,
@@ -1315,31 +1301,29 @@ mod mzsignal_impl {
                         warn!("{} did not have raw data arrays", scan.id());
                         None
                     }
+                } else if let Some(peaks) = scan.peaks.as_ref() {
+                    let fpeaks: Vec<_> = peaks
+                        .iter()
+                        .map(|p| {
+                            let mut fp = FittedPeak::from(p.as_centroid());
+                            fp.full_width_at_half_max = FWHM_DEFAULT;
+                            PeakShapeModel {
+                                peak: fp,
+                                shape: PeakShape::Gaussian,
+                            }
+                        })
+                        .collect();
+                    let signal = self.reprofiler.reprofile(&fpeaks);
+                    Some(ArrayPair::from((
+                        signal.mz_array.to_vec(),
+                        signal.intensity_array.to_vec(),
+                    )))
                 } else {
-                    if let Some(peaks) = scan.peaks.as_ref() {
-                        let fpeaks: Vec<_> = peaks
-                            .iter()
-                            .map(|p| {
-                                let mut fp = FittedPeak::from(p.as_centroid());
-                                fp.full_width_at_half_max = FWHM_DEFAULT;
-                                PeakShapeModel {
-                                    peak: fp,
-                                    shape: PeakShape::Gaussian,
-                                }
-                            })
-                            .collect();
-                        let signal = self.reprofiler.reprofile(&fpeaks);
-                        Some(ArrayPair::from((
-                            signal.mz_array.to_vec(),
-                            signal.intensity_array.to_vec(),
-                        )))
-                    } else {
-                        warn!(
-                            "{} was not in profile mode but no centroids found",
-                            scan.id()
-                        );
-                        None
-                    }
+                    warn!(
+                        "{} was not in profile mode but no centroids found",
+                        scan.id()
+                    );
+                    None
                 }
             })
         }
@@ -1364,12 +1348,12 @@ mod mzsignal_impl {
                 }
             }
             let next_group = self._next_group_no_pop();
-            self.output_buffer.extend(next_group.into_iter());
+            self.output_buffer.extend(next_group);
             for _ in 0..self.averaging_width_index {
                 if let Some(pair) = arrays.pop_front() {
                     self.averager.push(pair);
                     let next_group = self._next_group_no_pop();
-                    self.output_buffer.extend(next_group.into_iter());
+                    self.output_buffer.extend(next_group);
                 }
             }
         }
@@ -1377,10 +1361,9 @@ mod mzsignal_impl {
         fn _next_group_no_pop(&mut self) -> Option<G> {
             let array_map = self.average_spectra();
             if let Some(mut group) = self.buffer.pop_front() {
-                group.precursor_mut().and_then(|precursor| {
+                if let Some(precursor) = group.precursor_mut() {
                     precursor.arrays = Some(array_map);
-                    Some(())
-                });
+                }
                 Some(group)
             } else {
                 None
@@ -1430,12 +1413,11 @@ mod mzsignal_impl {
     }
 
     impl<
-            'lifespan,
             C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
             R: Iterator<Item = G>,
-        > Iterator for SpectrumAveragingIterator<'lifespan, C, D, G, R>
+        > Iterator for SpectrumAveragingIterator<'_, C, D, G, R>
     {
         type Item = G;
 
@@ -1445,13 +1427,12 @@ mod mzsignal_impl {
     }
 
     impl<
-            'lifespan,
             C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
             R: RandomAccessSpectrumGroupingIterator<C, D, MultiLayerSpectrum<C, D>, G>,
         > RandomAccessSpectrumGroupingIterator<C, D, MultiLayerSpectrum<C, D>, G>
-        for SpectrumAveragingIterator<'lifespan, C, D, G, R>
+        for SpectrumAveragingIterator<'_, C, D, G, R>
     {
         fn reset_state(&mut self) {
             self.source.reset_state();
@@ -1490,7 +1471,6 @@ mod mzsignal_impl {
     }
 
     impl<
-            'lifespan,
             C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             R: RandomAccessSpectrumGroupingIterator<C, D, MultiLayerSpectrum<C, D>, G>,
@@ -1596,12 +1576,11 @@ mod mzsignal_impl {
     }
 
     impl<
-            'lifespan,
             T,
             C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
             G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-        > SpectrumGroupAveraging<'lifespan, C, D, G> for T
+        > SpectrumGroupAveraging<'_, C, D, G> for T
     where
         T: Iterator<Item = G>,
     {

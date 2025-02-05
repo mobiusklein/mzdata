@@ -351,7 +351,6 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
     ///
     /// **NOTE**: Values are produced in the order they are stored, so the data are not guaranteed
     /// to be ordered by m/z.
-
     pub fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize> {
         match self {
             Self::Missing => None,
@@ -434,7 +433,7 @@ impl<'a> RawIter<'a> {
     }
 }
 
-impl<'a> Iterator for RawIter<'a> {
+impl Iterator for RawIter<'_> {
     type Item = MZPoint;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -459,7 +458,7 @@ pub struct PeakDataIter<'a, C: CentroidLike, D: DeconvolutedCentroidLike> {
     n: usize,
 }
 
-impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for PeakDataIter<'a, C, D> {
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for PeakDataIter<'_, C, D> {
     type Item = MZPoint;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -473,18 +472,18 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for PeakDataIter
     }
 }
 
-impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> ExactSizeIterator
-    for PeakDataIter<'a, C, D>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> ExactSizeIterator
+    for PeakDataIter<'_, C, D>
 {
     fn len(&self) -> usize {
         self.n
     }
 }
 
-impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> FusedIterator for PeakDataIter<'a, C, D> {}
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> FusedIterator for PeakDataIter<'_, C, D> {}
 
-impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> DoubleEndedIterator
-    for PeakDataIter<'a, C, D>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> DoubleEndedIterator
+    for PeakDataIter<'_, C, D>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         let n = self.n;
@@ -522,7 +521,7 @@ pub enum PeakDataIterDispatch<'a, C: CentroidLike, D: DeconvolutedCentroidLike> 
 }
 
 
-impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for PeakDataIterDispatch<'a, C, D> {
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for PeakDataIterDispatch<'_, C, D> {
     type Item = MZPoint;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -577,7 +576,7 @@ impl SpectrumSummary {
     }
 }
 
-impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D> {
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'_, C, D> {
     /// Compute the base peak of a spectrum
     pub fn base_peak(&self) -> CentroidPeak {
         match self {
@@ -672,7 +671,7 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'a, C, D
     }
 }
 
-impl<'a, C: CentroidLike + Clone, D: DeconvolutedCentroidLike + Clone> RefPeakDataLevel<'a, C, D> {
+impl<C: CentroidLike + Clone, D: DeconvolutedCentroidLike + Clone> RefPeakDataLevel<'_, C, D> {
     pub fn cloned(&self) -> PeakDataLevel<C, D> {
         match self {
             RefPeakDataLevel::Missing => PeakDataLevel::Missing,
@@ -692,7 +691,7 @@ pub struct RefPeakDataIter<'a, C: CentroidLike, D: DeconvolutedCentroidLike> {
     n: usize,
 }
 
-impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for RefPeakDataIter<'a, C, D> {
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for RefPeakDataIter<'_, C, D> {
     type Item = MZPoint;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -706,18 +705,18 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for RefPeakDataI
     }
 }
 
-impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> ExactSizeIterator
-    for RefPeakDataIter<'a, C, D>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> ExactSizeIterator
+    for RefPeakDataIter<'_, C, D>
 {
     fn len(&self) -> usize {
         self.n
     }
 }
 
-impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> FusedIterator for RefPeakDataIter<'a, C, D> {}
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> FusedIterator for RefPeakDataIter<'_, C, D> {}
 
-impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> DoubleEndedIterator
-    for RefPeakDataIter<'a, C, D>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> DoubleEndedIterator
+    for RefPeakDataIter<'_, C, D>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         let n = self.n;

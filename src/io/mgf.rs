@@ -102,14 +102,14 @@ mod test {
     #[test]
     fn test_read_unsupported() -> io::Result<()> {
         let path = path::Path::new("./test/data/small.mgf");
-        let file = fs::File::open(&path).expect("Test file doesn't exist");
+        let file = fs::File::open(path).expect("Test file doesn't exist");
         let mut reader = MGFReaderType::<_>::new(file);
 
         assert!(reader.get_chromatogram_by_id("not real").is_none());
         assert!(reader.get_chromatogram_by_index(0).is_none());
         assert!(reader.spectrum_count_hint().is_none());
 
-        reader = MGFReaderType::<_>::open_path(&path)?;
+        reader = MGFReaderType::<_>::open_path(path)?;
         assert_eq!(reader.spectrum_count_hint().unwrap() as usize, reader.len());
 
         assert!(reader.run_description().is_some());
@@ -160,18 +160,18 @@ mod test {
 
         assert_eq!(*reader.detail_level(), DetailLevel::Full);
         scan = reader.start_from_index(30).unwrap().next().unwrap();
-        assert!(scan.peaks().len() > 0);
+        assert!(!scan.peaks().is_empty());
         assert_eq!(scan.index(), 30);
         let time = scan.start_time();
 
         reader.set_detail_level(DetailLevel::MetadataOnly);
         scan = reader.start_from_id(sid).unwrap().next().unwrap();
         assert_eq!(scan.index(), 0);
-        assert_eq!(scan.peaks().len(), 0);
+        assert!(scan.peaks().is_empty());
 
         scan = reader.start_from_time(time).unwrap().next().unwrap();
         assert_eq!(scan.index(), 30);
-        assert_eq!(scan.peaks().len(), 0);
+        assert!(scan.peaks().is_empty());
         Ok(())
     }
 

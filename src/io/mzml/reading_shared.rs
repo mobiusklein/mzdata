@@ -577,10 +577,10 @@ pub struct FileMetadataBuilder<'a> {
     pub default_data_processing: Option<String>,
 }
 
-impl<'a> XMLParseBase for FileMetadataBuilder<'a> {}
-impl<'a> CVParamParse for FileMetadataBuilder<'a> {}
+impl XMLParseBase for FileMetadataBuilder<'_> {}
+impl CVParamParse for FileMetadataBuilder<'_> {}
 
-impl<'a> FileMetadataBuilder<'a> {
+impl FileMetadataBuilder<'_> {
     pub fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
@@ -883,10 +883,9 @@ impl<'a> FileMetadataBuilder<'a> {
                             let val = attr
                                 .unescape_value()
                                 .expect("Error decoding start timestamp");
-                            let val = DateTime::parse_from_rfc3339(&val).map_err(
-                                |e| {
+                            let val = DateTime::parse_from_rfc3339(&val).inspect_err(
+                                |&e| {
                                     log::error!("Expected a dateTime value conforming to ISO 8601 standard: {e}");
-                                    e
                                 }
                             ).ok();
                             self.start_timestamp = val;
@@ -930,9 +929,9 @@ impl<'a> FileMetadataBuilder<'a> {
             MzMLParserState::SourceFile => {
                 let sf = self.file_description.source_files.last_mut().unwrap();
                 if let Some(curie) = param.curie() {
-                    if let Some(_) = NativeSpectrumIdentifierFormatTerm::from_curie(&curie) {
+                    if NativeSpectrumIdentifierFormatTerm::from_curie(&curie).is_some() {
                         sf.id_format = Some(param);
-                    } else if let Some(_) = MassSpectrometerFileFormatTerm::from_curie(&curie) {
+                    } else if MassSpectrometerFileFormatTerm::from_curie(&curie).is_some() {
                         sf.file_format = Some(param);
                     } else {
                         sf.add_param(param)

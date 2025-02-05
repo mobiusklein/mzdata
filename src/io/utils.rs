@@ -353,13 +353,13 @@ mod test {
         assert_eq!(stream.buffer_size, 512);
 
         let mut buffer = [0u8; 128];
-        stream.read(&mut buffer)?;
+        stream.read_exact(&mut buffer)?;
         assert_eq!(buffer.len(), 128);
         assert!(buffer.starts_with(b"<?xml version=\"1.0\" encoding=\"utf-8\"?>"));
 
         let mut buffer2 = [0u8; 128];
         stream.seek(io::SeekFrom::Start(0))?;
-        stream.read(&mut buffer2)?;
+        stream.read_exact(&mut buffer2)?;
 
         assert_eq!(buffer, buffer2);
 

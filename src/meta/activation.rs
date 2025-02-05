@@ -92,27 +92,21 @@ crate::cvmap! {
 impl DissociationMethodTerm {
 
     pub fn is_electronic(&self) -> bool {
-        match self {
-            Self::ElectronActivatedDissociation
+        matches!(self, Self::ElectronActivatedDissociation
             | Self::ElectronCaptureDissociation
             | Self::ElectronTransferDissociation
-            | Self::NegativeElectronTransferDissociation => true,
-            _ => false
-        }
+            | Self::NegativeElectronTransferDissociation)
     }
 
     pub fn is_collisional(&self) -> bool {
-        match self {
-            Self::CollisionInducedDissociation
+        matches!(self, Self::CollisionInducedDissociation
             | Self::LowEnergyCollisionInducedDissociation
             | Self::BeamTypeCollisionInducedDissociation
             | Self::TrapTypeCollisionInducedDissociation
             | Self::InSourceCollisionInducedDissociation
             | Self::SupplementalBeamTypeCollisionInducedDissociation
             | Self::SupplementalCollisionInducedDissociation
-            | Self::HigherEnergyBeamTypeCollisionInducedDissociation => true,
-            _ => false,
-        }
+            | Self::HigherEnergyBeamTypeCollisionInducedDissociation)
     }
 }
 

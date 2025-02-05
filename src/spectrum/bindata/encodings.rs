@@ -192,16 +192,13 @@ impl ArrayType {
                 CV.const_param_ident("resolution array", 1002529)
             },
             ArrayType::PressureArray => {
-                let p = CV.const_param_ident("pressure array", 1000821);
-                p
+                CV.const_param_ident("pressure array", 1000821)
             },
             ArrayType::TemperatureArray => {
-                let p = CV.const_param_ident("temperature array", 1000822);
-                p
+                CV.const_param_ident("temperature array", 1000822)
             },
             ArrayType::FlowRateArray => {
-                let p = CV.const_param_ident("flow rate array", 1000820);
-                p
+                CV.const_param_ident("flow rate array", 1000820)
             },
             _ => {
                 panic!("Could not determine how to name for array");
@@ -239,16 +236,13 @@ impl ArrayType {
                 CV.const_param_ident_unit("resolution array", 1002529, unit)
             },
             ArrayType::PressureArray => {
-                let p = CV.const_param_ident_unit("pressure array", 1000821, unit);
-                p
+                CV.const_param_ident_unit("pressure array", 1000821, unit)
             },
             ArrayType::TemperatureArray => {
-                let p = CV.const_param_ident_unit("temperature array", 1000822, unit);
-                p
+                CV.const_param_ident_unit("temperature array", 1000822, unit)
             },
             ArrayType::FlowRateArray => {
-                let p = CV.const_param_ident_unit("flow rate array", 1000820, unit);
-                p
+                CV.const_param_ident_unit("flow rate array", 1000820, unit)
             },
             _ => {
                 panic!("Could not determine how to name for array");

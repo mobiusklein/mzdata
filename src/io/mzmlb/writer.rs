@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::fmt::Display;
 use std::io::{self, prelude::*, Cursor};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
@@ -178,9 +179,9 @@ impl BufferName {
     }
 }
 
-impl ToString for BufferName {
-    fn to_string(&self) -> String {
-        let context = match self.context {
+impl Display for BufferName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let context = match self.context {
             BufferContext::Spectrum => "spectrum",
             BufferContext::Chromatogram => "chromatogram",
         };
@@ -209,7 +210,7 @@ impl ToString for BufferName {
             BinaryDataArrayType::Int32 => "i32",
             BinaryDataArrayType::ASCII => "u8",
         };
-        format!("{}_{}_{}", context, tp_name, dtype)
+        write!(f, "{}_{}_{}", context, tp_name, dtype)
     }
 }
 
@@ -403,7 +404,7 @@ impl io::Write for ByteWriter {
 
 pub type WriterResult = Result<(), MzMLbWriterError>;
 
-impl<'a, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> SpectrumWriter<C, D>
+impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> SpectrumWriter<C, D>
     for MzMLbWriterType<C, D>
 where
     C: BuildArrayMapFrom,
@@ -1007,7 +1008,7 @@ impl<
 
     fn close_frames(&mut self) -> io::Result<()> {
         if let Err(e) = self.close() {
-            return Err(e.into())
+            Err(e.into())
         } else {
             Ok(())
         }

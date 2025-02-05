@@ -233,7 +233,7 @@ pub trait BuildFromArrayMap3D: BuildFromArrayMap {
                 ArraysAvailable::MissingArrays(arrays_not_seen.into_iter().collect())
             }
         } else {
-            return ArraysAvailable::Unknown;
+            ArraysAvailable::Unknown
         }
     }
 }
@@ -470,7 +470,7 @@ impl BuildFromArrayMap for Feature<MZ, IonMobility> {
         let array_key = ArrayType::nonstandard("feature identifier array");
         let marker_array = arrays
             .get(&array_key)
-            .ok_or_else(|| ArrayRetrievalError::NotFound(array_key))?
+            .ok_or(ArrayRetrievalError::NotFound(array_key))?
             .to_i32()?;
 
         let n = marker_array.iter().map(|i| *i as usize).max();
@@ -588,13 +588,13 @@ impl BuildFromArrayMap for ChargedFeature<Mass, IonMobility> {
 
         let charge_array = arrays
             .get(&ArrayType::ChargeArray)
-            .ok_or_else(|| ArrayRetrievalError::NotFound(ArrayType::ChargeArray))?
+            .ok_or(ArrayRetrievalError::NotFound(ArrayType::ChargeArray))?
             .to_i32()?;
 
         let array_key = ArrayType::nonstandard("feature identifier array");
         let marker_array = arrays
             .get(&array_key)
-            .ok_or_else(|| ArrayRetrievalError::NotFound(array_key))?
+            .ok_or(ArrayRetrievalError::NotFound(array_key))?
             .to_i32()?;
 
         let n = marker_array.iter().map(|i| *i as usize).max();

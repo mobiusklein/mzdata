@@ -295,9 +295,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             #[cfg(feature = "numpress")]
             BinaryCompressionType::NumpressLinear => match self.dtype {
                 BinaryDataArrayType::Float64 => {
-                    let mut bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
+                    let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
                         .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
-                    let decoded = Self::decompres_numpress_linear(&mut bytestring)?;
+                    let decoded = Self::decompres_numpress_linear(&bytestring)?;
                     let view = vec_as_bytes(decoded);
                     Ok(Cow::Owned(view))
                 }
@@ -366,9 +366,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             #[cfg(feature = "numpress")]
             BinaryCompressionType::NumpressLinear => match self.dtype {
                 BinaryDataArrayType::Float64 => {
-                    let mut bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
+                    let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
                         .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
-                    let decoded = Self::decompres_numpress_linear(&mut bytestring)?;
+                    let decoded = Self::decompres_numpress_linear(&bytestring)?;
                     let view = vec_as_bytes(decoded);
                     self.data = view;
                     Ok(&mut self.data)
@@ -410,46 +410,33 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         if self.dtype == dtype {
             return Ok(self.data.len());
         }
-        let result = match dtype {
+        match dtype {
             BinaryDataArrayType::Float32 => {
-                let view = match self.to_f32() {
-                    Ok(view) => view,
-                    Err(err) => return Err(err),
-                };
+                let view = self.to_f32()?;
                 let recast = to_bytes(&view);
                 self.dtype = dtype;
                 self.set_buffer_of_type(recast)
             }
             BinaryDataArrayType::Float64 => {
-                let view = match self.to_f64() {
-                    Ok(view) => view,
-                    Err(err) => return Err(err),
-                };
+                let view = self.to_f64()?;
                 let recast = to_bytes(&view);
                 self.dtype = dtype;
                 self.set_buffer_of_type(recast)
             }
             BinaryDataArrayType::Int32 => {
-                let view = match self.to_i32() {
-                    Ok(view) => view,
-                    Err(err) => return Err(err),
-                };
+                let view = self.to_i32()?;
                 let recast = to_bytes(&view);
                 self.dtype = dtype;
                 self.set_buffer_of_type(recast)
             }
             BinaryDataArrayType::Int64 => {
-                let view = match self.to_i64() {
-                    Ok(view) => view,
-                    Err(err) => return Err(err),
-                };
+                let view = self.to_i64()?;
                 let recast = to_bytes(&view);
                 self.dtype = dtype;
                 self.set_buffer_of_type(recast)
             }
             _ => Ok(0),
-        };
-        result
+        }
     }
 
     /// Test if the the array describes an ion mobility quantity.
@@ -588,19 +575,19 @@ mod test {
         let view = da.to_f64()?;
         assert_eq!(view.len(), 19800);
         for (a, b) in back.iter_f64()?.zip(view.iter().copied()) {
-            let err= (a as f64 - b).abs();
-            assert!((a as f64 - b).abs() < 1e-3, "{} - {} = {}", a, b, err);
+            let err= (a - b).abs();
+            assert!((a - b).abs() < 1e-3, "{} - {} = {}", a, b, err);
         }
         for (a, b) in back.iter_f64()?.zip(da.iter_f32()?.map(|x| x as f64)) {
-            let err= (a as f64 - b).abs();
-            assert!((a as f64 - b).abs() < 1e-3, "{} - {} = {}", a, b, err);
+            let err= (a - b).abs();
+            assert!((a - b).abs() < 1e-3, "{} - {} = {}", a, b, err);
         }
         da.store_as(BinaryDataArrayType::Float64)?;
         let view = da.to_f64()?;
         assert_eq!(view.len(), 19800);
         for (a, b) in back.iter_f64()?.zip(view.iter().copied()) {
-            let err= (a as f64 - b).abs();
-            assert!((a as f64 - b).abs() < 1e-3, "{} - {} = {}", a, b, err);
+            let err= (a - b).abs();
+            assert!((a - b).abs() < 1e-3, "{} - {} = {}", a, b, err);
         }
         Ok(())
     }

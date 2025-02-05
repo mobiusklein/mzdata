@@ -144,8 +144,10 @@ impl<
     async fn parse_metadata(&mut self) -> Result<(), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
-        let mut accumulator = FileMetadataBuilder::default();
-        accumulator.instrument_id_map = Some(&mut self.instrument_id_map);
+        let mut accumulator = FileMetadataBuilder {
+            instrument_id_map: Some(&mut self.instrument_id_map),
+            ..Default::default()
+        };
         loop {
             match reader.read_event_into_async(&mut self.buffer).await {
                 Ok(Event::Start(ref e)) => {
@@ -210,7 +212,7 @@ impl<
                             continue;
                         } else {
                             self.error = Some(MzMLParserError::IncompleteElementError(
-                                String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
+                                String::from_utf8_lossy(&self.buffer).to_string(),
                                 self.state,
                             ));
                             self.state = MzMLParserState::ParserError;
@@ -218,7 +220,7 @@ impl<
                     }
                     _ => {
                         self.error = Some(MzMLParserError::IncompleteElementError(
-                            String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
+                            String::from_utf8_lossy(&self.buffer).to_string(),
                             self.state,
                         ));
                         self.state = MzMLParserState::ParserError;
@@ -238,7 +240,7 @@ impl<
         self.instrument_configurations = accumulator
             .instrument_configurations
             .into_iter()
-            .map(|ic| (ic.id.clone(), ic))
+            .map(|ic| (ic.id, ic))
             .collect();
         self.softwares = accumulator.softwares;
         self.samples = accumulator.samples;
@@ -255,7 +257,7 @@ impl<
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
             MzMLParserState::ParserError => {
-                Err(self.error.take().unwrap_or_else(|| MzMLParserError::UnknownError(MzMLParserState::ParserError)))
+                Err(self.error.take().unwrap_or(MzMLParserError::UnknownError(MzMLParserState::ParserError)))
             }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
@@ -275,14 +277,11 @@ impl<
                 Ok(Event::Start(ref e)) => {
                     match accumulator.start_element(e, self.state) {
                         Ok(state) => {
-                            match state {
-                                MzMLParserState::ParserError => {
-                                    warn!(
-                                        "Encountered an error while starting {:?}",
-                                        String::from_utf8_lossy(&self.buffer)
-                                    );
-                                }
-                                _ => {}
+                            if state == MzMLParserState::ParserError {
+                                warn!(
+                                    "Encountered an error while starting {:?}",
+                                    String::from_utf8_lossy(&self.buffer)
+                                );
                             }
                             self.state = state;
                         }
@@ -342,7 +341,7 @@ impl<
                             continue;
                         } else {
                             self.error = Some(MzMLParserError::IncompleteElementError(
-                                String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
+                                String::from_utf8_lossy(&self.buffer).into_owned().to_string(),
                                 self.state,
                             ));
                             self.state = MzMLParserState::ParserError;
@@ -351,7 +350,7 @@ impl<
                     }
                     _ => {
                         self.error = Some(MzMLParserError::IncompleteElementError(
-                            String::from_utf8_lossy(&self.buffer).to_owned().to_string(),
+                            String::from_utf8_lossy(&self.buffer).into_owned().to_string(),
                             self.state,
                         ));
                         self.state = MzMLParserState::ParserError;
@@ -611,7 +610,7 @@ impl IndexedMzMLIndexExtractor {
                     .unescape()
                     .expect("Failed to unescape spectrum offset");
                 if let Ok(offset) = bin.parse::<u64>() {
-                    if self.last_id != "" {
+                    if !self.last_id.is_empty() {
                         let key = mem::take(&mut self.last_id);
                         self.spectrum_index.insert(key, offset);
                     } else {
@@ -624,7 +623,7 @@ impl IndexedMzMLIndexExtractor {
                     .unescape()
                     .expect("Failed to unescape chromatogram offset");
                 if let Ok(offset) = bin.parse::<u64>() {
-                    if self.last_id != "" {
+                    if !self.last_id.is_empty() {
                         let key = mem::take(&mut self.last_id);
                         self.chromatogram_index.insert(key, offset);
                     } else {
@@ -657,13 +656,10 @@ impl<
         this
     }
 
-    pub fn as_stream<'a>(&'a mut self) -> impl SpectrumStream<C, D, MultiLayerSpectrum<C, D>> + 'a {
+    pub fn as_stream(&mut self) -> impl SpectrumStream<C, D, MultiLayerSpectrum<C, D>> + '_ {
         Box::pin(stream::unfold(self, |reader| async {
             let spec = reader.read_next();
-            match spec.await {
-                Some(val) => Some((val, reader)),
-                None => None
-            }
+            spec.await.map(|val| (val, reader))
         }))
     }
 
@@ -700,10 +696,7 @@ impl<
                     match indexer.start_element(e, indexer_state) {
                         Ok(state) => {
                             indexer_state = state;
-                            match &indexer_state {
-                                IndexParserState::Done => break,
-                                _ => {}
-                            }
+                            if let IndexParserState::Done = &indexer_state { break }
                         }
                         Err(message) => return Err(MzMLIndexingError::XMLError(message)),
                     };
@@ -767,6 +760,10 @@ impl<
     /// Read the length of the spectrum offset index
     pub fn len(&self) -> usize {
         self.spectrum_index.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.spectrum_index.is_empty()
     }
 
     /// Retrieve a spectrum by its scan start time

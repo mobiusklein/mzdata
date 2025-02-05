@@ -586,7 +586,7 @@ impl<
 
     fn close_frames(&mut self) -> io::Result<()> {
         if let Err(e) = self.close() {
-            return Err(e.into());
+            Err(e.into())
         } else {
             Ok(())
         }
@@ -606,11 +606,8 @@ impl<
     }
 
     fn set_spectrum_count_hint(&mut self, value: Option<u64>) {
-        match value {
-            Some(value) => {
-                self.spectrum_count = value;
-            },
-            None => {},
+        if let Some(value) = value {
+            self.spectrum_count = value;
         };
     }
 
@@ -820,14 +817,13 @@ where
         if let Some(block) = spanned_blocks.iter().min_by_key(|block| block.len()) {
             let members: Vec<_> = block
                 .iter()
-                .map(|(p, s)| {
+                .flat_map(|(p, s)| {
                     let mut v = Vec::with_capacity(*s);
                     for _ in 0..*s {
                         v.push((*p).clone());
                     }
                     v.into_iter()
                 })
-                .flatten()
                 .collect();
             if members.len() < 2 {
                 None
@@ -1465,7 +1461,7 @@ where
         let tag = bstart!("activation");
         start_event!(self, tag);
         if let Some(meth) = act.method() {
-            let meth_param: Param = meth.clone().into();
+            let meth_param: Param = meth.into();
             self.handle.write_param(&meth_param)?;
         }
         self.handle.write_param_list(act.params().iter())?;
@@ -1506,10 +1502,10 @@ where
         S: SpectrumLike<C1, D1> + 'static
     >(&mut self, spectrum: &S) -> WriterResult {
         let ms_level = spectrum.ms_level();
-        if ms_level == 1 {
-            self.handle.write_param(&MS1_SPECTRUM)?;
-        } else if ms_level > 1 {
-            self.handle.write_param(&MSN_SPECTRUM)?;
+        match ms_level {
+            1 => self.handle.write_param(&MS1_SPECTRUM)?,
+            x if x > 1 => self.handle.write_param(&MSN_SPECTRUM)?,
+            _ => {}
         }
         self.write_param(&self.ms_cv.const_param(
             "ms level",
@@ -1794,11 +1790,7 @@ where
         let peak_count = match peaks {
             RefPeakDataLevel::RawData(arrays) => {
                 if let Some(arr) = arrays.get(&ArrayType::MZArray) {
-                    if let Ok(count) = arr.data_len() {
-                        count
-                    } else {
-                        0
-                    }
+                    arr.data_len().unwrap_or_default()
                 } else {
                     0
                 }

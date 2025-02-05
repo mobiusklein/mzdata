@@ -170,8 +170,10 @@ pub struct InstrumentConfiguration {
 impl InstrumentConfiguration {
     /// Add a new [`Component`] to the configuration, added at the end of the list
     pub fn new_component(&mut self, component_type: ComponentType) -> &mut Component {
-        let mut component = Component::default();
-        component.component_type = component_type;
+        let component = Component {
+            component_type,
+            ..Default::default()
+        };
         self.push(component);
         self.components.last_mut().unwrap()
     }

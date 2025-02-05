@@ -25,7 +25,7 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         if n % z != 0 {
             return Err(ArrayRetrievalError::DataTypeSizeMismatch);
         }
-        return match buffer {
+        match buffer {
             Cow::Borrowed(c) => {
                 Ok(Cow::Borrowed(bytemuck::try_cast_slice(c)?))
             },
@@ -38,7 +38,7 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
                 })?;
                 Ok(Cow::Owned(buf))
             },
-        };
+        }
     }
 
     fn coerce<T: Pod>(
@@ -221,10 +221,7 @@ pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
     fn coerce_mut<T: Clone + Sized>(
         &'lifespan mut self,
     ) -> Result<&'transient mut [T], ArrayRetrievalError> {
-        let view = match self.view_mut() {
-            Ok(data) => data,
-            Err(err) => return Err(err),
-        };
+        let view = self.view_mut()?;
         Self::coerce_from_mut(view)
     }
 }
@@ -236,10 +233,10 @@ pub struct DataSliceIter<'a, T: Pod> {
     _t: PhantomData<T>
 }
 
-impl<'a, T: Pod> ExactSizeIterator for DataSliceIter<'a, T> {
+impl<T: Pod> ExactSizeIterator for DataSliceIter<'_, T> {
     fn len(&self) -> usize {
         let z = mem::size_of::<T>();
-        (self.buffer.len() / z) as usize
+        self.buffer.len() / z
     }
 }
 
@@ -261,7 +258,7 @@ impl<'a, T: Pod> DataSliceIter<'a, T> {
     }
 }
 
-impl<'a, T: Pod> Iterator for DataSliceIter<'a, T> {
+impl<T: Pod> Iterator for DataSliceIter<'_, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {

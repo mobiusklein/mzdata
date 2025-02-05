@@ -21,7 +21,7 @@ enum MatchType {
     ExactNoSpaces,
 }
 
-#[allow(unused, non_camel_case_types)]
+#[allow(unused, non_camel_case_types, clippy::upper_case_acronyms)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InstrumentModelType {
     #[default]
@@ -129,7 +129,7 @@ impl Display for InstrumentModelType {
 
 #[allow(unused)]
 impl InstrumentModelType {
-    pub fn to_param(&self) -> Param {
+    pub fn to_param(self) -> Param {
         let val = match self {
             InstrumentModelType::Unknown => {
                 param!("Thermo Fisher Scientific instrument model", 1000483)

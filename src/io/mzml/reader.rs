@@ -345,19 +345,17 @@ pub struct MzMLSpectrumBuilder<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<'a, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> XMLParseBase
-    for MzMLSpectrumBuilder<'a, C, D>
+impl<C: CentroidLike + Default, D: DeconvolutedPeakAdapting> XMLParseBase
+    for MzMLSpectrumBuilder<'_, C, D>
 {
 }
-impl<'a, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> CVParamParse
-    for MzMLSpectrumBuilder<'a, C, D>
+impl<C: CentroidLike + Default, D: DeconvolutedPeakAdapting> CVParamParse
+    for MzMLSpectrumBuilder<'_, C, D>
 {
 }
 
 impl<
         'inner,
-        'outer: 'inner + 'event,
-        'event: 'inner,
         C: CentroidLike + Default,
         D: DeconvolutedPeakAdapting,
     > SpectrumBuilding<'inner, C, D, MultiLayerSpectrum<C, D>>
@@ -372,7 +370,7 @@ impl<
         if event.scan_windows.is_empty() {
             event.scan_windows.push(ScanWindow::default());
         }
-        return event.scan_windows.last_mut().unwrap();
+        event.scan_windows.last_mut().unwrap()
     }
 
     fn selected_ion_mut(&mut self) -> &mut SelectedIon {
@@ -478,7 +476,6 @@ impl<
 
 impl<
         'inner,
-        'outer: 'inner,
         C: CentroidLike + Default + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + BuildFromArrayMap,
     > MzMLSpectrumBuilder<'inner, C, D>
@@ -623,11 +620,9 @@ impl<
 }
 
 impl<
-        'inner,
-        'outer: 'inner,
         C: CentroidLike + Default + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > MzMLSAX for MzMLSpectrumBuilder<'inner, C, D>
+    > MzMLSAX for MzMLSpectrumBuilder<'_, C, D>
 {
     fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
@@ -1063,9 +1058,6 @@ impl<
 impl<
         'a,
         'b: 'a,
-        'inner,
-        'outer: 'inner + 'event,
-        'event: 'inner,
         R: Read,
         C: CentroidPeakAdapting + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + BuildFromArrayMap,
@@ -1236,7 +1228,7 @@ impl<
             MzMLParserState::ParserError => Err(self
                 .error
                 .take()
-                .unwrap_or_else(|| MzMLParserError::UnknownError(MzMLParserState::ParserError))),
+                .unwrap_or(MzMLParserError::UnknownError(MzMLParserState::ParserError))),
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
@@ -1733,12 +1725,11 @@ impl<
     /// Construct a new MzMLReaderType and build an offset index
     /// using [`Self::build_index`]
     pub fn new_indexed(file: R) -> MzMLReaderType<R, C, D> {
-        let reader = Self::with_buffer_capacity_and_detail_level_indexed(
+        Self::with_buffer_capacity_and_detail_level_indexed(
             file,
             BUFFER_SIZE,
             DetailLevel::Full,
-        );
-        reader
+        )
     }
 
     fn _read_index(&mut self) {
@@ -1778,10 +1769,7 @@ impl<
 
     /// Read the checksum from the end of an `indexedmzML` document
     pub fn read_checksum(&mut self) -> io::Result<Option<String>> {
-        let current_position = match self.handle.stream_position() {
-            Ok(position) => position,
-            Err(err) => return Err(err),
-        };
+        let current_position = self.handle.stream_position()?;
 
         self.handle.seek(SeekFrom::End(-200))?;
         let mut buf = Bytes::new();
@@ -1891,20 +1879,17 @@ impl<
                         for attr_parsed in e.attributes() {
                             match attr_parsed {
                                 Ok(attr) => {
-                                    match attr.key.as_ref() {
-                                        b"id" => {
-                                            let scan_id = attr
-                                                .unescape_value()
-                                                .expect("Error decoding spectrum id in streaming mzML index")
-                                                .to_string();
-                                            // This count is off by 2 because somehow the < and > bytes are removed?
-                                            self.spectrum_index.insert(
-                                                scan_id,
-                                                (reader.buffer_position() - e.len() - 2) as u64,
-                                            );
-                                            break;
-                                        }
-                                        &_ => {}
+                                    if attr.key.as_ref() == b"id" {
+                                        let scan_id = attr
+                                            .unescape_value()
+                                            .expect("Error decoding spectrum id in streaming mzML index")
+                                            .to_string();
+                                        // This count is off by 2 because somehow the < and > bytes are removed?
+                                        self.spectrum_index.insert(
+                                            scan_id,
+                                            (reader.buffer_position() - e.len() - 2) as u64,
+                                        );
+                                        break;
                                     };
                                 }
                                 Err(_msg) => {}
@@ -2024,11 +2009,10 @@ impl<
 }
 
 impl<
-        'a,
         R: SeekRead,
         C: CentroidPeakAdapting + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > Iterator for ChromatogramIter<'a, R, C, D>
+    > Iterator for ChromatogramIter<'_, R, C, D>
 {
     type Item = Chromatogram;
 
@@ -2097,12 +2081,12 @@ mod test {
         let comp = config.iter().find_map(|c| c.ionization_type()).unwrap();
         assert_eq!(comp.name(), "electrospray ionization");
         assert_eq!(
-            config.components.get(0).unwrap().name(),
+            config.components.first().unwrap().name(),
             Some("electrospray ionization")
         );
 
         for comp in config.iter() {
-            assert!(comp.parent_types().len() > 0);
+            assert!(!comp.parent_types().is_empty());
         }
 
         assert_eq!(config.len(), 3);
@@ -2256,7 +2240,7 @@ mod test {
     #[test_log::test]
     fn read_index() -> io::Result<()> {
         let path = path::Path::new("./test/data/read_index_of.mzML");
-        let file = fs::File::open(&path)?;
+        let file = fs::File::open(path)?;
         let mut reader = MzMLReader::new(file);
         match reader.read_index_from_end() {
             Ok(_count) => {}
@@ -2265,7 +2249,7 @@ mod test {
             }
         };
         assert!(!reader.spectrum_index.is_empty());
-        let mut reader2 = MzMLReader::new(fs::File::open(&path)?);
+        let mut reader2 = MzMLReader::new(fs::File::open(path)?);
         reader2.build_index();
         for (k, v) in reader2.spectrum_index.iter() {
             let v2 = reader.spectrum_index.get(k);
@@ -2409,7 +2393,7 @@ mod test {
                     v.compression,
                     BinaryCompressionType::NoCompression
                 ));
-                assert!(v.data.len() == 0);
+                assert!(v.data.is_empty());
             });
 
         Ok(())
@@ -2816,7 +2800,7 @@ mod test {
         assert_eq!(builder.acquisition.first_scan().unwrap().start_time, 50.0);
 
         let param = ScanCombination::NoCombination.to_param();
-        builder.fill_param_into(param.into(), MzMLParserState::ScanList);
+        builder.fill_param_into(param, MzMLParserState::ScanList);
         assert_eq!(
             builder.acquisition.combination,
             ScanCombination::NoCombination

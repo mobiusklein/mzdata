@@ -195,6 +195,7 @@ pub struct SQLFrame {
 }
 
 impl SQLFrame {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: usize,
         time: f64,
@@ -263,7 +264,7 @@ pub struct RawTDFSQLReader {
 }
 
 #[allow(unused)]
-impl<'a> RawTDFSQLReader {
+impl RawTDFSQLReader {
     pub fn new(tdf_path: &Path) -> Result<Self, Error> {
         let connection = ReentrantMutex::new(Connection::open(tdf_path)?);
         Ok(Self { connection })
@@ -280,7 +281,7 @@ impl<'a> RawTDFSQLReader {
             .collect())
     }
 
-    pub fn query<T: FromSQL>(&'a self, sql: &str, params: impl Params) -> Result<Vec<T>, Error> {
+    pub fn query<T: FromSQL>(&self, sql: &str, params: impl Params) -> Result<Vec<T>, Error> {
         let conn = self.connection();
         let mut stmt = conn.prepare(sql)?;
         let out: Result<Vec<T>, Error> = stmt
@@ -436,10 +437,7 @@ impl TDFMSnFacet {
 
     #[allow(unused)]
     pub fn is_compound(&self) -> bool {
-        match self {
-            Self::CompoundPasefDDA(_) | Self::CompoundPasefDIA(_) => true,
-            _ => false
-        }
+        matches!(self, Self::CompoundPasefDDA(_) | Self::CompoundPasefDIA(_))
     }
 
     pub fn precursor(&self) -> Option<&SQLPrecursor> {
@@ -460,7 +458,7 @@ impl TDFMSnFacet {
 
     pub fn dia_window(&self) -> Option<&SQLDIAFrameMsMsWindow> {
         if let Self::PasefDIA(dia) = self {
-            Some(&dia)
+            Some(dia)
         } else {
             None
         }
@@ -473,12 +471,12 @@ impl TDFMSnFacet {
         } else {
             [].iter()
         };
-        let s = if let Self::PasefDDA(p) = self {
-            c.chain(Some(p).into_iter())
+
+        if let Self::PasefDDA(p) = self {
+            c.chain(Some(p))
         } else {
-            c.chain(None.into_iter())
-        };
-        s
+            c.chain(None)
+        }
     }
 
     #[allow(unused)]
@@ -488,11 +486,11 @@ impl TDFMSnFacet {
         } else {
             [].iter()
         };
-        let s = if let Self::PasefDIA(p) = self {
-            c.chain(Some(p).into_iter())
+
+        if let Self::PasefDIA(p) = self {
+            c.chain(Some(p))
         } else {
-            c.chain(None.into_iter())
-        };
-        s
+            c.chain(None)
+        }
     }
 }

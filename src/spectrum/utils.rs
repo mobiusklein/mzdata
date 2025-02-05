@@ -176,7 +176,7 @@ impl<T: Send> Collator<T> {
 
     /// Try to get the next item according to the collation, or None if it hasn't arrived yet
     pub fn try_next(&mut self) -> Option<(usize, T)> {
-        self.waiting.remove_entry(&self.next_key).inspect(|op| {
+        self.waiting.remove_entry(&self.next_key).inspect(|_| {
             self.next_key += 1;
         })
     }

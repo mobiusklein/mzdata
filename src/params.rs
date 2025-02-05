@@ -501,7 +501,7 @@ impl Hash for Value {
             Self::Float(v) => v.to_bits().hash(state),
             Self::Int(v) => (*v).hash(state),
             Self::Buffer(v) => v.hash(state),
-            Self::Empty => ().hash(state),
+            Self::Empty => 0u8.hash(state),
             Self::Boolean(v) => v.hash(state),
         }
     }
@@ -595,9 +595,9 @@ pub enum ValueRef<'a> {
     Boolean(bool),
 }
 
-impl<'a> Eq for ValueRef<'a> {}
+impl Eq for ValueRef<'_> {}
 
-impl<'a> From<String> for ValueRef<'a> {
+impl From<String> for ValueRef<'_> {
     fn from(value: String) -> Self {
         value.parse().unwrap()
     }
@@ -618,25 +618,25 @@ impl<'a> From<Cow<'a, str>> for ValueRef<'a> {
     }
 }
 
-impl<'a> PartialEq<String> for ValueRef<'a> {
+impl PartialEq<String> for ValueRef<'_> {
     fn eq(&self, other: &String) -> bool {
         self.as_str() == other.as_str()
     }
 }
 
-impl<'a> PartialEq<str> for ValueRef<'a> {
+impl PartialEq<str> for ValueRef<'_> {
     fn eq(&self, other: &str) -> bool {
         self.as_str() == other
     }
 }
 
-impl<'a> PartialEq<&str> for ValueRef<'a> {
+impl PartialEq<&str> for ValueRef<'_> {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
     }
 }
 
-impl<'a> PartialEq<i64> for ValueRef<'a> {
+impl PartialEq<i64> for ValueRef<'_> {
     fn eq(&self, other: &i64) -> bool {
         if let Self::Int(val) = self {
             val == other
@@ -646,7 +646,7 @@ impl<'a> PartialEq<i64> for ValueRef<'a> {
     }
 }
 
-impl<'a> PartialEq<f64> for ValueRef<'a> {
+impl PartialEq<f64> for ValueRef<'_> {
     fn eq(&self, other: &f64) -> bool {
         if let Self::Float(val) = self {
             val == other
@@ -656,7 +656,7 @@ impl<'a> PartialEq<f64> for ValueRef<'a> {
     }
 }
 
-impl<'a> PartialEq<bool> for ValueRef<'a> {
+impl PartialEq<bool> for ValueRef<'_> {
     fn eq(&self, other: &bool) -> bool {
         if let Self::Boolean(val) = self {
             val == other
@@ -685,7 +685,7 @@ impl FromStr for ValueRef<'_> {
     }
 }
 
-impl<'a> Display for ValueRef<'a> {
+impl Display for ValueRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::String(v) => f.write_str(v),
@@ -867,7 +867,7 @@ impl<'a> ValueRef<'a> {
     }
 }
 
-impl<'a> ParamValue for ValueRef<'a> {
+impl ParamValue for ValueRef<'_> {
     fn is_empty(&self) -> bool {
         self.is_empty()
     }
@@ -956,7 +956,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
     }
 }
 
-impl<'a> PartialEq<Value> for ValueRef<'a> {
+impl PartialEq<Value> for ValueRef<'_> {
     fn eq(&self, other: &Value) -> bool {
         *self == other.as_ref()
     }
@@ -984,7 +984,7 @@ impl<'a> From<ValueRef<'a>> for Value {
     }
 }
 
-impl<'a> Hash for ValueRef<'a> {
+impl Hash for ValueRef<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         core::mem::discriminant(self).hash(state);
         match self {
@@ -992,7 +992,7 @@ impl<'a> Hash for ValueRef<'a> {
             Self::Float(v) => v.to_bits().hash(state),
             Self::Int(v) => (*v).hash(state),
             Self::Buffer(v) => v.hash(state),
-            Self::Empty => ().hash(state),
+            Self::Empty => 0u8.hash(state),
             Self::Boolean(v) => (*v).hash(state),
         }
     }
@@ -1185,7 +1185,7 @@ macro_rules! accessioncode {
 #[macro_export]
 macro_rules! find_param_method {
     ($meth:ident, $curie:expr) => {
-        $crate::find_param_method!($meth, $curie, "");
+        $crate::find_param_method!($meth, $curie, "Find a parameter by its CURIE");
     };
     ($meth:ident, $curie:expr, $desc:literal) => {
         #[doc=$desc]
@@ -1195,7 +1195,7 @@ macro_rules! find_param_method {
         }
     };
     ($meth:ident, $curie:expr, $conv:expr, $result:ty) => {
-        $crate::find_param_method!($meth, $curie, $conv, $result, "");
+        $crate::find_param_method!($meth, $curie, $conv, $result, "Find a parameter by its CURIE");
     };
     ($meth:ident, $curie:expr, $conv:expr, $result:ty, $desc:literal) => {
         #[doc=$desc]
@@ -1562,7 +1562,7 @@ impl<'a> From<ParamCow<'a>> for Param {
     }
 }
 
-impl<'a> PartialEq<CURIE> for ParamCow<'a> {
+impl PartialEq<CURIE> for ParamCow<'_> {
     fn eq(&self, other: &CURIE) -> bool {
         other.eq(self)
     }
@@ -1836,7 +1836,7 @@ impl<'a> PartialEq<ParamCow<'a>> for Param {
     }
 }
 
-impl<'a> PartialEq<Param> for ParamCow<'a> {
+impl PartialEq<Param> for ParamCow<'_> {
     fn eq(&self, other: &Param) -> bool {
         self.controlled_vocabulary == other.controlled_vocabulary
             && self.accession == other.accession
@@ -1909,7 +1909,7 @@ pub enum AccessionLike<'a> {
     CURIE(CURIE),
 }
 
-impl<'a> From<AccessionIntCode> for AccessionLike<'a> {
+impl From<AccessionIntCode> for AccessionLike<'_> {
     fn from(value: AccessionIntCode) -> Self {
         Self::Number(value)
     }
@@ -1921,7 +1921,7 @@ impl<'a> From<&'a str> for AccessionLike<'a> {
     }
 }
 
-impl<'a> From<String> for AccessionLike<'a> {
+impl From<String> for AccessionLike<'_> {
     fn from(value: String) -> Self {
         Self::Text(Cow::Owned(value))
     }
@@ -2126,10 +2126,10 @@ pub trait ParamDescribedRead {
     /// This is equivalent to [`ParamDescribed::get_param_by_curie`] on `accession.parse::<CURIE>().unwrap()`
     fn get_param_by_accession(&self, accession: &str) -> Option<&Param> {
         let (cv, acc_num) = curie_to_num(accession);
-        return self
+        self
             .params()
             .iter()
-            .find(|&param| param.accession == acc_num && param.controlled_vocabulary == cv);
+            .find(|&param| param.accession == acc_num && param.controlled_vocabulary == cv)
     }
 
     /// Iterate over the encapsulated parameter list
@@ -2212,10 +2212,10 @@ pub trait ParamDescribed {
     /// This is equivalent to [`ParamDescribed::get_param_by_curie`] on `accession.parse::<CURIE>().unwrap()`
     fn get_param_by_accession(&self, accession: &str) -> Option<&Param> {
         let (cv, acc_num) = curie_to_num(accession);
-        return self
+        self
             .params()
             .iter()
-            .find(|&param| param.accession == acc_num && param.controlled_vocabulary == cv);
+            .find(|&param| param.accession == acc_num && param.controlled_vocabulary == cv)
     }
 
     /// Iterate over the encapsulated parameter list
@@ -2555,7 +2555,7 @@ mod test {
         assert_eq!(
             ParamBuilder::default()
                 .name("dalton")
-                .curie(curie!(UO:000221))
+                .curie(curie!(UO:221))
                 .build(),
             ControlledVocabulary::UO.param("UO:000221", "dalton")
         );

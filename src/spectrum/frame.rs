@@ -292,12 +292,12 @@ impl<
                     self.features = Some(peaks);
                     return Ok(self.features());
                 }
-                return Ok(RefFeatureDataLevel::Missing);
+                Ok(RefFeatureDataLevel::Missing)
             } else {
-                return Ok(self.features());
+                Ok(self.features())
             }
         } else {
-            return Ok(self.features());
+            Ok(self.features())
         }
     }
 }
@@ -487,8 +487,7 @@ mod mzsignal_impl {
                     SignalContinuity::Centroid => {
                         let mut extractor: FeatureExtracterType<E, _, _, IonMobility> = arrays
                             .iter()
-                            .map(
-                                |(time, submap)| -> Result<
+                            .flat_map(|(time, submap)| -> Result<
                                     (f64, PeakSetVec<CentroidPeak, MZ>),
                                     ArrayRetrievalError,
                                 > {
@@ -499,10 +498,8 @@ mod mzsignal_impl {
                                         .zip(intens.iter())
                                         .map(|(mz, inten)| CentroidPeak::new(*mz, *inten, 0))
                                         .collect();
-                                    Ok((time as f64, peaks))
-                                },
-                            )
-                            .flatten()
+                                    Ok((time, peaks))
+                                })
                             .collect();
                         extractor.extract_features(error_tolerance, min_length, maximum_gap_size)
                     }
@@ -512,8 +509,7 @@ mod mzsignal_impl {
                         });
                         let mut extractor: FeatureExtracterType<E, _, _, IonMobility> = arrays
                             .iter()
-                            .map(
-                                |(time, submap)| -> Result<
+                            .flat_map(|(time, submap)| -> Result<
                                     (f64, PeakSetVec<CentroidPeak, MZ>),
                                     ArrayRetrievalError,
                                 > {
@@ -525,10 +521,8 @@ mod mzsignal_impl {
                                         .unwrap();
                                     let peaks =
                                         peaks.into_iter().map(|p| p.as_centroid()).collect();
-                                    Ok((time as f64, peaks))
-                                },
-                            )
-                            .flatten()
+                                    Ok((time, peaks))
+                                })
                             .collect();
                         extractor.extract_features(error_tolerance, min_length, maximum_gap_size)
                     }

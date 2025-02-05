@@ -79,7 +79,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
     where
         P: Into<std::path::PathBuf> + Clone,
     {
-        Self::new(&path.into())
+        Self::new(path.into())
     }
 }
 
@@ -91,10 +91,12 @@ fn make_native_id(index: i32) -> String {
     )
 }
 
-const SOURCE_FILE_ID: &'static str = "RAW1";
+const SOURCE_FILE_ID: & str = "RAW1";
 
 #[cfg(not(feature = "doc-only"))]
 pub(crate) mod sealed {
+    use std::path::Path;
+
     use crate::spectrum::bindata::to_bytes;
 
     use super::*;
@@ -179,7 +181,7 @@ pub(crate) mod sealed {
                 components_to_instrument_id,
                 softwares: vec![sw],
                 data_processings: vec![],
-                ms_run: ms_run,
+                ms_run,
                 _c: PhantomData,
                 _d: PhantomData,
                 load_extended_spectrum_data: false,
@@ -259,9 +261,11 @@ pub(crate) mod sealed {
             let tic = self.handle.tic();
             let array_map = self.unpack_chromatogram_signal(tic);
 
-            let mut descr = ChromatogramDescription::default();
-            descr.chromatogram_type = ChromatogramType::TotalIonCurrentChromatogram;
-            descr.id = "TIC".to_string();
+            let descr = ChromatogramDescription {
+                chromatogram_type: ChromatogramType::TotalIonCurrentChromatogram,
+                id: "TIC".to_string(),
+                ..Default::default()
+            };
             Chromatogram::new(descr, array_map)
         }
 
@@ -269,9 +273,11 @@ pub(crate) mod sealed {
             let bpc = self.handle.bpc();
 
             let array_map = self.unpack_chromatogram_signal(bpc);
-            let mut descr = ChromatogramDescription::default();
-            descr.chromatogram_type = ChromatogramType::BasePeakChromatogram;
-            descr.id = "BPC".to_string();
+            let descr = ChromatogramDescription {
+                id: "BPC".to_string(),
+                chromatogram_type: ChromatogramType::BasePeakChromatogram,
+                ..Default::default()
+            };
             Chromatogram::new(descr, array_map)
         }
 
@@ -497,20 +503,18 @@ pub(crate) mod sealed {
         ThermoRawReaderType<C, D>
     {
         pub(crate) fn make_ms_run(
-            path: &PathBuf,
+            path: &Path,
             thermo_file_description: &ThermoFileDescription,
         ) -> MassSpectrometryRun {
-            let mut run = MassSpectrometryRun::default();
-
-            run.default_instrument_id = Some(0);
-            run.default_source_file_id = Some(SOURCE_FILE_ID.to_string());
-            run.id = path
+            let run = MassSpectrometryRun {
+                default_instrument_id: Some(0),
+                default_source_file_id: Some(SOURCE_FILE_ID.to_string()),
+                id: path
                 .file_name()
-                .map(|s| s.to_string_lossy().split(".").next().unwrap().to_string());
-            run.start_time = thermo_file_description.creation_date().map(|s| {
-                let dt = DateTime::parse_from_rfc3339(s).unwrap();
-                dt
-            });
+                .map(|s| s.to_string_lossy().split(".").next().unwrap().to_string()),
+                start_time: thermo_file_description.creation_date().map(|s| DateTime::parse_from_rfc3339(s).unwrap()),
+                ..Default::default()
+            };
             run
         }
 
@@ -549,7 +553,7 @@ pub(crate) mod sealed {
                 .collect();
 
             let mut contents = Vec::new();
-            if levels.get(0).copied().unwrap_or_default() > 0 {
+            if levels.first().copied().unwrap_or_default() > 0 {
                 contents.push(param!("MS1 spectrum", 1000579).into())
             }
             if levels[1..].iter().copied().sum::<u32>() > 0 {
@@ -569,9 +573,11 @@ pub(crate) mod sealed {
         ) {
             let descr = handle.instrument_model();
 
-            let mut sw = Software::default();
-            sw.id = "thermo_xcalibur".to_string();
-            sw.version = descr.software_version().unwrap().to_string();
+            let mut sw = Software {
+                id: "thermo_xcalibur".to_string(),
+                version: descr.software_version().unwrap().to_string(),
+                ..Default::default()
+            };
             sw.add_param(
                 ControlledVocabulary::MS
                     .const_param_ident("Xcalibur", 1000532)
@@ -588,7 +594,6 @@ pub(crate) mod sealed {
             let mut components_to_instrument_id = HashMap::new();
 
             let method_texts: Vec<Param> = (0..handle.instrument_method_count())
-                .into_iter()
                 .flat_map(|i| handle.instrument_method(i as u8))
                 .flat_map(|m| {
                     m.text().map(|s| {
@@ -597,15 +602,11 @@ pub(crate) mod sealed {
                 })
                 .collect();
 
-            let serial_number_param = if let Some(serial) = descr.serial_number() {
-                Some(ControlledVocabulary::MS.param_val(
+            let serial_number_param = descr.serial_number().map(|serial| ControlledVocabulary::MS.param_val(
                     1000529,
                     "instrument serial number",
                     serial,
-                ))
-            } else {
-                None
-            };
+                ));
 
             // Try to build the instrument configuration from the metadata
             for (i, vconf) in descr.configurations().enumerate() {
@@ -649,8 +650,10 @@ pub(crate) mod sealed {
                             acq.ionization_mode().0.into()
                         })
                 }) {
-                    let mut source = Component::default();
-                    source.component_type = ComponentType::IonSource;
+                    let mut source = Component {
+                        component_type: ComponentType::IonSource,
+                        ..Default::default()
+                    };
                     source.extend_params(ionization_mode_to_inlet(first_ionization));
                     source.add_param(translate_ionization_mode(first_ionization));
 
@@ -715,10 +718,10 @@ pub(crate) mod sealed {
                         detector.add_param(detector_type.into());
 
                         config.software_reference = sw.id.clone();
-                        config.id = i as u32;
+                        config.id = i;
 
                         let vconf_mass_analyzer = translate_mass_analyzer_reverse(mass_analyzer);
-                        components_to_instrument_id.insert(vconf_mass_analyzer, i as u32);
+                        components_to_instrument_id.insert(vconf_mass_analyzer, i);
 
                         configs.insert(i, config);
                         i += 1;
@@ -742,20 +745,19 @@ pub(crate) mod sealed {
         pub(crate) fn make_sample(
             thermo_file_description: &ThermoFileDescription,
         ) -> Option<Sample> {
-            if let Some(name) = thermo_file_description.sample_id() {
-                Some(Sample::new(
+            thermo_file_description.sample_id().map(|name| Sample::new(
                     name.to_string(),
                     Some(name.to_string()),
                     Vec::new(),
                 ))
-            } else {
-                None
-            }
         }
 
         pub(crate) fn populate_precursor(&self, vprec: &PrecursorT, precursor: &mut Precursor) {
-            let mut ion = SelectedIon::default();
-            ion.mz = vprec.mz();
+            let mut ion = SelectedIon {
+                mz: vprec.mz(),
+                intensity: vprec.intensity(),
+                ..Default::default()
+            };
             ion.intensity = vprec.intensity();
             ion.charge = match vprec.charge() {
                 0 => None,
@@ -801,7 +803,7 @@ pub(crate) mod sealed {
                         .methods_mut()
                         .push(DissociationMethodTerm::ElectronTransferDissociation);
                     activation.methods_mut().push(
-                        DissociationMethodTerm::SupplementalCollisionInducedDissociation.into(),
+                        DissociationMethodTerm::SupplementalCollisionInducedDissociation,
                     );
                 }
                 DissociationMethod::NETD => {
@@ -1551,9 +1553,9 @@ mod test {
 
         for _ in reader.instrument_configurations().iter() {}
 
-        assert_eq!(reader.get_centroiding(), false);
+        assert!(!reader.get_centroiding());
         reader.set_centroiding(true);
-        assert_eq!(reader.get_centroiding(), true);
+        assert!(reader.get_centroiding());
         let spec_centr = reader.get_spectrum_by_index(spec.index()).unwrap();
         assert_eq!(spec_centr.signal_continuity(), SignalContinuity::Centroid);
         assert!(spec_centr.peaks.is_some());

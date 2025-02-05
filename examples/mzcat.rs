@@ -1,7 +1,6 @@
 use std::time;
 use std::{env, io, path};
 
-use env_logger;
 use mzdata::spectrum::MultiLayerSpectrum;
 use mzdata::{prelude::*, MZReader};
 use rayon::prelude::*;

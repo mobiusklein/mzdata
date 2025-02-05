@@ -2,7 +2,6 @@ use std::time;
 use std::{env, io, path};
 
 use futures::StreamExt;
-use tokio;
 use tokio::fs;
 
 use mzdata::io::mzml;
@@ -49,9 +48,7 @@ async fn scan_file(reader: &mut mzml::AsyncMzMLReader<fs::File>) {
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() -> io::Result<()> {
     let path = path::PathBuf::from(
-        env::args()
-            .skip(1)
-            .next()
+        env::args().nth(1)
             .expect("Please pass an MS data file path"),
     );
     if let Some(ext) = path.extension() {

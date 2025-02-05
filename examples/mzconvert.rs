@@ -121,15 +121,17 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
                 })
                 .all(|a| a);
             if !has_already {
-                let mut sf = SourceFile::default();
-                sf.location = pb
-                    .parent()
-                    .map(|p| format!("file:///{}", p.to_string_lossy()))
-                    .unwrap_or("file:///".to_string());
-                sf.name = pb
-                    .file_name()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or("".to_string());
+                let mut sf = SourceFile {
+                    location: pb
+                        .parent()
+                        .map(|p| format!("file:///{}", p.to_string_lossy()))
+                        .unwrap_or("file:///".to_string()),
+                    name: pb
+                        .file_name()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or("".to_string()),
+                    ..Default::default()
+                };
                 let par = ControlledVocabulary::MS.param_val(1000569, "SHA-1", checksum);
                 sf.add_param(par);
                 sf.file_format = reader_format.as_param();
@@ -141,16 +143,20 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
             }
         };
 
-        let mut sw = Software::default();
-        sw.version = format!(
-            "v{}",
-            option_env!("CARGO_PKG_VERSION").unwrap_or_else(|| "?")
-        );
+        let mut sw = Software {
+            version: format!(
+                "v{}",
+                option_env!("CARGO_PKG_VERSION").unwrap_or_else(|| "?")
+            ),
+            id: Software::find_unique_id("mzconvert", writer.softwares()),
+            ..Default::default()
+        };
         sw.add_param(custom_software_name("mzconvert"));
-        sw.id = Software::find_unique_id("mzconvert", writer.softwares());
 
-        let mut method = ProcessingMethod::default();
-        method.software_reference = sw.id.clone();
+        let mut method = ProcessingMethod {
+            software_reference: sw.id.clone(),
+            ..Default::default()
+        };
         writer.softwares_mut().push(sw);
 
         if let Some(conv) = writer_format.as_conversion() {

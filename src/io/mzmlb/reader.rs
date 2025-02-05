@@ -376,6 +376,7 @@ impl ExternalDataRegistry {
                 return Ok(());
             }
         }
+        #[allow(clippy::manual_inspect)]
         if let Some(dset) = self.registry.get(&range_request.name).as_ref() {
             let dtype = dset.dtype()?;
             let block_end = (start + self.chunk_size).min(dset.size());
@@ -477,10 +478,9 @@ pub struct MzMLbSpectrumBuilder<
 }
 
 impl<
-        'a,
         C: CentroidPeakAdapting + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > MzMLbSpectrumBuilder<'a, C, D>
+    > MzMLbSpectrumBuilder<'_, C, D>
 {
     pub fn new() -> Self {
         Self::default()
@@ -752,7 +752,6 @@ pub struct MzMLbReaderType<
 
 impl<
         'a,
-        'b: 'a,
         C: CentroidPeakAdapting + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + BuildFromArrayMap,
     > MzMLbReaderType<C, D>
@@ -956,9 +955,9 @@ impl<
                 if accumulator.is_chromatogram_entry() {
                     let mut chrom = Chromatogram::default();
                     accumulator.into_chromatogram(&mut chrom);
-                    return Ok(chrom);
+                    Ok(chrom)
                 } else {
-                    return Err(MzMLParserError::UnknownError(self.mzml_parser.state).into());
+                    Err(MzMLParserError::UnknownError(self.mzml_parser.state).into())
                 }
             }
             Err(err) => Err(err),
@@ -1278,10 +1277,9 @@ impl<
 }
 
 impl<
-        'a,
         C: CentroidPeakAdapting + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > Iterator for ChromatogramIter<'a, C, D>
+    > Iterator for ChromatogramIter<'_, C, D>
 {
     type Item = Chromatogram;
 

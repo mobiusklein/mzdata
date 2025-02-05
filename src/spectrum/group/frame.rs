@@ -397,7 +397,7 @@ mod test {
     fn make_group() -> IonMobilityFrameGroup<
         Feature<MZ, IonMobility>,
         ChargedFeature<Mass, IonMobility>,
-        MultiLayerIonMobilityFrame<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>,
+        MultiLayerIonMobilityFrame,
     > {
         let mut spec1 = MultiLayerIonMobilityFrame::default();
         {

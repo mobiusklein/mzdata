@@ -907,7 +907,7 @@ mod test {
         assert!(sw.find_software_term().is_some());
 
 
-        let id = Software::find_unique_id("foo", vec![sw].iter());
+        let id = Software::find_unique_id("foo", [sw].iter());
         assert_eq!(id, "foo_0");
     }
 }

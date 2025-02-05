@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity, clippy::large_enum_variant)]
 use std::{fmt::Debug, fs, io, marker::PhantomData, path::{self, Path}};
 
 use mzpeaks::{prelude::FeatureLike, CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, KnownCharge};
@@ -49,7 +50,7 @@ pub enum MZReaderType<
     #[cfg(feature = "thermo")]
     ThermoRaw(ThermoRawReaderType<C, D>),
     #[cfg(feature = "mzmlb")]
-    MzMLb(MzMLbReaderType<C, D>),
+    MzMLb(Box<MzMLbReaderType<C, D>>),
     #[cfg(feature = "bruker_tdf")]
     BrukerTDF(TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D>),
     Unknown(Box<dyn SpectrumSourceWithMetadata<C, D, MultiLayerSpectrum<C, D>> + Send>),
@@ -376,7 +377,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
             #[cfg(feature = "mzmlb")]
             MassSpectrometryFormat::MzMLb => {
                 let reader = MzMLbReaderType::open_path(path)?;
-                Ok(Self::MzMLb(reader))
+                Ok(Self::MzMLb(Box::new(reader)))
             }
             _ => Err(io::Error::new(
                 io::ErrorKind::Unsupported,
@@ -412,7 +413,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
             #[cfg(feature = "mzmlb")]
             MassSpectrometryFormat::MzMLb => {
                 let reader = MzMLbReaderType::open_file(source)?;
-                Ok(Self::MzMLb(reader))
+                Ok(Self::MzMLb(Box::new(reader)))
             }
             _ => Err(io::Error::new(
                 io::ErrorKind::Unsupported,
@@ -597,7 +598,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak> + BuildFromArrayMap,
             #[cfg(feature="thermo")]
             MZReaderType::ThermoRaw(_) => return Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound),
             #[cfg(feature="mzmlb")]
-            MZReaderType::MzMLb(reader) => IMMZReaderType::MzMLb(reader.try_into_frame_source()?),
+            MZReaderType::MzMLb(reader) => IMMZReaderType::MzMLb(Box::new(reader.try_into_frame_source()?)),
             #[cfg(feature="bruker_tdf")]
             MZReaderType::BrukerTDF(reader) => IMMZReaderType::BrukerTDF(reader.try_into_frame_source()?),
             MZReaderType::Unknown(_) => todo!(),
@@ -640,10 +641,9 @@ mod async_impl {
         }
 
         pub async fn open_read_seek(mut source: R) -> io::Result<AsyncMZReaderType<R, C, D>> {
-            let mut buffer: Vec<u8> = Vec::new();
-            buffer.resize(250, 0);
+            let mut buffer: Vec<u8> = vec![0; 250];
             let current = source.stream_position().await?;
-            source.read(&mut buffer).await?;
+            source.read_exact(&mut buffer).await?;
             source.seek(SeekFrom::Start(current)).await?;
             let mut stream = io::Cursor::new(buffer);
             let (ms_format, gzipped) = infer_from_stream(&mut stream)?;
@@ -820,16 +820,16 @@ mod async_impl {
                     Ok(Self::MzML(AsyncMzMLReaderType::open_path(path).await?))
                 },
                 MassSpectrometryFormat::MzMLb => {
-                    return Err(io::Error::new(io::ErrorKind::Unsupported, "MzMLb files are not supported in async mode"))
+                    Err(io::Error::new(io::ErrorKind::Unsupported, "MzMLb files are not supported in async mode"))
                 },
                 MassSpectrometryFormat::ThermoRaw => {
                     #[cfg(feature = "thermo")]
-                    return Ok(Self::ThermoRaw(AsyncThermoRawReaderType::open_path(path).await?));
+                    {Ok(Self::ThermoRaw(AsyncThermoRawReaderType::open_path(path).await?))}
                     #[cfg(not(feature = "thermo"))]
-                    return Err(io::Error::new(io::ErrorKind::Unsupported, "Thermo RAW files are not supported. Enable the 'thermo' feature"))
+                    {Err(io::Error::new(io::ErrorKind::Unsupported, "Thermo RAW files are not supported. Enable the 'thermo' feature"))}
                 },
-                MassSpectrometryFormat::BrukerTDF => return Err(io::Error::new(io::ErrorKind::Unsupported, "Bruker TDF files are not supported in async mode")),
-                MassSpectrometryFormat::Unknown => return Err(io::Error::new(io::ErrorKind::Unsupported, "Unknown file format unsupported")),
+                MassSpectrometryFormat::BrukerTDF => Err(io::Error::new(io::ErrorKind::Unsupported, "Bruker TDF files are not supported in async mode")),
+                MassSpectrometryFormat::Unknown => Err(io::Error::new(io::ErrorKind::Unsupported, "Unknown file format unsupported")),
             }
         }
 
@@ -949,7 +949,7 @@ pub enum IMMZReaderType<
     > {
     MzML(Generic3DIonMobilityFrameSource<CP, DP, MzMLReaderType<R, CP, DP>, C, D>),
     #[cfg(feature = "mzmlb")]
-    MzMLb(Generic3DIonMobilityFrameSource<CP, DP, MzMLbReaderType<CP, DP>, C, D>),
+    MzMLb(Box<Generic3DIonMobilityFrameSource<CP, DP, MzMLbReaderType<CP, DP>, C, D>>),
     #[cfg(feature = "bruker_tdf")]
     BrukerTDF(TDFFrameReaderType<C, D>),
 }

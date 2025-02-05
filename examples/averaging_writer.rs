@@ -43,10 +43,10 @@ fn main() -> io::Result<()> {
                 || averager.clone(),
                 |averager, (i, g)| {
                     let (mut g, arrays) = g.average_with(averager);
-                    g.precursor_mut().map(|p| {
+                    if let Some(p) = g.precursor_mut() {
                         p.arrays = Some(arrays.into());
                         p.description_mut().signal_continuity = SignalContinuity::Profile;
-                    });
+                    }
                     (i, g)
                 },
             )

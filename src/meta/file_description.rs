@@ -278,7 +278,7 @@ impl NativeSpectrumIDFormat {
     }
 
     pub const fn name(&self) -> &str {
-        &self.term.name()
+        self.term.name()
     }
 
     pub const fn curie(&self) -> CURIE {
@@ -334,11 +334,11 @@ impl NativeSpectrumIDFormat {
                 received: values.len(),
             });
         }
-        for (i, (k, v)) in names.into_iter().zip(values).enumerate() {
+        for (i, (k, v)) in names.iter().zip(values).enumerate() {
             match k {
                 Some(k) => {
                     buffer.push_str(k);
-                    buffer.push_str("=");
+                    buffer.push('=');
                     buffer.push_str(&v.as_str());
                 }
                 None => {
