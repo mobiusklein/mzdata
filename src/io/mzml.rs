@@ -15,7 +15,7 @@ extensive customization of the coercion process relies on the [`BuildFromArrayMa
 for reading and writing conversion to [`BinaryArrayMap`](crate::spectrum::bindata::BinaryArrayMap).
 
 */
-
+#![cfg(feature = "mzml")]
 mod reader;
 mod reading_shared;
 mod writer;

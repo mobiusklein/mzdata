@@ -2,10 +2,11 @@
 Read and write [MGF](https://www.matrixscience.com/help/data_file_help.html#GEN) files.
 Supports random access when reading from a source that supports [`io::Seek`](std::io::Seek).
 */
+#![cfg(feature = "mgf")]
 mod reader;
 mod writer;
 
-pub use reader::{is_mgf, MGFError, MGFParserState, MGFReader, MGFReaderType};
+pub use reader::{MGFError, MGFParserState, MGFReader, MGFReaderType};
 pub use writer::{
     MGFHeaderStyle, MGFWriter, MGFWriterType, MZDataMGFStyle, SimpleMGFStyle, SimpleMGFWriter,
     SimpleMGFWriterType,
@@ -18,6 +19,13 @@ mod async_reader;
 pub use crate::io::mgf::async_reader::{
     MGFReader as AsyncMGFReader, MGFReaderType as AsyncMGFReaderType,
 };
+
+
+pub fn is_mgf(buf: &[u8]) -> bool {
+    let needle = b"BEGIN IONS";
+    buf.windows(needle.len()).any(|window| window == needle)
+}
+
 
 #[cfg(test)]
 mod test {

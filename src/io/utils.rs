@@ -2,12 +2,15 @@
 
 use std::fs;
 use std::io;
+#[allow(unused)]
 use std::io::prelude::*;
 use std::path;
+#[allow(unused)]
 use std::path::PathBuf;
 
-use md5::Context as MD5Context;
-use md5::Digest;
+#[cfg(feature = "checksum")]
+use md5::{Context as MD5Context, Digest};
+#[cfg(feature = "checksum")]
 use sha1::{self, Digest as _};
 
 type ByteBuffer = io::Cursor<Vec<u8>>;
@@ -103,51 +106,6 @@ where
 {
     fn from(path: P) -> FileSource<T> {
         FileSource::from_path(path)
-    }
-}
-
-/// A writable stream that keeps a running MD5 checksum of all bytes
-#[derive(Clone)]
-pub(crate) struct MD5HashingStream<T: io::Write> {
-    pub stream: T,
-    pub context: MD5Context,
-}
-
-impl<T: io::Write> MD5HashingStream<T> {
-    pub fn new(file: T) -> MD5HashingStream<T> {
-        Self {
-            stream: file,
-            context: MD5Context::new(),
-        }
-    }
-
-    pub fn compute(&self) -> Digest {
-        self.context.clone().compute()
-    }
-
-    pub fn get_mut(&mut self) -> &mut T {
-        &mut self.stream
-    }
-
-    pub fn into_inner(self) -> T {
-        self.stream
-    }
-}
-
-impl<T: io::Write> io::Write for MD5HashingStream<T> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.context.consume(buf);
-        self.stream.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.stream.flush()
-    }
-}
-
-impl<T: io::Seek + io::Write> io::Seek for MD5HashingStream<T> {
-    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
-        self.stream.seek(pos)
     }
 }
 
@@ -309,6 +267,7 @@ impl<R: io::Read> PreBufferedStream<R> {
     }
 }
 
+#[cfg(feature = "checksum")]
 /// Compute a SHA-1 digest of a file path
 pub fn checksum_file(path: &PathBuf) -> io::Result<String> {
     let mut checksum = sha1::Sha1::new();
@@ -323,6 +282,56 @@ pub fn checksum_file(path: &PathBuf) -> io::Result<String> {
     let x = base16ct::lower::encode_string(&checksum.finalize());
     Ok(x)
 }
+
+#[cfg(feature = "checksum")]
+/// A writable stream that keeps a running MD5 checksum of all bytes
+#[derive(Clone)]
+pub(crate) struct MD5HashingStream<T: io::Write> {
+    pub stream: T,
+    pub context: MD5Context,
+}
+
+#[cfg(feature = "checksum")]
+impl<T: io::Write> MD5HashingStream<T> {
+    pub fn new(file: T) -> MD5HashingStream<T> {
+        Self {
+            stream: file,
+            context: MD5Context::new(),
+        }
+    }
+
+    pub fn compute(&self) -> Digest {
+        self.context.clone().compute()
+    }
+
+    pub fn get_mut(&mut self) -> &mut T {
+        &mut self.stream
+    }
+
+    pub fn into_inner(self) -> T {
+        self.stream
+    }
+}
+
+#[cfg(feature = "checksum")]
+impl<T: io::Write> io::Write for MD5HashingStream<T> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.context.consume(buf);
+        self.stream.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.stream.flush()
+    }
+}
+
+#[cfg(feature = "checksum")]
+impl<T: io::Seek + io::Write> io::Seek for MD5HashingStream<T> {
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        self.stream.seek(pos)
+    }
+}
+
 
 #[cfg(test)]
 mod test {

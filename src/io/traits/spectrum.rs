@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::marker::PhantomData;
 use std::ops::Index;
+#[allow(unused)]
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::{fs, io, path};
@@ -9,6 +10,7 @@ use log::warn;
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 use thiserror::Error;
 
+#[allow(unused)]
 use crate::io::utils::FileSource;
 use crate::io::{DetailLevel, OffsetIndex};
 use crate::meta::{
@@ -315,6 +317,7 @@ pub trait MZFileReader<
     /// to be a trivial wrapper.
     fn construct_index_from_stream(&mut self) -> u64;
 
+    #[cfg(feature = "serde")]
     /// Re-construct an offset index from this readable object, assuming
     /// it is a JSON stream over the serialized index.
     fn read_index(&mut self, reader: Box<dyn io::Read>) -> Result<&mut Self, serde_json::Error> {
@@ -327,6 +330,7 @@ pub trait MZFileReader<
         }
     }
 
+    #[cfg(feature = "serde")]
     fn write_index(&self, writer: Box<dyn io::Write>) -> Result<&Self, serde_json::Error> {
         match self.get_index().to_writer(writer) {
             Ok(_) => Ok(self),
@@ -345,12 +349,14 @@ pub trait MZFileReader<
     where
         P: Into<path::PathBuf> + Clone,
     {
-        let source: FileSource<fs::File> = FileSource::from(path.clone());
-        let index_file_name = source.index_file_name();
+
+        #[cfg(feature = "serde")]
+        let index_file_name = FileSource::<fs::File>::from(path.clone()).index_file_name();
 
         match fs::File::open(path.into()) {
             Ok(file) => {
                 let mut reader = Self::open_file(file)?;
+                #[cfg(feature = "serde")]
                 if let Some(index_path) = &index_file_name {
                     if index_path.exists() {
                         let index_stream = fs::File::open(index_path)?;
@@ -364,6 +370,8 @@ pub trait MZFileReader<
                         reader.construct_index_from_stream();
                     }
                 }
+                #[cfg(not(feature = "serde"))]
+                reader.construct_index_from_stream();
                 Ok(reader)
             }
             Err(err) => Err(err),
@@ -374,6 +382,7 @@ pub trait MZFileReader<
     fn open_file(source: fs::File) -> io::Result<Self>;
 }
 
+#[cfg(feature = "serde")]
 fn _save_index<
     C: CentroidLike + Default,
     D: DeconvolutedCentroidLike + Default,

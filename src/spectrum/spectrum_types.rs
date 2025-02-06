@@ -1463,7 +1463,8 @@ where
     }
 }
 
-#[cfg(test)]
+
+#[cfg(all(test, feature = "mzml"))]
 mod test {
     use std::io;
 

@@ -26,6 +26,7 @@ mod test {
 
     use super::*;
 
+    #[cfg(feature = "mzml")]
     #[test]
     fn infer_mzml() {
         let path = path::Path::new("./test/data/small.mzML");
@@ -53,6 +54,7 @@ mod test {
         assert!(!zipped);
     }
 
+    #[cfg(feature = "mzml")]
     #[test]
     fn infer_open() {
         let path = path::Path::new("./test/data/small.mzML");
@@ -129,6 +131,7 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "mzml")]
     #[test]
     fn test_dispatch_mzreader() -> io::Result<()> {
         let mut reader = MZReader::open_path("./test/data/small.mzML")?;
@@ -142,6 +145,7 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "mzml")]
     #[test]
     fn test_infer_stream() -> io::Result<()> {
         let mut mzml_file = fs::File::open("./test/data/small.mzML")?;

@@ -828,8 +828,3 @@ impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> Chromatogram
 }
 
 pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
-
-pub fn is_mgf(buf: &[u8]) -> bool {
-    let needle = b"BEGIN IONS";
-    buf.windows(needle.len()).any(|window| window == needle)
-}

@@ -18,46 +18,61 @@ mod utils;
 pub(crate) mod compression;
 
 pub use crate::io::infer_format::{
-    infer_format, infer_from_path, infer_from_stream, MZReader, MZReaderType,
-    MassSpectrometryFormat, MassSpectrometryReadWriteProcess, Sink, Source,
-    MZReaderBuilder, IMMZReaderType
+    infer_format, infer_from_path, infer_from_stream, IMMZReaderType, MZReader, MZReaderBuilder,
+    MZReaderType, MassSpectrometryFormat, MassSpectrometryReadWriteProcess, Sink, Source,
 };
+
+#[cfg(feature = "mgf")]
 pub use crate::io::mgf::{MGFError, MGFReader, MGFWriter};
-#[cfg(feature = "async")]
+
+#[cfg(all(feature = "async", feature = "mzml"))]
 pub use crate::io::mzml::AsyncMzMLReader;
+
+#[cfg(feature = "mzml")]
 pub use crate::io::mzml::{MzMLParserError, MzMLReader, MzMLWriter};
+
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::{MzMLbError, MzMLbReader};
+
 pub use crate::io::offset_index::OffsetIndex;
 pub use crate::io::traits::{
     BorrowedGeneric3DIonMobilityFrameSource, ChromatogramIterator, ChromatogramSource,
-    Generic3DIonMobilityFrameSource, IonMobilityFrameAccessError, IonMobilityFrameGrouping,
-    IonMobilityFrameIterator, IonMobilityFrameSource, MZFileReader, MemorySpectrumSource,
-    RandomAccessIonMobilityFrameIterator, RandomAccessSpectrumGroupingIterator,
-    RandomAccessSpectrumIterator, RandomAccessSpectrumSource, SpectrumAccessError,
-    SpectrumGrouping, SpectrumIterator, SpectrumReceiver, SpectrumSource,
+    Generic3DIonMobilityFrameSource, IntoIonMobilityFrameSource, IntoIonMobilityFrameSourceError,
+    IonMobilityFrameAccessError, IonMobilityFrameGrouping, IonMobilityFrameIterator,
+    IonMobilityFrameSource, MZFileReader, MemorySpectrumSource,
+    RandomAccessIonMobilityFrameGroupingIterator, RandomAccessIonMobilityFrameIterator,
+    RandomAccessSpectrumGroupingIterator, RandomAccessSpectrumIterator, RandomAccessSpectrumSource,
+    SpectrumAccessError, SpectrumGrouping, SpectrumIterator, SpectrumReceiver, SpectrumSource,
     SpectrumSourceWithMetadata, SpectrumWriter, StreamingSpectrumIterator,
-    RandomAccessIonMobilityFrameGroupingIterator, IntoIonMobilityFrameSource, IntoIonMobilityFrameSourceError,
 };
 
 #[cfg(feature = "async_partial")]
 pub use crate::io::traits::AsyncSpectrumSource;
+
 #[cfg(feature = "async")]
 pub use crate::io::traits::AsyncMZFileReader;
 
-pub use crate::io::utils::{checksum_file, DetailLevel, PreBufferedStream};
+pub use crate::io::utils::{DetailLevel, PreBufferedStream};
+
+#[cfg(feature = "checksum")]
+pub use crate::io::utils::checksum_file;
+
 pub use compression::RestartableGzDecoder;
 
-#[cfg(any(feature = "thermo", feature="doc-only"))]
+#[cfg(any(feature = "thermo", feature = "doc-only"))]
 pub mod thermo;
-#[cfg(any(feature = "thermo", feature="doc-only"))]
+
+#[cfg(any(feature = "thermo", feature = "doc-only"))]
 pub use thermo::ThermoRawReader;
 
-#[cfg(all(feature = "async_partial", any(feature = "thermo", feature="doc-only")))]
+#[cfg(all(
+    feature = "async_partial",
+    any(feature = "thermo", feature = "doc-only")
+))]
 pub use thermo::AsyncThermoRawReader;
 
 #[cfg(feature = "async_partial")]
-pub use infer_format::{AsyncMZReader, AsyncMZReaderType, AsyncMZReaderBuilder};
+pub use infer_format::{AsyncMZReader, AsyncMZReaderBuilder, AsyncMZReaderType};
 
 #[cfg(feature = "bruker_tdf")]
 pub mod tdf;
