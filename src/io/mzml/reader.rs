@@ -1,57 +1,56 @@
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::fs;
-use std::io;
-use std::io::{BufReader, Read, Seek, SeekFrom};
-use std::marker::PhantomData;
-use std::mem;
+use std::{
+    collections::HashMap,
+    convert::TryInto,
+    fs,
+    io::{self, BufReader, Read, Seek, SeekFrom},
+    marker::PhantomData,
+    mem,
+};
 
 use log::{debug, trace, warn};
 
-use mzpeaks::CentroidLike;
-use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::Error as XMLError;
-use quick_xml::Reader;
-
-use crate::io::Generic3DIonMobilityFrameSource;
-use crate::io::IntoIonMobilityFrameSource;
-use crate::meta::DissociationEnergyTerm;
-use crate::meta::Sample;
-use crate::prelude::*;
-use crate::spectrum::HasIonMobility;
-
-use super::super::offset_index::OffsetIndex;
-use super::super::traits::{
-    ChromatogramSource, MZFileReader, RandomAccessSpectrumIterator, SeekRead, SpectrumAccessError,
-    SpectrumSource,
-};
-use super::reading_shared::EntryType;
-
-use mzpeaks::{CentroidPeak, DeconvolutedPeak};
-
-use crate::meta::{
-    DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
-    MassSpectrometryRun, Software,
-};
-use crate::params::{Param, ParamList, Unit};
-use crate::prelude::ParamLike;
-use crate::spectrum::bindata::{
-    ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, BuildArrayMapFrom,
-    BuildFromArrayMap, DataArray,
-};
-use crate::spectrum::chromatogram::{Chromatogram, ChromatogramLike};
-use crate::spectrum::scan_properties::*;
-use crate::spectrum::spectrum_types::{
-    CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting, MultiLayerSpectrum,
-    RawSpectrum, Spectrum,
+use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedPeak};
+use quick_xml::{
+    events::{BytesEnd, BytesStart, BytesText, Event},
+    Error as XMLError, Reader,
 };
 
-use crate::io::utils::DetailLevel;
+use crate::{
+    io::{utils::DetailLevel, Generic3DIonMobilityFrameSource, IntoIonMobilityFrameSource},
+    meta::{
+        DataProcessing, DissociationEnergyTerm, FileDescription, InstrumentConfiguration,
+        MSDataFileMetadata, MassSpectrometryRun, Sample, Software,
+    },
+    params::{Param, ParamList, Unit},
+    prelude::{ParamLike, *},
+    spectrum::{
+        bindata::{
+            ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType,
+            BuildArrayMapFrom, BuildFromArrayMap, DataArray,
+        },
+        chromatogram::{Chromatogram, ChromatogramLike},
+        scan_properties::*,
+        spectrum_types::{
+            CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting,
+            MultiLayerSpectrum, RawSpectrum, Spectrum,
+        },
+        HasIonMobility,
+    },
+};
 
-use super::reading_shared::{
-    CVParamParse, FileMetadataBuilder, IncrementingIdMap, IndexParserState,
-    IndexedMzMLIndexExtractor, MzMLIndexingError, MzMLParserError, MzMLParserState, MzMLSAX,
-    ParserResult, XMLParseBase,
+use super::{
+    super::{
+        offset_index::OffsetIndex,
+        traits::{
+            ChromatogramSource, MZFileReader, RandomAccessSpectrumIterator, SeekRead,
+            SpectrumAccessError, SpectrumSource,
+        },
+    },
+    reading_shared::{
+        CVParamParse, EntryType, FileMetadataBuilder, IncrementingIdMap, IndexParserState,
+        IndexedMzMLIndexExtractor, MzMLIndexingError, MzMLParserError, MzMLParserState, MzMLSAX,
+        ParserResult, XMLParseBase,
+    },
 };
 
 pub type Bytes = Vec<u8>;
@@ -354,12 +353,8 @@ impl<C: CentroidLike + Default, D: DeconvolutedPeakAdapting> CVParamParse
 {
 }
 
-impl<
-        'inner,
-        C: CentroidLike + Default,
-        D: DeconvolutedPeakAdapting,
-    > SpectrumBuilding<'inner, C, D, MultiLayerSpectrum<C, D>>
-    for MzMLSpectrumBuilder<'inner, C, D>
+impl<'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapting>
+    SpectrumBuilding<'inner, C, D, MultiLayerSpectrum<C, D>> for MzMLSpectrumBuilder<'inner, C, D>
 {
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
         &mut self.precursor.isolation_window
@@ -995,7 +990,7 @@ pub struct MzMLReaderType<
     /// The raw reader
     handle: BufReader<R>,
     /// A place to store the last error the parser encountered
-    error: Option<MzMLParserError>,
+    error: Option<Box<MzMLParserError>>,
     /// A spectrum ID to byte offset for fast random access
     pub spectrum_index: OffsetIndex,
     pub chromatogram_index: Box<OffsetIndex>,
@@ -1021,9 +1016,10 @@ pub struct MzMLReaderType<
     num_spectra: Option<u64>,
 
     buffer: Bytes,
+    instrument_id_map: Box<IncrementingIdMap>,
+
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
-    instrument_id_map: IncrementingIdMap,
 }
 
 impl<
@@ -1042,7 +1038,8 @@ impl<
         DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge,
     >(
         mut self,
-    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError> {
+    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError>
+    {
         if let Some(state) = self.has_ion_mobility() {
             if matches!(state, HasIonMobility::Dimension) {
                 Ok(Self::IonMobilityFrameSource::new(self))
@@ -1093,7 +1090,7 @@ impl<
 
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
-            instrument_id_map: IncrementingIdMap::default(),
+            instrument_id_map: Box::new(IncrementingIdMap::default()),
             num_spectra: None,
             run: MassSpectrometryRun::default(),
         };
@@ -1132,7 +1129,7 @@ impl<
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
+                            self.error = Some(Box::new(message));
                         }
                     };
                 }
@@ -1143,7 +1140,7 @@ impl<
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
+                            self.error = Some(Box::new(message));
                         }
                     };
                 }
@@ -1154,7 +1151,7 @@ impl<
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
+                            self.error = Some(Box::new(message));
                         }
                     };
                 }
@@ -1165,7 +1162,7 @@ impl<
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
+                            self.error = Some(Box::new(message));
                         }
                     }
                 }
@@ -1180,18 +1177,18 @@ impl<
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
-                            self.error = Some(MzMLParserError::IncompleteElementError(
+                            self.error = Some(Box::new(MzMLParserError::IncompleteElementError(
                                 String::from_utf8_lossy(&self.buffer).to_string(),
                                 self.state,
-                            ));
+                            )));
                             self.state = MzMLParserState::ParserError;
                         }
                     }
                     _ => {
-                        self.error = Some(MzMLParserError::IncompleteElementError(
+                        self.error = Some(Box::new(MzMLParserError::IncompleteElementError(
                             String::from_utf8_lossy(&self.buffer).to_string(),
                             self.state,
-                        ));
+                        )));
                         self.state = MzMLParserState::ParserError;
                     }
                 },
@@ -1225,10 +1222,14 @@ impl<
 
         match self.state {
             MzMLParserState::SpectrumDone | MzMLParserState::ChromatogramDone => Ok(()),
-            MzMLParserState::ParserError => Err(self
-                .error
-                .take()
-                .unwrap_or(MzMLParserError::UnknownError(MzMLParserState::ParserError))),
+            MzMLParserState::ParserError => {
+                Err(*self
+                    .error
+                    .take()
+                    .unwrap_or(Box::new(MzMLParserError::UnknownError(
+                        MzMLParserState::ParserError,
+                    ))))
+            }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
@@ -1251,7 +1252,7 @@ impl<
         macro_rules! err_state {
             ($message:ident) => {{
                 self.state = MzMLParserState::ParserError;
-                self.error = Some($message);
+                self.error = Some(Box::new($message));
             }};
         }
 
@@ -1318,19 +1319,19 @@ impl<
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
-                            self.error = Some(MzMLParserError::IncompleteElementError(
+                            self.error = Some(Box::new(MzMLParserError::IncompleteElementError(
                                 String::from_utf8_lossy(&self.buffer).to_string(),
                                 self.state,
-                            ));
+                            )));
                             self.state = MzMLParserState::ParserError;
                             log::trace!("Expected element {expected}, found {_found}");
                         }
                     }
                     e => {
-                        self.error = Some(MzMLParserError::IncompleteElementError(
+                        self.error = Some(Box::new(MzMLParserError::IncompleteElementError(
                             e.to_string(),
                             self.state,
-                        ));
+                        )));
                         self.state = MzMLParserState::ParserError;
                     }
                 },
@@ -1351,7 +1352,9 @@ impl<
             MzMLParserState::SpectrumDone | MzMLParserState::ChromatogramDone => {
                 Ok((accumulator, offset))
             }
-            MzMLParserState::ParserError if self.error.is_some() => Err(self.error.take().unwrap()),
+            MzMLParserState::ParserError if self.error.is_some() => {
+                Err(*self.error.take().unwrap())
+            }
             MzMLParserState::ParserError if self.error.is_none() => {
                 warn!(
                     "Terminated with ParserError but no error set: {:?}",
@@ -1725,11 +1728,7 @@ impl<
     /// Construct a new MzMLReaderType and build an offset index
     /// using [`Self::build_index`]
     pub fn new_indexed(file: R) -> MzMLReaderType<R, C, D> {
-        Self::with_buffer_capacity_and_detail_level_indexed(
-            file,
-            BUFFER_SIZE,
-            DetailLevel::Full,
-        )
+        Self::with_buffer_capacity_and_detail_level_indexed(file, BUFFER_SIZE, DetailLevel::Full)
     }
 
     fn _read_index(&mut self) {

@@ -4,35 +4,49 @@ use std::marker::PhantomData;
 use std::mem;
 use std::pin::Pin;
 
-use super::reader::{Bytes, MzMLSpectrumBuilder, SpectrumBuilding};
-use super::reading_shared::{
-    FileMetadataBuilder, IncrementingIdMap, IndexParserState, MzMLIndexingError, MzMLParserError,
-    MzMLParserState, MzMLSAX, XMLParseBase,
-};
-
 use futures::stream;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, BufReader};
 use tokio::{self, io};
 
 use log::{debug, warn};
 
-use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::Error as XMLError;
-use quick_xml::Reader;
-
-use crate::prelude::*;
-
-use crate::io::utils::DetailLevel;
-use crate::meta::{DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, Software};
-use crate::params::Param;
-use crate::spectrum::bindata::BuildFromArrayMap;
-use crate::spectrum::spectrum_types::{
-    CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
+use quick_xml::{
+    events::{BytesEnd, BytesStart, BytesText, Event},
+    Error as XMLError, Reader,
 };
 
-use crate::io::traits::{AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource, SpectrumStream};
-use crate::spectrum::Chromatogram;
-use super::super::offset_index::OffsetIndex;
+use mzpeaks::{CentroidPeak, DeconvolutedPeak};
+
+use crate::{
+    io::{
+        traits::{
+            AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource,
+            SpectrumStream,
+        },
+        utils::DetailLevel,
+    },
+    meta::{
+        DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
+        MassSpectrometryRun, Sample, Software,
+    },
+    params::Param,
+    prelude::*,
+    spectrum::{
+        bindata::BuildFromArrayMap,
+        spectrum_types::{CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum},
+        Chromatogram,
+    },
+};
+
+use super::{
+    super::offset_index::OffsetIndex,
+    reader::{Bytes, MzMLSpectrumBuilder, SpectrumBuilding},
+    reading_shared::{
+        FileMetadataBuilder, IncrementingIdMap, IndexParserState, MzMLIndexingError,
+        MzMLParserError, MzMLParserState, MzMLSAX, XMLParseBase,
+    },
+};
+
 // Need to learn more about async traits
 // use super::super::traits::{
 //     MZFileReader, RandomAccessSpectrumIterator, ScanAccessError, SpectrumSource,
@@ -41,8 +55,6 @@ use super::super::offset_index::OffsetIndex;
 pub trait AsyncReadType: AsyncRead + AsyncReadExt {}
 
 impl<T> AsyncReadType for T where T: AsyncRead + AsyncReadExt {}
-
-use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 const BUFFER_SIZE: usize = 10000;
 
@@ -58,7 +70,7 @@ pub struct MzMLReaderType<
     /// The raw reader
     handle: BufReader<R>,
     /// A place to store the last error the parser encountered
-    error: Option<MzMLParserError>,
+    error: Option<Box<MzMLParserError>>,
     /// A spectrum ID to byte offset for fast random access
     pub spectrum_index: OffsetIndex,
     pub chromatogram_index: OffsetIndex,
@@ -80,7 +92,7 @@ pub struct MzMLReaderType<
 
     pub detail_level: DetailLevel,
 
-    pub(crate) instrument_id_map: IncrementingIdMap,
+    pub(crate) instrument_id_map: Box<IncrementingIdMap>,
 
     pub run: MassSpectrometryRun,
 
@@ -128,7 +140,7 @@ impl<
 
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
-            instrument_id_map: IncrementingIdMap::default(),
+            instrument_id_map: IncrementingIdMap::default().into(),
             run: MassSpectrometryRun::default(),
             num_spectra: None,
         };
@@ -163,7 +175,7 @@ impl<
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
+                            self.error = Some(Box::new(message));
                         }
                     };
                 }
@@ -174,7 +186,7 @@ impl<
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
+                            self.error = Some(Box::new(message));
                         }
                     };
                 }
@@ -185,7 +197,7 @@ impl<
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
+                            self.error = Some(Box::new(message));
                         }
                     };
                 }
@@ -196,7 +208,7 @@ impl<
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
+                            self.error = Some(Box::new(message));
                         }
                     }
                 }
@@ -211,18 +223,21 @@ impl<
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
-                            self.error = Some(MzMLParserError::IncompleteElementError(
+                            self.error = Some(Box::new(MzMLParserError::IncompleteElementError(
                                 String::from_utf8_lossy(&self.buffer).to_string(),
                                 self.state,
-                            ));
+                            )));
                             self.state = MzMLParserState::ParserError;
                         }
                     }
                     _ => {
-                        self.error = Some(MzMLParserError::IncompleteElementError(
-                            String::from_utf8_lossy(&self.buffer).to_string(),
-                            self.state,
-                        ));
+                        self.error = Some(
+                            MzMLParserError::IncompleteElementError(
+                                String::from_utf8_lossy(&self.buffer).to_string(),
+                                self.state,
+                            )
+                            .into(),
+                        );
                         self.state = MzMLParserState::ParserError;
                     }
                 },
@@ -256,9 +271,11 @@ impl<
 
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
-            MzMLParserState::ParserError => {
-                Err(self.error.take().unwrap_or(MzMLParserError::UnknownError(MzMLParserState::ParserError)))
-            }
+            MzMLParserState::ParserError => Err(self
+                .error
+                .take()
+                .map(|e| *e)
+                .unwrap_or(MzMLParserError::UnknownError(MzMLParserState::ParserError))),
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
@@ -287,7 +304,7 @@ impl<
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
+                            self.error = Some(message.into());
                         }
                     };
                 }
@@ -295,13 +312,16 @@ impl<
                     match accumulator.end_element(e, self.state) {
                         Ok(state) => {
                             if log::log_enabled!(log::Level::Trace) {
-                                log::trace!("Ending mzML element: {}", String::from_utf8_lossy(e.name().as_ref()));
+                                log::trace!(
+                                    "Ending mzML element: {}",
+                                    String::from_utf8_lossy(e.name().as_ref())
+                                );
                             }
                             self.state = state;
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
+                            self.error = Some(message.into());
                         }
                     };
                 }
@@ -312,7 +332,7 @@ impl<
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
+                            self.error = Some(message.into());
                         }
                     };
                 }
@@ -323,7 +343,7 @@ impl<
                         }
                         Err(message) => {
                             self.state = MzMLParserState::ParserError;
-                            self.error = Some(message);
+                            self.error = Some(message.into());
                         }
                     }
                 }
@@ -340,19 +360,29 @@ impl<
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
-                            self.error = Some(MzMLParserError::IncompleteElementError(
-                                String::from_utf8_lossy(&self.buffer).into_owned().to_string(),
-                                self.state,
-                            ));
+                            self.error = Some(
+                                MzMLParserError::IncompleteElementError(
+                                    String::from_utf8_lossy(&self.buffer)
+                                        .into_owned()
+                                        .to_string(),
+                                    self.state,
+                                )
+                                .into(),
+                            );
                             self.state = MzMLParserState::ParserError;
                             log::trace!("Expected element {expected}, found {_found}");
                         }
                     }
                     _ => {
-                        self.error = Some(MzMLParserError::IncompleteElementError(
-                            String::from_utf8_lossy(&self.buffer).into_owned().to_string(),
-                            self.state,
-                        ));
+                        self.error = Some(
+                            MzMLParserError::IncompleteElementError(
+                                String::from_utf8_lossy(&self.buffer)
+                                    .into_owned()
+                                    .to_string(),
+                                self.state,
+                            )
+                            .into(),
+                        );
                         self.state = MzMLParserState::ParserError;
                     }
                 },
@@ -370,7 +400,7 @@ impl<
         match self.state {
             MzMLParserState::SpectrumDone => Ok((offset, accumulator)),
             MzMLParserState::ParserError if self.error.is_some() => {
-                Err(self.error.take().unwrap())
+                Err(self.error.take().map(|e| *e).unwrap())
             }
             MzMLParserState::ParserError if self.error.is_none() => {
                 warn!(
@@ -394,12 +424,15 @@ impl<
         match self.state {
             MzMLParserState::SpectrumDone => {
                 self.state = MzMLParserState::Resume;
-            },
+            }
             MzMLParserState::ParserError => {
                 warn!("Starting parsing from error: {:?}", self.error);
             }
             state if state > MzMLParserState::SpectrumDone => {
-                warn!("Attempting to start parsing a spectrum in state {}", self.state);
+                warn!(
+                    "Attempting to start parsing a spectrum in state {}",
+                    self.state
+                );
             }
             _ => {}
         }
@@ -649,10 +682,11 @@ impl<
         D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
     > MzMLReaderType<R, C, D>
 {
-
     pub async fn new_indexed(file: R) -> MzMLReaderType<R, C, D> {
         let mut this = Self::new(file).await;
-        this.read_index_from_end().await.expect("Failed to read mzML index");
+        this.read_index_from_end()
+            .await
+            .expect("Failed to read mzML index");
         this
     }
 
@@ -696,7 +730,9 @@ impl<
                     match indexer.start_element(e, indexer_state) {
                         Ok(state) => {
                             indexer_state = state;
-                            if let IndexParserState::Done = &indexer_state { break }
+                            if let IndexParserState::Done = &indexer_state {
+                                break;
+                            }
                         }
                         Err(message) => return Err(MzMLIndexingError::XMLError(message)),
                     };
@@ -861,7 +897,9 @@ impl<
             .stream_position()
             .await
             .expect("Failed to save checkpoint");
-        self.handle.seek(SeekFrom::Start(offset)).await
+        self.handle
+            .seek(SeekFrom::Start(offset))
+            .await
             .expect("Failed to move seek to offset");
         // debug_assert!(
         //     self.check_stream("chromatogram").unwrap(),
@@ -869,7 +907,9 @@ impl<
         // );
         self.state = MzMLParserState::Resume;
         let result = self._read_next_chromatogram().await;
-        self.handle.seek(SeekFrom::Start(start)).await
+        self.handle
+            .seek(SeekFrom::Start(start))
+            .await
             .expect("Failed to restore offset");
         if let Ok(chrom) = result {
             Some(chrom)
@@ -885,7 +925,9 @@ impl<
             .stream_position()
             .await
             .expect("Failed to save checkpoint");
-        self.handle.seek(SeekFrom::Start(offset)).await
+        self.handle
+            .seek(SeekFrom::Start(offset))
+            .await
             .expect("Failed to move seek to offset");
         // debug_assert!(
         //     self.check_stream("chromatogram").unwrap(),
@@ -893,7 +935,9 @@ impl<
         // );
         self.state = MzMLParserState::Resume;
         let result = self._read_next_chromatogram().await;
-        self.handle.seek(SeekFrom::Start(start)).await
+        self.handle
+            .seek(SeekFrom::Start(start))
+            .await
             .expect("Failed to restore offset");
         if let Ok(chrom) = result {
             Some(chrom)
@@ -914,14 +958,12 @@ impl<
     }
 }
 
-
-
 impl<
         R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Send,
         C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
-    > AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D> {
-
+    > AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+{
     async fn reset(&mut self) {
         self.reset().await;
     }
@@ -955,7 +997,6 @@ impl<
     }
 }
 
-
 #[cfg(feature = "async")]
 impl<
         C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
@@ -967,31 +1008,36 @@ impl<
             Ok(val) => val,
             Err(e) => {
                 panic!("Building an index from byte stream not yet implemented. Failed to parse index: {}", e)
-            },
+            }
         }
     }
 
-    async fn open_file(
-        source: tokio::fs::File,
-    ) -> std::io::Result<Self> {
+    async fn open_file(source: tokio::fs::File) -> std::io::Result<Self> {
         Ok(Self::new(source).await)
     }
 }
-
 
 impl<
         R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Send,
         C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
         D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
-    > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D> {
-
+    > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>>
+    for MzMLReaderType<R, C, D>
+{
     async fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         let idx = match self._offset_of_id(id) {
             Some(i) => i,
-            None => return Err(crate::io::SpectrumAccessError::SpectrumIdNotFound(id.to_string())),
+            None => {
+                return Err(crate::io::SpectrumAccessError::SpectrumIdNotFound(
+                    id.to_string(),
+                ))
+            }
         };
 
-        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        self.handle
+            .seek(SeekFrom::Start(idx))
+            .await
+            .map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
         Ok(self)
     }
 
@@ -1001,17 +1047,23 @@ impl<
             None => return Err(crate::io::SpectrumAccessError::SpectrumIndexNotFound(index)),
         };
 
-        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        self.handle
+            .seek(SeekFrom::Start(idx))
+            .await
+            .map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
         Ok(self)
     }
 
-    async fn start_from_time(&mut  self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
+    async fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
         let idx = match self._offset_of_time(time).await {
             Some(i) => i,
             None => return Err(crate::io::SpectrumAccessError::SpectrumNotFound),
         };
 
-        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        self.handle
+            .seek(SeekFrom::Start(idx))
+            .await
+            .map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
         Ok(self)
     }
 }
@@ -1023,7 +1075,7 @@ mod test {
     use super::*;
     use tokio::{fs, io};
 
-    #[tokio::test(flavor="multi_thread", worker_threads=4)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn test_trait() -> io::Result<()> {
         let path = path::Path::new("./test/data/read_index_of.mzML");
         let file = fs::File::open(path).await?;
@@ -1045,7 +1097,9 @@ mod test {
         ms1_counter = 0;
         msn_counter = 0;
         for i in 0..reader.len() {
-            let spec = AsyncSpectrumSource::get_spectrum_by_index(&mut reader,i).await.unwrap();
+            let spec = AsyncSpectrumSource::get_spectrum_by_index(&mut reader, i)
+                .await
+                .unwrap();
             if spec.ms_level() > 1 {
                 msn_counter += 1;
             } else {
