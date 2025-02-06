@@ -30,7 +30,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features nalgebra,parallelism,async,mzsignal,thermo -- --nocapture --show-output
+          args: --features nalgebra,parallelism,async,mzsignal,thermo -- --nocapture --show-output
 
   test-remote:
     name: PROXI Test Suite
@@ -52,4 +52,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features async,proxi,proxi-async -- --nocapture --show-output
+          args: --features async,proxi,proxi-async -- --nocapture --show-output
