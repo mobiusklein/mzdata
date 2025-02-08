@@ -53,3 +53,24 @@ jobs:
         with:
           command: test
           args: --features async,proxi,proxi-async -- --nocapture --show-output
+
+  test-spectra-subset:
+    name: mzdata-spectra
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo test
+        continue-on-error: true
+        run: |
+          cd crates/mzdata-spectra && cargo build --features mzsignal,nalgebra,serde
