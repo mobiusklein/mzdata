@@ -6,7 +6,7 @@ keywords = ['mass-spectrometry', 'mzml', 'mgf']
 
 categories = ["science", "parser-implementations", "data-structures"]
 
-description = "A library to read mass spectrometry data formats"
+description = "A library to read mass spectrometry data formats and a data model for mass spectra"
 
 license = "Apache-2.0"
 

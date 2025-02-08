@@ -9,6 +9,8 @@ license = "Apache-2.0"
 repository = "https://github.com/mobiusklein/mzdata"
 documentation = "https://docs.rs/mzdata"
 
+description = "A subset of `mzdata`'s traits and spectrum data model"
+
 categories = ["science", "data-structures"]
 
 [features]
