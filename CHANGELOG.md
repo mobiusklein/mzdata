@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.45.0] - 2025-02-08
+
+### Changed
+
+- Refactor to allow completely disabling parser machinery and create proxy crate `mzdata-spectra` to re-export the remaining symbols (#21)
+
 ## [0.44.0] - 2025-02-02
 
 ### Added
@@ -641,7 +647,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.44.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.45.0...HEAD
+[0.45.0]: https://github.com/mobiusklein/mzdata/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/mobiusklein/mzdata/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/mobiusklein/mzdata/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/mobiusklein/mzdata/compare/v0.41.0...v0.42.0
