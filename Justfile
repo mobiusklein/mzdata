@@ -62,11 +62,15 @@ changelog version:
     print(buffer)
 
 
-release tag: (changelog tag)
+release tag: (changelog tag) (patch-version)
+    #!/usr/bin/env bash
+
     git add CHANGELOG.md
     git commit -m "chore: update changelog"
     git tag {{tag}}
+
     cargo publish
+    cd crates/mzdata-spectra && cargo publish
 
 
 patch-version:
@@ -79,6 +83,7 @@ patch-version:
     target_toml = "crates/mzdata-spectra/Cargo.toml"
 
     pattern = re.compile(r"^version\s*=\s*\"(.+?)\"")
+    dep_pattern = re.compile("version\s*=\s*\"(.+?)\"")
 
     version = None
 
@@ -97,6 +102,9 @@ patch-version:
         for line in fh:
             if pattern.match(line):
                 line = version
+            if line.startswith("mzdata"):
+                line = dep_pattern.sub(version.strip(), line)
+
             buffer.append(line.strip())
 
     with open(target_toml, 'w') as fh:

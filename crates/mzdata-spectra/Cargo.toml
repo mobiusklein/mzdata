@@ -3,7 +3,12 @@ name = "mzdata-spectra"
 version = "0.45.0"
 edition = "2021"
 
-keywords = ['mass-spectrometry', 'mzml', 'mgf']
+keywords = ['mass-spectrometry']
+license-file = "../../LICENSE"
+
+license = "Apache-2.0"
+repository = "https://github.com/mobiusklein/mzdata"
+documentation = "https://docs.rs/mzdata"
 
 categories = ["science", "data-structures"]
 
@@ -21,4 +26,4 @@ serde = ["mzdata/serde"]
 
 
 [dependencies]
-mzdata = { path = "../../", default-features = false, features = []}
+mzdata = { path = "../../", default-features = false, features = [], version = "0.45.0" }
