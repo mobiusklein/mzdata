@@ -67,3 +67,37 @@ release tag: (changelog tag)
     git commit -m "chore: update changelog"
     git tag {{tag}}
     cargo publish
+
+
+patch-version:
+    #!/usr/bin/env python
+    import sys
+    import re
+
+
+    ref_toml = "Cargo.toml"
+    target_toml = "crates/mzdata-spectra/Cargo.toml"
+
+    pattern = re.compile(r"^version\s*=\s*\"(.+?)\"")
+
+    version = None
+
+    with open(ref_toml) as fh:
+        for line in fh:
+            if match := pattern.match(line):
+                version = match.string
+                break
+
+    if not version:
+        raise ValueError("Version not found in reference")
+
+
+    buffer = []
+    with open(target_toml) as fh:
+        for line in fh:
+            if pattern.match(line):
+                line = version
+            buffer.append(line.strip())
+
+    with open(target_toml, 'w') as fh:
+        fh.write('\n'.join(buffer))
