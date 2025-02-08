@@ -4,7 +4,6 @@ version = "0.45.0"
 edition = "2021"
 
 keywords = ['mass-spectrometry']
-license-file = "../../LICENSE"
 
 license = "Apache-2.0"
 repository = "https://github.com/mobiusklein/mzdata"

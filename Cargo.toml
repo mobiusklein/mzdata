@@ -9,7 +9,6 @@ categories = ["science", "parser-implementations", "data-structures"]
 description = "A library to read mass spectrometry data formats"
 
 license = "Apache-2.0"
-license-file = "LICENSE"
 
 repository = "https://github.com/mobiusklein/mzdata"
 documentation = "https://docs.rs/mzdata"
