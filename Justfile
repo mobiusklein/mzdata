@@ -62,9 +62,10 @@ changelog version:
     print(buffer)
 
 
-release tag: (changelog tag) (patch-version)
+release tag: (patch-version) (changelog tag)
     #!/usr/bin/env bash
 
+    git add crates
     git add CHANGELOG.md
     git commit -m "chore: update changelog"
     git tag {{tag}}
