@@ -1,9 +1,11 @@
+#[allow(unused)]
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender, SyncSender};
 use std::any::Any;
 
+#[allow(unused)]
 use flate2::write::GzEncoder;
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 #[cfg(feature = "bruker_tdf")]
@@ -13,8 +15,11 @@ use crate::io::PreBufferedStream;
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::{MzMLbReaderType, MzMLbWriterBuilder};
 
+#[allow(unused)]
 use crate::io::compression::RestartableGzDecoder;
+#[cfg(feature = "mgf")]
 use crate::io::mgf::{MGFReaderType, MGFWriterType};
+#[cfg(feature = "mzml")]
 use crate::io::mzml::{MzMLReaderType, MzMLWriterType};
 #[allow(unused)]
 use crate::io::traits::{RandomAccessSpectrumIterator, SpectrumSource, SpectrumWriter, MZFileReader};
@@ -261,8 +266,10 @@ pub trait MassSpectrometryReadWriteProcess<
         let read_path = read_path.into();
         match read_path {
             Source::PathLike(read_path) => {
+                #[allow(unused)]
                 let (format, is_gzipped) = infer_format(&read_path)?;
                 match format {
+                    #[cfg(feature = "mgf")]
                     MassSpectrometryFormat::MGF => {
                         let handle = fs::File::open(read_path)?;
                         if is_gzipped {
@@ -277,6 +284,7 @@ pub trait MassSpectrometryReadWriteProcess<
                         };
                         Ok(())
                     }
+                    #[cfg(feature = "mzml")]
                     MassSpectrometryFormat::MzML => {
                         let handle = fs::File::open(read_path)?;
 
@@ -330,6 +338,7 @@ pub trait MassSpectrometryReadWriteProcess<
                     infer_from_stream(&mut handle)?
                 };
                 match format {
+                    #[cfg(feature = "mgf")]
                     MassSpectrometryFormat::MGF => {
                         let handle = io::BufReader::new(handle);
                         let reader = MGFReaderType::new_indexed(handle);
@@ -337,6 +346,7 @@ pub trait MassSpectrometryReadWriteProcess<
                         self.open_writer(reader, format, write_path)?;
                         Ok(())
                     },
+                    #[cfg(feature = "mzml")]
                     MassSpectrometryFormat::MzML => {
                         let handle = io::BufReader::new(handle);
 
@@ -368,6 +378,7 @@ pub trait MassSpectrometryReadWriteProcess<
                 let (ms_format, compressed) = infer_from_stream(&mut buffered)?;
                 log::debug!("Detected {ms_format:?} from STDIN (compressed? {compressed})");
                 match ms_format {
+                    #[cfg(feature = "mgf")]
                     MassSpectrometryFormat::MGF => {
                         if compressed {
                             let reader = StreamingSpectrumIterator::new(MGFReaderType::new(
@@ -382,6 +393,7 @@ pub trait MassSpectrometryReadWriteProcess<
                         }
                         Ok(())
                     }
+                    #[cfg(feature = "mzml")]
                     MassSpectrometryFormat::MzML => {
                         if compressed {
                             let reader = StreamingSpectrumIterator::new(MzMLReaderType::new(
@@ -414,6 +426,7 @@ pub trait MassSpectrometryReadWriteProcess<
     >(
         &self,
         reader: R,
+        #[allow(unused)]
         reader_format: MassSpectrometryFormat,
         write_path: Q,
     ) -> Result<(), Self::ErrorType> {
@@ -427,8 +440,10 @@ pub trait MassSpectrometryReadWriteProcess<
                 self.task(reader, writer)
             },
             Sink::PathLike(write_path) => {
+                #[allow(unused)]
                 let (writer_format, is_gzip) = infer_from_path(&write_path);
                 match writer_format {
+                    #[cfg(feature = "mgf")]
                     MassSpectrometryFormat::MGF => {
                         let handle = io::BufWriter::new(fs::File::create(&write_path)?);
                         if is_gzip {
@@ -451,6 +466,7 @@ pub trait MassSpectrometryReadWriteProcess<
                         }
                         Ok(())
                     }
+                    #[cfg(feature = "mzml")]
                     MassSpectrometryFormat::MzML => {
                         let handle = io::BufWriter::new(fs::File::create(&write_path)?);
                         if is_gzip {
@@ -494,8 +510,10 @@ pub trait MassSpectrometryReadWriteProcess<
                     .into()),
                 }
             },
+            #[allow(unused)]
             Sink::Writer(handle, writer_format) => {
                 match writer_format {
+                    #[cfg(feature = "mgf")]
                     MassSpectrometryFormat::MGF => {
                         let handle = io::BufWriter::new(handle);
                         let mut writer = MGFWriterType::new(
@@ -508,6 +526,7 @@ pub trait MassSpectrometryReadWriteProcess<
 
                         Ok(())
                     }
+                    #[cfg(feature = "mzml")]
                     MassSpectrometryFormat::MzML => {
                         let handle = io::BufWriter::new(handle);
                         let mut writer = MzMLWriterType::new(

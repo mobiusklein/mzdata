@@ -1,7 +1,5 @@
+#[allow(unused)]
 use std::io::prelude::*;
-
-use serde::{Deserialize, Serialize};
-use serde_json;
 
 use indexmap::map::{Iter, Keys};
 use indexmap::IndexMap;
@@ -13,7 +11,8 @@ file it resides in.
 
 A wrapper around [`indexmap::IndexMap`].
 */
-#[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OffsetIndex {
     /// The name of the index. There may potentially be more than one
     /// index per file
@@ -21,7 +20,7 @@ pub struct OffsetIndex {
 
     /// The mapping from ID to byte offset, ordered by occurrence
     // If using serde_json to save this, use
-    #[serde(with = "indexmap::map::serde_seq")]
+    #[cfg_attr(feature = "serde", serde(with = "indexmap::map::serde_seq"))]
     pub offsets: IndexMap<Box<str>, u64>,
 
     /// Whether the index has been initalized explicitly or not, as
@@ -89,11 +88,13 @@ impl OffsetIndex {
         self.offsets.contains_key(key)
     }
 
+    #[cfg(feature = "serde")]
     /// Write the index out in JSON format to `writer`
     pub fn to_writer<W: Write>(&self, writer: W) -> serde_json::Result<()> {
         serde_json::to_writer(writer, self)
     }
 
+    #[cfg(feature = "serde")]
     /// Read an index in JSON format from `reader`
     pub fn from_reader<R: Read>(reader: R) -> serde_json::Result<Self> {
         serde_json::from_reader(reader)

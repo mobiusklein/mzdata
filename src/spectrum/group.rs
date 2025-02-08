@@ -1593,6 +1593,7 @@ pub use mzsignal_impl::{
     SpectrumGroupAveraging,
 };
 
+#[cfg(feature = "mzml")]
 #[cfg(test)]
 mod test {
     use super::*;

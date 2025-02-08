@@ -15,7 +15,10 @@ use crate::{
     Param,
 };
 
+#[cfg(feature = "mgf")]
 use crate::io::mgf::is_mgf;
+
+#[cfg(feature = "mzml")]
 use crate::io::mzml::is_mzml;
 
 #[cfg(feature = "thermo")]
@@ -161,7 +164,9 @@ pub fn infer_from_stream<R: Read + Seek>(
     stream.seek(io::SeekFrom::Start(current_pos))?;
 
     match &buf {
+        #[cfg(feature = "mzml")]
         _ if is_mzml(&buf) => Ok((MassSpectrometryFormat::MzML, is_stream_gzipped)),
+        #[cfg(feature = "mgf")]
         _ if is_mgf(&buf) => Ok((MassSpectrometryFormat::MGF, is_stream_gzipped)),
         #[cfg(feature = "thermo")]
         _ if is_thermo_raw_prefix(&buf) => {

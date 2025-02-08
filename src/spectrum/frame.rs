@@ -586,6 +586,7 @@ mod test {
         };
     }
 
+    #[cfg(feature = "mzml")]
     #[test]
     fn test_loader_conversion() -> io::Result<()> {
         let fh = fs::File::open("./test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz")?;
@@ -597,6 +598,7 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "mzml")]
     #[test]
     fn test_reader_wrapper_iter() -> io::Result<()> {
         let group = crate::mz_read!("./test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz".as_ref(), reader => {

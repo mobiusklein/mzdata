@@ -36,6 +36,7 @@ macro_rules! mz_read {
             $crate::io::Source::PathLike(read_path) => {
                 let (format, is_gzipped) = $crate::io::infer_format(&read_path)?;
                 match format {
+                    #[cfg(feature = "mgf")]
                     $crate::io::MassSpectrometryFormat::MGF => {
                         let handle = std::fs::File::open(read_path)?;
                         if is_gzipped {
@@ -49,6 +50,7 @@ macro_rules! mz_read {
                             Ok($impl)
                         }
                     }
+                    #[cfg(feature = "mzml")]
                     $crate::io::MassSpectrometryFormat::MzML => {
                         let handle = std::fs::File::open(read_path)?;
 
@@ -93,6 +95,7 @@ macro_rules! mz_read {
             $crate::io::Source::Reader(mut handle, format) => {
                 let (format, is_gzipped) = if let Some(format) = format { (format, false) } else { $crate::io::infer_from_stream(&mut handle)? };
                 match format {
+                    #[cfg(feature = "mgf")]
                     $crate::io::MassSpectrometryFormat::MGF => {
                         let handle = std::io::BufReader::new(handle);
                         #[allow(unused_mut)]
@@ -107,6 +110,7 @@ macro_rules! mz_read {
                             Ok($impl)
                         }
                     },
+                    #[cfg(feature = "mzml")]
                     $crate::io::MassSpectrometryFormat::MzML => {
                         let handle = std::io::BufReader::new(handle);
                         #[allow(unused_mut)]
@@ -140,6 +144,7 @@ macro_rules! mz_read {
                     $crate::io::PreBufferedStream::new_with_buffer_size(std::io::stdin(), 2usize.pow(20))?;
                 let (ms_format, compressed) = $crate::io::infer_from_stream(&mut buffered)?;
                 match ms_format {
+                    #[cfg(feature = "mgf")]
                     $crate::io::MassSpectrometryFormat::MGF => {
                         if compressed {
                             #[allow(unused_mut)]
@@ -155,6 +160,8 @@ macro_rules! mz_read {
                             Ok($impl)
                         }
                     }
+
+                    #[cfg(feature = "mzml")]
                     $crate::io::MassSpectrometryFormat::MzML => {
                         if compressed {
                             #[allow(unused_mut)]
@@ -225,6 +232,7 @@ macro_rules! mz_write {
             $crate::io::Sink::PathLike(write_path) => {
                 let (writer_format, is_gzip) = $crate::io::infer_from_path(&write_path);
                 match writer_format {
+                    #[cfg(feature = "mgf")]
                     $crate::io::MassSpectrometryFormat::MGF => {
                         let handle = std::io::BufWriter::new(std::fs::File::create(&write_path)?);
                         if is_gzip {
@@ -241,6 +249,8 @@ macro_rules! mz_write {
 
                         }
                     }
+
+                    #[cfg(feature = "mzml")]
                     $crate::io::MassSpectrometryFormat::MzML => {
                         let handle = std::io::BufWriter::new(std::fs::File::create(&write_path)?);
                         if is_gzip {
@@ -275,6 +285,7 @@ macro_rules! mz_write {
             },
             $crate::io::Sink::Writer(handle, writer_format) => {
                 match writer_format {
+                    #[cfg(feature = "mgf")]
                     $crate::io::MassSpectrometryFormat::MGF => {
                         let handle = std::io::BufWriter::new(handle);
                         let mut $writer: $crate::io::mgf::MGFWriterType<_, $C, $D> = $crate::io::mgf::MGFWriterType::new(
@@ -282,6 +293,7 @@ macro_rules! mz_write {
                         );
                         Ok($impl)
                     }
+                    #[cfg(feature = "mzml")]
                     $crate::io::MassSpectrometryFormat::MzML => {
                         let handle = std::io::BufWriter::new(handle);
                         let mut $writer: $crate::io::mzml::MzMLWriterType<_, $C, $D> = $crate::io::mzml::MzMLWriterType::new(

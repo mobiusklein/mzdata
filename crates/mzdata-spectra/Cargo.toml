@@ -1,0 +1,28 @@
+[package]
+name = "mzdata-spectra"
+version = "0.45.0"
+edition = "2021"
+
+keywords = ['mass-spectrometry']
+
+license = "Apache-2.0"
+repository = "https://github.com/mobiusklein/mzdata"
+documentation = "https://docs.rs/mzdata"
+
+categories = ["science", "data-structures"]
+
+[features]
+
+mzsignal = ["mzdata/mzsignal"]
+openblas = ["mzdata/openblas"]
+netlib = ["mzdata/netlib"]
+intel-mkl = ["mzdata/intel-mkl"]
+nalgebra = ["mzdata/nalgebra"]
+
+parallelism = ["mzdata/parallelism"]
+
+serde = ["mzdata/serde"]
+
+
+[dependencies]
+mzdata = { path = "../../", default-features = false, features = [], version = "0.45.0" }
