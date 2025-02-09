@@ -78,3 +78,12 @@ pub use infer_format::{AsyncMZReader, AsyncMZReaderBuilder, AsyncMZReaderType};
 pub mod tdf;
 
 pub mod usi;
+
+
+// A location to re-export the symbols needed to make mz_read and
+// mz_write macros behave properly in other crates.
+#[doc(hidden)]
+pub mod _impl {
+    pub use super::shorthand::*;
+
+}
