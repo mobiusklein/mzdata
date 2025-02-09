@@ -945,7 +945,7 @@ pub trait IntoIonMobilityFrameSource<C: CentroidPeakAdapting, D: DeconvolutedPea
     fn try_into_frame_source<CF: FeatureLike<MZ, IonMobility>, DF: FeatureLike<Mass, IonMobility> + KnownCharge>(self) -> Result<Self::IonMobilityFrameSource<CF, DF>, IntoIonMobilityFrameSourceError>;
 
 
-    /// Call [`IonMobilityLoadable::try_into_frame_source`], panicking if an error is returned.
+    /// Call [`IntoIonMobilityFrameSource::try_into_frame_source`], panicking if an error is returned.
     fn into_frame_source<CF: FeatureLike<MZ, IonMobility>, DF: FeatureLike<Mass, IonMobility> + KnownCharge>(self) -> Self::IonMobilityFrameSource<CF, DF> {
         self.try_into_frame_source().unwrap()
     }
