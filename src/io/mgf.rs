@@ -1,7 +1,7 @@
-/*!
-Read and write [MGF](https://www.matrixscience.com/help/data_file_help.html#GEN) files.
-Supports random access when reading from a source that supports [`io::Seek`](std::io::Seek).
-*/
+//! Read and write [MGF](https://www.matrixscience.com/help/data_file_help.html#GEN) files.
+//! Supports random access when reading from a source that supports [`io::Seek`](std::io::Seek).
+//!
+//! **Requires the `mgf` feature, enabled by default**
 #![cfg(feature = "mgf")]
 mod reader;
 mod writer;

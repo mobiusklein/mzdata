@@ -465,11 +465,42 @@ mod mzsignal_impl {
         FittedPeak, PeakFitType,
     };
 
+
+    /// When [`mzsignal`] is available, [`MultiLayerIonMobilityFrame`] supports performing feature extraction
+    /// to construct ion mobility-distributed traces in the m/z dimension similar to [`MultiLayerSpectrum::pick_peaks`].
     impl<
             C: FeatureLike<MZ, IonMobility> + FeatureLikeMut<MZ, IonMobility> + Default + Clone,
             D: FeatureLike<Mass, IonMobility> + KnownCharge,
         > MultiLayerIonMobilityFrame<C, D>
     {
+        /// Extract features using the provided [`MapState`] type to build the `C`-type features
+        /// directly.
+        ///
+        /// If the m/z dimension is not centroided, this will pick peaks for each ion
+        /// mobility slice as well.
+        ///
+        /// # Arguments
+        /// - `error_tolerance`: The mass accuracy error accepted in the m/z dimension between
+        ///                      members of the same feature or trace.
+        /// - `min_length`: The minimum number of time points a feature must contain to be kept
+        ///                 in the solution.
+        /// - `maximum_gap_size`: The maximum time period between m/z observations to tolerate
+        ///                       within a feature.
+        /// - `peak_picker`: A configured [`PeakPicker`] instance to use to centroid profile
+        ///                  m/z spectra. If not provided, the default configuration will be
+        ///                  used.
+        ///
+        /// # Type Arguments
+        /// - `E`: a [`MapState`] implementing type that will control how [`FeatureExtracterType`]
+        ///       can construct features.
+        ///
+        /// If the m/z dimension is not centroided, this will pick peaks for each ion
+        /// mobility slice as well.
+        ///
+        /// # Note
+        /// This requires directly specifying the extraction type to use which opens up a wide
+        /// range of customization options. For the simple cases and for convenience, see
+        /// [`MultiLayerIonMobilityFrame::extract_features_simple`].
         pub fn extract_features_with<
             E: MapState<CentroidPeak, MZ, IonMobility, FeatureType = C> + Default,
         >(
@@ -533,9 +564,27 @@ mod mzsignal_impl {
         }
     }
 
+    /// A simplified API for feature extraction is available for the basic [`Feature`] type
+    /// where the default [`MapState`] type is known.
     impl<D: FeatureLike<Mass, IonMobility> + KnownCharge>
         MultiLayerIonMobilityFrame<Feature<MZ, IonMobility>, D>
     {
+
+        /// Extract features using the default algorithm.
+        ///
+        /// # Arguments
+        /// - `error_tolerance`: The mass accuracy error accepted in the m/z dimension between
+        ///                      members of the same feature or trace.
+        /// - `min_length`: The minimum number of time points a feature must contain to be kept
+        ///                 in the solution.
+        /// - `maximum_gap_size`: The maximum time period between m/z observations to tolerate
+        ///                       within a feature.
+        /// - `peak_picker`: A configured [`PeakPicker`] instance to use to centroid profile
+        ///                  m/z spectra. If not provided, the default configuration will be
+        ///                  used.
+        ///
+        /// If the m/z dimension is not centroided, this will pick peaks for each ion
+        /// mobility slice as well.
         pub fn extract_features_simple(
             &mut self,
             error_tolerance: Tolerance,

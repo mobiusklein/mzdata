@@ -1,20 +1,19 @@
-/*!
-Implements a parser for the PSI-MS mzML and indexedmzML XML file formats
-for representing raw and processed mass spectra, providing a
-[`RandomAccessSpectrumIterator`](crate::io::traits::RandomAccessSpectrumIterator)
-interface for reading, and [`SpectrumWriter`](crate::io::traits::SpectrumWriter)
-interface for writing.
-
-The mzML format is standardized by the Proteomics Standards Initiative (PSI), with
-a formal schema defined at <https://www.psidev.info/mzML>.
-
-This crate supports both reading and writing (indexed) mzML documents with spectra
-of varying degrees of complexity (raw profiles, centroids, processed centroids), though
-extensive customization of the coercion process relies on the [`BuildFromArrayMap`](crate::spectrum::bindata::BuildFromArrayMap) and
-[`BuildArrayMapFrom`](crate::spectrum::bindata::BuildArrayMapFrom) traits
-for reading and writing conversion to [`BinaryArrayMap`](crate::spectrum::bindata::BinaryArrayMap).
-
-*/
+//! Implements a parser for the PSI-MS mzML and indexedmzML XML file formats
+//! for representing raw and processed mass spectra, providing a
+//! [`RandomAccessSpectrumIterator`](crate::io::traits::RandomAccessSpectrumIterator)
+//! interface for reading, and [`SpectrumWriter`](crate::io::traits::SpectrumWriter)
+//! interface for writing.
+//!
+//! **Requires the `mzml` feature, enabled by default**
+//!
+//! The mzML format is standardized by the Proteomics Standards Initiative (PSI), with
+//! a formal schema defined at <https://www.psidev.info/mzML>.
+//!
+//! This crate supports both reading and writing (indexed) mzML documents with spectra
+//! of varying degrees of complexity (raw profiles, centroids, processed centroids), though
+//! extensive customization of the coercion process relies on the [`BuildFromArrayMap`](crate::spectrum::bindata::BuildFromArrayMap) and
+//! [`BuildArrayMapFrom`](crate::spectrum::bindata::BuildArrayMapFrom) traits
+//! for reading and writing conversion to [`BinaryArrayMap`](crate::spectrum::bindata::BinaryArrayMap).
 #![cfg(feature = "mzml")]
 mod reader;
 mod reading_shared;

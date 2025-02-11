@@ -167,6 +167,7 @@ rusqlite = { version = "0.31.0", optional = true }
 timsrust = { version = "0.4.1", default-features = false, features = [
     "tdf",
 ], optional = true }
+
 parking_lot = { version = "0.12.3", optional = true }
 pin-project-lite = { version = "0.2.16", optional = true }
 
@@ -186,6 +187,8 @@ harness = false
 
 [package.metadata.docs.rs]
 features = [
+    "mzml",
+    "mgf",
     "parallelism",
     "mzsignal",
     "nalgebra",
@@ -195,5 +198,6 @@ features = [
     "proxi-async",
     # "thermo",
     "doc-only",
+    "bruker_tdf",
 ]
 no-default-features = true

@@ -1,5 +1,7 @@
 //! Reader implementation for Thermo RAW files, [`ThermoRawReaderType`].
 //!
+//! **Requires the `thermo` feature**
+//!
 //! Depends upon the [`thermorawfilereader`] crate which manages the self-hosted `.NET`
 //! runtime. You must still have a working [`.NET 8`](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) runtime installed on the machine you
 //! wish to run this on until Thermo's library supports .NET ahead-of-time compilation. For scripted installation of the .NET runtime

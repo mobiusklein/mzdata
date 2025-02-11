@@ -975,7 +975,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 pub type TDFFrameReader =
     TDFFrameReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>;
 
-/// A consolidated spectrum reader for Bruker TDF file format. It sums over ion mobility
+/// A flat spectrum reader for Bruker TDF file format. It sums over ion mobility
 /// spectra, consolidating features into peaks.
 #[derive(Debug)]
 pub struct TDFSpectrumReaderType<

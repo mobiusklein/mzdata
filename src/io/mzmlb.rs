@@ -4,6 +4,8 @@
 //! interface for reading, and [`SpectrumWriter`](crate::io::traits::SpectrumWriter)
 //! interface for writing.
 //!
+//! **Requires the `mzmlb` feature**
+//!
 //! The mzMLb format embeds a variant of the mzML format within an HDF5 file, storing
 //! the spectrum metadata in XML and data arrays in separate datasets in the same file.
 //!
