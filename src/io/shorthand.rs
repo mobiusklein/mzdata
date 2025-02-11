@@ -172,43 +172,43 @@ pub struct DummyWriter<W, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>(
 
 impl<W, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata for DummyWriter<W, C, D> {
     fn data_processings(&self) -> &Vec<crate::meta::DataProcessing> {
-        todo!()
+        panic!("stub");
     }
 
     fn instrument_configurations(&self) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
-        todo!()
+        panic!("stub");
     }
 
     fn file_description(&self) -> &crate::meta::FileDescription {
-        todo!()
+        panic!("stub");
     }
 
     fn softwares(&self) -> &Vec<crate::meta::Software> {
-        todo!()
+        panic!("stub");
     }
 
     fn samples(&self) -> &Vec<crate::meta::Sample> {
-        todo!()
+        panic!("stub");
     }
 
     fn data_processings_mut(&mut self) -> &mut Vec<crate::meta::DataProcessing> {
-        todo!()
+        panic!("stub");
     }
 
     fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
-        todo!()
+        panic!("stub");
     }
 
     fn file_description_mut(&mut self) -> &mut crate::meta::FileDescription {
-        todo!()
+        panic!("stub");
     }
 
     fn softwares_mut(&mut self) -> &mut Vec<crate::meta::Software> {
-        todo!()
+        panic!("stub");
     }
 
     fn samples_mut(&mut self) -> &mut Vec<crate::meta::Sample> {
-        todo!()
+        panic!("stub");
     }
 }
 

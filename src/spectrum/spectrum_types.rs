@@ -1509,6 +1509,7 @@ mod test {
         };
     }
 
+    #[allow(unused)]
     fn test_spectrum_behavior<T: SpectrumLike>(spec: &T) {
         behaviors!(spec);
     }

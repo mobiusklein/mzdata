@@ -1597,9 +1597,8 @@ pub use mzsignal_impl::{
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{prelude::*, RawSpectrum};
-    use crate::spectrum::SignalContinuity;
-    use crate::MzMLReader;
+    #[allow(unused)]
+    use crate::{prelude::*, RawSpectrum, MzMLReader, spectrum::SignalContinuity};
 
     #[test]
     fn test_group_iter() {
