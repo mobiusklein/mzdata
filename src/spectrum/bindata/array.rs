@@ -172,7 +172,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             Err(ArrayRetrievalError::DataTypeSizeMismatch)
         } else {
             let data = bytemuck::bytes_of(&value);
-            self.data.extend(data.iter());
+            self.data.extend_from_slice(data);
             self.item_count = self.item_count.map(|i| i + 1);
             Ok(())
         }
@@ -187,7 +187,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         } else {
             self.item_count = self.item_count.map(|i| i + values.len());
             let data = bytemuck::cast_slice(values);
-            self.data.extend(data.iter());
+            self.data.extend_from_slice(data);
             Ok(())
         }
     }
@@ -398,6 +398,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         if self.compression == compression {
             Ok(())
         } else {
+            self.item_count = self.data_len().ok();
             let bytes = self.encode_bytestring(compression);
             self.data = bytes;
             self.compression = compression;

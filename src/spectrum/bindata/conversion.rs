@@ -136,13 +136,13 @@ impl From<&DeconvolutedPeakSet> for BinaryArrayMap {
             let charge = p.charge();
 
             let raw_bytes: [u8; mem::size_of::<f64>()] = mz.to_le_bytes();
-            mz_array.data.extend(raw_bytes);
+            mz_array.data.extend_from_slice(&raw_bytes);
 
             let raw_bytes: [u8; mem::size_of::<f32>()] = inten.to_le_bytes();
-            intensity_array.data.extend(raw_bytes);
+            intensity_array.data.extend_from_slice(&raw_bytes);
 
             let raw_bytes: [u8; mem::size_of::<i32>()] = charge.to_le_bytes();
-            charge_array.data.extend(raw_bytes);
+            charge_array.data.extend_from_slice(&raw_bytes);
         }
 
         arrays.add(mz_array);
@@ -274,10 +274,10 @@ impl BuildArrayMapFrom for CentroidPeak {
             let inten: f32 = p.intensity();
 
             let raw_bytes: [u8; mem::size_of::<f64>()] = mz.to_le_bytes();
-            mz_array.data.extend(raw_bytes);
+            mz_array.data.extend_from_slice(&raw_bytes);
 
             let raw_bytes: [u8; mem::size_of::<f32>()] = inten.to_le_bytes();
-            intensity_array.data.extend(raw_bytes);
+            intensity_array.data.extend_from_slice(&raw_bytes);
         }
 
         arrays.add(mz_array);
@@ -339,13 +339,13 @@ impl BuildArrayMapFrom for DeconvolutedPeak {
             let charge = p.charge();
 
             let raw_bytes: [u8; mem::size_of::<f64>()] = mz.to_le_bytes();
-            mz_array.data.extend(raw_bytes);
+            mz_array.data.extend_from_slice(&raw_bytes);
 
             let raw_bytes: [u8; mem::size_of::<f32>()] = inten.to_le_bytes();
-            intensity_array.data.extend(raw_bytes);
+            intensity_array.data.extend_from_slice(&raw_bytes);
 
             let raw_bytes: [u8; mem::size_of::<i32>()] = charge.to_le_bytes();
-            charge_array.data.extend(raw_bytes);
+            charge_array.data.extend_from_slice(&raw_bytes);
         }
 
         arrays.add(mz_array);
@@ -442,10 +442,10 @@ impl BuildArrayMapFrom for Feature<MZ, IonMobility> {
         });
 
         for (mz, im, inten, key) in acc.iter() {
-            mz_array.data.extend(mz.to_le_bytes());
-            intensity_array.data.extend(inten.to_le_bytes());
-            ion_mobility_array.data.extend(im.to_le_bytes());
-            marker_array.data.extend((*key as i32).to_le_bytes());
+            mz_array.data.extend_from_slice(&mz.to_le_bytes());
+            intensity_array.data.extend_from_slice(&inten.to_le_bytes());
+            ion_mobility_array.data.extend_from_slice(&im.to_le_bytes());
+            marker_array.data.extend_from_slice(&(*key as i32).to_le_bytes());
         }
 
         arrays.add(mz_array);
