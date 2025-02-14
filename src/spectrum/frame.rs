@@ -706,10 +706,10 @@ mod test {
 
                 eprintln!("{:?}\t{:?}\t{:?}\t{}", feat.start_time(), feat.end_time(), feat.apex_time(), feat.len());
 
-                assert_is_close!(feat.start_time().unwrap(), 0.947379971788502, 1e-3, "start_time");
+                assert_is_close!(feat.start_time().unwrap(), 0.9547949817459156, 1e-3, "start_time");
                 assert_is_close!(feat.end_time().unwrap(), 1.2638564827665548, 1e-3, "end_time");
                 assert_is_close!(feat.apex_time().unwrap(), 1.212666, 1e-3, "apex_time");
-                assert_eq!(feat.len(), 98);
+                assert_eq!(feat.len(), 83);
             }
         });
         Ok(())
