@@ -2,26 +2,29 @@ use std::convert::TryFrom;
 use std::io;
 use std::marker::PhantomData;
 
-use thiserror::Error;
 use log::warn;
+use thiserror::Error;
 
 use mzpeaks::{
-    IonMobility,
-    KnownCharge, Mass, MZ,
-    feature::{ChargedFeature, Feature, FeatureLike}
+    feature::{ChargedFeature, Feature, FeatureLike},
+    IonMobility, KnownCharge, Mass, MZ,
 };
 
-use crate::{io::{DetailLevel, OffsetIndex}, prelude::{MSDataFileMetadata, SpectrumLike}, spectrum::{HasIonMobility, IonMobilityFrameGroup}};
 use crate::spectrum::group::IonMobilityFrameGroupingIterator;
 use crate::spectrum::spectrum_types::MultiLayerSpectrum;
 use crate::spectrum::{
     CentroidPeakAdapting, DeconvolutedPeakAdapting, IonMobilityFrameLike,
     MultiLayerIonMobilityFrame,
 };
+use crate::{
+    io::{DetailLevel, OffsetIndex},
+    prelude::{MSDataFileMetadata, SpectrumLike},
+    spectrum::{HasIonMobility, IonMobilityFrameGroup},
+};
 
-use super::{IonMobilityFrameGrouping, RandomAccessSpectrumIterator, SpectrumAccessError, SpectrumSource};
-
-
+use super::{
+    IonMobilityFrameGrouping, RandomAccessSpectrumIterator, SpectrumAccessError, SpectrumSource,
+};
 
 /// An analog of [`SpectrumSource`] for [`IonMobilityFrameLike`] producing types
 pub trait IonMobilityFrameSource<
@@ -33,10 +36,8 @@ pub trait IonMobilityFrameSource<
     /// Rewind the current position of the source to the beginning
     fn reset(&mut self);
 
-
     /// Get the [`DetailLevel`] the reader currently uses
     fn detail_level(&self) -> &DetailLevel;
-
 
     /// Set the [`DetailLevel`] for the reader, changing
     /// the amount of work done immediately on loading a
@@ -136,7 +137,9 @@ pub trait IonMobilityFrameSource<
     }
 
     /// Create a new [`IonMobilityFrameIterator`] over `self` and use that state to drive a [`IonMobilityFrameGroupingIterator`]
-    fn groups(&mut self) -> IonMobilityFrameGroupingIterator<IonMobilityFrameIterator<'_, C, D, S, Self>, C, D, S>
+    fn groups(
+        &mut self,
+    ) -> IonMobilityFrameGroupingIterator<IonMobilityFrameIterator<'_, C, D, S, Self>, C, D, S>
     where
         Self: Sized,
     {
@@ -333,7 +336,6 @@ impl<
     > IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>>
     for Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
 {
-
     fn detail_level(&self) -> &DetailLevel {
         self.source.detail_level()
     }
@@ -365,7 +367,7 @@ impl<
                     warn!("Failed to convert {index} to MultiLayerIonMobilityFrame: {err}");
                     None
                 },
-                Some
+                Some,
             )
         })
     }
@@ -377,7 +379,7 @@ impl<
                     warn!("Failed to convert {time} to MultiLayerIonMobilityFrame: {err}");
                     None
                 },
-                Some
+                Some,
             )
         })
     }
@@ -402,8 +404,10 @@ impl<
     type Item = MultiLayerIonMobilityFrame<C, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.source.next().map(|s| MultiLayerIonMobilityFrame::try_from(s)
-                    .expect("Failed to convert spectrum into frame"))
+        self.source
+            .by_ref()
+            .filter_map(|s| MultiLayerIonMobilityFrame::try_from(s).ok())
+            .next()
     }
 }
 
@@ -483,8 +487,12 @@ impl From<IonMobilityFrameAccessError> for SpectrumAccessError {
     fn from(value: IonMobilityFrameAccessError) -> Self {
         match value {
             IonMobilityFrameAccessError::FrameNotFound => SpectrumAccessError::SpectrumNotFound,
-            IonMobilityFrameAccessError::FrameIdNotFound(id) => SpectrumAccessError::SpectrumIdNotFound(id),
-            IonMobilityFrameAccessError::FrameIndexNotFound(i) => SpectrumAccessError::SpectrumIndexNotFound(i),
+            IonMobilityFrameAccessError::FrameIdNotFound(id) => {
+                SpectrumAccessError::SpectrumIdNotFound(id)
+            }
+            IonMobilityFrameAccessError::FrameIndexNotFound(i) => {
+                SpectrumAccessError::SpectrumIndexNotFound(i)
+            }
             IonMobilityFrameAccessError::IOError(error) => SpectrumAccessError::IOError(error),
         }
     }
@@ -494,8 +502,12 @@ impl From<SpectrumAccessError> for IonMobilityFrameAccessError {
     fn from(value: SpectrumAccessError) -> Self {
         match value {
             SpectrumAccessError::SpectrumNotFound => IonMobilityFrameAccessError::FrameNotFound,
-            SpectrumAccessError::SpectrumIdNotFound(id) => IonMobilityFrameAccessError::FrameIdNotFound(id),
-            SpectrumAccessError::SpectrumIndexNotFound(i) => IonMobilityFrameAccessError::FrameIndexNotFound(i),
+            SpectrumAccessError::SpectrumIdNotFound(id) => {
+                IonMobilityFrameAccessError::FrameIdNotFound(id)
+            }
+            SpectrumAccessError::SpectrumIndexNotFound(i) => {
+                IonMobilityFrameAccessError::FrameIndexNotFound(i)
+            }
             SpectrumAccessError::IOError(error) => IonMobilityFrameAccessError::IOError(error),
         }
     }
@@ -557,8 +569,7 @@ impl<
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
         S: IonMobilityFrameLike<C, D>,
         R: IonMobilityFrameSource<C, D, S>,
-    > RandomAccessIonMobilityFrameIterator<C, D, S>
-    for IonMobilityFrameIterator<'_, C, D, S, R>
+    > RandomAccessIonMobilityFrameIterator<C, D, S> for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     /// Start iterating from the spectrum whose native ID matches `id`
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError> {
@@ -608,12 +619,18 @@ pub trait IonMobilityFrameWriter<
 >
 {
     /// Write out a single frame
-    fn write_frame<S: IonMobilityFrameLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize>;
+    fn write_frame<S: IonMobilityFrameLike<C, D> + 'static>(
+        &mut self,
+        spectrum: &S,
+    ) -> io::Result<usize>;
 
     /// Write out a single owned frame.
     ///
     /// This may produce fewer copies for some implementations.
-    fn write_frame_owned<S: IonMobilityFrameLike<C, D> + 'static>(&mut self, spectrum: S) -> io::Result<usize> {
+    fn write_frame_owned<S: IonMobilityFrameLike<C, D> + 'static>(
+        &mut self,
+        spectrum: S,
+    ) -> io::Result<usize> {
         self.write_frame(&spectrum)
     }
 
@@ -645,7 +662,10 @@ pub trait IonMobilityFrameWriter<
     }
 
     /// Write a [`IonMobilityFrameGrouping`] out in order
-    fn write_frame_group<S: IonMobilityFrameLike<C, D> + 'static, G: IonMobilityFrameGrouping<C, D, S> + 'static>(
+    fn write_frame_group<
+        S: IonMobilityFrameLike<C, D> + 'static,
+        G: IonMobilityFrameGrouping<C, D, S> + 'static,
+    >(
         &mut self,
         group: &G,
     ) -> io::Result<usize> {
@@ -718,7 +738,6 @@ pub trait IonMobilityFrameWriter<
     fn close_frames(&mut self) -> io::Result<()>;
 }
 
-
 /// Adapt a [`SpectrumSource`] that contains spectra with a non-scalar ion mobility
 /// dimension to a [`IonMobilityFrameSource`].
 #[derive(Debug)]
@@ -759,7 +778,6 @@ impl<
     > IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>>
     for BorrowedGeneric3DIonMobilityFrameSource<'_, CP, DP, R, C, D>
 {
-
     fn detail_level(&self) -> &DetailLevel {
         self.source.detail_level()
     }
@@ -817,7 +835,6 @@ impl<
     }
 }
 
-
 impl<
         CP: CentroidPeakAdapting,
         DP: DeconvolutedPeakAdapting,
@@ -829,7 +846,9 @@ impl<
     type Item = MultiLayerIonMobilityFrame<C, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.source.next().map(|s| MultiLayerIonMobilityFrame::try_from(s).expect("Failed to convert spectrum into frame"))
+        self.source.by_ref().filter_map(|s| {
+            MultiLayerIonMobilityFrame::try_from(s).ok()
+        }).next()
     }
 }
 
@@ -853,7 +872,6 @@ impl<
         }
     }
 }
-
 
 impl<
         CP: CentroidPeakAdapting,
@@ -906,13 +924,16 @@ where
     }
 }
 
-
 /// Analogous to to [`RandomAccessIonMobilityFrameIterator`], but for [`IonMobilityFrameGrouping`] implementations.
 pub trait RandomAccessIonMobilityFrameGroupingIterator<
     C: FeatureLike<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge,
     S: IonMobilityFrameLike<C, D> = MultiLayerIonMobilityFrame<C, D>,
-    G: IonMobilityFrameGrouping<C, D, S> = IonMobilityFrameGroup<C, D, MultiLayerIonMobilityFrame<C, D>>,
+    G: IonMobilityFrameGrouping<C, D, S> = IonMobilityFrameGroup<
+        C,
+        D,
+        MultiLayerIonMobilityFrame<C, D>,
+    >,
 >: Iterator<Item = G>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError>;
@@ -921,20 +942,19 @@ pub trait RandomAccessIonMobilityFrameGroupingIterator<
     fn reset_state(&mut self);
 }
 
-
 #[derive(Debug, Error)]
 pub enum IntoIonMobilityFrameSourceError {
     #[error("No ion mobility frames were found")]
     NoIonMobilityFramesFound,
 
     #[error("Cannot convert to requested frame type")]
-    ConversionNotPossible
+    ConversionNotPossible,
 }
 
-
 /// Convert a [`SpectrumSource`] to an [`IonMobilityFrameSource`] if it detects ion mobility frames (3D spectra)
-pub trait IntoIonMobilityFrameSource<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>: SpectrumSource<C, D, MultiLayerSpectrum<C, D>> + Sized {
-
+pub trait IntoIonMobilityFrameSource<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>:
+    SpectrumSource<C, D, MultiLayerSpectrum<C, D>> + Sized
+{
     /// The [`IonMobilityFrameSource`]-implementing type for this [`SpectrumSource`].
     ///
     /// When another type isn't available, [`Generic3DIonMobilityFrameSource`]
@@ -942,18 +962,26 @@ pub trait IntoIonMobilityFrameSource<C: CentroidPeakAdapting, D: DeconvolutedPea
 
     /// Attempt to convert the [`SpectrumSource`] into an [`IonMobilityFrameSource`], returning [`IntoIonMobilityFrameSourceError`]
     /// if it is not possible
-    fn try_into_frame_source<CF: FeatureLike<MZ, IonMobility>, DF: FeatureLike<Mass, IonMobility> + KnownCharge>(self) -> Result<Self::IonMobilityFrameSource<CF, DF>, IntoIonMobilityFrameSourceError>;
-
+    fn try_into_frame_source<
+        CF: FeatureLike<MZ, IonMobility>,
+        DF: FeatureLike<Mass, IonMobility> + KnownCharge,
+    >(
+        self,
+    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, IntoIonMobilityFrameSourceError>;
 
     /// Call [`IntoIonMobilityFrameSource::try_into_frame_source`], panicking if an error is returned.
-    fn into_frame_source<CF: FeatureLike<MZ, IonMobility>, DF: FeatureLike<Mass, IonMobility> + KnownCharge>(self) -> Self::IonMobilityFrameSource<CF, DF> {
+    fn into_frame_source<
+        CF: FeatureLike<MZ, IonMobility>,
+        DF: FeatureLike<Mass, IonMobility> + KnownCharge,
+    >(
+        self,
+    ) -> Self::IonMobilityFrameSource<CF, DF> {
         self.try_into_frame_source().unwrap()
     }
 
     /// Reads a sparse 1% of the entries from the [`SpectrumSource`], testing
     /// for the presence of ion mobility data.
-    fn has_ion_mobility(&mut self) -> Option<HasIonMobility>
-    {
+    fn has_ion_mobility(&mut self) -> Option<HasIonMobility> {
         let details = *self.detail_level();
         self.set_detail_level(DetailLevel::Lazy);
         let n = self.len();
