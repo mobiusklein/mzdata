@@ -494,3 +494,202 @@ impl TDFMSnFacet {
         }
     }
 }
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct SQLTrace {
+    pub id: usize,
+    pub description: String,
+    pub instrument: String,
+    pub instrument_id: String,
+    pub trace_type: usize,
+    pub unit: usize,
+    pub time_offset: f64,
+    pub times: Option<Vec<f64>>,
+    pub intensities: Option<Vec<f32>>,
+}
+
+impl SQLTrace {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        id: usize,
+        description: String,
+        instrument: String,
+        instrument_id: String,
+        trace_type: usize,
+        unit: usize,
+        time_offset: f64,
+        times: Option<Vec<f64>>,
+        intensities: Option<Vec<f32>>,
+    ) -> Self {
+        Self {
+            id,
+            description,
+            instrument,
+            instrument_id,
+            trace_type,
+            unit,
+            time_offset,
+            times,
+            intensities,
+        }
+    }
+
+    pub fn load_trace_data(&mut self, connection: &Connection) -> Result<&Self, Error> {
+        let mut q =
+            connection.prepare("SELECT Times, Intensities FROM TraceChunks WHERE Id = ?")?;
+        let (mut times, mut intensities) = q
+            .query([self.id])?
+            .mapped(|row| {
+                let times = row.get::<usize, Vec<u8>>(0)?;
+                let mut time_acc = Vec::new();
+                let mut buf = [0u8; 8];
+                for chunk in times.chunks_exact(8) {
+                    buf.copy_from_slice(chunk);
+                    time_acc.push(f64::from_le_bytes(buf));
+                }
+
+                let ints = row.get::<usize, Vec<u8>>(1)?;
+                let mut intensity_acc = Vec::new();
+                let mut buf = [0u8; 4];
+                for chunk in ints.chunks_exact(4) {
+                    buf.copy_from_slice(chunk);
+                    intensity_acc.push(f32::from_le_bytes(buf));
+                }
+
+                Ok((time_acc, intensity_acc))
+            })
+            .flatten()
+            .reduce(|(mut ta, mut ia), (t, i)| {
+                ta.extend_from_slice(&t);
+                ia.extend_from_slice(&i);
+                (ta, ia)
+            })
+            .unwrap_or_default();
+
+        if !times.is_sorted() {
+            let mut indices: Vec<_> = (0..times.len()).collect();
+            indices.sort_by(|a, b| times[*a].total_cmp(&times[*b]));
+            const TOMBSTONE: usize = usize::MAX;
+
+            for idx in 0..times.len() {
+                if indices[idx] != TOMBSTONE {
+                    let mut current_idx = idx;
+                    loop {
+                        let next_idx = indices[current_idx];
+                        indices[current_idx] = TOMBSTONE;
+                        if indices[next_idx] == TOMBSTONE {
+                            break;
+                        }
+                        times.swap(current_idx, next_idx);
+                        intensities.swap(current_idx, next_idx);
+                        current_idx = next_idx;
+                    }
+                }
+            }
+        }
+
+        self.times = Some(times);
+        self.intensities = Some(intensities);
+        Ok(self)
+    }
+
+    pub fn len(&self) -> usize {
+        self.times.as_ref().map(|s| s.len()).unwrap_or_default()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.times
+            .as_ref()
+            .map(|s| s.is_empty())
+            .unwrap_or_default()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (f64, f32)> + '_ {
+        self.times
+            .as_ref()
+            .into_iter()
+            .flatten()
+            .copied()
+            .zip(self.intensities.as_ref().into_iter().flatten().copied())
+    }
+}
+
+impl FromSQL for SQLTrace {
+    fn from_row(row: &Row<'_>) -> Result<Self, Error> {
+        let this = Self::new(
+            row.get(0)?,
+            row.get(1)?,
+            row.get(2)?,
+            row.get(3)?,
+            row.get(4)?,
+            row.get(5)?,
+            row.get(6)?,
+            None,
+            None,
+        );
+        Ok(this)
+    }
+
+    fn get_sql() -> String {
+        "SELECT Id, Description, Instrument, InstrumentId, Type, Unit, TimeOffset FROM TraceSources"
+            .into()
+    }
+}
+
+// chromatography-data.sqlite
+pub struct ChromatographyData {
+    pub connection: ReentrantMutex<Connection>,
+}
+
+impl ChromatographyData {
+    pub const FILE_NAME: &str = "chromatography-data.sqlite";
+
+    pub fn new(data_path: &Path) -> Result<Self, Error> {
+        let connection = ReentrantMutex::new(Connection::open(data_path)?);
+        let this = Self { connection };
+        this.valid_schema()?;
+        Ok(this)
+    }
+
+    fn valid_schema(&self) -> Result<bool, Error> {
+        Ok(self.has_table("TraceSources")? && self.has_table("TraceChunks")?)
+    }
+
+    pub fn connection(&self) -> ReentrantMutexGuard<'_, Connection> {
+        self.connection.try_lock().unwrap()
+    }
+
+    fn has_table(&self, table: &str) -> Result<bool, Error> {
+        self.connection().query_row(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            [table],
+            |_| Ok(true),
+        )
+    }
+
+    pub fn traces(&mut self, include_data: bool) -> Result<Vec<SQLTrace>, Error> {
+        let mut traces = SQLTrace::read_from(&self.connection(), [])?;
+        if include_data {
+            for t in traces.iter_mut() {
+                t.load_trace_data(&self.connection())?;
+            }
+        }
+        Ok(traces)
+    }
+
+    pub fn get_by_name(
+        &mut self,
+        name: &str,
+        include_data: bool,
+    ) -> Result<Option<SQLTrace>, Error> {
+        let mut trace = SQLTrace::read_from_where(&self.connection(), [name], "Description = ?")?
+            .into_iter()
+            .next();
+        if include_data {
+            if let Some(t) = trace.as_mut() {
+                t.load_trace_data(&self.connection())?;
+            }
+        }
+        Ok(trace)
+    }
+}

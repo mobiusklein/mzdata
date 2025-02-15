@@ -46,13 +46,13 @@ use timsrust::{
     Metadata, TimsRustError,
 };
 
-use super::arrays::consolidate_peaks;
 pub use super::arrays::FrameToArraysMapper;
 use super::constants::{InstrumentSource, MsMsType};
 use super::sql::{
     FromSQL, PasefPrecursor, RawTDFSQLReader, SQLDIAFrameMsMsWindow, SQLFrame, SQLPasefFrameMsMs,
     SQLPrecursor, TDFMSnFacet,
 };
+use super::{arrays::consolidate_peaks, sql::ChromatographyData};
 
 const PEAK_MERGE_TOLERANCE: Tolerance = Tolerance::Da(0.01);
 
@@ -174,9 +174,7 @@ pub struct TDFFrameReaderType<
     _d: PhantomData<D>,
 }
 
-
 type DIAFrameWindowMap = HashMap<u32, Vec<Arc<SQLDIAFrameMsMsWindow>>, BuildIdentityHasher<u32>>;
-
 
 impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge>
     TDFFrameReaderType<C, D>
@@ -316,10 +314,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         Ok((entry_count_guess, frame_types))
     }
 
-    fn build_window_index(
-        &self,
-    ) -> Result<DIAFrameWindowMap, Error>
-    {
+    fn build_window_index(&self) -> Result<DIAFrameWindowMap, Error> {
         let conn = self.tdf_reader.connection();
         let dia_windows = SQLDIAFrameMsMsWindow::read_from(&conn, [])?;
         let mut window_groups: HashMap<u32, Vec<Arc<SQLDIAFrameMsMsWindow>>, _> =
@@ -450,8 +445,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                         .extend_from_slice(&entry.frame.summed_intensities.to_le_bytes());
                 }
                 ChromatogramType::BasePeakChromatogram => {
-                    intensity_array
-                        .extend_from_slice(&entry.frame.max_intensity.to_le_bytes());
+                    intensity_array.extend_from_slice(&entry.frame.max_intensity.to_le_bytes());
                 }
                 _ => {
                     unimplemented!()
@@ -596,6 +590,21 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         } else {
             Ok(None)
         }
+    }
+
+    pub fn get_trace_reader(&self) -> Result<ChromatographyData, TimsRustError> {
+        let path = self
+            .metadata
+            .path
+            .parent()
+            .expect(".tdf file did not have an enclosing directory")
+            .join(super::sql::ChromatographyData::FILE_NAME);
+        let handle = super::sql::ChromatographyData::new(&path).map_err(|e| {
+            TimsRustError::MetadataReaderError(timsrust::readers::MetadataReaderError::SqlError(
+                e.into(),
+            ))
+        })?;
+        Ok(handle)
     }
 }
 
@@ -1249,6 +1258,10 @@ impl<
     pub fn peak_merging_tolerance_mut(&mut self) -> &mut Tolerance {
         &mut self.peak_merging_tolerance
     }
+
+    pub fn get_trace_reader(&self) -> Result<ChromatographyData, TimsRustError> {
+        self.frame_reader.get_trace_reader()
+    }
 }
 
 pub type TDFSpectrumReader = TDFSpectrumReaderType<
@@ -1276,7 +1289,6 @@ fn index_to_precursor(
         };
 
         let im = metadata.im_converter.convert(prec.scan_average);
-
 
         let p = inverse_reduce_ion_mobility_param(im);
         ion.add_param(p);
