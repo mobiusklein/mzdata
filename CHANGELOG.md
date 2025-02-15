@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.47.0] - 2025-02-15
+
+### Added
+
+- Add chromatogram data reader to `bruker_tdf`
+
+### Changed
+
+- `Generic3DIonMobilityFrameSource::next` will skip spectra without ion mobility dimension
+
 ## [0.46.1] - 2025-02-11
 
 ### Added
@@ -663,7 +673,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.46.1...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.47.0...HEAD
+[0.47.0]: https://github.com/mobiusklein/mzdata/compare/v0.46.1...v0.47.0
 [0.46.1]: https://github.com/mobiusklein/mzdata/compare/v0.46.0...v0.46.1
 [0.46.0]: https://github.com/mobiusklein/mzdata/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/mobiusklein/mzdata/compare/v0.44.0...v0.45.0
