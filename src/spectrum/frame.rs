@@ -1,5 +1,5 @@
 #![allow(unused)]
-use std::{borrow::Cow, convert::TryFrom, marker::PhantomData, mem};
+use std::{borrow::Cow, convert::TryFrom, marker::PhantomData, mem, ops::Deref};
 
 use mzpeaks::{
     coordinate::{IonMobility, Mass, MZ},
@@ -18,7 +18,7 @@ use super::{
 use super::{scan_properties::SCAN_TITLE, MultiLayerSpectrum};
 use crate::{
     io::IonMobilityFrameGrouping,
-    params::{ParamDescribed, ParamList},
+    params::{ParamDescribed, ParamList, Unit},
 };
 use crate::{prelude::*, RawSpectrum};
 
@@ -86,6 +86,9 @@ pub struct IonMobilityFrameDescription {
 
     /// The parent ion or ions and their isolation and activation description
     pub precursor: Option<Precursor>,
+
+    /// The unit of the ion mobility dimension
+    pub ion_mobility_unit: Unit,
 }
 
 impl_param_described!(IonMobilityFrameDescription);
@@ -101,6 +104,7 @@ impl IonMobilityFrameDescription {
         params: ParamList,
         acquisition: Acquisition,
         precursor: Option<Precursor>,
+        ion_mobility_unit: Unit,
     ) -> Self {
         Self {
             id,
@@ -111,6 +115,7 @@ impl IonMobilityFrameDescription {
             params,
             acquisition,
             precursor,
+            ion_mobility_unit,
         }
     }
 
@@ -130,6 +135,7 @@ impl From<SpectrumDescription> for IonMobilityFrameDescription {
             value.params,
             value.acquisition,
             value.precursor,
+            Unit::Unknown,
         )
     }
 }
@@ -161,6 +167,26 @@ pub trait IonMobilityFrameLike<
 
     /// The method to access the spectrum descript itself, mutably.
     fn description_mut(&mut self) -> &mut IonMobilityFrameDescription;
+
+    /// The unit of measure of the ion mobility dimension
+    fn ion_mobility_unit(&self) -> Unit {
+        let unit = self.description().ion_mobility_unit;
+        if unit == Unit::Unknown {
+            self.raw_arrays().map(|a| a.ion_mobility_unit).unwrap_or_default()
+        } else {
+            unit
+        }
+    }
+
+    /// Get a mutable reference to the ion mobility dimension's unit
+    fn ion_mobility_unit_mut(&mut self) -> &mut Unit {
+        if self.description().ion_mobility_unit == Unit::Unknown {
+            if let Some(unit) = self.raw_arrays().map(|a| a.ion_mobility_unit) {
+                self.description_mut().ion_mobility_unit = unit;
+            }
+        }
+        &mut self.description_mut().ion_mobility_unit
+    }
 
     /// Access the acquisition information for this spectrum.
     #[inline]
@@ -282,13 +308,13 @@ impl<
         if matches!(self.signal_continuity(), SignalContinuity::Centroid) {
             if let Some(arrays) = self.arrays.as_ref() {
                 if let ArraysAvailable::Ok = D::has_arrays_3d_for(arrays) {
-                    let peaks = FeatureMap::new(D::try_from_arrays_3d(arrays)?);
+                    let peaks = D::try_from_arrays_3d(arrays).map(|f| FeatureMap::new(f))?;
                     self.deconvoluted_features = Some(peaks);
                     return Ok(self.features());
                 }
 
                 if let ArraysAvailable::Ok = C::has_arrays_3d_for(arrays) {
-                    let peaks = FeatureMap::new(C::try_from_arrays_3d(arrays)?);
+                    let peaks = C::try_from_arrays_3d(arrays).map(|f| FeatureMap::new(f))?;
                     self.features = Some(peaks);
                     return Ok(self.features());
                 }
@@ -323,12 +349,18 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         deconvoluted_features: Option<FeatureMap<Mass, IonMobility, D>>,
         description: IonMobilityFrameDescription,
     ) -> Self {
-        Self {
+        let mut this = Self {
             arrays,
             features,
             deconvoluted_features,
             description,
+        };
+        if this.description.ion_mobility_unit.is_unknown() {
+            if let Some(arrays) = this.raw_arrays() {
+                this.description.ion_mobility_unit = arrays.ion_mobility_unit
+            }
         }
+        this
     }
 }
 
@@ -425,7 +457,8 @@ impl<
     > From<MultiLayerIonMobilityFrame<C, D>> for RawSpectrum
 {
     fn from(value: MultiLayerIonMobilityFrame<C, D>) -> Self {
-        let arrays = if let Some(d) = value.deconvoluted_features {
+        let im_unit = value.ion_mobility_unit();
+        let mut arrays = if let Some(d) = value.deconvoluted_features {
             BuildArrayMap3DFrom::as_arrays_3d(&d[..]).unstack().unwrap()
         } else if let Some(c) = value.features {
             BuildArrayMap3DFrom::as_arrays_3d(&c[..]).unstack().unwrap()
@@ -434,6 +467,12 @@ impl<
         } else {
             BinaryArrayMap::default()
         };
+
+        arrays.iter_mut().for_each(|(at, da)| {
+            if at.is_ion_mobility() {
+                *da.unit_mut() = im_unit;
+            }
+        });
 
         let descr = value.description.into();
 
@@ -464,7 +503,6 @@ mod mzsignal_impl {
         peak_picker::PeakPicker,
         FittedPeak, PeakFitType,
     };
-
 
     /// When [`mzsignal`] is available, [`MultiLayerIonMobilityFrame`] supports performing feature extraction
     /// to construct ion mobility-distributed traces in the m/z dimension similar to [`MultiLayerSpectrum::pick_peaks`].
@@ -518,7 +556,8 @@ mod mzsignal_impl {
                     SignalContinuity::Centroid => {
                         let mut extractor: FeatureExtracterType<E, _, _, IonMobility> = arrays
                             .iter()
-                            .flat_map(|(time, submap)| -> Result<
+                            .flat_map(
+                                |(time, submap)| -> Result<
                                     (f64, PeakSetVec<CentroidPeak, MZ>),
                                     ArrayRetrievalError,
                                 > {
@@ -530,7 +569,8 @@ mod mzsignal_impl {
                                         .map(|(mz, inten)| CentroidPeak::new(*mz, *inten, 0))
                                         .collect();
                                     Ok((time, peaks))
-                                })
+                                },
+                            )
                             .collect();
                         extractor.extract_features(error_tolerance, min_length, maximum_gap_size)
                     }
@@ -540,7 +580,8 @@ mod mzsignal_impl {
                         });
                         let mut extractor: FeatureExtracterType<E, _, _, IonMobility> = arrays
                             .iter()
-                            .flat_map(|(time, submap)| -> Result<
+                            .flat_map(
+                                |(time, submap)| -> Result<
                                     (f64, PeakSetVec<CentroidPeak, MZ>),
                                     ArrayRetrievalError,
                                 > {
@@ -553,7 +594,8 @@ mod mzsignal_impl {
                                     let peaks =
                                         peaks.into_iter().map(|p| p.as_centroid()).collect();
                                     Ok((time, peaks))
-                                })
+                                },
+                            )
                             .collect();
                         extractor.extract_features(error_tolerance, min_length, maximum_gap_size)
                     }
@@ -569,7 +611,6 @@ mod mzsignal_impl {
     impl<D: FeatureLike<Mass, IonMobility> + KnownCharge>
         MultiLayerIonMobilityFrame<Feature<MZ, IonMobility>, D>
     {
-
         /// Extract features using the default algorithm.
         ///
         /// # Arguments
@@ -638,11 +679,17 @@ mod test {
     #[cfg(feature = "mzml")]
     #[test]
     fn test_loader_conversion() -> io::Result<()> {
-        let fh = fs::File::open("./test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz")?;
+        let fh = fs::File::open(
+            "./test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz",
+        )?;
         let handle = crate::io::compression::RestartableGzDecoder::new(io::BufReader::new(fh));
         let mzml_reader = crate::MzMLReader::new_indexed(handle);
-        let mut frame_reader = mzml_reader.try_into_frame_source::<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>().unwrap();
-        let frame = frame_reader.get_frame_by_id("merged=42926 frame=9728 scanStart=1 scanEnd=705").unwrap();
+        let mut frame_reader = mzml_reader
+            .try_into_frame_source::<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>()
+            .unwrap();
+        let frame = frame_reader
+            .get_frame_by_id("merged=42926 frame=9728 scanStart=1 scanEnd=705")
+            .unwrap();
         assert_eq!(frame.ms_level(), 1);
         Ok(())
     }

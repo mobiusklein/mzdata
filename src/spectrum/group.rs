@@ -49,13 +49,14 @@ pub struct SpectrumGroupingIterator<
 > {
     pub source: R,
     pub queue: VecDeque<S>,
-    pub product_scan_mapping: HashMap<String, Vec<S>>,
+    pub product_mapping: HashMap<String, Vec<S>>,
     generation_tracker: GenerationTracker,
     buffering: usize,
     highest_ms_level: u8,
     generation: usize,
     depth: u32,
     passed_first_ms1: bool,
+    pub max_ms1_seeking_depth: u32,
     phantom: PhantomData<S>,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
@@ -63,6 +64,167 @@ pub struct SpectrumGroupingIterator<
 }
 
 const MISSING_SCAN_ID: &str = "___MISSING_PRECURSOR_ID___";
+
+
+macro_rules! impl_ms_level_switching {
+    () => {
+        fn add_precursor(&mut self, scan: S) -> bool {
+            self.queue.push_back(scan);
+            self.queue.len() >= self.buffering
+        }
+
+        fn add_product(&mut self, scan: S) {
+            self.depth += 1;
+            if let Some(precursor) = scan.precursor() {
+                match precursor.precursor_id.as_ref() {
+                    Some(prec_id) => {
+                        let ent = self.product_mapping.entry(prec_id.clone());
+                        self.generation_tracker
+                            .add(prec_id.clone(), self.generation);
+                        ent.or_default().push(scan);
+                    }
+                    None => {
+                        let buffer = self
+                            .product_mapping
+                            .entry(MISSING_SCAN_ID.to_owned())
+                            .or_default();
+                        buffer.push(scan);
+                        if buffer.len() % 1000 == 0 && !buffer.is_empty() {
+                            log::warn!("Unassociated MSn scan buffer size is {}", buffer.len());
+                        }
+                    }
+                }
+            } else if !self.queue.is_empty() {
+                // Consider replacing with normal get_mut to avoid re-copying
+                let last = self.queue.back().unwrap();
+                self.generation_tracker
+                    .add(last.id().to_owned(), self.generation);
+                self.product_mapping
+                    .entry(last.id().to_owned())
+                    .or_default()
+                    .push(scan);
+            } else {
+                let ent = self.product_mapping.entry(MISSING_SCAN_ID.to_owned());
+                let buffer = ent.or_default();
+                buffer.push(scan);
+                if buffer.len() % 1000 == 0 && !buffer.is_empty() {
+                    log::warn!("Unassociated MSn scan buffer size is {}", buffer.len());
+                }
+            }
+        }
+
+        fn pop_precursor(&mut self, precursor_id: &str) -> Vec<S> {
+            self.product_mapping.remove(precursor_id).unwrap_or_default()
+        }
+
+        fn flush_first_ms1(&mut self, group: &mut G) {
+            let current_ms1_time = group.precursor().unwrap().start_time();
+            let mut ids_to_remove = Vec::new();
+            for (prec_id, prods) in self.product_mapping.iter_mut() {
+                let mut hold = vec![];
+                for prod in prods.drain(..) {
+                    if prod.start_time() <= current_ms1_time {
+                        group.products_mut().push(prod);
+                    } else {
+                        hold.push(prod);
+                    }
+                }
+                if hold.is_empty() {
+                    ids_to_remove.push(prec_id.clone());
+                } else {
+                    prods.extend(hold);
+                }
+            }
+            for prec_id in ids_to_remove {
+                self.product_mapping.remove(&prec_id);
+            }
+        }
+
+        fn flush_all_products(&mut self, group: &mut G) {
+            for (_prec_id, prods) in self.product_mapping.drain() {
+                group.products_mut().extend(prods);
+            }
+        }
+
+        fn include_higher_msn(&mut self, group: &mut G) {
+            let mut blocks = Vec::new();
+            let mut new_block = Vec::new();
+            for msn_spec in group.products() {
+                new_block.extend(self.pop_precursor(msn_spec.id()));
+            }
+            blocks.push(new_block);
+            for _ in 0..self.highest_ms_level - 2 {
+                if let Some(last_block) = blocks.last() {
+                    let mut new_block = Vec::new();
+                    for msn_spec in last_block {
+                        new_block.extend(self.pop_precursor(msn_spec.id()));
+                    }
+                    blocks.push(new_block);
+                }
+            }
+            if !blocks.is_empty() {
+                for block in blocks {
+                    group.products_mut().extend(block);
+                }
+            }
+        }
+
+        fn flush_generations(&mut self, group: &mut G) {
+            if self.buffering > self.generation {
+                return;
+            }
+            for prec_id in self
+                .generation_tracker
+                .older_than(self.generation - self.buffering)
+            {
+                if let Some(prods) = self.product_mapping.remove(&prec_id) {
+                    group.products_mut().extend(prods);
+                }
+            }
+        }
+
+        fn deque_group_without_precursor(&mut self) -> G {
+            let mut group = G::default();
+            self.flush_all_products(&mut group);
+            self.generation += 1;
+            self.depth = 0;
+            group
+        }
+
+        fn deque_group(&mut self, flush_all: bool) -> Option<G> {
+            let mut group = G::default();
+            if let Some(precursor) = self.queue.pop_front() {
+                group.set_precursor(precursor);
+                let mut products = self.pop_precursor(group.precursor().unwrap().id());
+                if self.product_mapping.contains_key(MISSING_SCAN_ID) {
+                    products.extend(self.pop_precursor(MISSING_SCAN_ID));
+                }
+                group.products_mut().extend(products);
+
+                self.flush_generations(&mut group);
+
+                // Handle interleaving MS3 and up
+                if self.highest_ms_level > 2 {
+                    self.include_higher_msn(&mut group);
+                }
+
+                if !self.passed_first_ms1 && !self.queue.is_empty() {
+                    self.flush_first_ms1(&mut group);
+                }
+                self.generation += 1;
+                if flush_all {
+                    self.flush_all_products(&mut group);
+                }
+                self.depth = 0;
+                Some(group)
+            } else {
+                None
+            }
+        }
+
+    };
+}
+
 
 impl<
         R: Iterator<Item = S>,
@@ -83,171 +245,20 @@ impl<
             deconvoluted_type: PhantomData,
             grouping_type: PhantomData,
             buffering: 3,
-            product_scan_mapping: HashMap::new(),
+            product_mapping: HashMap::new(),
             queue: VecDeque::new(),
             highest_ms_level: 0,
             generation: 0,
             depth: 0,
+            max_ms1_seeking_depth: MAX_GROUP_DEPTH,
             passed_first_ms1: false,
         }
     }
 
-    fn add_product(&mut self, scan: S) {
-        self.depth += 1;
-        if let Some(precursor) = scan.precursor() {
-            match precursor.precursor_id.as_ref() {
-                Some(prec_id) => {
-                    let ent = self.product_scan_mapping.entry(prec_id.clone());
-                    self.generation_tracker
-                        .add(prec_id.clone(), self.generation);
-                    ent.or_default().push(scan);
-                }
-                None => {
-                    let buffer = self
-                        .product_scan_mapping
-                        .entry(MISSING_SCAN_ID.to_owned())
-                        .or_default();
-                    buffer.push(scan);
-                    if buffer.len() % 1000 == 0 && !buffer.is_empty() {
-                        log::warn!("Unassociated MSn scan buffer size is {}", buffer.len());
-                    }
-                }
-            }
-        } else if !self.queue.is_empty() {
-            // Consider replacing with normal get_mut to avoid re-copying
-            let last = self.queue.back().unwrap();
-            self.generation_tracker
-                .add(last.id().to_owned(), self.generation);
-            self.product_scan_mapping
-                .entry(last.id().to_owned())
-                .or_default()
-                .push(scan);
-        } else {
-            let ent = self.product_scan_mapping.entry(MISSING_SCAN_ID.to_owned());
-            let buffer = ent.or_default();
-            buffer.push(scan);
-            if buffer.len() % 1000 == 0 && !buffer.is_empty() {
-                log::warn!("Unassociated MSn scan buffer size is {}", buffer.len());
-            }
-        }
-    }
-
-    fn add_precursor(&mut self, scan: S) -> bool {
-        self.queue.push_back(scan);
-        self.queue.len() >= self.buffering
-    }
-
-    fn pop_precursor(&mut self, precursor_id: &str) -> Vec<S> {
-        self.product_scan_mapping.remove(precursor_id).unwrap_or_default()
-    }
-
-    fn flush_first_ms1(&mut self, group: &mut G) {
-        let current_ms1_time = group.precursor().unwrap().start_time();
-        let mut ids_to_remove = Vec::new();
-        for (prec_id, prods) in self.product_scan_mapping.iter_mut() {
-            let mut hold = vec![];
-            for prod in prods.drain(..) {
-                if prod.start_time() <= current_ms1_time {
-                    group.products_mut().push(prod);
-                } else {
-                    hold.push(prod);
-                }
-            }
-            if hold.is_empty() {
-                ids_to_remove.push(prec_id.clone());
-            } else {
-                prods.extend(hold);
-            }
-        }
-        for prec_id in ids_to_remove {
-            self.product_scan_mapping.remove(&prec_id);
-        }
-    }
-
-    fn flush_all_products(&mut self, group: &mut G) {
-        for (_prec_id, prods) in self.product_scan_mapping.drain() {
-            group.products_mut().extend(prods);
-        }
-    }
-
-    fn include_higher_msn(&mut self, group: &mut G) {
-        let mut blocks = Vec::new();
-        let mut new_block = Vec::new();
-        for msn_spec in group.products() {
-            new_block.extend(self.pop_precursor(msn_spec.id()));
-        }
-        blocks.push(new_block);
-        for _ in 0..self.highest_ms_level - 2 {
-            if let Some(last_block) = blocks.last() {
-                let mut new_block = Vec::new();
-                for msn_spec in last_block {
-                    new_block.extend(self.pop_precursor(msn_spec.id()));
-                }
-                blocks.push(new_block);
-            }
-        }
-        if !blocks.is_empty() {
-            for block in blocks {
-                group.products_mut().extend(block);
-            }
-        }
-    }
-
-    fn flush_generations(&mut self, group: &mut G) {
-        if self.buffering > self.generation {
-            return;
-        }
-        for prec_id in self
-            .generation_tracker
-            .older_than(self.generation - self.buffering)
-        {
-            if let Some(prods) = self.product_scan_mapping.remove(&prec_id) {
-                group.products_mut().extend(prods);
-            }
-        }
-    }
-
-    fn deque_group_without_precursor(&mut self) -> G {
-        let mut group = G::default();
-        self.flush_all_products(&mut group);
-        self.generation += 1;
-        self.depth = 0;
-        group
-    }
-
-    fn deque_group(&mut self, flush_all: bool) -> Option<G> {
-        let mut group = G::default();
-        if let Some(precursor) = self.queue.pop_front() {
-            group.set_precursor(precursor);
-            let mut products = self.pop_precursor(group.precursor().unwrap().id());
-            if self.product_scan_mapping.contains_key(MISSING_SCAN_ID) {
-                products.extend(self.pop_precursor(MISSING_SCAN_ID));
-            }
-            group.products_mut().extend(products);
-
-            self.flush_generations(&mut group);
-
-            // Handle interleaving MS3 and up
-            if self.highest_ms_level > 2 {
-                self.include_higher_msn(&mut group);
-            }
-
-            if !self.passed_first_ms1 && !self.queue.is_empty() {
-                self.flush_first_ms1(&mut group);
-            }
-            self.generation += 1;
-            if flush_all {
-                self.flush_all_products(&mut group);
-            }
-            self.depth = 0;
-            Some(group)
-        } else {
-            None
-        }
-    }
+    impl_ms_level_switching!();
 
     pub fn clear(&mut self) {
-        self.product_scan_mapping.clear();
+        self.product_mapping.clear();
         self.queue.clear();
         self.generation_tracker.clear();
         self.generation = 0;
@@ -269,7 +280,7 @@ impl<
                 }
                 if level > 1 {
                     self.add_product(spectrum);
-                    if self.depth > MAX_GROUP_DEPTH {
+                    if self.depth > self.max_ms1_seeking_depth {
                         return Some(self.deque_group_without_precursor());
                     }
                 } else if self.add_precursor(spectrum) {
@@ -280,7 +291,7 @@ impl<
                     d if d > 1 => self.deque_group(false),
                     1 => self.deque_group(true),
                     _ => {
-                        if !self.product_scan_mapping.is_empty() {
+                        if !self.product_mapping.is_empty() {
                             Some(self.deque_group_without_precursor())
                         } else {
                             None
@@ -394,11 +405,12 @@ pub struct IonMobilityFrameGroupingIterator<
 > {
     pub source: R,
     pub queue: VecDeque<S>,
-    pub product_frame_mapping: HashMap<String, Vec<S>>,
+    pub product_mapping: HashMap<String, Vec<S>>,
     generation_tracker: GenerationTracker,
     buffering: usize,
     highest_ms_level: u8,
     generation: usize,
+    pub max_ms1_seeking_depth: u32,
     depth: u32,
     passed_first_ms1: bool,
     phantom: PhantomData<S>,
@@ -441,171 +453,20 @@ impl<
             deconvoluted_type: PhantomData,
             grouping_type: PhantomData,
             buffering: 3,
-            product_frame_mapping: HashMap::new(),
+            product_mapping: HashMap::new(),
             queue: VecDeque::new(),
             highest_ms_level: 0,
             generation: 0,
             depth: 0,
+            max_ms1_seeking_depth: MAX_GROUP_DEPTH,
             passed_first_ms1: false,
         }
     }
 
-    fn add_product(&mut self, scan: S) {
-        self.depth += 1;
-        if let Some(precursor) = scan.precursor() {
-            match precursor.precursor_id.as_ref() {
-                Some(prec_id) => {
-                    let ent = self.product_frame_mapping.entry(prec_id.clone());
-                    self.generation_tracker
-                        .add(prec_id.clone(), self.generation);
-                    ent.or_default().push(scan);
-                }
-                None => {
-                    let buffer = self
-                        .product_frame_mapping
-                        .entry(MISSING_SCAN_ID.to_owned())
-                        .or_default();
-                    buffer.push(scan);
-                    if buffer.len() % 1000 == 0 && !buffer.is_empty() {
-                        log::warn!("Unassociated MSn frame buffer size is {}", buffer.len());
-                    }
-                }
-            }
-        } else if !self.queue.is_empty() {
-            // Consider replacing with normal get_mut to avoid re-copying
-            let last = self.queue.back().unwrap();
-            self.generation_tracker
-                .add(last.id().to_owned(), self.generation);
-            self.product_frame_mapping
-                .entry(last.id().to_owned())
-                .or_default()
-                .push(scan);
-        } else {
-            let ent = self.product_frame_mapping.entry(MISSING_SCAN_ID.to_owned());
-            let buffer = ent.or_default();
-            buffer.push(scan);
-            if buffer.len() % 1000 == 0 && !buffer.is_empty() {
-                log::warn!("Unassociated MSn frame buffer size is {}", buffer.len());
-            }
-        }
-    }
-
-    fn add_precursor(&mut self, scan: S) -> bool {
-        self.queue.push_back(scan);
-        self.queue.len() >= self.buffering
-    }
-
-    fn pop_precursor(&mut self, precursor_id: &str) -> Vec<S> {
-        self.product_frame_mapping.remove(precursor_id).unwrap_or_default()
-    }
-
-    fn flush_first_ms1(&mut self, group: &mut G) {
-        let current_ms1_time = group.precursor().unwrap().start_time();
-        let mut ids_to_remove = Vec::new();
-        for (prec_id, prods) in self.product_frame_mapping.iter_mut() {
-            let mut hold = vec![];
-            for prod in prods.drain(..) {
-                if prod.start_time() <= current_ms1_time {
-                    group.products_mut().push(prod);
-                } else {
-                    hold.push(prod);
-                }
-            }
-            if hold.is_empty() {
-                ids_to_remove.push(prec_id.clone());
-            } else {
-                prods.extend(hold);
-            }
-        }
-        for prec_id in ids_to_remove {
-            self.product_frame_mapping.remove(&prec_id);
-        }
-    }
-
-    fn flush_all_products(&mut self, group: &mut G) {
-        for (_prec_id, prods) in self.product_frame_mapping.drain() {
-            group.products_mut().extend(prods);
-        }
-    }
-
-    fn include_higher_msn(&mut self, group: &mut G) {
-        let mut blocks = Vec::new();
-        let mut new_block = Vec::new();
-        for msn_spec in group.products() {
-            new_block.extend(self.pop_precursor(msn_spec.id()));
-        }
-        blocks.push(new_block);
-        for _ in 0..self.highest_ms_level - 2 {
-            if let Some(last_block) = blocks.last() {
-                let mut new_block = Vec::new();
-                for msn_spec in last_block {
-                    new_block.extend(self.pop_precursor(msn_spec.id()));
-                }
-                blocks.push(new_block);
-            }
-        }
-        if !blocks.is_empty() {
-            for block in blocks {
-                group.products_mut().extend(block);
-            }
-        }
-    }
-
-    fn flush_generations(&mut self, group: &mut G) {
-        if self.buffering > self.generation {
-            return;
-        }
-        for prec_id in self
-            .generation_tracker
-            .older_than(self.generation - self.buffering)
-        {
-            if let Some(prods) = self.product_frame_mapping.remove(&prec_id) {
-                group.products_mut().extend(prods);
-            }
-        }
-    }
-
-    fn deque_group_without_precursor(&mut self) -> G {
-        let mut group = G::default();
-        self.flush_all_products(&mut group);
-        self.generation += 1;
-        self.depth = 0;
-        group
-    }
-
-    fn deque_group(&mut self, flush_all: bool) -> Option<G> {
-        let mut group = G::default();
-        if let Some(precursor) = self.queue.pop_front() {
-            group.set_precursor(precursor);
-            let mut products = self.pop_precursor(group.precursor().unwrap().id());
-            if self.product_frame_mapping.contains_key(MISSING_SCAN_ID) {
-                products.extend(self.pop_precursor(MISSING_SCAN_ID));
-            }
-            group.products_mut().extend(products);
-
-            self.flush_generations(&mut group);
-
-            // Handle interleaving MS3 and up
-            if self.highest_ms_level > 2 {
-                self.include_higher_msn(&mut group);
-            }
-
-            if !self.passed_first_ms1 && !self.queue.is_empty() {
-                self.flush_first_ms1(&mut group);
-            }
-            self.generation += 1;
-            if flush_all {
-                self.flush_all_products(&mut group);
-            }
-            self.depth = 0;
-            Some(group)
-        } else {
-            None
-        }
-    }
+    impl_ms_level_switching!();
 
     pub fn clear(&mut self) {
-        self.product_frame_mapping.clear();
+        self.product_mapping.clear();
         self.queue.clear();
         self.generation_tracker.clear();
         self.generation = 0;
@@ -627,7 +488,7 @@ impl<
                 }
                 if level > 1 {
                     self.add_product(spectrum);
-                    if self.depth > MAX_GROUP_DEPTH {
+                    if self.depth > self.max_ms1_seeking_depth {
                         return Some(self.deque_group_without_precursor());
                     }
                 } else if self.add_precursor(spectrum) {
@@ -638,7 +499,7 @@ impl<
                     d if d > 1 => self.deque_group(false),
                     1 => self.deque_group(true),
                     _ => {
-                        if !self.product_frame_mapping.is_empty() {
+                        if !self.product_mapping.is_empty() {
                             Some(self.deque_group_without_precursor())
                         } else {
                             None
@@ -824,6 +685,7 @@ mod mzsignal_impl {
         average_signal(&profiles, dx)
     }
 
+    /// An easily shared pair of m/z and intensity arrays for use with [`SpectrumAveragingContext`]
     #[derive(Debug, Clone)]
     pub struct ArcArrays {
         pub mz_array: Arc<Vec<f64>>,
@@ -874,6 +736,10 @@ mod mzsignal_impl {
         }
     }
 
+    /// A wrapper around a [`SpectrumGrouping`] type that carries adjacent MS1 array data
+    /// for later averaging.
+    ///
+    /// Produced by [`DeferredSpectrumAveragingIterator`].
     #[derive(Debug, Default)]
     pub struct SpectrumAveragingContext<
         C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
@@ -1029,6 +895,10 @@ mod mzsignal_impl {
         }
     }
 
+    /// An iterator over spectrum groups that collates data for signal averaging, but defers the
+    /// computation to be done externally.
+    ///
+    /// For an eager averaging iterator, use [`SpectrumAveragingIterator`].
     pub struct DeferredSpectrumAveragingIterator<
         C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,
@@ -1208,7 +1078,11 @@ mod mzsignal_impl {
         }
     }
 
-    /// Wrap a `[SpectrumGroupingIterator]` to average MS1 spectra over
+    /// Wrap a `[SpectrumGroupingIterator]` to average MS1 spectra over, as the iterator is
+    /// consumed.
+    ///
+    /// If any centroid spectra are included in the averaging, they will be transformed into
+    /// profile spectra using [`PeakSetReprofiler`]
     pub struct SpectrumAveragingIterator<
         'lifespan,
         C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap,

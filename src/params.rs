@@ -2532,6 +2532,10 @@ impl Unit {
     pub const fn from_param(param: &Param) -> Unit {
         param.unit
     }
+
+    pub const fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown)
+    }
 }
 
 impl Default for Unit {
