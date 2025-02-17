@@ -23,10 +23,12 @@ use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 use crate::io::traits::IonMobilityFrameWriter;
 use crate::meta::{
-    ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, Software
+    ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
+    MassSpectrometryRun, Sample, Software,
 };
 use crate::params::{
-    AccessionIntCode, ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamDescribedRead, ParamLike, ParamValue, Unit, ValueRef
+    AccessionIntCode, ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamDescribedRead,
+    ParamLike, ParamValue, Unit, ValueRef,
 };
 use crate::spectrum::bindata::{
     to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType,
@@ -985,7 +987,7 @@ where
 
     fn write_sample_list(&mut self) -> WriterResult {
         if self.samples.is_empty() {
-            return Ok(())
+            return Ok(());
         }
         let mut outer = bstart!("sampleList");
         let count = self.samples.len().to_string();
@@ -1499,8 +1501,11 @@ where
     fn write_ms_level<
         C1: CentroidLike + Default + BuildArrayMapFrom,
         D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
-        S: SpectrumLike<C1, D1> + 'static
-    >(&mut self, spectrum: &S) -> WriterResult {
+        S: SpectrumLike<C1, D1> + 'static,
+    >(
+        &mut self,
+        spectrum: &S,
+    ) -> WriterResult {
         let ms_level = spectrum.ms_level();
         match ms_level {
             1 => self.handle.write_param(&MS1_SPECTRUM)?,
@@ -1519,8 +1524,11 @@ where
     fn write_polarity<
         C1: CentroidLike + Default + BuildArrayMapFrom,
         D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
-        S: SpectrumLike<C1, D1> + 'static
-    >(&mut self, spectrum: &S) -> WriterResult {
+        S: SpectrumLike<C1, D1> + 'static,
+    >(
+        &mut self,
+        spectrum: &S,
+    ) -> WriterResult {
         match spectrum.polarity() {
             ScanPolarity::Negative => self.handle.write_param(&NEGATIVE_SCAN),
             ScanPolarity::Positive => self.handle.write_param(&POSITIVE_SCAN),
@@ -1537,8 +1545,11 @@ where
     fn write_continuity<
         C1: CentroidLike + Default + BuildArrayMapFrom,
         D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
-        S: SpectrumLike<C1, D1> + 'static
-    >(&mut self, spectrum: &S) -> WriterResult {
+        S: SpectrumLike<C1, D1> + 'static,
+    >(
+        &mut self,
+        spectrum: &S,
+    ) -> WriterResult {
         match spectrum.signal_continuity() {
             SignalContinuity::Profile => self.handle.write_param(&PROFILE_SPECTRUM),
             SignalContinuity::Unknown => {
@@ -1555,7 +1566,7 @@ where
     fn write_signal_properties<
         C1: CentroidLike + Default + BuildArrayMapFrom,
         D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
-        S: SpectrumLike<C1, D1> + 'static
+        S: SpectrumLike<C1, D1> + 'static,
     >(
         &mut self,
         spectrum: &S,
@@ -1650,11 +1661,18 @@ where
                 self.handle.write_param(&array.name.as_param_const())?
             }
             ArrayType::TimeArray
-            | ArrayType::RawIonMobilityArray
-            | ArrayType::MeanIonMobilityArray
-            | ArrayType::DeconvolutedIonMobilityArray => self
+            | ArrayType::TemperatureArray
+            | ArrayType::FlowRateArray
+            | ArrayType::PressureArray
+            | ArrayType::WavelengthArray
+            | ArrayType::IonMobilityArray => self
                 .handle
                 .write_param(&array.name.as_param_with_unit_const(array.unit))?,
+            x if x.is_ion_mobility() => {
+                self
+                .handle
+                .write_param(&array.name.as_param_with_unit_const(array.unit))?
+            },
             ArrayType::NonStandardDataArray { name } => {
                 let mut p =
                     self.ms_cv
@@ -1781,7 +1799,7 @@ where
     pub fn spectrum_has_summaries<
         C1: CentroidLike + Default + BuildArrayMapFrom,
         D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
-        S: SpectrumLike<C1, D1> + 'static
+        S: SpectrumLike<C1, D1> + 'static,
     >(
         &self,
         spectrum: &S,
@@ -1818,7 +1836,7 @@ where
     pub fn write_spectrum_descriptors<
         C1: CentroidLike + Default + BuildArrayMapFrom,
         D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
-        S: SpectrumLike<C1, D1> + 'static
+        S: SpectrumLike<C1, D1> + 'static,
     >(
         &mut self,
         spectrum: &S,
@@ -1852,7 +1870,7 @@ where
     pub fn write_spectrum<
         C1: CentroidLike + Default + BuildArrayMapFrom,
         D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
-        S: SpectrumLike<C1, D1> + 'static
+        S: SpectrumLike<C1, D1> + 'static,
     >(
         &mut self,
         spectrum: &S,

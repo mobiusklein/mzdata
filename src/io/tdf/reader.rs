@@ -5,17 +5,12 @@ use std::{
 
 use chrono::DateTime;
 
-use crate::{
-    io::IntoIonMobilityFrameSource,
-    mzpeaks::{CentroidPeak, DeconvolutedPeak},
-};
-
 #[allow(unused)]
 use crate::io::checksum_file;
 
 use crate::{
     curie,
-    io::{DetailLevel, IonMobilityFrameAccessError, OffsetIndex},
+    io::{DetailLevel, IonMobilityFrameAccessError, OffsetIndex, IntoIonMobilityFrameSource},
     meta::{
         Component, ComponentType, DataProcessing, DetectorTypeTerm,
         DissociationMethodTerm::CollisionInducedDissociation, FileDescription,
@@ -26,6 +21,7 @@ use crate::{
     mzpeaks::{
         feature::{ChargedFeature, Feature},
         IonMobility, Mass, MZ,
+        CentroidPeak, DeconvolutedPeak
     },
     params::{ControlledVocabulary, Unit, Value},
     prelude::*,
@@ -47,12 +43,14 @@ use timsrust::{
 };
 
 pub use super::arrays::FrameToArraysMapper;
-use super::constants::{InstrumentSource, MsMsType};
-use super::sql::{
-    FromSQL, PasefPrecursor, RawTDFSQLReader, SQLDIAFrameMsMsWindow, SQLFrame, SQLPasefFrameMsMs,
-    SQLPrecursor, TDFMSnFacet,
+use super::{
+    arrays::consolidate_peaks,
+    constants::{InstrumentSource, MsMsType},
+    sql::{
+        ChromatographyData, FromSQL, PasefPrecursor, RawTDFSQLReader, SQLDIAFrameMsMsWindow,
+        SQLFrame, SQLPasefFrameMsMs, SQLPrecursor, TDFMSnFacet,
+    },
 };
-use super::{arrays::consolidate_peaks, sql::ChromatographyData};
 
 const PEAK_MERGE_TOLERANCE: Tolerance = Tolerance::Da(0.01);
 

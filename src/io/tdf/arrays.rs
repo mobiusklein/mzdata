@@ -106,7 +106,7 @@ impl<'a> FrameToArraysMapper<'a> {
 
         BinaryArrayMap3D::from_ion_mobility_dimension_and_arrays(
             im_dimension,
-            ArrayType::IonMobilityArray,
+            ArrayType::MeanInverseReducedIonMobilityArray,
             Unit::VoltSecondPerSquareCentimeter,
             arrays,
         )

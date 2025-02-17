@@ -200,7 +200,7 @@ impl Display for BufferName {
             ArrayType::NonStandardDataArray { name } => Cow::Owned(name.replace(['/', ' '], "_")),
             ArrayType::BaselineArray => Cow::Borrowed("baseline"),
             ArrayType::ResolutionArray => Cow::Borrowed("resolution"),
-            _ => Cow::Owned(self.array_type.to_string())
+            _ => Cow::Owned(self.array_type.to_string().replace(['/', ' '], "_").to_lowercase())
         };
         let dtype = match self.dtype {
             BinaryDataArrayType::Unknown => "unknown",

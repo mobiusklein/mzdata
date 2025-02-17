@@ -42,10 +42,18 @@ pub enum ArrayType {
     SignalToNoiseArray,
     TimeArray,
     WavelengthArray,
+
     IonMobilityArray,
     MeanIonMobilityArray,
+    MeanDriftTimeArray,
+    MeanInverseReducedIonMobilityArray,
     RawIonMobilityArray,
+    RawDriftTimeArray,
+    RawInverseReducedIonMobilityArray,
     DeconvolutedIonMobilityArray,
+    DeconvolutedDriftTimeArray,
+    DeconvolutedInverseReducedIonMobilityArray,
+
     BaselineArray,
     ResolutionArray,
     PressureArray,
@@ -63,6 +71,12 @@ impl Display for ArrayType {
 }
 
 impl ArrayType {
+    /// Get the data type that the array is compatible with in the
+    /// `mzdata` type expectations.
+    ///
+    /// By default, the m/z array is encoded using `Float64`,
+    /// the charge state array is encoded using `Int32`, and
+    /// all other arrays are encoded using `Float32`.
     pub const fn preferred_dtype(&self) -> BinaryDataArrayType {
         match self {
             ArrayType::MZArray => BinaryDataArrayType::Float64,
@@ -70,6 +84,54 @@ impl ArrayType {
             ArrayType::ChargeArray => BinaryDataArrayType::Int32,
             _ => BinaryDataArrayType::Float32,
         }
+    }
+
+    /// Convert an ion mobility array to its mean variant
+    pub const fn as_mean_ion_mobility(&self) -> Option<ArrayType> {
+        Some(match self {
+            Self::RawDriftTimeArray
+            | Self::DeconvolutedDriftTimeArray
+            | Self::MeanDriftTimeArray => Self::MeanDriftTimeArray,
+            Self::RawInverseReducedIonMobilityArray
+            | Self::DeconvolutedInverseReducedIonMobilityArray
+            | Self::MeanInverseReducedIonMobilityArray => Self::MeanInverseReducedIonMobilityArray,
+            Self::RawIonMobilityArray
+            | Self::DeconvolutedIonMobilityArray
+            | Self::MeanIonMobilityArray => Self::MeanIonMobilityArray,
+            _ => return None,
+        })
+    }
+
+    /// Convert an ion mobility array to its raw variant
+    pub const fn as_raw_ion_mobility(&self) -> Option<ArrayType> {
+        Some(match self {
+            Self::RawDriftTimeArray
+            | Self::DeconvolutedDriftTimeArray
+            | Self::MeanDriftTimeArray => Self::RawDriftTimeArray,
+            Self::RawInverseReducedIonMobilityArray
+            | Self::DeconvolutedInverseReducedIonMobilityArray
+            | Self::MeanInverseReducedIonMobilityArray => Self::RawInverseReducedIonMobilityArray,
+            Self::RawIonMobilityArray
+            | Self::DeconvolutedIonMobilityArray
+            | Self::MeanIonMobilityArray => Self::RawIonMobilityArray,
+            _ => return None,
+        })
+    }
+
+    /// Convert an ion mobility array to its deconvoluted variant
+    pub const fn as_deconvoluted_ion_mobility(&self) -> Option<ArrayType> {
+        Some(match self {
+            Self::RawDriftTimeArray
+            | Self::DeconvolutedDriftTimeArray
+            | Self::MeanDriftTimeArray => Self::DeconvolutedDriftTimeArray,
+            Self::RawInverseReducedIonMobilityArray
+            | Self::DeconvolutedInverseReducedIonMobilityArray
+            | Self::MeanInverseReducedIonMobilityArray => Self::DeconvolutedInverseReducedIonMobilityArray,
+            Self::RawIonMobilityArray
+            | Self::DeconvolutedIonMobilityArray
+            | Self::MeanIonMobilityArray => Self::DeconvolutedIonMobilityArray,
+            _ => return None,
+        })
     }
 
     /// Create a [`ArrayType::NonStandardDataArray`] with the provided name.
@@ -85,8 +147,14 @@ impl ArrayType {
             self,
             Self::IonMobilityArray
                 | Self::MeanIonMobilityArray
-                | Self::RawIonMobilityArray
+                | Self::MeanDriftTimeArray
+                | Self::MeanInverseReducedIonMobilityArray
                 | Self::DeconvolutedIonMobilityArray
+                | Self::DeconvolutedDriftTimeArray
+                | Self::DeconvolutedInverseReducedIonMobilityArray
+                | Self::RawIonMobilityArray
+                | Self::RawDriftTimeArray
+                | Self::RawInverseReducedIonMobilityArray,
         )
     }
 
@@ -107,12 +175,34 @@ impl ArrayType {
             ArrayType::TimeArray => CV
                 .const_param_ident_unit("time array", 1000595, unit.unwrap_or(Unit::Minute))
                 .into(),
-            ArrayType::WavelengthArray => CV.const_param_ident_unit("wavelength array", 1000617, Unit::Nanometer).into(),
-            ArrayType::SignalToNoiseArray => CV.const_param_ident("signal to noise array", 1000517).into(),
-            ArrayType::IonMobilityArray => CV.const_param_ident_unit("ion mobility array", 1002893, unit.unwrap_or_default()).into(),
+            ArrayType::WavelengthArray => CV
+                .const_param_ident_unit("wavelength array", 1000617, Unit::Nanometer)
+                .into(),
+            ArrayType::SignalToNoiseArray => CV
+                .const_param_ident("signal to noise array", 1000517)
+                .into(),
+            ArrayType::IonMobilityArray => CV
+                .const_param_ident_unit("ion mobility array", 1002893, unit.unwrap_or_default())
+                .into(),
+
+            ArrayType::RawDriftTimeArray => CV
+                .const_param_ident_unit(
+                    "raw ion mobility drift time array",
+                    1003153,
+                    unit.unwrap_or_default(),
+                )
+                .into(),
+            ArrayType::RawInverseReducedIonMobilityArray => CV
+                .const_param_ident_unit(
+                    "raw inverse reduced ion mobility array",
+                    1003008,
+                    unit.unwrap_or_default(),
+                )
+                .into(),
             ArrayType::RawIonMobilityArray => CV
                 .const_param_ident_unit("raw ion mobility array", 1003007, unit.unwrap_or_default())
                 .into(),
+
             ArrayType::MeanIonMobilityArray => CV
                 .const_param_ident_unit(
                     "mean ion mobility array",
@@ -120,6 +210,21 @@ impl ArrayType {
                     unit.unwrap_or_default(),
                 )
                 .into(),
+            ArrayType::MeanDriftTimeArray => CV
+                .const_param_ident_unit(
+                    "mean ion mobility drift time array",
+                    1002477,
+                    unit.unwrap_or_default(),
+                )
+                .into(),
+            ArrayType::MeanInverseReducedIonMobilityArray => CV
+                .const_param_ident_unit(
+                    "mean inverse reduced ion mobility array",
+                    1003006,
+                    unit.unwrap_or_default(),
+                )
+                .into(),
+
             ArrayType::DeconvolutedIonMobilityArray => CV
                 .const_param_ident_unit(
                     "deconvoluted ion mobility array",
@@ -127,32 +232,43 @@ impl ArrayType {
                     unit.unwrap_or_default(),
                 )
                 .into(),
+            ArrayType::DeconvolutedDriftTimeArray => CV
+                .const_param_ident_unit(
+                    "deconvoluted ion mobility drift time array",
+                    1003156,
+                    unit.unwrap_or_default(),
+                )
+                .into(),
+            ArrayType::DeconvolutedInverseReducedIonMobilityArray => CV
+                .const_param_ident_unit(
+                    "deconvoluted inverse reduced ion mobility array",
+                    1003155,
+                    unit.unwrap_or_default(),
+                )
+                .into(),
+
             ArrayType::NonStandardDataArray { name } => {
                 let mut p = CV.param_val(1000786, "non-standard data array", name.to_string());
                 p.unit = unit.unwrap_or_default();
                 p
             }
-            ArrayType::BaselineArray => {
-                CV.const_param_ident("baseline array", 1002530).into()
-            },
-            ArrayType::ResolutionArray => {
-                CV.const_param_ident("resolution array", 1002529).into()
-            },
+            ArrayType::BaselineArray => CV.const_param_ident("baseline array", 1002530).into(),
+            ArrayType::ResolutionArray => CV.const_param_ident("resolution array", 1002529).into(),
             ArrayType::PressureArray => {
                 let mut p = CV.const_param_ident("pressure array", 1000821);
                 p.unit = unit.unwrap_or_default();
                 p.into()
-            },
+            }
             ArrayType::TemperatureArray => {
                 let mut p = CV.const_param_ident("temperature array", 1000822);
                 p.unit = unit.unwrap_or_default();
                 p.into()
-            },
+            }
             ArrayType::FlowRateArray => {
                 let mut p = CV.const_param_ident("flow rate array", 1000820);
                 p.unit = unit.unwrap_or_default();
                 p.into()
-            },
+            }
             _ => {
                 panic!("Could not determine how to name for array {}", self);
             }
@@ -168,7 +284,9 @@ impl ArrayType {
             }
             ArrayType::ChargeArray => CV.const_param_ident("charge array", 1000516),
             ArrayType::TimeArray => CV.const_param_ident_unit("time array", 1000595, Unit::Minute),
-            ArrayType::WavelengthArray => CV.const_param_ident_unit("wavelength array", 1000617, Unit::Nanometer),
+            ArrayType::WavelengthArray => {
+                CV.const_param_ident_unit("wavelength array", 1000617, Unit::Nanometer)
+            }
             ArrayType::SignalToNoiseArray => CV.const_param_ident("signal to noise array", 1000517),
             ArrayType::IonMobilityArray => CV.const_param_ident("ion mobility array", 1002893),
             ArrayType::RawIonMobilityArray => {
@@ -180,26 +298,49 @@ impl ArrayType {
             ArrayType::DeconvolutedIonMobilityArray => {
                 CV.const_param_ident("deconvoluted ion mobility array", 1003154)
             }
+            ArrayType::RawDriftTimeArray => CV.const_param_ident_unit(
+                "raw ion mobility drift time array",
+                1003153,
+                Unit::Unknown,
+            ),
+            ArrayType::RawInverseReducedIonMobilityArray => CV.const_param_ident_unit(
+                "raw inverse reduced ion mobility array",
+                1003008,
+                Unit::VoltSecondPerSquareCentimeter,
+            ),
+
+            ArrayType::MeanDriftTimeArray => CV.const_param_ident_unit(
+                "mean ion mobility drift time array",
+                1002477,
+                Unit::Unknown,
+            ),
+            ArrayType::MeanInverseReducedIonMobilityArray => CV.const_param_ident_unit(
+                "mean inverse reduced ion mobility array",
+                1003006,
+                Unit::VoltSecondPerSquareCentimeter,
+            ),
+
+            ArrayType::DeconvolutedDriftTimeArray => CV.const_param_ident_unit(
+                "deconvoluted ion mobility drift time array",
+                1003156,
+                Unit::Unknown,
+            ),
+            ArrayType::DeconvolutedInverseReducedIonMobilityArray => CV.const_param_ident_unit(
+                "deconvoluted inverse reduced ion mobility array",
+                1003155,
+                Unit::VoltSecondPerSquareCentimeter,
+            ),
+
             ArrayType::NonStandardDataArray { name: _name } => {
                 panic!(
                     "Cannot format NonStandardDataArray in a const context, please use `as_param`"
                 );
             }
-            ArrayType::BaselineArray => {
-                CV.const_param_ident("baseline array", 1002530)
-            },
-            ArrayType::ResolutionArray => {
-                CV.const_param_ident("resolution array", 1002529)
-            },
-            ArrayType::PressureArray => {
-                CV.const_param_ident("pressure array", 1000821)
-            },
-            ArrayType::TemperatureArray => {
-                CV.const_param_ident("temperature array", 1000822)
-            },
-            ArrayType::FlowRateArray => {
-                CV.const_param_ident("flow rate array", 1000820)
-            },
+            ArrayType::BaselineArray => CV.const_param_ident("baseline array", 1002530),
+            ArrayType::ResolutionArray => CV.const_param_ident("resolution array", 1002529),
+            ArrayType::PressureArray => CV.const_param_ident("pressure array", 1000821),
+            ArrayType::TemperatureArray => CV.const_param_ident("temperature array", 1000822),
+            ArrayType::FlowRateArray => CV.const_param_ident("flow rate array", 1000820),
             _ => {
                 panic!("Could not determine how to name for array");
             }
@@ -229,21 +370,41 @@ impl ArrayType {
                     "Cannot format NonStandardDataArray in a const context, please use `as_param`"
                 );
             }
-            ArrayType::BaselineArray => {
-                CV.const_param_ident_unit("baseline array", 1002530, unit)
-            },
+
+            ArrayType::RawDriftTimeArray => {
+                CV.const_param_ident_unit("raw ion mobility drift time array", 1003153, unit)
+            }
+            ArrayType::RawInverseReducedIonMobilityArray => {
+                CV.const_param_ident_unit("raw inverse reduced ion mobility array", 1003008, unit)
+            }
+
+            ArrayType::MeanDriftTimeArray => {
+                CV.const_param_ident_unit("mean ion mobility drift time array", 1002477, unit)
+            }
+            ArrayType::MeanInverseReducedIonMobilityArray => {
+                CV.const_param_ident_unit("mean inverse reduced ion mobility array", 1003006, unit)
+            }
+
+            ArrayType::DeconvolutedDriftTimeArray => CV.const_param_ident_unit(
+                "deconvoluted ion mobility drift time array",
+                1003156,
+                unit,
+            ),
+            ArrayType::DeconvolutedInverseReducedIonMobilityArray => CV.const_param_ident_unit(
+                "deconvoluted inverse reduced ion mobility array",
+                1003155,
+                unit,
+            ),
+
+            ArrayType::BaselineArray => CV.const_param_ident_unit("baseline array", 1002530, unit),
             ArrayType::ResolutionArray => {
                 CV.const_param_ident_unit("resolution array", 1002529, unit)
-            },
-            ArrayType::PressureArray => {
-                CV.const_param_ident_unit("pressure array", 1000821, unit)
-            },
+            }
+            ArrayType::PressureArray => CV.const_param_ident_unit("pressure array", 1000821, unit),
             ArrayType::TemperatureArray => {
                 CV.const_param_ident_unit("temperature array", 1000822, unit)
-            },
-            ArrayType::FlowRateArray => {
-                CV.const_param_ident_unit("flow rate array", 1000820, unit)
-            },
+            }
+            ArrayType::FlowRateArray => CV.const_param_ident_unit("flow rate array", 1000820, unit),
             _ => {
                 panic!("Could not determine how to name for array");
             }
@@ -553,7 +714,7 @@ mod test {
                     "MS-Numpress short logged float compression followed by zlib compression",
                     1002478,
                 ),
-                _ =>  ("", 0),
+                _ => ("", 0),
             };
             if let Some(p) = enc.as_param() {
                 assert_eq!(p.name, reps.0);

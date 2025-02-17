@@ -151,36 +151,41 @@ pub trait SpectrumBuilding<
                     }
                 }
                 1002477 => {
+                    self.current_array_mut().name = ArrayType::MeanDriftTimeArray;
+                    self.current_array_mut().unit = param.unit();
+                }
+                1002816 => {
                     self.current_array_mut().name = ArrayType::MeanIonMobilityArray;
-                    self.current_array_mut().unit = Unit::Millisecond;
+                    self.current_array_mut().unit = param.unit();
                 }
                 1003006 => {
-                    self.current_array_mut().name = ArrayType::MeanIonMobilityArray;
-                    self.current_array_mut().unit = Unit::VoltSecondPerSquareCentimeter;
+                    self.current_array_mut().name = ArrayType::MeanInverseReducedIonMobilityArray;
+                    self.current_array_mut().unit = param.unit();
                 }
                 1003007 => {
-                    self.current_array_mut().name = ArrayType::IonMobilityArray;
-                    self.current_array_mut().unit = Unit::Unknown;
+                    self.current_array_mut().name = ArrayType::RawIonMobilityArray;
+                    self.current_array_mut().unit = param.unit();
                 }
                 1003153 => {
-                    self.current_array_mut().name = ArrayType::IonMobilityArray;
-                    self.current_array_mut().unit = Unit::Unknown;
+                    self.current_array_mut().name = ArrayType::RawDriftTimeArray;
+                    self.current_array_mut().unit = param.unit();
                 }
                 1003156 => {
-                    self.current_array_mut().name = ArrayType::IonMobilityArray;
-                    self.current_array_mut().unit = Unit::Millisecond;
+                    self.current_array_mut().name = ArrayType::DeconvolutedDriftTimeArray;
+                    self.current_array_mut().unit = param.unit();
                 }
                 1003008 => {
-                    self.current_array_mut().name = ArrayType::IonMobilityArray;
-                    self.current_array_mut().unit = Unit::VoltSecondPerSquareCentimeter;
+                    self.current_array_mut().name = ArrayType::RawInverseReducedIonMobilityArray;
+                    self.current_array_mut().unit = param.unit();
                 }
                 1003154 => {
-                    self.current_array_mut().name = ArrayType::DeconvolutedIonMobilityArray;
-                    self.current_array_mut().unit = Unit::Millisecond;
+                    self.current_array_mut().name = ArrayType::DeconvolutedDriftTimeArray;
+                    self.current_array_mut().unit = param.unit();
                 }
                 1003155 => {
-                    self.current_array_mut().name = ArrayType::DeconvolutedIonMobilityArray;
-                    self.current_array_mut().unit = Unit::VoltSecondPerSquareCentimeter;
+                    self.current_array_mut().name =
+                        ArrayType::DeconvolutedInverseReducedIonMobilityArray;
+                    self.current_array_mut().unit = param.unit();
                 }
                 _ => {
                     self.current_array_mut().add_param(param.into());
@@ -2744,34 +2749,42 @@ mod test {
             builder._reset();
         }
         let pairs = [
-            (1002477, ArrayType::MeanIonMobilityArray, Unit::Millisecond),
+            (1002477, ArrayType::MeanDriftTimeArray, Unit::Millisecond),
             (
                 1003006,
-                ArrayType::MeanIonMobilityArray,
+                ArrayType::MeanInverseReducedIonMobilityArray,
                 Unit::VoltSecondPerSquareCentimeter,
             ),
-            (1003007, ArrayType::IonMobilityArray, Unit::Unknown),
-            (1003153, ArrayType::IonMobilityArray, Unit::Unknown),
-            (1003156, ArrayType::IonMobilityArray, Unit::Millisecond),
+            (1003007, ArrayType::RawIonMobilityArray, Unit::Unknown),
+            (1003153, ArrayType::RawDriftTimeArray, Unit::Unknown),
+            (
+                1003156,
+                ArrayType::DeconvolutedDriftTimeArray,
+                Unit::Millisecond,
+            ),
             (
                 1003008,
-                ArrayType::IonMobilityArray,
+                ArrayType::RawInverseReducedIonMobilityArray,
                 Unit::VoltSecondPerSquareCentimeter,
             ),
             (
                 1003154,
-                ArrayType::DeconvolutedIonMobilityArray,
+                ArrayType::DeconvolutedDriftTimeArray,
                 Unit::Millisecond,
             ),
             (
                 1003155,
-                ArrayType::DeconvolutedIonMobilityArray,
+                ArrayType::DeconvolutedInverseReducedIonMobilityArray,
                 Unit::VoltSecondPerSquareCentimeter,
             ),
         ];
 
         for (acc, term, unit) in pairs {
-            builder.fill_binary_data_array(ControlledVocabulary::MS.param(acc, term.to_string()));
+            builder.fill_binary_data_array(
+                ControlledVocabulary::MS
+                    .param(acc, term.to_string())
+                    .with_unit_t(&unit),
+            );
             assert_eq!(builder.current_array.name, term);
             assert_eq!(builder.current_array.unit, unit);
             builder._reset();
