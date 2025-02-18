@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.48.0] - 2025-02-18
+
+### Added
+
+- Add ion mobility unit propagation to `IonMobilityFrameLike` types
+
+### Fixed
+
+- Upgrade minimum `mzsignal` version to fix malformed mz peak picking numerical errors
+- Formally use the expanded ion mobility `ArrayType`s, can't solve units
+
+### Removed
+
+- Remove the requirement for `Default` on peak types throughout the library
+
 ## [0.47.0] - 2025-02-15
 
 ### Added
@@ -673,7 +688,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.47.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.48.0...HEAD
+[0.48.0]: https://github.com/mobiusklein/mzdata/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/mobiusklein/mzdata/compare/v0.46.1...v0.47.0
 [0.46.1]: https://github.com/mobiusklein/mzdata/compare/v0.46.0...v0.46.1
 [0.46.0]: https://github.com/mobiusklein/mzdata/compare/v0.45.0...v0.46.0
