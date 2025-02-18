@@ -240,8 +240,8 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     /// Consume this reader, wrapping it in a [`TDFSpectrumReaderType`] with the default
     /// peak merging tolerance.
     pub fn into_spectrum_reader<
-        CP: CentroidLike + Default,
-        DP: DeconvolutedCentroidLike + Default,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
     >(
         self,
     ) -> TDFSpectrumReaderType<C, D, CP, DP> {
@@ -251,8 +251,8 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     /// Consume this reader, wrapping it in a [`TDFSpectrumReaderType`] with the
     /// specified peak merging error tolerance.
     pub fn into_spectrum_reader_with_peak_merging_tolerance<
-        CP: CentroidLike + Default,
-        DP: DeconvolutedCentroidLike + Default,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
     >(
         self,
         peak_merging_tolerance: Tolerance,
@@ -513,8 +513,8 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     }
 
     fn frame_to_spectrum<
-        CP: CentroidLike + Default + From<CentroidPeak>,
-        DP: DeconvolutedCentroidLike + Default,
+        CP: CentroidLike + From<CentroidPeak>,
+        DP: DeconvolutedCentroidLike,
     >(
         &self,
         frame: MultiLayerIonMobilityFrame<C, D>,
@@ -988,8 +988,8 @@ pub type TDFFrameReader =
 pub struct TDFSpectrumReaderType<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
-    CP: CentroidLike + Default = CentroidPeak,
-    DP: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    CP: CentroidLike = CentroidPeak,
+    DP: DeconvolutedCentroidLike = DeconvolutedPeak,
 > {
     frame_reader: TDFFrameReaderType<C, D>,
     peak_merging_tolerance: Tolerance,
@@ -1000,8 +1000,8 @@ pub struct TDFSpectrumReaderType<
 impl<
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        CP: CentroidLike + Default + From<CentroidPeak>,
-        DP: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak>,
+        CP: CentroidLike + From<CentroidPeak>,
+        DP: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
     > IntoIonMobilityFrameSource<CP, DP> for TDFSpectrumReaderType<C, D, CP, DP>
 {
     type IonMobilityFrameSource<
@@ -1041,8 +1041,8 @@ impl<
 impl<
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        CP: CentroidLike + Default + From<CentroidPeak>,
-        DP: DeconvolutedCentroidLike + Default,
+        CP: CentroidLike + From<CentroidPeak>,
+        DP: DeconvolutedCentroidLike,
     > RandomAccessSpectrumIterator<CP, DP, MultiLayerSpectrum<CP, DP>>
     for TDFSpectrumReaderType<C, D, CP, DP>
 {
@@ -1071,8 +1071,8 @@ impl<
 impl<
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        CP: CentroidLike + Default + From<CentroidPeak>,
-        DP: DeconvolutedCentroidLike + Default,
+        CP: CentroidLike + From<CentroidPeak>,
+        DP: DeconvolutedCentroidLike,
     > SpectrumSource<CP, DP> for TDFSpectrumReaderType<C, D, CP, DP>
 {
     fn reset(&mut self) {
@@ -1120,8 +1120,8 @@ impl<
 impl<
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        CP: CentroidLike + Default + From<CentroidPeak>,
-        DP: DeconvolutedCentroidLike + Default,
+        CP: CentroidLike + From<CentroidPeak>,
+        DP: DeconvolutedCentroidLike,
     > Iterator for TDFSpectrumReaderType<C, D, CP, DP>
 {
     type Item = MultiLayerSpectrum<CP, DP>;
@@ -1137,8 +1137,8 @@ impl<
 impl<
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        CP: CentroidLike + Default + From<CentroidPeak>,
-        DP: DeconvolutedCentroidLike + Default,
+        CP: CentroidLike + From<CentroidPeak>,
+        DP: DeconvolutedCentroidLike,
     > FusedIterator for TDFSpectrumReaderType<C, D, CP, DP>
 {
 }
@@ -1146,8 +1146,8 @@ impl<
 impl<
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        CP: CentroidLike + Default,
-        DP: DeconvolutedCentroidLike + Default,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
     > MSDataFileMetadata for TDFSpectrumReaderType<C, D, CP, DP>
 {
     crate::delegate_impl_metadata_trait!(frame_reader);
@@ -1156,8 +1156,8 @@ impl<
 impl<
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        CP: CentroidLike + Default,
-        DP: DeconvolutedCentroidLike + Default,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
     > ChromatogramSource for TDFSpectrumReaderType<C, D, CP, DP>
 {
     fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
@@ -1172,8 +1172,8 @@ impl<
 impl<
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        CP: CentroidLike + Default,
-        DP: DeconvolutedCentroidLike + Default,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
     > TDFSpectrumReaderType<C, D, CP, DP>
 {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, TimsRustError> {
@@ -1416,8 +1416,8 @@ fn frame_to_description(
 impl<
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        CP: CentroidLike + Default + Default + From<CentroidPeak>,
-        DP: DeconvolutedCentroidLike + Default + Default,
+        CP: CentroidLike + From<CentroidPeak>,
+        DP: DeconvolutedCentroidLike,
     > MZFileReader<CP, DP, MultiLayerSpectrum<CP, DP>> for TDFSpectrumReaderType<C, D, CP, DP>
 {
     fn construct_index_from_stream(&mut self) -> u64 {

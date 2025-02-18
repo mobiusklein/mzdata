@@ -55,7 +55,7 @@ pub fn is_thermo_raw_prefix(buffer: &[u8]) -> bool {
     prefix.starts_with("Finnigan")
 }
 
-impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
     MZFileReader<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
 {
     /// The format is always indexed and requires no formal build step.
@@ -112,8 +112,8 @@ pub(crate) mod sealed {
         A Thermo Fisher RAW file reader that supports iteration and random access.
     */
     pub struct ThermoRawReaderType<
-        C: CentroidLike + Default + From<CentroidPeak> = CentroidPeak,
-        D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+        C: CentroidLike + From<CentroidPeak> = CentroidPeak,
+        D: DeconvolutedCentroidLike = DeconvolutedPeak,
     > {
         pub path: PathBuf,
         pub detail_level: DetailLevel,
@@ -133,7 +133,7 @@ pub(crate) mod sealed {
     }
 
     // The public API
-    impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
+    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
         ThermoRawReaderType<C, D>
     {
         /// Create a new [`ThermoRawReaderType`] from a path.
@@ -499,7 +499,7 @@ pub(crate) mod sealed {
         }
     }
 
-    impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
+    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
         ThermoRawReaderType<C, D>
     {
         pub(crate) fn make_ms_run(
@@ -1085,8 +1085,8 @@ pub(crate) mod stub {
     // This is a stub for documentation compilation when the dotnet runtime isn't available.
     // See the the [`sealed`](super::sealed) module for the real implementation.
     pub struct ThermoRawReaderType<
-        C: CentroidLike + Default + From<CentroidPeak> = CentroidPeak,
-        D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+        C: CentroidLike + From<CentroidPeak> = CentroidPeak,
+        D: DeconvolutedCentroidLike = DeconvolutedPeak,
     > {
         pub path: PathBuf,
         pub detail_level: DetailLevel,
@@ -1105,7 +1105,7 @@ pub(crate) mod stub {
     // The public API
     // This is a stub for documentation compilation when the dotnet runtime isn't available.
     // See the the [`sealed`](super::sealed) module for the real implementation.
-    impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
+    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
         ThermoRawReaderType<C, D>
     {
         /// Get whether or not to load extended spectrum signal information for the spectrum.
@@ -1218,7 +1218,7 @@ pub use stub::ThermoRawReaderType;
 #[cfg(not(feature = "doc-only"))]
 pub use sealed::ThermoRawReaderType;
 
-impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default> Iterator
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike> Iterator
     for ThermoRawReaderType<C, D>
 {
     type Item = MultiLayerSpectrum<C, D>;
@@ -1228,7 +1228,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
     }
 }
 
-impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
     SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
 {
     fn detail_level(&self) -> &DetailLevel {
@@ -1261,7 +1261,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
     }
 }
 
-impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
     RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
@@ -1292,7 +1292,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
     }
 }
 
-impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike + Default>
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
     MSDataFileMetadata for ThermoRawReaderType<C, D>
 {
     fn data_processings(&self) -> &Vec<DataProcessing> {
@@ -1345,7 +1345,7 @@ impl<C: CentroidLike + Default + From<CentroidPeak>, D: DeconvolutedCentroidLike
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> ChromatogramSource
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike> ChromatogramSource
     for ThermoRawReaderType<C, D>
 {
     fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {

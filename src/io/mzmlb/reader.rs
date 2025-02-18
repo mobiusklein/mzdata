@@ -41,9 +41,7 @@ use crate::spectrum::bindata::vec_as_bytes;
 #[cfg(feature = "numpress")]
 use numpress::numpress_decompress;
 
-use crate::spectrum::spectrum_types::{
-    CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
-};
+use crate::spectrum::spectrum_types::MultiLayerSpectrum;
 use crate::spectrum::{Chromatogram, HasIonMobility, IsolationWindow, ScanWindow, SelectedIon};
 
 #[derive(Debug, Error)]
@@ -466,21 +464,30 @@ pub trait DataRegistryBorrower<'a> {
     fn borrow_data_registry(self, data_registry: &'a mut ExternalDataRegistry) -> Self;
 }
 
-#[derive(Default)]
 pub struct MzMLbSpectrumBuilder<
     'a,
-    C: CentroidPeakAdapting + BuildFromArrayMap,
-    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
 > {
     inner: MzMLSpectrumBuilder<'a, C, D>,
     data_registry: Option<&'a mut ExternalDataRegistry>,
     current_data_range_query: DataRangeRequest,
 }
 
-impl<
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > MzMLbSpectrumBuilder<'_, C, D>
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap> Default
+    for MzMLbSpectrumBuilder<'_, C, D>
+{
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+            data_registry: None,
+            current_data_range_query: Default::default(),
+        }
+    }
+}
+
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    MzMLbSpectrumBuilder<'_, C, D>
 {
     pub fn new() -> Self {
         Self::default()
@@ -510,11 +517,8 @@ impl<
     }
 }
 
-impl<
-        'a,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > MzMLSAX for MzMLbSpectrumBuilder<'a, C, D>
+impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    MzMLSAX for MzMLbSpectrumBuilder<'a, C, D>
 {
     fn start_element(
         &mut self,
@@ -655,11 +659,8 @@ impl<
     }
 }
 
-impl<
-        'a,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > DataRegistryBorrower<'a> for MzMLbSpectrumBuilder<'a, C, D>
+impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    DataRegistryBorrower<'a> for MzMLbSpectrumBuilder<'a, C, D>
 {
     fn borrow_data_registry(mut self, data_registry: &'a mut ExternalDataRegistry) -> Self {
         self.data_registry = Some(data_registry);
@@ -667,11 +668,8 @@ impl<
     }
 }
 
-impl<
-        'a,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > SpectrumBuilding<'a, C, D, MultiLayerSpectrum<C, D>> for MzMLbSpectrumBuilder<'a, C, D>
+impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    SpectrumBuilding<'a, C, D, MultiLayerSpectrum<C, D>> for MzMLbSpectrumBuilder<'a, C, D>
 {
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
         self.inner.isolation_window_mut()
@@ -721,8 +719,8 @@ impl<
 }
 
 pub struct MzMLbReaderType<
-    C: CentroidPeakAdapting = CentroidPeak,
-    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
 > {
     pub handle: hdf5::File,
     /// A spectrum ID to byte offset for fast random access
@@ -750,11 +748,8 @@ pub struct MzMLbReaderType<
     data_buffers: ExternalDataRegistry,
 }
 
-impl<
-        'a,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > MzMLbReaderType<C, D>
+impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    MzMLbReaderType<C, D>
 {
     /// Create a new [`MzMLbReader`] with an internal cache size of `chunk_size` elements
     /// per data array to reduce the number of disk reads needed to populate spectra, and
@@ -1070,10 +1065,8 @@ impl<
 /// [`MzMLbReaderType`] instances are [`Iterator`]s over [`MultiLayerSpectrum`], like all
 /// file format readers. This involves advancing the position of the internal mzML file
 /// reader in-place without seeking.
-impl<
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > Iterator for MzMLbReaderType<C, D>
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap> Iterator
+    for MzMLbReaderType<C, D>
 {
     type Item = MultiLayerSpectrum<C, D>;
 
@@ -1084,10 +1077,8 @@ impl<
 
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
-impl<
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
 {
     fn detail_level(&self) -> &DetailLevel {
         &self.detail_level
@@ -1164,10 +1155,8 @@ impl<
 
 /// The iterator can also be updated to move to a different location in the
 /// stream efficiently.
-impl<
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_id(id) {
@@ -1200,10 +1189,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLbReaderType<C, D>
 {
     #[allow(unused)]
     /// The underlying HDF5 library for Rust, [`hdf5`](https://docs.rs/hdf5/latest/hdf5/) doesn't
@@ -1236,9 +1223,7 @@ impl<
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
-    for MzMLbReaderType<C, D>
-{
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> MSDataFileMetadata for MzMLbReaderType<C, D> {
     crate::impl_metadata_trait!();
 
     fn spectrum_count_hint(&self) -> Option<u64> {
@@ -1258,28 +1243,23 @@ pub type MzMLbReader = MzMLbReaderType<CentroidPeak, DeconvolutedPeak>;
 
 pub struct ChromatogramIter<
     'a,
-    C: CentroidPeakAdapting + BuildFromArrayMap,
-    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
 > {
     reader: &'a mut MzMLbReaderType<C, D>,
     index: usize,
 }
 
-impl<
-        'a,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > ChromatogramIter<'a, C, D>
+impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    ChromatogramIter<'a, C, D>
 {
     pub fn new(reader: &'a mut MzMLbReaderType<C, D>) -> Self {
         Self { reader, index: 0 }
     }
 }
 
-impl<
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > Iterator for ChromatogramIter<'_, C, D>
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap> Iterator
+    for ChromatogramIter<'_, C, D>
 {
     type Item = Chromatogram;
 
@@ -1294,10 +1274,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > ChromatogramSource for MzMLbReaderType<C, D>
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    ChromatogramSource for MzMLbReaderType<C, D>
 {
     fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
         self.get_chromatogram_by_id(id)
@@ -1308,10 +1286,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > IntoIonMobilityFrameSource<C, D> for MzMLbReaderType<C, D>
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    IntoIonMobilityFrameSource<C, D> for MzMLbReaderType<C, D>
 {
     type IonMobilityFrameSource<
         CF: FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility>,
@@ -1323,7 +1299,8 @@ impl<
         DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge,
     >(
         mut self,
-    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError> {
+    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError>
+    {
         if let Some(state) = self.has_ion_mobility() {
             if matches!(state, HasIonMobility::Dimension) {
                 Ok(Self::IonMobilityFrameSource::new(self))

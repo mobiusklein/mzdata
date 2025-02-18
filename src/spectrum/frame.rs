@@ -428,8 +428,8 @@ impl<CFeat: FeatureLike<MZ, IonMobility>, DFeat: FeatureLike<Mass, IonMobility> 
 impl<
         CFeat: FeatureLike<MZ, IonMobility>,
         DFeat: FeatureLike<Mass, IonMobility> + KnownCharge,
-        CPeak: CentroidPeakAdapting,
-        DPeak: DeconvolutedPeakAdapting,
+        CPeak: CentroidLike,
+        DPeak: DeconvolutedCentroidLike,
     > TryFrom<MultiLayerSpectrum<CPeak, DPeak>> for MultiLayerIonMobilityFrame<CFeat, DFeat>
 {
     type Error = ArrayRetrievalError;
@@ -483,8 +483,8 @@ impl<
 impl<
         CFeat: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
         DFeat: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
-        CPeak: CentroidPeakAdapting + BuildFromArrayMap,
-        DPeak: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        CPeak: CentroidLike + BuildFromArrayMap,
+        DPeak: DeconvolutedCentroidLike + BuildFromArrayMap,
     > From<MultiLayerIonMobilityFrame<CFeat, DFeat>> for MultiLayerSpectrum<CPeak, DPeak>
 {
     fn from(value: MultiLayerIonMobilityFrame<CFeat, DFeat>) -> Self {
@@ -507,7 +507,7 @@ mod mzsignal_impl {
     /// When [`mzsignal`] is available, [`MultiLayerIonMobilityFrame`] supports performing feature extraction
     /// to construct ion mobility-distributed traces in the m/z dimension similar to [`MultiLayerSpectrum::pick_peaks`].
     impl<
-            C: FeatureLike<MZ, IonMobility> + FeatureLikeMut<MZ, IonMobility> + Default + Clone,
+            C: FeatureLike<MZ, IonMobility> + FeatureLikeMut<MZ, IonMobility>,
             D: FeatureLike<Mass, IonMobility> + KnownCharge,
         > MultiLayerIonMobilityFrame<C, D>
     {

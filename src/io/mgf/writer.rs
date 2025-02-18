@@ -22,9 +22,6 @@ use crate::params::{
 
 use crate::spectrum::{
     bindata::BinaryArrayMap,
-    spectrum_types::{
-        CentroidPeakAdapting, DeconvolutedPeakAdapting,
-    },
     IonProperties, Precursor, PrecursorSelection, RefPeakDataLevel, SignalContinuity,
     SpectrumDescription, SpectrumLike,
 };
@@ -40,8 +37,8 @@ const MSN_SPECTRUM_CV: CURIE = ControlledVocabulary::MS.curie(1000580);
 pub trait MGFHeaderStyle: Sized {
     fn write_header<
         W: io::Write,
-        C: CentroidPeakAdapting,
-        D: DeconvolutedPeakAdapting,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
     >(
         writer: &mut MGFWriterType<W, C, D, Self>,
@@ -52,7 +49,7 @@ pub trait MGFHeaderStyle: Sized {
         Ok(())
     }
 
-    fn write_precursor<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>(
+    fn write_precursor<W: io::Write, C: CentroidLike, D: DeconvolutedCentroidLike>(
         writer: &mut MGFWriterType<W, C, D, Self>,
         precursor: &Precursor,
     ) -> io::Result<()> {
@@ -101,8 +98,8 @@ pub struct MZDataMGFStyle();
 impl MGFHeaderStyle for MZDataMGFStyle {
     fn write_header<
         W: io::Write,
-        C: CentroidPeakAdapting,
-        D: DeconvolutedPeakAdapting,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
     >(
         writer: &mut MGFWriterType<W, C, D, Self>,
@@ -129,8 +126,8 @@ impl MGFHeaderStyle for MZDataMGFStyle {
 /// writes all parameters it can find.
 pub struct MGFWriterType<
     W: io::Write,
-    C: CentroidPeakAdapting = CentroidPeak,
-    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
     Y: MGFHeaderStyle = MZDataMGFStyle,
 > {
     pub handle: io::BufWriter<W>,
@@ -146,7 +143,7 @@ pub struct MGFWriterType<
     run: MassSpectrometryRun,
 }
 
-impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting, Y: MGFHeaderStyle>
+impl<W: io::Write, C: CentroidLike, D: DeconvolutedCentroidLike, Y: MGFHeaderStyle>
     MGFWriterType<W, C, D, Y>
 {
     pub fn new(file: W) -> MGFWriterType<W, C, D, Y> {
@@ -344,7 +341,7 @@ TITLE="#,
     }
 }
 
-impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting, Y: MGFHeaderStyle>
+impl<W: io::Write, C: CentroidLike, D: DeconvolutedCentroidLike, Y: MGFHeaderStyle>
     MSDataFileMetadata for MGFWriterType<W, C, D, Y>
 {
     crate::impl_metadata_trait!();
@@ -358,7 +355,7 @@ impl<W: io::Write, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting, Y: MGFH
     }
 }
 
-impl<W: io::Write, C: CentroidPeakAdapting + 'static, D: DeconvolutedPeakAdapting + 'static>
+impl<W: io::Write, C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static>
     SpectrumWriter<C, D> for MGFWriterType<W, C, D>
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {

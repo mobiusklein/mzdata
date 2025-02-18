@@ -31,7 +31,7 @@ use crate::{
         chromatogram::{Chromatogram, ChromatogramLike},
         scan_properties::*,
         spectrum_types::{
-            CentroidPeakAdapting, CentroidSpectrumType, DeconvolutedPeakAdapting,
+            CentroidSpectrumType,
             MultiLayerSpectrum, RawSpectrum, Spectrum,
         },
         HasIonMobility,
@@ -56,12 +56,7 @@ use super::{
 pub type Bytes = Vec<u8>;
 
 /// Convert mzML spectrum XML into [`MultiLayerSpectrum`](crate::spectrum::MultiLayerSpectrum)
-pub trait SpectrumBuilding<
-    'a,
-    C: CentroidLike + Default,
-    D: DeconvolutedPeakAdapting,
-    S: SpectrumLike<C, D>,
->
+pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>>
 {
     /// Get the last isolation window being constructed
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow;
@@ -323,11 +318,10 @@ const BUFFER_SIZE: usize = 10000;
 
 /// An accumulator for the attributes of a spectrum as it is read from an
 /// mzML document
-#[derive(Default)]
 pub struct MzMLSpectrumBuilder<
     'a,
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
 > {
     pub params: ParamList,
     pub acquisition: Acquisition,
@@ -349,16 +343,35 @@ pub struct MzMLSpectrumBuilder<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedPeakAdapting> XMLParseBase
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> Default
     for MzMLSpectrumBuilder<'_, C, D>
 {
-}
-impl<C: CentroidLike + Default, D: DeconvolutedPeakAdapting> CVParamParse
-    for MzMLSpectrumBuilder<'_, C, D>
-{
+    fn default() -> Self {
+        Self {
+            params: Default::default(),
+            acquisition: Default::default(),
+            precursor: Default::default(),
+            arrays: Default::default(),
+            current_array: Default::default(),
+            index: Default::default(),
+            entry_id: Default::default(),
+            ms_level: Default::default(),
+            polarity: Default::default(),
+            signal_continuity: Default::default(),
+            has_precursor: Default::default(),
+            detail_level: Default::default(),
+            instrument_id_map: Default::default(),
+            entry_type: Default::default(),
+            centroid_type: PhantomData,
+            deconvoluted_type: PhantomData,
+        }
+    }
 }
 
-impl<'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapting>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> XMLParseBase for MzMLSpectrumBuilder<'_, C, D> {}
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> CVParamParse for MzMLSpectrumBuilder<'_, C, D> {}
+
+impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
     SpectrumBuilding<'inner, C, D, MultiLayerSpectrum<C, D>> for MzMLSpectrumBuilder<'inner, C, D>
 {
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
@@ -476,8 +489,8 @@ impl<'inner, C: CentroidLike + Default, D: DeconvolutedPeakAdapting>
 
 impl<
         'inner,
-        C: CentroidLike + Default + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > MzMLSpectrumBuilder<'inner, C, D>
 {
     pub fn new() -> MzMLSpectrumBuilder<'inner, C, D> {
@@ -619,10 +632,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike + Default + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
-    > MzMLSAX for MzMLSpectrumBuilder<'_, C, D>
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap> MzMLSAX
+    for MzMLSpectrumBuilder<'_, C, D>
 {
     fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
@@ -946,7 +957,7 @@ impl<
     }
 }
 
-impl<'a, C: CentroidLike + Default, D: DeconvolutedPeakAdapting> From<MzMLSpectrumBuilder<'a, C, D>>
+impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> From<MzMLSpectrumBuilder<'a, C, D>>
     for CentroidSpectrumType<C>
 where
     C: BuildFromArrayMap + BuildArrayMapFrom,
@@ -959,7 +970,7 @@ where
     }
 }
 
-impl<'a, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> From<MzMLSpectrumBuilder<'a, C, D>>
+impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> From<MzMLSpectrumBuilder<'a, C, D>>
     for MultiLayerSpectrum<C, D>
 {
     fn from(val: MzMLSpectrumBuilder<'a, C, D>) -> Self {
@@ -987,8 +998,8 @@ additional random access operations are available.
 */
 pub struct MzMLReaderType<
     R: Read,
-    C: CentroidPeakAdapting = CentroidPeak,
-    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
 > {
     /// The state the parser was in last.
     pub state: MzMLParserState,
@@ -1029,8 +1040,8 @@ pub struct MzMLReaderType<
 
 impl<
         R: Read + Seek,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > IntoIonMobilityFrameSource<C, D> for MzMLReaderType<R, C, D>
 {
     type IonMobilityFrameSource<
@@ -1061,8 +1072,8 @@ impl<
         'a,
         'b: 'a,
         R: Read,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > MzMLReaderType<R, C, D>
 {
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
@@ -1463,8 +1474,8 @@ impl<
 /// an `indexedmzML` document and use the offset map to jump to immediately jump to a specific spectrum
 impl<
         R: SeekRead,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > MzMLReaderType<R, C, D>
 {
     pub fn check_stream(&mut self, next_tag: &str) -> Result<bool, MzMLParserError> {
@@ -1583,8 +1594,8 @@ impl<
 
 impl<
         R: SeekRead,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > ChromatogramSource for MzMLReaderType<R, C, D>
 {
     fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
@@ -1599,8 +1610,8 @@ impl<
 /// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
 impl<
         R: io::Read,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > Iterator for MzMLReaderType<R, C, D>
 {
     type Item = MultiLayerSpectrum<C, D>;
@@ -1614,8 +1625,8 @@ impl<
 /// time when the underlying file stream supports [`io::Seek`].
 impl<
         R: SeekRead,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     /// Retrieve a spectrum by it's native ID
@@ -1689,8 +1700,8 @@ impl<
 /// stream efficiently.
 impl<
         R: SeekRead,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
@@ -1726,8 +1737,8 @@ impl<
 
 impl<
         R: SeekRead,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > MzMLReaderType<R, C, D>
 {
     /// Construct a new MzMLReaderType and build an offset index
@@ -1927,8 +1938,8 @@ impl<
 }
 
 impl<
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<fs::File, C, D>
 {
     fn open_file(source: fs::File) -> io::Result<Self> {
@@ -1944,7 +1955,7 @@ impl<
     }
 }
 
-impl<R: Read, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
+impl<R: Read, C: CentroidLike, D: DeconvolutedCentroidLike> MSDataFileMetadata
     for MzMLReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
@@ -1993,8 +2004,8 @@ pub(crate) fn is_mzml(buf: &[u8]) -> bool {
 pub struct ChromatogramIter<
     'a,
     R: SeekRead,
-    C: CentroidPeakAdapting + BuildFromArrayMap,
-    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
 > {
     reader: &'a mut MzMLReaderType<R, C, D>,
     index: usize,
@@ -2003,8 +2014,8 @@ pub struct ChromatogramIter<
 impl<
         'a,
         R: SeekRead,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > ChromatogramIter<'a, R, C, D>
 {
     pub fn new(reader: &'a mut MzMLReaderType<R, C, D>) -> Self {
@@ -2014,8 +2025,8 @@ impl<
 
 impl<
         R: SeekRead,
-        C: CentroidPeakAdapting + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + BuildFromArrayMap,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > Iterator for ChromatogramIter<'_, R, C, D>
 {
     type Item = Chromatogram;

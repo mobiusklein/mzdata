@@ -9,7 +9,7 @@ use tokio::io::{self, AsyncBufReadExt, AsyncSeekExt};
 
 use log::{error, warn};
 
-use mzpeaks::{CentroidPeak, DeconvolutedPeak};
+use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 
 use super::{
     super::{offset_index::OffsetIndex, utils::DetailLevel},
@@ -28,9 +28,7 @@ use crate::{
 
 use crate::params::{ControlledVocabulary, Param, ParamDescribed};
 
-use crate::spectrum::spectrum_types::{
-    CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum,
-};
+use crate::spectrum::spectrum_types::MultiLayerSpectrum;
 
 use crate::io::traits::AsyncSpectrumSource;
 
@@ -40,8 +38,8 @@ use crate::io::traits::AsyncSpectrumSource;
 /// instances which better represent the nature of this preprocessed data type.
 pub struct MGFReaderType<
     R: io::AsyncRead,
-    C: CentroidPeakAdapting = CentroidPeak,
-    D: DeconvolutedPeakAdapting = DeconvolutedPeak,
+    C: CentroidLike + From<CentroidPeak> = CentroidPeak,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> = DeconvolutedPeak,
 > {
     pub handle: io::BufReader<R>,
     pub state: MGFParserState,
@@ -62,8 +60,8 @@ pub struct MGFReaderType<
 
 #[cfg(feature = "async")]
 impl<
-        C: CentroidPeakAdapting + Send + Sync,
-        D: DeconvolutedPeakAdapting + Send + Sync,
+        C: CentroidLike + From<CentroidPeak> + Send + Sync,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
     > AsyncMZFileReader<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<tokio::fs::File, C, D>
 {
     async fn construct_index_from_stream(&mut self) -> u64 {
@@ -77,7 +75,7 @@ impl<
     }
 }
 
-impl<R: io::AsyncRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGFLineParsing<C, D>
+impl<R: io::AsyncRead, C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>> MGFLineParsing<C, D>
     for MGFReaderType<R, C, D>
 {
     fn state(&self) -> &MGFParserState {
@@ -93,7 +91,7 @@ impl<R: io::AsyncRead, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MGF
     }
 }
 
-impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+impl<R: io::AsyncRead + Unpin, C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>>
     MGFReaderType<R, C, D>
 {
     async fn read_line(&mut self, buffer: &mut String) -> io::Result<usize> {
@@ -231,8 +229,8 @@ impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapt
 
 impl<
         R: io::AsyncRead + io::AsyncSeek + Unpin,
-        C: CentroidPeakAdapting,
-        D: DeconvolutedPeakAdapting,
+        C: CentroidLike + From<CentroidPeak>,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
     > MGFReaderType<R, C, D>
 {
     pub fn as_stream(&mut self) -> impl SpectrumStream<C, D, MultiLayerSpectrum<C, D>> + '_ {
@@ -312,7 +310,7 @@ impl<
 
 /// The MGF format does not contain any consistent metadata, but additional
 /// information can be included after creation.
-impl<R: io::AsyncRead + Unpin, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>
+impl<R: io::AsyncRead + Unpin, C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>>
     MSDataFileMetadata for MGFReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
@@ -338,8 +336,8 @@ pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
 impl<
         R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin,
-        C: CentroidPeakAdapting + Send + Sync,
-        D: DeconvolutedPeakAdapting + Send + Sync,
+        C: CentroidLike + From<CentroidPeak> + Send + Sync,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
     > MGFReaderType<R, C, D>
 {
     /// Helper method to support seeking to an ID
@@ -474,8 +472,8 @@ impl<
 
 impl<
         R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin + Send,
-        C: CentroidPeakAdapting + Send + Sync,
-        D: DeconvolutedPeakAdapting + Send + Sync,
+        C: CentroidLike + From<CentroidPeak> + Send + Sync,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
     > AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
     async fn reset(&mut self) {
@@ -513,8 +511,8 @@ impl<
 
 impl<
         R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin + Send,
-        C: CentroidPeakAdapting + Send + Sync,
-        D: DeconvolutedPeakAdapting + Send + Sync,
+        C: CentroidLike + From<CentroidPeak> + Send + Sync,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
     > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D> {
 
     async fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {

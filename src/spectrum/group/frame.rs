@@ -176,8 +176,8 @@ where
 }
 
 pub struct IonMobilityFrameGroupIntoIter<
-    C: FeatureLike<MZ, IonMobility> + Default,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge + Default,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
     S: IonMobilityFrameLike<C, D> + Default,
     G: IonMobilityFrameGrouping<C, D, S>,
 > {
@@ -189,8 +189,8 @@ pub struct IonMobilityFrameGroupIntoIter<
 }
 
 impl<
-        C: FeatureLike<MZ, IonMobility> + Default,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge + Default,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
         S: IonMobilityFrameLike<C, D> + Default,
         G: IonMobilityFrameGrouping<C, D, S>,
     > Iterator for IonMobilityFrameGroupIntoIter<C, D, S, G>
@@ -241,8 +241,8 @@ impl<
 }
 
 impl<
-        C: FeatureLike<MZ, IonMobility> + Default,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge + Default,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
         S: IonMobilityFrameLike<C, D> + Default,
         G: IonMobilityFrameGrouping<C, D, S>,
     > IonMobilityFrameGroupIntoIter<C, D, S, G>
@@ -265,9 +265,9 @@ impl<
 /// Iterate over the spectra in [`IonMobilityFrameGroup`]
 pub struct IonMobilityFrameGroupIter<
     'a,
-    C: FeatureLike<MZ, IonMobility> + Default,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge + Default,
-    S: IonMobilityFrameLike<C, D> + Default + 'a,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D> + 'a + Default,
     G: IonMobilityFrameGrouping<C, D, S>,
 > {
     group: &'a G,
@@ -279,9 +279,9 @@ pub struct IonMobilityFrameGroupIter<
 
 impl<
         'a,
-        C: FeatureLike<MZ, IonMobility> + Default,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge + Default,
-        S: IonMobilityFrameLike<C, D> + Default + 'a,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D> + 'a + Default,
         G: IonMobilityFrameGrouping<C, D, S>,
     > Iterator for IonMobilityFrameGroupIter<'a, C, D, S, G>
 {
@@ -332,8 +332,8 @@ impl<
 
 impl<
         'a,
-        C: FeatureLike<MZ, IonMobility> + Default,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge + Default,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
         S: IonMobilityFrameLike<C, D> + Default,
         G: IonMobilityFrameGrouping<C, D, S>,
     > IonMobilityFrameGroupIter<'a, C, D, S, G>
@@ -355,8 +355,8 @@ impl<
 
 impl<C, D, S> IntoIterator for IonMobilityFrameGroup<C, D, S>
 where
-    C: FeatureLike<MZ, IonMobility> + Default,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge + Default,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
     S: IonMobilityFrameLike<C, D> + Default,
 {
     type Item = S;
@@ -370,8 +370,8 @@ where
 
 impl<'a, C, D, S> IonMobilityFrameGroup<C, D, S>
 where
-    C: FeatureLike<MZ, IonMobility> + Default,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge + Default,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
     S: IonMobilityFrameLike<C, D> + Default,
 {
     pub fn new(precursor: Option<S>, products: Vec<S>) -> Self {

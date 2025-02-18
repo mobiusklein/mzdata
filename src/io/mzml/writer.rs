@@ -462,8 +462,8 @@ is accumulated.
 #[derive(Debug)]
 pub struct MzMLWriterType<
     W: Write,
-    C: CentroidLike + Default + BuildArrayMapFrom + 'static = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom + 'static = DeconvolutedPeak,
+    C: CentroidLike + BuildArrayMapFrom + 'static = CentroidPeak,
+    D: DeconvolutedCentroidLike + BuildArrayMapFrom + 'static = DeconvolutedPeak,
 > {
     /// The current offset from the stream start
     pub offset: usize,
@@ -517,8 +517,8 @@ pub struct MzMLWriterType<
 
 impl<
         W: Write,
-        C: CentroidLike + Default + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C: CentroidLike + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
     > SpectrumWriter<C, D> for MzMLWriterType<W, C, D>
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
@@ -546,8 +546,8 @@ impl<
 
 impl<
         W: Write,
-        C: CentroidLike + Default + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C: CentroidLike + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
         CF: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
         DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
     > IonMobilityFrameWriter<CF, DF> for MzMLWriterType<W, C, D>
@@ -597,8 +597,8 @@ impl<
 
 impl<
         W: Write,
-        C: CentroidLike + Default + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C: CentroidLike + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
     > MSDataFileMetadata for MzMLWriterType<W, C, D>
 {
     crate::impl_metadata_trait!();
@@ -691,7 +691,7 @@ impl IntoIterator for ParamGroup {
 
 impl_param_described!(ParamGroup);
 
-impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<W: Write, C: CentroidLike, D: DeconvolutedCentroidLike>
     MzMLWriterType<W, C, D>
 where
     C: BuildArrayMapFrom,
@@ -1165,7 +1165,7 @@ where
     }
 }
 
-impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<W: Write, C: CentroidLike, D: DeconvolutedCentroidLike>
     MzMLWriterType<W, C, D>
 where
     C: BuildArrayMapFrom,
@@ -1309,7 +1309,7 @@ where
     }
 }
 
-impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<W: Write, C: CentroidLike, D: DeconvolutedCentroidLike>
     MzMLWriterType<W, C, D>
 where
     C: BuildArrayMapFrom,
@@ -1499,8 +1499,8 @@ where
     }
 
     fn write_ms_level<
-        C1: CentroidLike + Default + BuildArrayMapFrom,
-        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C1: CentroidLike + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + BuildArrayMapFrom,
         S: SpectrumLike<C1, D1> + 'static,
     >(
         &mut self,
@@ -1522,8 +1522,8 @@ where
     }
 
     fn write_polarity<
-        C1: CentroidLike + Default + BuildArrayMapFrom,
-        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C1: CentroidLike + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + BuildArrayMapFrom,
         S: SpectrumLike<C1, D1> + 'static,
     >(
         &mut self,
@@ -1543,8 +1543,8 @@ where
     }
 
     fn write_continuity<
-        C1: CentroidLike + Default + BuildArrayMapFrom,
-        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C1: CentroidLike + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + BuildArrayMapFrom,
         S: SpectrumLike<C1, D1> + 'static,
     >(
         &mut self,
@@ -1564,8 +1564,8 @@ where
     }
 
     fn write_signal_properties<
-        C1: CentroidLike + Default + BuildArrayMapFrom,
-        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C1: CentroidLike + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + BuildArrayMapFrom,
         S: SpectrumLike<C1, D1> + 'static,
     >(
         &mut self,
@@ -1585,7 +1585,7 @@ where
     }
 }
 
-impl<W: Write, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<W: Write, C: CentroidLike, D: DeconvolutedCentroidLike>
     MzMLWriterType<W, C, D>
 where
     C: BuildArrayMapFrom,
@@ -1772,8 +1772,8 @@ where
     /// This function will return an error if a [`MzMLWriterError`] error occurs during
     /// writing any underlying data occurs.
     pub fn start_spectrum<
-        C1: CentroidLike + Default + BuildArrayMapFrom,
-        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C1: CentroidLike + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + BuildArrayMapFrom,
         S: SpectrumLike<C1, D1> + 'static,
     >(
         &mut self,
@@ -1797,8 +1797,8 @@ where
     /// Checks if spectrum-level summaries are already calculated for
     /// `spectrum`.
     pub fn spectrum_has_summaries<
-        C1: CentroidLike + Default + BuildArrayMapFrom,
-        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C1: CentroidLike + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + BuildArrayMapFrom,
         S: SpectrumLike<C1, D1> + 'static,
     >(
         &self,
@@ -1834,8 +1834,8 @@ where
     /// Write spectrum-level descriptive metadata, acquisition scan metadata,
     /// and precursors if any are present.
     pub fn write_spectrum_descriptors<
-        C1: CentroidLike + Default + BuildArrayMapFrom,
-        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C1: CentroidLike + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + BuildArrayMapFrom,
         S: SpectrumLike<C1, D1> + 'static,
     >(
         &mut self,
@@ -1868,8 +1868,8 @@ where
     writing any underlying data occurs.
     */
     pub fn write_spectrum<
-        C1: CentroidLike + Default + BuildArrayMapFrom,
-        D1: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C1: CentroidLike + BuildArrayMapFrom,
+        D1: DeconvolutedCentroidLike + BuildArrayMapFrom,
         S: SpectrumLike<C1, D1> + 'static,
     >(
         &mut self,
@@ -2095,8 +2095,8 @@ where
 
 impl<
         W: io::Write,
-        C: CentroidLike + Default + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C: CentroidLike + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
     > Drop for MzMLWriterType<W, C, D>
 {
     fn drop(&mut self) {

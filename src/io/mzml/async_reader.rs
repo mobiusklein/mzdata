@@ -33,7 +33,7 @@ use crate::{
     prelude::*,
     spectrum::{
         bindata::BuildFromArrayMap,
-        spectrum_types::{CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum},
+        spectrum_types::MultiLayerSpectrum,
         Chromatogram,
     },
 };
@@ -62,8 +62,8 @@ const BUFFER_SIZE: usize = 10000;
 /// works with the `tokio` runtime.
 pub struct MzMLReaderType<
     R: AsyncReadType + Unpin,
-    C: CentroidPeakAdapting + Send + Sync = CentroidPeak,
-    D: DeconvolutedPeakAdapting + Send + Sync = DeconvolutedPeak,
+    C: CentroidLike + Send + Sync = CentroidPeak,
+    D: DeconvolutedCentroidLike + Send + Sync = DeconvolutedPeak,
 > {
     /// The state the parser was in last.
     pub state: MzMLParserState,
@@ -107,8 +107,8 @@ pub struct MzMLReaderType<
 impl<
         'a,
         R: AsyncReadType + Unpin,
-        C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
+        C: CentroidLike + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
     > MzMLReaderType<R, C, D>
 {
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`tokio::io::AsyncRead`] handle
@@ -500,8 +500,8 @@ impl<
 
 impl<
         R: AsyncReadType + Unpin,
-        C: CentroidPeakAdapting + Send + Sync,
-        D: DeconvolutedPeakAdapting + Send + Sync,
+        C: CentroidLike + Send + Sync,
+        D: DeconvolutedCentroidLike + Send + Sync,
     > MSDataFileMetadata for MzMLReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
@@ -678,8 +678,8 @@ impl IndexedMzMLIndexExtractor {
 /// asynchronous execution.
 impl<
         R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin,
-        C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
+        C: CentroidLike + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
     > MzMLReaderType<R, C, D>
 {
     pub async fn new_indexed(file: R) -> MzMLReaderType<R, C, D> {
@@ -960,8 +960,8 @@ impl<
 
 impl<
         R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Send,
-        C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
+        C: CentroidLike + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
     > AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     async fn reset(&mut self) {
@@ -999,8 +999,8 @@ impl<
 
 #[cfg(feature = "async")]
 impl<
-        C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
+        C: CentroidLike + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
     > AsyncMZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<tokio::fs::File, C, D>
 {
     async fn construct_index_from_stream(&mut self) -> u64 {
@@ -1019,8 +1019,8 @@ impl<
 
 impl<
         R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Send,
-        C: CentroidPeakAdapting + Send + Sync + BuildFromArrayMap,
-        D: DeconvolutedPeakAdapting + Send + Sync + BuildFromArrayMap,
+        C: CentroidLike + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
     > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>>
     for MzMLReaderType<R, C, D>
 {

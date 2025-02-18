@@ -27,8 +27,8 @@ use super::SpectrumGrouping;
 /// A [`SpectrumSource`] is the basis for many data access methods
 /// in [`mzdata`](crate).
 pub trait SpectrumSource<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 >: Iterator<Item = S>
 {
@@ -169,8 +169,8 @@ pub trait SpectrumSource<
 /// behavior should be used.
 pub struct SpectrumIterator<
     'lifespan,
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
     S: SpectrumLike<C, D>,
     R: SpectrumSource<C, D, S>,
 > {
@@ -183,8 +183,8 @@ pub struct SpectrumIterator<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
     > SpectrumIterator<'_, C, D, S, R>
@@ -202,8 +202,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
     > Iterator for SpectrumIterator<'_, C, D, S, R>
@@ -221,8 +221,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
     > ExactSizeIterator for SpectrumIterator<'_, C, D, S, R>
@@ -233,8 +233,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
     > DoubleEndedIterator for SpectrumIterator<'_, C, D, S, R>
@@ -251,8 +251,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
         R: SpectrumSource<C, D, S>,
     > SpectrumSource<C, D, S> for SpectrumIterator<'_, C, D, S, R>
@@ -294,8 +294,8 @@ impl<
 /// If the underlying iterator implements [`MSDataFileMetadata`] then [`SpectrumIterator`] will
 /// forward that implementation, assuming it is available.
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         R: SpectrumSource<C, D, S>,
         S: SpectrumLike<C, D>,
     > MSDataFileMetadata for SpectrumIterator<'_, C, D, S, R>
@@ -308,8 +308,8 @@ where
 /// A trait defining some helper methods to make efficient use of indices
 /// automatic when opening a file from a path-like object.
 pub trait MZFileReader<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 >: SpectrumSource<C, D, S> + Sized
 {
@@ -384,8 +384,8 @@ pub trait MZFileReader<
 
 #[cfg(feature = "serde")]
 fn _save_index<
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
     S: SpectrumLike<C, D>,
 >(
     index_path: &PathBuf,
@@ -444,8 +444,8 @@ impl From<SpectrumAccessError> for io::Error {
 /// An extension of [`SpectrumSource`] that supports relocatable iteration relative to a
 /// specific spectrum coordinate or identifier.
 pub trait RandomAccessSpectrumIterator<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 >: SpectrumSource<C, D, S>
 {
@@ -460,8 +460,8 @@ pub trait RandomAccessSpectrumIterator<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
         R: SpectrumSource<C, D, S>,
     > RandomAccessSpectrumIterator<C, D, S> for SpectrumIterator<'_, C, D, S, R>
@@ -509,16 +509,16 @@ impl<
 
 /// A union trait for [`SpectrumSource`] and [`RandomAccessSpectrumIterator`]
 pub trait RandomAccessSpectrumSource<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 >: SpectrumSource<C, D, S> + RandomAccessSpectrumIterator<C, D, S>
 {
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
         T: SpectrumSource<C, D, S> + RandomAccessSpectrumIterator<C, D, S>,
     > RandomAccessSpectrumSource<C, D, S> for T
@@ -526,16 +526,16 @@ impl<
 }
 
 pub trait SpectrumSourceWithMetadata<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 >: SpectrumSource<C, D, S> + MSDataFileMetadata
 {
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
         T: SpectrumSource<C, D, S> + MSDataFileMetadata,
     > SpectrumSourceWithMetadata<C, D, S> for T
@@ -551,8 +551,8 @@ impl<
 /// mechanism, but in situations where it cannot satisfy the request, it will `panic` instead. It also,
 /// naturally doesn't support reading spectra that have already been seen as the stream cannot be reversed.
 pub struct StreamingSpectrumIterator<
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
     S: SpectrumLike<C, D>,
     I: Iterator<Item = S>,
 > {
@@ -564,8 +564,8 @@ pub struct StreamingSpectrumIterator<
 }
 
 impl<
-        C: CentroidLike + Default + Send,
-        D: DeconvolutedCentroidLike + Default + Send,
+        C: CentroidLike + Send,
+        D: DeconvolutedCentroidLike + Send,
         S: SpectrumLike<C, D> + Send,
     > From<SpectrumReceiver<C, D, S>>
     for StreamingSpectrumIterator<C, D, S, SpectrumReceiver<C, D, S>>
@@ -576,8 +576,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default + Send,
-        D: DeconvolutedCentroidLike + Default + Send,
+        C: CentroidLike + Send,
+        D: DeconvolutedCentroidLike + Send,
         S: SpectrumLike<C, D> + Send,
     > From<Receiver<S>> for StreamingSpectrumIterator<C, D, S, SpectrumReceiver<C, D, S>>
 {
@@ -587,8 +587,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
         I: Iterator<Item = S>,
     > SpectrumSource<C, D, S> for StreamingSpectrumIterator<C, D, S, I>
@@ -650,8 +650,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
         I: Iterator<Item = S>,
     > Iterator for StreamingSpectrumIterator<C, D, S, I>
@@ -668,8 +668,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak>,
+        C: CentroidLike + From<CentroidPeak>,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
         I: Iterator<Item = MultiLayerSpectrum<C, D>>,
     > super::frame::IntoIonMobilityFrameSource<C, D>
     for StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, I>
@@ -709,8 +709,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
         I: Iterator<Item = S>,
     > StreamingSpectrumIterator<C, D, S, I>
@@ -753,8 +753,8 @@ impl<
 /// by reading through successive spectra until the target spectrum is found. This will exhaust the
 /// underlying iterator if the requested coordinate is not found.
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
         I: Iterator<Item = S>,
     > RandomAccessSpectrumIterator<C, D, S> for StreamingSpectrumIterator<C, D, S, I>
@@ -793,8 +793,8 @@ impl<
 /// If the underlying iterator implements [`MSDataFileMetadata`] then [`StreamingSpectrumIterator`] will
 /// forward that implementation, assuming it is available.
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
         I: Iterator<Item = S>,
     > MSDataFileMetadata for StreamingSpectrumIterator<C, D, S, I>
@@ -810,8 +810,8 @@ where
 /// This type is meant to be wrapped in a [`StreamingSpectrumIterator`] for
 /// compatibility with other interfaces.
 pub struct SpectrumReceiver<
-    C: CentroidLike + Default + Send,
-    D: DeconvolutedCentroidLike + Default + Send,
+    C: CentroidLike + Send,
+    D: DeconvolutedCentroidLike + Send,
     S: SpectrumLike<C, D> + Send,
 > {
     receiver: Receiver<S>,
@@ -835,8 +835,8 @@ pub struct SpectrumReceiver<
 }
 
 impl<
-        C: CentroidLike + Default + Send,
-        D: DeconvolutedCentroidLike + Default + Send,
+        C: CentroidLike + Send,
+        D: DeconvolutedCentroidLike + Send,
         S: SpectrumLike<C, D> + Send,
     > Iterator for SpectrumReceiver<C, D, S>
 {
@@ -854,8 +854,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default + Send,
-        D: DeconvolutedCentroidLike + Default + Send,
+        C: CentroidLike + Send,
+        D: DeconvolutedCentroidLike + Send,
         S: SpectrumLike<C, D> + Send,
     > From<Receiver<S>> for SpectrumReceiver<C, D, S>
 {
@@ -876,8 +876,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default + Send,
-        D: DeconvolutedCentroidLike + Default + Send,
+        C: CentroidLike + Send,
+        D: DeconvolutedCentroidLike + Send,
         S: SpectrumLike<C, D> + Send,
     > MSDataFileMetadata for SpectrumReceiver<C, D, S>
 {
@@ -897,8 +897,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default + Send,
-        D: DeconvolutedCentroidLike + Default + Send,
+        C: CentroidLike + Send,
+        D: DeconvolutedCentroidLike + Send,
         S: SpectrumLike<C, D> + Send,
     > SpectrumReceiver<C, D, S>
 {
@@ -930,8 +930,8 @@ impl<
 
 /// Analogous to to [`RandomAccessSpectrumIterator`], but for [`SpectrumGrouping`] implementations.
 pub trait RandomAccessSpectrumGroupingIterator<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
     G: SpectrumGrouping<C, D, S> = SpectrumGroup<C, D, S>,
 >: Iterator<Item = G>
@@ -947,8 +947,8 @@ pub trait RandomAccessSpectrumGroupingIterator<
 /// to yield ownership for [`SpectrumSource`], they are cloned
 #[derive(Debug, Default)]
 pub struct MemorySpectrumSource<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 > {
     spectra: VecDeque<S>,
@@ -959,8 +959,8 @@ pub struct MemorySpectrumSource<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D> + Clone,
     > MemorySpectrumSource<C, D, S>
 {
@@ -981,8 +981,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D> + Clone,
     > Iterator for MemorySpectrumSource<C, D, S>
 {
@@ -1001,8 +1001,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D> + Clone,
     > SpectrumSource<C, D, S> for MemorySpectrumSource<C, D, S>
 {
@@ -1041,8 +1041,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D> + Clone,
     > RandomAccessSpectrumIterator<C, D, S> for MemorySpectrumSource<C, D, S>
 {
@@ -1077,8 +1077,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D> + Clone,
     > From<VecDeque<S>> for MemorySpectrumSource<C, D, S>
 {
@@ -1089,8 +1089,8 @@ impl<
 
 /// Common interface for spectrum writing
 pub trait SpectrumWriter<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
 >
 {
     /// Write out a single spectrum
@@ -1216,8 +1216,8 @@ mod async_traits {
     use super::*;
 
     pub trait AsyncSpectrumSource<
-        C: CentroidLike + Default = CentroidPeak,
-        D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+        C: CentroidLike = CentroidPeak,
+        D: DeconvolutedCentroidLike = DeconvolutedPeak,
         S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
     >: Send
     {
@@ -1345,8 +1345,8 @@ mod async_traits {
     }
 
     pub trait AsyncRandomAccessSpectrumIterator<
-        C: CentroidLike + Default = CentroidPeak,
-        D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+        C: CentroidLike = CentroidPeak,
+        D: DeconvolutedCentroidLike = DeconvolutedPeak,
         S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
     >: AsyncSpectrumSource<C, D, S> + Sized
     {
@@ -1366,8 +1366,8 @@ mod async_traits {
 
     #[cfg(feature = "async")]
     pub trait AsyncMZFileReader<
-        C: CentroidLike + Default = CentroidPeak,
-        D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+        C: CentroidLike = CentroidPeak,
+        D: DeconvolutedCentroidLike = DeconvolutedPeak,
         S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
     >: AsyncSpectrumSource<C, D, S> + Sized
     {
@@ -1395,8 +1395,8 @@ mod async_traits {
 
     #[cfg(feature = "async")]
     pub(crate) async fn open_path_inner<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
         R: AsyncSpectrumSource<C, D, S> + AsyncMZFileReader<C, D, S>,
         P: Into<path::PathBuf>,
@@ -1414,16 +1414,16 @@ mod async_traits {
     }
 
     pub trait SpectrumStream<
-        C: CentroidLike + Default = CentroidPeak,
-        D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+        C: CentroidLike = CentroidPeak,
+        D: DeconvolutedCentroidLike = DeconvolutedPeak,
         S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
     >: Stream<Item = S> + FusedStream
     {
     }
 
     impl<
-            C: CentroidLike + Default,
-            D: DeconvolutedCentroidLike + Default,
+            C: CentroidLike,
+            D: DeconvolutedCentroidLike,
             S: SpectrumLike<C, D>,
             T: Stream<Item = S> + FusedStream,
         > SpectrumStream<C, D, S> for T

@@ -30,7 +30,7 @@ use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Software,
 };
 use crate::params::{ControlledVocabulary, ParamDescribed};
-use crate::prelude::{MSDataFileMetadata, SpectrumLike};
+use crate::prelude::*;
 use crate::spectrum::bindata::{
     ArrayRetrievalError, BinaryDataArrayType, BuildArrayMap3DFrom, BuildArrayMapFrom, ByteArrayView, DataArray
 };
@@ -89,7 +89,7 @@ impl From<MzMLbWriterError> for io::Error {
     }
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> MSDataFileMetadata
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> MSDataFileMetadata
     for MzMLbWriterType<C, D>
 where
     C: BuildArrayMapFrom,
@@ -404,7 +404,7 @@ impl io::Write for ByteWriter {
 
 pub type WriterResult = Result<(), MzMLbWriterError>;
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> SpectrumWriter<C, D>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> SpectrumWriter<C, D>
     for MzMLbWriterType<C, D>
 where
     C: BuildArrayMapFrom,
@@ -431,10 +431,10 @@ where
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MzMLbWriterBuilder<
-    C: CentroidLike + Default + 'static,
-    D: DeconvolutedCentroidLike + Default + 'static,
+    C: CentroidLike + 'static,
+    D: DeconvolutedCentroidLike + 'static,
 > where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
@@ -446,7 +446,23 @@ pub struct MzMLbWriterBuilder<
     _d: PhantomData<D>,
 }
 
-impl<C: CentroidLike + Default + 'static, D: DeconvolutedCentroidLike + Default + 'static>
+impl<C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static> Default for MzMLbWriterBuilder<C, D>
+where
+    C: BuildArrayMapFrom,
+    D: BuildArrayMapFrom,
+{
+    fn default() -> Self {
+        Self {
+            path: PathBuf::new(),
+            chunk_size: None,
+            filters: None,
+            _c: PhantomData,
+            _d: PhantomData,
+        }
+    }
+}
+
+impl<C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static>
     MzMLbWriterBuilder<C, D>
 where
     C: BuildArrayMapFrom,
@@ -486,7 +502,7 @@ where
     }
 }
 
-impl<C: CentroidLike + Default + 'static, D: DeconvolutedCentroidLike + Default + 'static>
+impl<C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static>
     From<MzMLbWriterBuilder<C, D>> for MzMLbWriterType<C, D>
 where
     C: BuildArrayMapFrom,
@@ -499,8 +515,8 @@ where
 
 #[derive(Debug)]
 pub struct MzMLbWriterType<
-    C: CentroidLike + Default + 'static,
-    D: DeconvolutedCentroidLike + Default + 'static,
+    C: CentroidLike + 'static,
+    D: DeconvolutedCentroidLike + 'static,
 > where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
@@ -512,7 +528,7 @@ pub struct MzMLbWriterType<
     filters: Vec<filters::Filter>,
 }
 
-impl<C: CentroidLike + Default + 'static, D: DeconvolutedCentroidLike + Default + 'static>
+impl<C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static>
     MzMLbWriterType<C, D>
 where
     C: BuildArrayMapFrom,
@@ -962,8 +978,8 @@ where
 }
 
 impl<
-        C: CentroidLike + Default + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C: CentroidLike + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
     > Drop for MzMLbWriterType<C, D>
 {
     fn drop(&mut self) {
@@ -972,8 +988,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + Default + BuildArrayMapFrom,
+        C: CentroidLike + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
         CF: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
         DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
     > IonMobilityFrameWriter<CF, DF> for MzMLbWriterType<C, D>

@@ -1032,8 +1032,8 @@ impl From<&PROXISpectrum> for SpectrumDescription {
 }
 
 impl<
-        C: CentroidLike + Default + BuildFromArrayMap + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + Default + BuildFromArrayMap + BuildArrayMapFrom,
+        C: CentroidLike + BuildFromArrayMap + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap + BuildArrayMapFrom,
     > From<PROXISpectrum> for MultiLayerSpectrum<C, D>
 {
     fn from(value: PROXISpectrum) -> Self {

@@ -31,15 +31,15 @@ use super::DataArray;
 use super::HasIonMobility;
 
 /// A blanket trait that ties together all the assumed behaviors of an m/z coordinate centroid peak
-pub trait CentroidPeakAdapting: CentroidLike + Default + From<CentroidPeak> {}
-impl<C: CentroidLike + Default + From<CentroidPeak>> CentroidPeakAdapting for C {}
+pub trait CentroidPeakAdapting: CentroidLike + From<CentroidPeak> {}
+impl<C: CentroidLike + From<CentroidPeak>> CentroidPeakAdapting for C {}
 
 /// A blanket trait that ties together all the assumed behaviors of an neutral mass coordinate centroid peak
 pub trait DeconvolutedPeakAdapting:
-    DeconvolutedCentroidLike + Default + From<DeconvolutedPeak>
+    DeconvolutedCentroidLike + From<DeconvolutedPeak>
 {
 }
-impl<D: DeconvolutedCentroidLike + Default + From<DeconvolutedPeak>> DeconvolutedPeakAdapting
+impl<D: DeconvolutedCentroidLike + From<DeconvolutedPeak>> DeconvolutedPeakAdapting
     for D
 {
 }
@@ -339,7 +339,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         self,
     ) -> Result<CentroidSpectrumType<C>, SpectrumConversionError>
     where
-        C: BuildFromArrayMap + CentroidLike + Default
+        C: BuildFromArrayMap + CentroidLike
     {
         if !matches!(
             self.description.signal_continuity,
@@ -401,7 +401,7 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
         self,
     ) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
     where
-        C: BuildFromArrayMap, C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default
+        C: BuildFromArrayMap, C: CentroidLike, D: DeconvolutedCentroidLike
     {
         Ok(MultiLayerSpectrum::<C, D> {
             arrays: Some(self.arrays),
@@ -643,21 +643,27 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> SpectrumLike<C, D> for RawSpe
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Represents a spectrum that has been centroided into discrete m/z points, a
 /// process also called "peak picking".
 ///
 /// This type of spectrum represents data in exactly one format.
-pub struct CentroidSpectrumType<C: CentroidLike + Default> {
+pub struct CentroidSpectrumType<C: CentroidLike> {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
     /// The picked centroid peaks, sorted by m/z in a fast searchable structure.
     pub peaks: MZPeakSetType<C>,
 }
 
+impl<C: CentroidLike> Default for CentroidSpectrumType<C> {
+    fn default() -> Self {
+        Self { description: Default::default(), peaks: PeakSetVec::empty() }
+    }
+}
+
 #[cfg(feature = "mzsignal")]
-impl<C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap> CentroidSpectrumType<C> {
+impl<C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap> CentroidSpectrumType<C> {
     /// Convert the centroid peaks in theoretical profile signal, producing a [`MultiLayerSpectrum`]
     /// which contains both the `peaks` as well as a raw data array in profile mode.
     ///
@@ -676,7 +682,7 @@ impl<C: CentroidLike + Default + BuildArrayMapFrom + BuildFromArrayMap> Centroid
     }
 }
 
-impl<C: CentroidLike + Default> ParamDescribed for CentroidSpectrumType<C> {
+impl<C: CentroidLike> ParamDescribed for CentroidSpectrumType<C> {
     fn params(&self) -> &[crate::params::Param] {
         <SpectrumDescription as ParamDescribed>::params(&self.description)
     }
@@ -686,7 +692,7 @@ impl<C: CentroidLike + Default> ParamDescribed for CentroidSpectrumType<C> {
     }
 }
 
-impl<C: CentroidLike + Default> SpectrumLike<C> for CentroidSpectrumType<C> {
+impl<C: CentroidLike> SpectrumLike<C> for CentroidSpectrumType<C> {
     #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
@@ -711,7 +717,7 @@ impl<C: CentroidLike + Default> SpectrumLike<C> for CentroidSpectrumType<C> {
     }
 }
 
-impl<C: CentroidLike + Default> CentroidSpectrumType<C> {
+impl<C: CentroidLike> CentroidSpectrumType<C> {
     pub fn new(description: SpectrumDescription, peaks: MZPeakSetType<C>) -> Self {
         Self { description, peaks }
     }
@@ -719,7 +725,7 @@ impl<C: CentroidLike + Default> CentroidSpectrumType<C> {
     /// Convert a spectrum into a [`MultiLayerSpectrum`]
     pub fn into_spectrum<D>(self) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
     where
-        D: DeconvolutedCentroidLike + Default,
+        D: DeconvolutedCentroidLike,
     {
         let val = MultiLayerSpectrum::<C, D> {
             peaks: Some(self.peaks),
@@ -772,9 +778,9 @@ where
 /// Represents a spectrum that has been centroided, deisotoped, and charge state deconvolved.
 ///
 /// This type of spectrum represents data in exactly one format.
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct DeconvolutedSpectrumType<D: DeconvolutedCentroidLike + Default> {
+pub struct DeconvolutedSpectrumType<D: DeconvolutedCentroidLike> {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
     /// The deisotoped and charge state deconvolved peaks, sorted by neutral mass
@@ -782,7 +788,13 @@ pub struct DeconvolutedSpectrumType<D: DeconvolutedCentroidLike + Default> {
     pub deconvoluted_peaks: MassPeakSetType<D>,
 }
 
-impl<D: DeconvolutedCentroidLike + Default> DeconvolutedSpectrumType<D> {
+impl<D: DeconvolutedCentroidLike> Default for DeconvolutedSpectrumType<D> {
+    fn default() -> Self {
+        Self { description: Default::default(), deconvoluted_peaks: PeakSetVec::empty() }
+    }
+}
+
+impl<D: DeconvolutedCentroidLike> DeconvolutedSpectrumType<D> {
     pub fn new(description: SpectrumDescription, deconvoluted_peaks: MassPeakSetType<D>) -> Self {
         Self {
             description,
@@ -793,7 +805,7 @@ impl<D: DeconvolutedCentroidLike + Default> DeconvolutedSpectrumType<D> {
     /// Convert a spectrum into a [`MultiLayerSpectrum`]
     pub fn into_spectrum<C>(self) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
     where
-        C: CentroidLike + Default,
+        C: CentroidLike,
     {
         let val = MultiLayerSpectrum::<C, D> {
             deconvoluted_peaks: Some(self.deconvoluted_peaks),
@@ -804,7 +816,7 @@ impl<D: DeconvolutedCentroidLike + Default> DeconvolutedSpectrumType<D> {
     }
 }
 
-impl<D: DeconvolutedCentroidLike + Default> ParamDescribed for DeconvolutedSpectrumType<D> {
+impl<D: DeconvolutedCentroidLike> ParamDescribed for DeconvolutedSpectrumType<D> {
     fn params(&self) -> &[crate::params::Param] {
         <SpectrumDescription as ParamDescribed>::params(&self.description)
     }
@@ -814,7 +826,7 @@ impl<D: DeconvolutedCentroidLike + Default> ParamDescribed for DeconvolutedSpect
     }
 }
 
-impl<D: DeconvolutedCentroidLike + Default> SpectrumLike<CentroidPeak, D>
+impl<D: DeconvolutedCentroidLike> SpectrumLike<CentroidPeak, D>
     for DeconvolutedSpectrumType<D>
 {
     #[inline]
@@ -881,7 +893,7 @@ where
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Represent a spectrum with multiple layers of representation of the
 /// peak data.
@@ -889,8 +901,8 @@ where
 /// This type is useful because it permits us to hold spectra in incrementally
 /// more processed representations without loss of information.
 pub struct MultiLayerSpectrum<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
 > {
     /// The spectrum metadata describing acquisition conditions and details.
     pub description: SpectrumDescription,
@@ -906,7 +918,13 @@ pub struct MultiLayerSpectrum<
     pub deconvoluted_peaks: Option<MassPeakSetType<D>>,
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> ParamDescribed
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> Default for MultiLayerSpectrum<C, D> {
+    fn default() -> Self {
+        Self { description: Default::default(), arrays: None, peaks: None, deconvoluted_peaks: None }
+    }
+}
+
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> ParamDescribed
     for MultiLayerSpectrum<C, D>
 {
     fn params(&self) -> &[crate::params::Param] {
@@ -918,7 +936,7 @@ impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> ParamDesc
     }
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> SpectrumLike<C, D>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> SpectrumLike<C, D>
     for MultiLayerSpectrum<C, D>
 {
     #[inline]
@@ -959,7 +977,7 @@ impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> SpectrumL
     }
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> MultiLayerSpectrum<C, D>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> MultiLayerSpectrum<C, D>
 where
     C: BuildFromArrayMap + BuildArrayMapFrom,
     D: BuildFromArrayMap + BuildArrayMapFrom,
@@ -1168,7 +1186,7 @@ where
     }
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> MultiLayerSpectrum<C, D>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> MultiLayerSpectrum<C, D>
 where
     C: BuildFromArrayMap,
     D: BuildFromArrayMap,
@@ -1246,7 +1264,7 @@ where
 /// The peak picking steps need to convert an [`mzsignal::FittedPeak`] into `C`. This is trivial for [`CentroidPeak`]
 /// and [`mzsignal::FittedPeak`] itself.
 #[cfg(feature = "mzsignal")]
-impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike + Default>
+impl<C: CentroidLike + From<FittedPeak>, D: DeconvolutedCentroidLike>
     MultiLayerSpectrum<C, D>
 {
     /// Using a pre-configured [`mzsignal::PeakPicker`](mzsignal::peak_picker::PeakPicker) to pick peaks
@@ -1371,7 +1389,7 @@ impl<C: CentroidLike + Default + From<FittedPeak>, D: DeconvolutedCentroidLike +
     }
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike>
     TryFrom<MultiLayerSpectrum<C, D>> for CentroidSpectrumType<C>
 where
     C: BuildFromArrayMap + BuildArrayMapFrom,
@@ -1390,7 +1408,7 @@ where
 /// in multiple overlapping layers.
 pub type Spectrum = MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>;
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> From<CentroidSpectrumType<C>>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> From<CentroidSpectrumType<C>>
     for MultiLayerSpectrum<C, D>
 {
     fn from(spectrum: CentroidSpectrumType<C>) -> MultiLayerSpectrum<C, D> {
@@ -1398,7 +1416,7 @@ impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> From<Cent
     }
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> From<RawSpectrum>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> From<RawSpectrum>
     for MultiLayerSpectrum<C, D>
 where
     C: BuildFromArrayMap,
@@ -1409,7 +1427,7 @@ where
     }
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike>
     From<MultiLayerSpectrum<C, D>> for RawSpectrum
 where
     C: BuildFromArrayMap + BuildArrayMapFrom,
@@ -1420,7 +1438,7 @@ where
     }
 }
 
-impl<C: CentroidLike + Default> TryFrom<RawSpectrum> for CentroidSpectrumType<C>
+impl<C: CentroidLike> TryFrom<RawSpectrum> for CentroidSpectrumType<C>
 where
     C: BuildFromArrayMap,
 {
@@ -1431,7 +1449,7 @@ where
     }
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike>
     TryFrom<MultiLayerSpectrum<C, D>> for DeconvolutedSpectrumType<D>
 where
     C: BuildFromArrayMap + BuildArrayMapFrom,

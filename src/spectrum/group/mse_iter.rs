@@ -33,7 +33,7 @@ impl HasScanConfiguration for IonMobilityFrameDescription {
     }
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default> HasScanConfiguration
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> HasScanConfiguration
     for MultiLayerSpectrum<C, D>
 {
     fn get_configuration(&self) -> Option<ValueRef> {
@@ -131,8 +131,8 @@ impl<T: HasScanConfiguration, I: Iterator<Item = T>> MSEIterator<T, I> {
 }
 
 pub struct SpectrumMSEIterator<
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
     I: Iterator<Item = MultiLayerSpectrum<C, D>>,
     G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
 > {
@@ -141,8 +141,8 @@ pub struct SpectrumMSEIterator<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         I: Iterator<Item = MultiLayerSpectrum<C, D>>,
         G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
     > Iterator for SpectrumMSEIterator<C, D, I, G>
@@ -164,8 +164,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         I: Iterator<Item = MultiLayerSpectrum<C, D>>,
         G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
     > SpectrumMSEIterator<C, D, I, G>

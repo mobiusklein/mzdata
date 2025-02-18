@@ -150,9 +150,9 @@ pub fn thermo_new<R: Into<PathBuf>, C: CentroidPeakAdapting + BuildFromArrayMap,
 
 #[doc(hidden)]
 #[allow(unused)]
-pub fn mzmlb_new<R: Into<PathBuf>, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>(handle: R) -> io::Result<MzMLbReaderType<C ,D>> {
+pub fn mzmlb_new<R: AsRef<Path>, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>(handle: R) -> io::Result<MzMLbReaderType<C ,D>> {
     #[cfg(feature = "mzmlb")]
-    return MzMLbReaderType::new(handle);
+    return MzMLbReaderType::new(&handle);
     #[cfg(not(feature = "mzmlb"))]
     panic!("mzMLb file reading not enabled")
 }

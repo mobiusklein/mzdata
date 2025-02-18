@@ -9,8 +9,8 @@ use super::util::GroupIterState;
 
 /// An abstraction over [`SpectrumGroup`](crate::spectrum::SpectrumGroup)'s interface.
 pub trait SpectrumGrouping<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
 >: Default
 {
@@ -106,8 +106,8 @@ A pairing of an optional MS1 spectrum with all its associated MSn spectra.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SpectrumGroup<C = CentroidPeak, D = DeconvolutedPeak, S = MultiLayerSpectrum<C, D>>
 where
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
     S: SpectrumLike<C, D>,
 {
     /// The MS1 spectrum of a group. This may be absent when the source does not contain any MS1 spectra
@@ -121,8 +121,8 @@ where
 
 impl<C, D, S> IntoIterator for SpectrumGroup<C, D, S>
 where
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
     S: SpectrumLike<C, D> + Default,
 {
     type Item = S;
@@ -136,8 +136,8 @@ where
 
 impl<'a, C, D, S> SpectrumGroup<C, D, S>
 where
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
     S: SpectrumLike<C, D>,
 {
     pub fn new(precursor: Option<S>, products: Vec<S>) -> Self {
@@ -150,8 +150,8 @@ where
 }
 
 pub struct SpectrumGroupIntoIter<
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
     S: SpectrumLike<C, D> + Default = MultiLayerSpectrum<C, D>,
     G: SpectrumGrouping<C, D, S> = SpectrumGroup<C, D, S>,
 > {
@@ -163,8 +163,8 @@ pub struct SpectrumGroupIntoIter<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D> + Default,
         G: SpectrumGrouping<C, D, S>,
     > Iterator for SpectrumGroupIntoIter<C, D, S, G>
@@ -215,8 +215,8 @@ impl<
 }
 
 impl<
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D> + Default,
         G: SpectrumGrouping<C, D, S>,
     > SpectrumGroupIntoIter<C, D, S, G>
@@ -239,8 +239,8 @@ impl<
 /// Iterate over the spectra in [`SpectrumGroup`]
 pub struct SpectrumGroupIter<
     'a,
-    C: CentroidLike + Default = CentroidPeak,
-    D: DeconvolutedCentroidLike + Default = DeconvolutedPeak,
+    C: CentroidLike = CentroidPeak,
+    D: DeconvolutedCentroidLike = DeconvolutedPeak,
     S: SpectrumLike<C, D> = MultiLayerSpectrum<C, D>,
     G: SpectrumGrouping<C, D, S> = SpectrumGroup<C, D, S>,
 > {
@@ -253,8 +253,8 @@ pub struct SpectrumGroupIter<
 
 impl<
         'a,
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D> + 'a,
         G: SpectrumGrouping<C, D, S>,
     > Iterator for SpectrumGroupIter<'a, C, D, S, G>
@@ -306,8 +306,8 @@ impl<
 
 impl<
         'a,
-        C: CentroidLike + Default,
-        D: DeconvolutedCentroidLike + Default,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
         S: SpectrumLike<C, D>,
         G: SpectrumGrouping<C, D, S>,
     > SpectrumGroupIter<'a, C, D, S, G>
@@ -327,7 +327,7 @@ impl<
     }
 }
 
-impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default, S: SpectrumLike<C, D>>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>>
     Default for SpectrumGroup<C, D, S>
 {
     fn default() -> Self {
@@ -342,8 +342,8 @@ impl<C: CentroidLike + Default, D: DeconvolutedCentroidLike + Default, S: Spectr
 
 impl<C, D, S> SpectrumGrouping<C, D, S> for SpectrumGroup<C, D, S>
 where
-    C: CentroidLike + Default,
-    D: DeconvolutedCentroidLike + Default,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
     S: SpectrumLike<C, D>,
 {
     fn precursor(&self) -> Option<&S> {

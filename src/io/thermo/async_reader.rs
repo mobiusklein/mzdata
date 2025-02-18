@@ -12,18 +12,18 @@ use crate::{
         DetailLevel,
     },
     prelude::*,
-    spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting, MultiLayerSpectrum},
+    spectrum::MultiLayerSpectrum,
 };
 
 pub struct ThermoRawReaderType<
-    C: CentroidPeakAdapting + Send = CentroidPeak,
-    D: DeconvolutedPeakAdapting + Send = DeconvolutedPeak,
+    C: CentroidLike + From<CentroidPeak> + Send = CentroidPeak,
+    D: DeconvolutedCentroidLike + Send = DeconvolutedPeak,
 > {
     inner: Option<SyncThermoRawReaderType<C, D>>,
 }
 
 #[cfg(feature = "async")]
-impl<C: CentroidPeakAdapting + Send + 'static, D: DeconvolutedPeakAdapting + Send + 'static>
+impl<C: CentroidLike + From<CentroidPeak> + Send + 'static, D: DeconvolutedCentroidLike + Send + 'static>
     AsyncMZFileReader<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
 {
     async fn construct_index_from_stream(&mut self) -> u64 {
@@ -50,13 +50,13 @@ impl<C: CentroidPeakAdapting + Send + 'static, D: DeconvolutedPeakAdapting + Sen
     }
 }
 
-impl<C: CentroidPeakAdapting + Send, D: DeconvolutedPeakAdapting + Send> MSDataFileMetadata
+impl<C: CentroidLike + From<CentroidPeak> + Send, D: DeconvolutedCentroidLike + Send> MSDataFileMetadata
     for ThermoRawReaderType<C, D>
 {
     crate::delegate_impl_metadata_trait!(expr, this => { this.inner.as_ref().unwrap() }, &mut => { this.inner.as_mut().unwrap() });
 }
 
-impl<C: CentroidPeakAdapting + Send + 'static, D: DeconvolutedPeakAdapting + Send + 'static>
+impl<C: CentroidLike + From<CentroidPeak> + Send + 'static, D: DeconvolutedCentroidLike + Send + 'static>
     AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
 {
     fn reset(&mut self) -> impl std::future::Future<Output = ()> {
@@ -103,7 +103,7 @@ impl<C: CentroidPeakAdapting + Send + 'static, D: DeconvolutedPeakAdapting + Sen
     }
 }
 
-impl<C: CentroidPeakAdapting + Send + 'static, D: DeconvolutedPeakAdapting + Send + 'static>
+impl<C: CentroidLike + From<CentroidPeak> + Send + 'static, D: DeconvolutedCentroidLike + Send + 'static>
     ThermoRawReaderType<C, D>
 {
     /// Create a new [`ThermoRawReaderType`] from a path.
@@ -233,8 +233,8 @@ impl<C: CentroidPeakAdapting + Send + 'static, D: DeconvolutedPeakAdapting + Sen
 pub type ThermoRawReader = ThermoRawReaderType<CentroidPeak, DeconvolutedPeak>;
 
 impl<
-        C: CentroidPeakAdapting + Send + Sync + 'static,
-        D: DeconvolutedPeakAdapting + Send + Sync + 'static,
+        C: CentroidLike + From<CentroidPeak> + Send + Sync + 'static,
+        D: DeconvolutedCentroidLike + Send + Sync + 'static,
     > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>>
     for ThermoRawReaderType<C, D>
 {

@@ -7,13 +7,14 @@ use thiserror::Error;
 
 use mzpeaks::{
     feature::{ChargedFeature, Feature, FeatureLike},
-    IonMobility, KnownCharge, Mass, MZ,
+    DeconvolutedCentroidLike, IonMobility, KnownCharge, Mass, MZ,
+    CentroidLike,
 };
 
 use crate::spectrum::group::IonMobilityFrameGroupingIterator;
 use crate::spectrum::spectrum_types::MultiLayerSpectrum;
 use crate::spectrum::{
-    CentroidPeakAdapting, DeconvolutedPeakAdapting, IonMobilityFrameLike,
+    IonMobilityFrameLike,
     MultiLayerIonMobilityFrame,
 };
 use crate::{
@@ -301,8 +302,8 @@ where
 /// dimension to a [`IonMobilityFrameSource`].
 #[derive(Debug)]
 pub struct Generic3DIonMobilityFrameSource<
-    CP: CentroidPeakAdapting,
-    DP: DeconvolutedPeakAdapting,
+    CP: CentroidLike,
+    DP: DeconvolutedCentroidLike,
     R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
@@ -315,8 +316,8 @@ pub struct Generic3DIonMobilityFrameSource<
 }
 
 impl<
-        CP: CentroidPeakAdapting,
-        DP: DeconvolutedPeakAdapting,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -328,8 +329,8 @@ where
 }
 
 impl<
-        CP: CentroidPeakAdapting,
-        DP: DeconvolutedPeakAdapting,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -394,8 +395,8 @@ impl<
 }
 
 impl<
-        CP: CentroidPeakAdapting,
-        DP: DeconvolutedPeakAdapting,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -412,8 +413,8 @@ impl<
 }
 
 impl<
-        CP: CentroidPeakAdapting,
-        DP: DeconvolutedPeakAdapting,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -532,8 +533,8 @@ pub trait RandomAccessIonMobilityFrameIterator<
 }
 
 impl<
-        CP: CentroidPeakAdapting,
-        DP: DeconvolutedPeakAdapting,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -743,8 +744,8 @@ pub trait IonMobilityFrameWriter<
 #[derive(Debug)]
 pub struct BorrowedGeneric3DIonMobilityFrameSource<
     'a,
-    CP: CentroidPeakAdapting,
-    DP: DeconvolutedPeakAdapting,
+    CP: CentroidLike,
+    DP: DeconvolutedCentroidLike,
     R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
@@ -757,8 +758,8 @@ pub struct BorrowedGeneric3DIonMobilityFrameSource<
 }
 
 impl<
-        CP: CentroidPeakAdapting,
-        DP: DeconvolutedPeakAdapting,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -770,8 +771,8 @@ where
 }
 
 impl<
-        CP: CentroidPeakAdapting,
-        DP: DeconvolutedPeakAdapting,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -836,8 +837,8 @@ impl<
 }
 
 impl<
-        CP: CentroidPeakAdapting,
-        DP: DeconvolutedPeakAdapting,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -846,16 +847,17 @@ impl<
     type Item = MultiLayerIonMobilityFrame<C, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.source.by_ref().filter_map(|s| {
-            MultiLayerIonMobilityFrame::try_from(s).ok()
-        }).next()
+        self.source
+            .by_ref()
+            .filter_map(|s| MultiLayerIonMobilityFrame::try_from(s).ok())
+            .next()
     }
 }
 
 impl<
         'a,
-        CP: CentroidPeakAdapting,
-        DP: DeconvolutedPeakAdapting,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -874,8 +876,8 @@ impl<
 }
 
 impl<
-        CP: CentroidPeakAdapting,
-        DP: DeconvolutedPeakAdapting,
+        CP: CentroidLike,
+        DP: DeconvolutedCentroidLike,
         R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
         C: FeatureLike<MZ, IonMobility>,
         D: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -952,7 +954,7 @@ pub enum IntoIonMobilityFrameSourceError {
 }
 
 /// Convert a [`SpectrumSource`] to an [`IonMobilityFrameSource`] if it detects ion mobility frames (3D spectra)
-pub trait IntoIonMobilityFrameSource<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>:
+pub trait IntoIonMobilityFrameSource<C: CentroidLike, D: DeconvolutedCentroidLike>:
     SpectrumSource<C, D, MultiLayerSpectrum<C, D>> + Sized
 {
     /// The [`IonMobilityFrameSource`]-implementing type for this [`SpectrumSource`].
