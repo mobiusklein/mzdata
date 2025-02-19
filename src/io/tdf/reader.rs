@@ -314,7 +314,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 
     fn build_window_index(&self) -> Result<DIAFrameWindowMap, Error> {
         let conn = self.tdf_reader.connection();
-        let dia_windows = SQLDIAFrameMsMsWindow::read_from(&conn, [])?;
+        let dia_windows = SQLDIAFrameMsMsWindow::read_from(&conn, []).unwrap_or_default();
         let mut window_groups: HashMap<u32, Vec<Arc<SQLDIAFrameMsMsWindow>>, _> =
             HashMap::default();
         for window in dia_windows {
@@ -336,13 +336,14 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 
         let conn = self.tdf_reader.connection();
 
-        let precursors: Vec<_> = SQLPrecursor::read_from(&conn, [])?
+        let precursors: Vec<_> = SQLPrecursor::read_from(&conn, [])
+            .unwrap_or_default()
             .into_iter()
             .map(Arc::new)
             .collect();
 
         let pasef_msms_info: HashMap<u32, Vec<Arc<SQLPasefFrameMsMs>>, BuildIdentityHasher<u32>> =
-            SQLPasefFrameMsMs::read_from(&conn, [])?
+            SQLPasefFrameMsMs::read_from(&conn, []).unwrap_or_default()
                 .into_iter()
                 .map(Arc::new)
                 .fold(HashMap::default(), |mut index, p| {
@@ -351,7 +352,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                 });
 
         let q = format!("{} ORDER BY Id", SQLFrame::get_sql());
-        let frames = self.tdf_reader.query::<SQLFrame>(&q, [])?;
+        let frames = self.tdf_reader.query::<SQLFrame>(&q, []).unwrap_or_default();
         let mut frame_index = Vec::with_capacity(frames.len());
         let mut parent_index: HashMap<usize, usize> = HashMap::new();
         let mut last_parent = 0usize;
