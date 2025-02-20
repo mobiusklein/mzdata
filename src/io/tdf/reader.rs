@@ -10,7 +10,7 @@ use crate::io::checksum_file;
 
 use crate::{
     curie,
-    io::{DetailLevel, IonMobilityFrameAccessError, OffsetIndex, IntoIonMobilityFrameSource},
+    io::{DetailLevel, IntoIonMobilityFrameSource, IonMobilityFrameAccessError, OffsetIndex},
     meta::{
         Component, ComponentType, DataProcessing, DetectorTypeTerm,
         DissociationMethodTerm::CollisionInducedDissociation, FileDescription,
@@ -20,8 +20,7 @@ use crate::{
     },
     mzpeaks::{
         feature::{ChargedFeature, Feature},
-        IonMobility, Mass, MZ,
-        CentroidPeak, DeconvolutedPeak
+        CentroidPeak, DeconvolutedPeak, IonMobility, Mass, MZ,
     },
     params::{ControlledVocabulary, Unit, Value},
     prelude::*,
@@ -239,10 +238,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 
     /// Consume this reader, wrapping it in a [`TDFSpectrumReaderType`] with the default
     /// peak merging tolerance.
-    pub fn into_spectrum_reader<
-        CP: CentroidLike,
-        DP: DeconvolutedCentroidLike,
-    >(
+    pub fn into_spectrum_reader<CP: CentroidLike, DP: DeconvolutedCentroidLike>(
         self,
     ) -> TDFSpectrumReaderType<C, D, CP, DP> {
         self.into_spectrum_reader_with_peak_merging_tolerance(PEAK_MERGE_TOLERANCE)
@@ -343,7 +339,8 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             .collect();
 
         let pasef_msms_info: HashMap<u32, Vec<Arc<SQLPasefFrameMsMs>>, BuildIdentityHasher<u32>> =
-            SQLPasefFrameMsMs::read_from(&conn, []).unwrap_or_default()
+            SQLPasefFrameMsMs::read_from(&conn, [])
+                .unwrap_or_default()
                 .into_iter()
                 .map(Arc::new)
                 .fold(HashMap::default(), |mut index, p| {
@@ -352,7 +349,10 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                 });
 
         let q = format!("{} ORDER BY Id", SQLFrame::get_sql());
-        let frames = self.tdf_reader.query::<SQLFrame>(&q, []).unwrap_or_default();
+        let frames = self
+            .tdf_reader
+            .query::<SQLFrame>(&q, [])
+            .unwrap_or_default();
         let mut frame_index = Vec::with_capacity(frames.len());
         let mut parent_index: HashMap<usize, usize> = HashMap::new();
         let mut last_parent = 0usize;
@@ -513,10 +513,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         best_match
     }
 
-    fn frame_to_spectrum<
-        CP: CentroidLike + From<CentroidPeak>,
-        DP: DeconvolutedCentroidLike,
-    >(
+    fn frame_to_spectrum<CP: CentroidLike + From<CentroidPeak>, DP: DeconvolutedCentroidLike>(
         &self,
         frame: MultiLayerIonMobilityFrame<C, D>,
         error_tolerance: Tolerance,
@@ -1320,6 +1317,47 @@ fn index_to_precursor(
         mz_prec.isolation_window = isolation;
         mz_prec.precursor_id = Some(parent_entry.format_native_id());
         Some(mz_prec)
+    } else if let Some(dia_window) = index_entry.dia_window() {
+        let mut ion = SelectedIon {
+            mz: dia_window.isolation_mz,
+            intensity: 0.0,
+            charge: None,
+            ..Default::default()
+        };
+        let im = metadata
+            .im_converter
+            .convert((dia_window.scan_end + dia_window.scan_start) as f64 / 2.0);
+
+        let p = inverse_reduce_ion_mobility_param(im);
+        ion.add_param(p);
+        let mut act = Activation::default();
+        let mut isolation = IsolationWindow::default();
+        if let Some(pasef) = index_entry.pasef_msms() {
+            act.energy = pasef.collision_energy as f32;
+            act.methods_mut().push(CollisionInducedDissociation);
+
+            let iso_width = pasef.isolation_width / 2.0;
+            isolation.target = pasef.isolation_mz as f32;
+            isolation.lower_bound = (pasef.isolation_mz - iso_width) as f32;
+            isolation.upper_bound = (pasef.isolation_mz + iso_width) as f32;
+            isolation.flags = IsolationWindowState::Complete;
+        }
+        if let Some(pasef) = index_entry.dia_window() {
+            act.energy = pasef.collision_energy;
+            act.methods_mut().push(CollisionInducedDissociation);
+
+            let iso_width = pasef.isolation_width / 2.0;
+            isolation.target = pasef.isolation_mz as f32;
+            isolation.lower_bound = (pasef.isolation_mz - iso_width) as f32;
+            isolation.upper_bound = (pasef.isolation_mz + iso_width) as f32;
+            isolation.flags = IsolationWindowState::Complete;
+        }
+        let mut mz_prec = Precursor::default();
+        mz_prec.add_ion(ion);
+        mz_prec.activation = act;
+        mz_prec.isolation_window = isolation;
+        mz_prec.precursor_id = Some(parent_entry.format_native_id());
+        Some(mz_prec)
     } else {
         None
     }
@@ -1402,6 +1440,13 @@ fn frame_to_description(
         descr.add_param(
             Param::new_key_value("ion mobility upper limit", im_high)
                 .with_unit_t(&Unit::VoltSecondPerSquareCentimeter),
+        );
+
+        scan.add_param(
+            Param::builder()
+                .name("window group")
+                .value(Value::Int(pasef.window_group as i64))
+                .build()
         );
 
         if frame_slice.is_none() {
