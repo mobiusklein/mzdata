@@ -22,10 +22,12 @@ use super::super::{
 };
 
 use crate::{
+    curie,
     meta::{
         DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
         MassSpectrometryRun, Sample, Software,
     },
+    params::Value,
     prelude::SpectrumLike,
 };
 
@@ -190,6 +192,207 @@ where
     }
 }
 
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct MGFTitle {
+    pub identifier: Option<String>,
+    pub fields: HashMap<String, Value>,
+}
+
+impl MGFTitle {
+    pub fn new(identifier: Option<String>, fields: HashMap<String, Value>) -> Self {
+        Self { identifier, fields }
+    }
+}
+
+/// MGF spectrum title parsing behavior following for extracting attributes
+/// from structured text strings
+pub trait MGFTitleParsing: Send + Sync {
+    /// Parse the title string into an [`MGFTitle`].
+    ///
+    /// Because not all MGF file writers follow a pattern, or not
+    /// all spectra in a single MGF file follow the same pattern, this
+    /// method is fallible.
+    fn parse_title(&self, title: &str, collect_fields: bool) -> Option<MGFTitle>;
+}
+
+/// The default title parser that simply treats the title as the identifier
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct DefaultTitleParser();
+
+impl MGFTitleParsing for DefaultTitleParser {
+    #[allow(unused_variables)]
+    fn parse_title(&self, title: &str, collect_fields: bool) -> Option<MGFTitle> {
+        Some(MGFTitle::new(Some(title.to_string()), Default::default()))
+    }
+}
+
+/// A title parser that recognizes the default Trans-Proteomics Pipeline (TPP) title
+/// format: `<RunId>.<ScanNumber1>.<ScanNumber2>.<ChargeState> File:"<^SourcePath>", NativeID:"<^Id>"`
+///
+/// Each of the labeled groups will be stored in [`MGFTitle::fields`] except `Id`, which will be
+/// the [`MGFTitle::identifier`]. `SourceFile` and `Id` may be absent.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct TPPTitleParser();
+
+impl MGFTitleParsing for TPPTitleParser {
+    fn parse_title(&self, title: &str, collect_fields: bool) -> Option<MGFTitle> {
+        let mut result = MGFTitle::default();
+        if let Some((run_id, after_run_id)) = title.trim().split_once(".") {
+            if collect_fields {
+                result
+                    .fields
+                    .insert("RunId".into(), run_id.parse().unwrap());
+            }
+            if let Some((scan1, after_scan1)) = after_run_id.split_once(".") {
+                if collect_fields {
+                    result
+                        .fields
+                        .insert("ScanNumber1".into(), scan1.parse().unwrap());
+                }
+                if let Some((scan2, after_scan2)) = after_scan1.split_once(".") {
+                    if collect_fields {
+                        result
+                            .fields
+                            .insert("ScanNumber2".into(), scan2.parse().unwrap());
+                    }
+                    if let Some((charge, after_charge)) = after_scan2.split_once(" ") {
+                        if collect_fields {
+                            result
+                                .fields
+                                .insert("Charge".into(), charge.parse().unwrap());
+                        }
+                        if let Some(tail) = after_charge.strip_prefix("File:\"") {
+                            if let Some((head, rest)) = tail.split_once('"') {
+                                if collect_fields {
+                                    result
+                                        .fields
+                                        .insert("File".into(), Value::String(head.into()));
+                                }
+                                if let Some(tail) = rest.strip_prefix(", NativeID:\"") {
+                                    if let Some((head, _rest)) = tail.split_once('"') {
+                                        if collect_fields {
+                                            result.fields.insert(
+                                                "NativeID".into(),
+                                                Value::String(head.into()),
+                                            );
+                                        }
+                                        result.identifier = Some(head.into());
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        warn!("Title {title} does not conform to TPPTitleParser pattern: Charge not found")
+                    }
+                } else {
+                    warn!("Title {title} does not conform to TPPTitleParser pattern: ScanNumber2 not found")
+                }
+            } else {
+                warn!("Title {title} does not conform to TPPTitleParser pattern: ScanNumber1 not found")
+            }
+        } else {
+            warn!("Title {title} does not conform to TPPTitleParser pattern: RunId not found")
+        }
+        Some(result)
+    }
+}
+
+
+/// A strategy for deciding how to index an MGF file.
+pub trait MGFIndexing: Send + Sync {
+    /// Check if this scan header is to be indexed
+    fn is_index_key(&self, key: &str) -> bool;
+
+    /// Convert the `value` of scan header `key` into the index key for the
+    /// spectrum.
+    ///
+    /// The default implementation simply returns the value-as-is.
+    #[allow(unused_variables)]
+    fn handle_key(&self, key: &str, value: &str) -> String {
+        value.trim().into()
+    }
+}
+
+
+/// The default indexing strategy for MGFs that use the full text
+/// of the `TITLE` scan header
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DefaultTitleIndexing();
+
+impl MGFIndexing for DefaultTitleIndexing {
+    fn is_index_key(&self, key: &str) -> bool {
+        key == "TITLE"
+    }
+}
+
+/// Indexing strategy for an MGF using the `SCANS` scan header.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ScansIndexing();
+
+impl MGFIndexing for ScansIndexing {
+    fn is_index_key(&self, key: &str) -> bool {
+        key == "SCANS"
+    }
+}
+
+
+/// Indexing strategy for an MGF using the `TITLE` scan header, parsed
+/// according to the Trans-Proteomics Pipeline notation's `NativeID`
+/// component.
+///
+/// See [`TPPTitleParser`] for more information.
+#[derive(Debug, Default)]
+pub struct TPPTitleParsingNativeIDIndexing {
+    parser: TPPTitleParser,
+}
+
+impl MGFIndexing for TPPTitleParsingNativeIDIndexing {
+    fn is_index_key(&self, key: &str) -> bool {
+        key == "TITLE"
+    }
+
+    #[allow(unused_variables)]
+    fn handle_key(&self, key: &str, value: &str) -> String {
+        if let Some(val) = self.parser.parse_title(value, true) {
+            match val.identifier {
+                Some(ident) => ident,
+                None => value.into(),
+            }
+        } else {
+            value.into()
+        }
+    }
+}
+
+
+/// Indexing strategy for an MGF using the `TITLE` scan header, parsed
+/// according to the Trans-Proteomics Pipeline notation's `ScanNumber1`
+/// component.
+///
+/// See [`TPPTitleParser`] for more information.
+#[derive(Debug, Default)]
+pub struct TPPTitleParsingScanNumberIndexing {
+    parser: TPPTitleParser,
+}
+
+impl MGFIndexing for TPPTitleParsingScanNumberIndexing {
+    fn is_index_key(&self, key: &str) -> bool {
+        key == "TITLE"
+    }
+
+    #[allow(unused_variables)]
+    fn handle_key(&self, key: &str, value: &str) -> String {
+        if let Some(val) = self.parser.parse_title(value, true) {
+            match val.fields.get("ScanNumber1") {
+                Some(ident) => ident.to_string(),
+                None => value.into(),
+            }
+        } else {
+            value.into()
+        }
+    }
+}
+
 /// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
 /// The parser produces [`Spectrum`](crate::spectrum::Spectrum) instances. These may be
 /// converted directly into [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum)
@@ -214,6 +417,7 @@ pub struct MGFReaderType<
     pub detail_level: DetailLevel,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
+    indexing: Box<dyn MGFIndexing>,
 }
 
 pub(crate) trait MGFLineParsing<
@@ -230,6 +434,15 @@ pub(crate) trait MGFLineParsing<
         *self.error_mut() = Some(error);
     }
 
+    #[allow(clippy::borrowed_box)]
+    fn indexer(&self) -> &Box<dyn MGFIndexing>;
+
+    /// Set the indexing strategy implementing [`MGFIndexing`].
+    ///
+    /// This method should invalidate any existing [`OffsetIndex`].
+    fn set_indexer(&mut self, indexer: Box<dyn MGFIndexing>);
+
+    /// Parse a single line defining a peak, if possible.
     fn parse_peak_from_line(
         &mut self,
         line: &str,
@@ -290,6 +503,161 @@ pub(crate) trait MGFLineParsing<
         }
     }
 
+    /// Handle the RTINSECONDS scan header
+    fn handle_rt(&mut self, key: &str, value: &str, builder: &mut SpectrumBuilder<C, D>) -> Result<(), MGFError> {
+        let scan_ev = builder
+            .description
+            .acquisition
+            .first_scan_mut()
+            .expect("Automatically adds scan event");
+        scan_ev.start_time = value
+            .parse::<f64>()
+            .map_err(|e| {
+                MGFError::MalformedHeaderLine(format!("Failed to parse {key}={value}: {e}"))
+            })? / 60.0;
+        Ok(())
+    }
+
+    /// Handle the PEPMASS scan header
+    fn handle_pepmass(
+        &mut self,
+        _key: &str,
+        value: &str,
+        builder: &mut SpectrumBuilder<C, D>,
+    ) -> Result<(), MGFError> {
+        let mut parts = value.split_ascii_whitespace();
+        let mz: f64 = parts.next().ok_or_else(|| MGFError::MalformedHeaderLine(
+            "No m/z value in PEPMASS header".into(),
+        ))?.parse().map_err(|e| {
+            MGFError::MalformedHeaderLine(format!(
+                "Malformed m/z value in PEPMASS header {value}: {e}"
+            ))
+        })?;
+
+        let intensity: f32 = parts
+            .next()
+            .map(|v| v.parse())
+            .unwrap_or_else(|| Ok(0.0))
+            .map_err(|e| warn!("Failed to parse PEPMASS intensity {value}: {e}"))
+            .unwrap_or_default();
+
+        let charge: Option<i32> = match parts.next() {
+            Some(c) => self.parse_charge(c),
+            None => builder.precursor_charge,
+        };
+        builder.description.precursor = Some(Precursor {
+            ions: vec![SelectedIon {
+                mz,
+                intensity,
+                charge,
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        Ok(())
+    }
+
+    /// Handle the ION_MOBILITY scan header
+    fn handle_ion_mobility(
+        &mut self,
+        key: &str,
+        value: &str,
+        builder: &mut SpectrumBuilder<C, D>,
+    ) -> Result<(), MGFError> {
+        let mut parts = value.split_ascii_whitespace();
+
+        let im = parts
+            .next_back()
+            .ok_or_else(|| {
+                MGFError::MalformedHeaderLine("No ion mobility value in ION_MOBILITY header".into())
+            })?
+            .parse::<f64>()
+            .map_err(|e| {
+                MGFError::MalformedHeaderLine(format!(
+                    "Malformed ion mobility value in ION_MOBILITY header {value}: {e}"
+                ))
+            })?;
+
+        builder
+            .description
+            .add_param(Param::new_key_value(key.to_lowercase(), value));
+
+        match &mut builder.description.precursor {
+            Some(precursor) => {
+                let ion = precursor.ion_mut();
+                ion.add_param(
+                    Param::builder()
+                        .name("ion mobility drift time")
+                        .curie(curie!(MS:1002476))
+                        .value(im)
+                        .build(),
+                );
+            }
+            None => {
+                warn!("An ION_MOBILITY parameter was found before PEPMASS. It will be skipped.")
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Handle the CHARGE scan header
+    fn handle_charge(
+        &mut self,
+        _key: &str,
+        value: &str,
+        builder: &mut SpectrumBuilder<C, D>,
+    ) -> bool {
+        builder.precursor_charge = self.parse_charge(value);
+        if let Some(ion) = builder
+            .description
+            .precursor
+            .get_or_insert_with(Precursor::default)
+            .iter_mut()
+            .last()
+        {
+            if ion.charge.is_none() {
+                ion.charge = builder.precursor_charge
+            }
+        }
+        true
+    }
+
+    /// Handle any other scan header that is not covered by other methods.
+    fn handle_other_entry_header_key(
+        &mut self,
+        key: &str,
+        value: &str,
+        builder: &mut SpectrumBuilder<C, D>,
+    ) -> bool {
+        if self.indexer().is_index_key(key) {
+            builder.description.id = self.indexer().handle_key(key, value);
+        }
+
+        match key {
+            "TITLE" => {
+                builder.description.add_param(
+                    Param::builder()
+                        .curie(curie!(MS:1000796))
+                        .name("spectrum title")
+                        .value(value)
+                        .build(),
+                );
+            }
+            _ => {
+                builder
+                    .description
+                    .add_param(Param::new_key_value(key.to_lowercase(), value));
+            }
+        }
+
+        true
+    }
+
+    /// Parse a line after `BEGIN IONS`, which may be a scan header, a peak or the `END IONS`
+    /// line.
+    ///
+    /// Returns `fale` if there is an error, otherwise, returns `true`.
     fn handle_scan_header(&mut self, line: &str, builder: &mut SpectrumBuilder<C, D>) -> bool {
         let peak_line = self.parse_peak_from_line(line, builder).unwrap_or(false);
         if peak_line {
@@ -303,76 +671,29 @@ pub(crate) trait MGFLineParsing<
             let value = value.trim();
             builder.empty_metadata = false;
             match key {
-                "TITLE" => builder.description.id = value.to_string(),
                 "RTINSECONDS" => {
-                    let scan_ev = builder
-                        .description
-                        .acquisition
-                        .first_scan_mut()
-                        .expect("Automatically adds scan event");
-                    scan_ev.start_time = value.parse::<f64>().unwrap() / 60.0
+                    if let Err(e) = self.handle_rt(key, value, builder) {
+                        self.set_error(e);
+                        return false
+                    }
                 }
                 "PEPMASS" => {
-                    let mut parts = value.split_ascii_whitespace();
-                    let mz = match parts.next() {
-                        Some(s) => s,
-                        None => {
-                            *self.state_mut() = MGFParserState::Error;
-                            *self.error_mut() = Some(MGFError::MalformedHeaderLine(
-                                "No m/z value in PEPMASS header".into(),
-                            ));
-                            return false;
-                        }
-                    };
-                    let mz: f64 = match mz.parse() {
-                        Ok(mz) => mz,
-                        Err(e) => {
-                            *self.state_mut() = MGFParserState::Error;
-                            *self.error_mut() = Some(MGFError::MalformedHeaderLine(format!(
-                                "Malformed m/z value in PEPMASS header {value}: {e}"
-                            )));
-                            return false;
-                        }
-                    };
-
-                    let intensity: f32 = parts
-                        .next()
-                        .map(|v| v.parse())
-                        .unwrap_or_else(|| Ok(0.0))
-                        .map_err(|e| warn!("Failed to parse PEPMASS intensity {value}: {e}"))
-                        .unwrap_or_default();
-                    let charge: Option<i32> = match parts.next() {
-                        Some(c) => self.parse_charge(c),
-                        None => builder.precursor_charge,
-                    };
-                    builder.description.precursor = Some(Precursor {
-                        ions: vec![SelectedIon {
-                            mz,
-                            intensity,
-                            charge,
-                            ..Default::default()
-                        }],
-                        ..Default::default()
-                    });
+                    if let Err(e) = self.handle_pepmass(key, value, builder) {
+                        self.set_error(e);
+                        return false
+                    }
                 }
                 "CHARGE" => {
-                    builder.precursor_charge = self.parse_charge(value);
-                    if let Some(ion) = builder
-                        .description
-                        .precursor
-                        .get_or_insert_with(Precursor::default)
-                        .iter_mut()
-                        .last()
-                    {
-                        if ion.charge.is_none() {
-                            ion.charge = builder.precursor_charge
-                        }
+                    self.handle_charge(key, value, builder);
+                }
+                "ION_MOBILITY" => {
+                    if let Err(e) = self.handle_ion_mobility(key, value, builder) {
+                        self.set_error(e);
+                        return false
                     }
                 }
                 &_ => {
-                    builder
-                        .description
-                        .add_param(Param::new_key_value(key.to_lowercase(), value));
+                    self.handle_other_entry_header_key(key, value, builder);
                 }
             };
 
@@ -468,6 +789,16 @@ impl<
     fn error_mut(&mut self) -> &mut Option<MGFError> {
         &mut self.error
     }
+
+    #[inline(always)]
+    fn indexer(&self) -> &Box<dyn MGFIndexing> {
+        &self.indexing
+    }
+
+    fn set_indexer(&mut self, indexer: Box<dyn MGFIndexing>) {
+        self.indexing = indexer;
+        self.index = OffsetIndex::new("spectrum".into());
+    }
 }
 
 impl<
@@ -528,8 +859,8 @@ impl<
 
             let line = buffer.trim();
 
-            // Skip empty lines
-            if line.is_empty() {
+            // Skip empty lines or comments
+            if line.is_empty() || line.starts_with("#") {
                 continue;
             }
 
@@ -590,6 +921,19 @@ impl<
         fd
     }
 
+    /// Get the current indexing strategy implementing [`MGFIndexing`]
+    #[allow(clippy::borrowed_box)]
+    pub fn indexer(&self) -> &Box<dyn MGFIndexing> {
+        &self.indexing
+    }
+
+    /// Set the indexing strategy implementing [`MGFIndexing`].
+    ///
+    /// This invalidates any existing [`OffsetIndex`].
+    pub fn set_indexer(&mut self, indexer: Box<dyn MGFIndexing>) {
+        <Self as MGFLineParsing<C, D>>::set_indexer(self, indexer);
+    }
+
     /// Create a new, unindexed MGF parser
     pub fn new(file: R) -> MGFReaderType<R, C, D> {
         let handle = io::BufReader::with_capacity(500, file);
@@ -609,6 +953,7 @@ impl<
             detail_level: DetailLevel::Full,
             run: MassSpectrometryRun::default(),
             read_counter: 0,
+            indexing: Box::new(DefaultTitleIndexing()),
         }
     }
 }
@@ -633,10 +978,19 @@ impl<
         D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
     > MGFReaderType<R, C, D>
 {
-    /// Construct a new MGFReaderType and build an offset index
+    /// Construct a new [`MGFReaderType`] and build an offset index
     /// using [`Self::build_index`]
     pub fn new_indexed(file: R) -> MGFReaderType<R, C, D> {
         let mut reader = Self::new(file);
+        reader.build_index();
+        reader
+    }
+
+    /// Construct a new [`MGFReaderType`] and build an offset index
+    /// using [`Self::build_index`] using the specified indexer.
+    pub fn new_indexed_with(file: R, indexer: Box<dyn MGFIndexing>) -> MGFReaderType<R, C, D> {
+        let mut reader = Self::new(file);
+        reader.set_indexer(indexer);
         reader.build_index();
         reader
     }
@@ -676,15 +1030,16 @@ impl<
             if buffer.starts_with(b"BEGIN IONS") {
                 found_start = true;
                 last_start = offset;
-            } else if found_start && buffer.starts_with(b"TITLE=") {
-                match str::from_utf8(&buffer[6..]) {
-                    Ok(string) => {
-                        index.insert(string.trim().to_owned(), last_start);
+            } else if found_start {
+                let string_buffer = String::from_utf8_lossy(&buffer);
+                let indexer = self.indexer();
+                if let Some((key, value)) = string_buffer.split_once('=') {
+                    if indexer.is_index_key(key) {
+                        index.insert(indexer.handle_key(key, value), last_start);
+                        found_start = false;
+                        last_start = 0;
                     }
-                    Err(_err) => {}
-                };
-                found_start = false;
-                last_start = 0;
+                }
             }
             offset += b as u64;
         }

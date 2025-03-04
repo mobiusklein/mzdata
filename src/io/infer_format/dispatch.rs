@@ -958,8 +958,8 @@ mod async_impl {
             Ok(reader)
         }
 
-        /// Create a reader from a type that supports [`tokio::io::Read`] and
-        /// [`tokio::io::Seek`].
+        /// Create a reader from a type that supports [`tokio::io::AsyncRead`] and
+        /// [`tokio::io::AsyncSeek`].
         ///
         /// # Note
         /// Not all formats can be read from an `io` type, these will

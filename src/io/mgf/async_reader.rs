@@ -13,7 +13,7 @@ use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, Deconvoluted
 
 use super::{
     super::{offset_index::OffsetIndex, utils::DetailLevel},
-    reader::{MGFLineParsing, SpectrumBuilder},
+    reader::{DefaultTitleIndexing, MGFIndexing, MGFLineParsing, SpectrumBuilder},
     MGFError, MGFParserState,
 };
 
@@ -56,6 +56,7 @@ pub struct MGFReaderType<
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
     read_counter: usize,
+    indexing: Box<dyn MGFIndexing>,
 }
 
 #[cfg(feature = "async")]
@@ -89,6 +90,15 @@ impl<R: io::AsyncRead, C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCent
     fn error_mut(&mut self) -> &mut Option<MGFError> {
         &mut self.error
     }
+
+    fn indexer(&self) -> &Box<dyn MGFIndexing> {
+        &self.indexing
+    }
+
+    fn set_indexer(&mut self, indexer: Box<dyn MGFIndexing>) {
+        self.indexing = indexer;
+        self.index = OffsetIndex::new("spectrum".into());
+    }
 }
 
 impl<R: io::AsyncRead + Unpin, C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>>
@@ -96,6 +106,19 @@ impl<R: io::AsyncRead + Unpin, C: CentroidLike + From<CentroidPeak>, D: Deconvol
 {
     async fn read_line(&mut self, buffer: &mut String) -> io::Result<usize> {
         self.handle.read_line(buffer).await
+    }
+
+    /// Get the current indexing strategy implementing [`MGFIndexing`]
+    #[allow(clippy::borrowed_box)]
+    pub fn indexer(&self) -> &Box<dyn MGFIndexing> {
+        &self.indexing
+    }
+
+    /// Set the indexing strategy implementing [`MGFIndexing`].
+    ///
+    /// This invalidates any existing [`OffsetIndex`].
+    pub fn set_indexer(&mut self, indexer: Box<dyn MGFIndexing>) {
+        <Self as MGFLineParsing<C, D>>::set_indexer(self, indexer);
     }
 
     /// Read the next spectrum from the file, if there is one.
@@ -146,7 +169,7 @@ impl<R: io::AsyncRead + Unpin, C: CentroidLike + From<CentroidPeak>, D: Deconvol
             let line = buffer.trim();
 
             // Skip empty lines
-            if line.is_empty() {
+            if line.is_empty() || line.starts_with("#") {
                 continue;
             }
 
@@ -223,6 +246,7 @@ impl<R: io::AsyncRead + Unpin, C: CentroidLike + From<CentroidPeak>, D: Deconvol
             detail_level: DetailLevel::Full,
             run: MassSpectrometryRun::default(),
             read_counter: 0,
+            indexing: Box::new(DefaultTitleIndexing()),
         }
     }
 }
@@ -240,10 +264,19 @@ impl<
         }))
     }
 
-    /// Construct a new MGFReaderType and build an offset index
+    /// Construct a new [`MGFReaderType`] and build an offset index
     /// using [`Self::build_index`]
     pub async fn new_indexed(file: R) -> MGFReaderType<R, C, D> {
         let mut reader = Self::new(file).await;
+        reader.build_index().await;
+        reader
+    }
+
+    /// Construct a new [`MGFReaderType`] and build an offset index
+    /// using [`Self::build_index`] using the specified indexer.
+    pub async fn new_indexed_with(file: R, indexer: Box<dyn MGFIndexing>) -> MGFReaderType<R, C, D> {
+        let mut reader = Self::new(file).await;
+        reader.set_indexer(indexer);
         reader.build_index().await;
         reader
     }
@@ -285,15 +318,16 @@ impl<
             if buffer.starts_with(b"BEGIN IONS") {
                 found_start = true;
                 last_start = offset;
-            } else if found_start && buffer.starts_with(b"TITLE=") {
-                match str::from_utf8(&buffer[6..]) {
-                    Ok(string) => {
-                        self.index.insert(string.trim().to_owned(), last_start);
+            } else if found_start {
+                let string_buffer = String::from_utf8_lossy(&buffer);
+                let indexer = self.indexer();
+                if let Some((key, value)) = string_buffer.split_once('=') {
+                    if indexer.is_index_key(key) {
+                        self.index.insert(indexer.handle_key(key, value), last_start);
+                        found_start = false;
+                        last_start = 0;
                     }
-                    Err(_err) => {}
-                };
-                found_start = false;
-                last_start = 0;
+                }
             }
             offset += b as u64;
         }
