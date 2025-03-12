@@ -412,6 +412,13 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
                 let reader = MzMLbReaderType::open_path(path)?;
                 Ok(Self::MzMLb(Box::new(reader)))
             }
+            #[cfg(feature = "bruker_tdf")]
+            MassSpectrometryFormat::BrukerTDF => {
+                let reader = TDFSpectrumReaderType::new(path.clone().into()).map_err(|e| {
+                    io::Error::new(io::ErrorKind::Other, e)
+                })?;
+                Ok(Self::BrukerTDF(reader))
+            }
             _ => Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "File format not supported",
@@ -1139,4 +1146,3 @@ impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mas
         Ok(self)
     }
 }
-
