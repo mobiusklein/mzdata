@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.49.0] - 2025-03-12
+
+### Added
+
+- Add basic tests for Bruker TDF file reading
+
+### Changed
+
+- Changed `MZReaderType::Unknown` to require `Sync`
+
 ## [0.48.3] - 2025-03-12
 
 ### Added
@@ -706,7 +716,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.48.3...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.49.0...HEAD
+[0.49.0]: https://github.com/mobiusklein/mzdata/compare/v0.48.3...v0.49.0
 [0.48.3]: https://github.com/mobiusklein/mzdata/compare/v0.48.2...v0.48.3
 [0.48.2]: https://github.com/mobiusklein/mzdata/compare/v0.48.1...v0.48.2
 [0.48.1]: https://github.com/mobiusklein/mzdata/compare/v0.48.0...v0.48.1
