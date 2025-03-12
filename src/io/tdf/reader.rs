@@ -1525,3 +1525,36 @@ pub fn is_tdf<P: AsRef<Path>>(path: P) -> bool {
     }
     true
 }
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_tdf_spectrum() -> io::Result<()> {
+        let mut reader = TDFSpectrumReader::open_path("test/data/diaPASEF.d")?;
+        eprintln!("{}", reader.len());
+        let s = reader.get_spectrum_by_index(0).unwrap();
+        assert!(s.peaks.is_some());
+        assert_eq!(s.signal_continuity(), SignalContinuity::Centroid);
+        assert_eq!(s.ms_level(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_tdf_frame() -> io::Result<()> {
+        let mut reader = TDFFrameReader::new("test/data/diaPASEF.d").map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        eprintln!("{}", reader.len());
+        let s = reader.get_frame_by_index(0).unwrap();
+        assert!(s.features.is_none());
+        assert_eq!(s.signal_continuity(), SignalContinuity::Centroid);
+        assert_eq!(s.ms_level(), 1);
+
+        let s = reader.get_frame_by_index(1).unwrap();
+        assert!(s.features.is_none());
+        assert_eq!(s.signal_continuity(), SignalContinuity::Centroid);
+        assert_eq!(s.ms_level(), 2);
+        Ok(())
+    }
+}
