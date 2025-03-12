@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.48.3] - 2025-03-12
+
+### Added
+
+- Add BrukerTDF support to `MZReaderType::open_path`
+
 ## [0.48.2] - 2025-02-20
 
 ### Added
@@ -700,7 +706,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.48.2...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.48.3...HEAD
+[0.48.3]: https://github.com/mobiusklein/mzdata/compare/v0.48.2...v0.48.3
 [0.48.2]: https://github.com/mobiusklein/mzdata/compare/v0.48.1...v0.48.2
 [0.48.1]: https://github.com/mobiusklein/mzdata/compare/v0.48.0...v0.48.1
 [0.48.0]: https://github.com/mobiusklein/mzdata/compare/v0.47.0...v0.48.0
