@@ -63,7 +63,7 @@ pub enum MZReaderType<
     MzMLb(Box<MzMLbReaderType<C, D>>),
     #[cfg(feature = "bruker_tdf")]
     BrukerTDF(TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D>),
-    Unknown(Box<dyn SpectrumSourceWithMetadata<C, D, MultiLayerSpectrum<C, D>> + Send>, PhantomData<R>),
+    Unknown(Box<dyn SpectrumSourceWithMetadata<C, D, MultiLayerSpectrum<C, D>> + Send + Sync>, PhantomData<R>),
 }
 
 impl<
@@ -1144,5 +1144,21 @@ impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mas
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
         immsfmt_dispatch!(self, reader, {reader.start_from_time(time)?;});
         Ok(self)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[cfg(feature = "bruker_tdf")]
+    #[test]
+    fn test_tdf() -> io::Result<()> {
+        let mut reader = MZReader::open_path("test/data/diaPASEF.d")?;
+        assert_eq!(reader.as_format(), MassSpectrometryFormat::BrukerTDF);
+        eprintln!("{}", reader.len());
+        let s = reader.get_spectrum_by_index(0).unwrap();
+        assert!(s.peaks.is_some());
+        Ok(())
     }
 }
