@@ -94,6 +94,7 @@ serde = [
     "mzsignal?/serde",
     "chrono/serde",
     "dep:serde_json",
+    "dep:serde_with",
 ]
 
 async = ["async_partial", "tokio/fs"]
@@ -111,6 +112,8 @@ proxi-async = ["proxi", "dep:futures"]
 regex = "1"
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
+serde_with = { version = "3.12.0", optional = true }
+
 quick-xml = { version = "0.30", features = ["serialize"], optional = true }
 num-traits = "0.2"
 log = "0.4.20"
@@ -170,6 +173,7 @@ timsrust = { version = "0.4.1", default-features = false, features = [
 
 parking_lot = { version = "0.12.3", optional = true }
 pin-project-lite = { version = "0.2.16", optional = true }
+
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

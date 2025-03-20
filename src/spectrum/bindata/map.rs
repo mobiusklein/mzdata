@@ -365,6 +365,7 @@ macro_rules! _populate_stacked_array_from {
 /// Represent a set of [`BinaryArrayMap`] that has been split across the
 /// ion mobility dimension.
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", serde_with::serde_as)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BinaryArrayMap3D {
     pub ion_mobility_dimension: Vec<f64>,
@@ -372,6 +373,7 @@ pub struct BinaryArrayMap3D {
     pub ion_mobility_unit: Unit,
     pub arrays: Vec<BinaryArrayMap>,
     pub additional_arrays: BinaryArrayMap,
+    #[cfg_attr(feature = "serde", serde_as(as = "Vec<(_, _)>"))]
     ion_mobility_index: HashMap<NonNaNF64, usize>,
 }
 
