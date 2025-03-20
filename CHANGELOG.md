@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.50.0] - 2025-03-20
+
+### Added
+
+- Add a more efficient implementation of `nth` to some `SpectrumSource`-based iterators and add `get_group_by_index` to `SpectrumSource`
+- Add `MZReaderType::open_gzipped_read_seek` to conveniently handle gzipped files
+- Add `MZReaderType::open_gzipped_read` to read non-seek-able gzipped streams. Less efficient buffering but does the job.
+
+### Changed
+
+- Change `BinaryArrayMap3D`'s serialization to serialize IM-array map pairs in an array instead of a map, requiring `serde_with`
+
 ## [0.49.0] - 2025-03-12
 
 ### Added
@@ -716,7 +728,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.49.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.50.0...HEAD
+[0.50.0]: https://github.com/mobiusklein/mzdata/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/mobiusklein/mzdata/compare/v0.48.3...v0.49.0
 [0.48.3]: https://github.com/mobiusklein/mzdata/compare/v0.48.2...v0.48.3
 [0.48.2]: https://github.com/mobiusklein/mzdata/compare/v0.48.1...v0.48.2
