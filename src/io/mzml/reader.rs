@@ -30,10 +30,7 @@ use crate::{
         },
         chromatogram::{Chromatogram, ChromatogramLike},
         scan_properties::*,
-        spectrum_types::{
-            CentroidSpectrumType,
-            MultiLayerSpectrum, RawSpectrum, Spectrum,
-        },
+        spectrum_types::{CentroidSpectrumType, MultiLayerSpectrum, RawSpectrum, Spectrum},
         HasIonMobility,
     },
 };
@@ -343,9 +340,7 @@ pub struct MzMLSpectrumBuilder<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike> Default
-    for MzMLSpectrumBuilder<'_, C, D>
-{
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> Default for MzMLSpectrumBuilder<'_, C, D> {
     fn default() -> Self {
         Self {
             params: Default::default(),
@@ -1735,6 +1730,11 @@ impl<
     }
 }
 
+enum IndexRecoveryOperation {
+    EOLMismatchSuspected,
+    IOFailure(io::Error),
+}
+
 impl<
         R: SeekRead,
         C: CentroidLike + BuildFromArrayMap,
@@ -1762,6 +1762,53 @@ impl<
                 }
             }
         }
+        match self.verify_index() {
+            Ok(()) => {
+                // No extra work required, the index checks out.
+            }
+            Err(e) => match e {
+                IndexRecoveryOperation::EOLMismatchSuspected => {
+                    warn!("Rebuilding index, EOL mismatch suspected");
+                    self.build_index();
+                },
+                IndexRecoveryOperation::IOFailure(err) => {
+                    panic!("An IO error occurred while validating the index: {err}")
+                }
+            },
+        }
+    }
+
+    fn verify_index(&mut self) -> Result<(), IndexRecoveryOperation> {
+        let n = self.spectrum_index.len();
+        if n > 0 {
+            // Try to pick a spectrum that's close to the beginning of the file to avoid large
+            // amounts of wasted scanning for non-linear files, but pick one far enough in it would
+            // be affected by byte drift.
+            let center = (n / 2).min(100);
+            let dl = self.detail_level;
+            self.set_detail_level(DetailLevel::MetadataOnly);
+            let s = self.get_spectrum_by_index(center);
+            self.set_detail_level(dl);
+            let s_found = s.is_none();
+            if s_found {
+                return Ok(());
+            }
+            match self.handle.fill_buf() {
+                Ok(buf) => {
+                    if let Some(i) = buf.iter().position(|b| *b == b'\r') {
+                        if let Some(b2) = buf.get(i + 1) {
+                            let has_windows_eol = *b2 == b'\n';
+                            if has_windows_eol {
+                                warn!("Carriage return line endings detected and offset index is not valid");
+                                return Err(IndexRecoveryOperation::EOLMismatchSuspected);
+                            }
+                        }
+                    }
+                }
+                Err(e) => return Err(IndexRecoveryOperation::IOFailure(e)),
+            }
+        }
+        Ok(())
     }
 
     pub fn with_buffer_capacity_and_detail_level_indexed(
@@ -1937,10 +1984,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<fs::File, C, D>
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<fs::File, C, D>
 {
     fn open_file(source: fs::File) -> io::Result<Self> {
         Ok(Self::new_indexed(source))
@@ -2706,6 +2751,19 @@ mod test {
         let base_peak = prec.peaks().base_peak();
         eprintln!("{base_peak:?} {tic} {raw_tic}");
 
+        Ok(())
+    }
+
+
+    #[test_log::test]
+    fn test_iterator_specialization() -> io::Result<()> {
+        let path = path::Path::new("./test/data/small.mzML");
+        let mut reader = MzMLReader::open_path(path)?;
+
+        let spec = reader.nth(10).unwrap();
+        reader.reset();
+        let spec2 = reader.iter().nth(10).unwrap();
+        assert_eq!(spec.id(), spec2.id());
         Ok(())
     }
 

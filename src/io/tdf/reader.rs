@@ -898,6 +898,11 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         self.index += 1;
         frame.ok().unwrap_or_default()
     }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.index += n;
+        self.next()
+    }
 }
 
 impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge>
@@ -1126,6 +1131,13 @@ impl<
 
     fn next(&mut self) -> Option<Self::Item> {
         self.frame_reader.next().map(|f| {
+            self.frame_reader
+                .frame_to_spectrum(f, self.peak_merging_tolerance)
+        })
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.frame_reader.nth(n).map(|f| {
             self.frame_reader
                 .frame_to_spectrum(f, self.peak_merging_tolerance)
         })
@@ -1446,7 +1458,7 @@ fn frame_to_description(
             Param::builder()
                 .name("window group")
                 .value(Value::Int(pasef.window_group as i64))
-                .build()
+                .build(),
         );
 
         if frame_slice.is_none() {
@@ -1526,7 +1538,6 @@ pub fn is_tdf<P: AsRef<Path>>(path: P) -> bool {
     true
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1544,7 +1555,8 @@ mod test {
 
     #[test]
     fn test_tdf_frame() -> io::Result<()> {
-        let mut reader = TDFFrameReader::new("test/data/diaPASEF.d").map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let mut reader = TDFFrameReader::new("test/data/diaPASEF.d")
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         eprintln!("{}", reader.len());
         let s = reader.get_frame_by_index(0).unwrap();
         assert!(s.features.is_none());

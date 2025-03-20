@@ -1226,6 +1226,11 @@ impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike> Iterator
     fn next(&mut self) -> Option<Self::Item> {
         self.read_next_spectrum()
     }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.index += n;
+        self.next()
+    }
 }
 
 impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>

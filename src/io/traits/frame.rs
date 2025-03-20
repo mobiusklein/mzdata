@@ -129,6 +129,14 @@ pub trait IonMobilityFrameSource<
         }
     }
 
+    /// Get the nth [`IonMobilityFrameGroup`] from this source
+    fn get_group_by_index(&mut self, index: usize) -> Option<IonMobilityFrameGroup<C, D, S>>
+    where
+        Self: Sized
+    {
+        self.groups().nth(index)
+    }
+
     /// Open a new iterator over this stream
     fn iter(&mut self) -> IonMobilityFrameIterator<C, D, S, Self>
     where
@@ -210,6 +218,11 @@ impl<
         let result = self.source.get_frame_by_index(self.index);
         self.index += 1;
         result
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.index += n;
+        self.next()
     }
 }
 

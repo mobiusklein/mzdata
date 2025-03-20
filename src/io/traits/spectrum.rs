@@ -146,6 +146,14 @@ pub trait SpectrumSource<
         SpectrumIterator::new(self)
     }
 
+    /// Get the nth [`SpectrumGroup`] from this source
+    fn get_group_by_index(&mut self, index: usize) -> Option<SpectrumGroup<C, D, S>>
+    where
+        Self: Sized
+    {
+        self.groups().nth(index)
+    }
+
     /// Create a new [`SpectrumIterator`] over `self` and use that state to drive a [`SpectrumGroupingIterator`]
     fn groups(&mut self) -> SpectrumGroupingIterator<SpectrumIterator<'_, C, D, S, Self>, C, D, S>
     where
@@ -217,6 +225,11 @@ impl<
         let result = self.source.get_spectrum_by_index(self.index);
         self.index += 1;
         result
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.index += n;
+        self.next()
     }
 }
 
