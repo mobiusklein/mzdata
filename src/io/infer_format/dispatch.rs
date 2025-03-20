@@ -1,6 +1,7 @@
 #![allow(clippy::type_complexity, clippy::large_enum_variant)]
 use std::{fmt::Debug, fs, io, marker::PhantomData, path::{self, Path}};
 
+use flate2::read::GzDecoder;
 use mzpeaks::{prelude::FeatureLike, CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, KnownCharge};
 use mzpeaks::{feature::{ChargedFeature, Feature}, IonMobility, Mass, MZ};
 
@@ -338,7 +339,7 @@ impl<R: io::Read,
     /// # Note
     /// Not all formats can be read from an `io` type, these will
     /// fail to open and an error will be returned
-    pub fn open_read(stream: R) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, Self>> {
+    pub fn open_read(stream: R) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, MZReaderType<PreBufferedStream<R>, C, D>>> {
         let mut stream = PreBufferedStream::new(stream)?;
         let (fmt, gzipped) = infer_from_stream(&mut stream)?;
 
@@ -351,6 +352,39 @@ impl<R: io::Read,
             MassSpectrometryFormat::MGF => Self::MGF(MGFReaderType::new(stream)),
             #[cfg(feature = "mzml")]
             MassSpectrometryFormat::MzML => Self::MzML(MzMLReaderType::new(stream)),
+            _ => {
+                return Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
+            }
+        };
+        Ok(StreamingSpectrumIterator::new(reader))
+    }
+
+    /// Create a reader from a type that supports [`io::Read`] is gzip-compressed.
+    ///
+    /// This will internally wrap the file in a [`PreBufferedStream`] for metadata
+    /// reading, but does not construct an index for full random access. Attempting
+    /// to use the reader to access spectra may move the reader forwards, but it can
+    /// never go backwards.
+    ///
+    /// # Note
+    /// This method will return an error if the stream is **not** gzip-compressed.
+    ///
+    /// Not all formats can be read from an `io` type, these will
+    /// fail to open and an error will be returned
+    pub fn open_gzipped_read(stream: R) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, MZReaderType<PreBufferedStream<GzDecoder<PreBufferedStream<R>>>, C, D>>> {
+        let mut stream = PreBufferedStream::new(stream)?;
+        let (fmt, gzipped) = infer_from_stream(&mut stream)?;
+
+        if !gzipped {
+            return Err(io::Error::new(io::ErrorKind::Unsupported, "This method only supports gzipped streams"))
+        }
+        let mut stream = PreBufferedStream::new(GzDecoder::new(stream))?;
+
+        let reader = match fmt {
+            #[cfg(feature = "mgf")]
+            MassSpectrometryFormat::MGF => MZReaderType::MGF(MGFReaderType::new(stream)),
+            #[cfg(feature = "mzml")]
+            MassSpectrometryFormat::MzML => MZReaderType::MzML(MzMLReaderType::new(stream)),
             _ => {
                 return Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
             }
