@@ -11,6 +11,7 @@ use crate::{io::{Generic3DIonMobilityFrameSource,
     PreBufferedStream,
     RandomAccessIonMobilityFrameIterator},
     spectrum::MultiLayerIonMobilityFrame};
+use crate::io::{traits::{MZFileReader, RandomAccessSpectrumIterator, SpectrumSource}, RestartableGzDecoder};
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::MzMLbReaderType;
 
@@ -18,7 +19,7 @@ pub use crate::io::mzmlb::MzMLbReaderType;
 use crate::io::mgf::MGFReaderType;
 #[cfg(feature = "mzml")]
 use crate::io::mzml::MzMLReaderType;
-use crate::io::traits::{RandomAccessSpectrumIterator, SpectrumSource, MZFileReader};
+
 use crate::meta::MSDataFileMetadata;
 use crate::spectrum::bindata::BuildFromArrayMap;
 use crate::spectrum::MultiLayerSpectrum;
@@ -252,6 +253,31 @@ impl<R: io::Read + io::Seek,
             MassSpectrometryFormat::MGF => Ok(Self::MGF(MGFReaderType::new_indexed(stream))),
             #[cfg(feature = "mzml")]
             MassSpectrometryFormat::MzML => Ok(Self::MzML(MzMLReaderType::new_indexed(stream))),
+            _ => {
+                Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
+            }
+        }
+    }
+
+    /// Create a reader from a type that supports [`io::Read`] and
+    /// [`io::Seek`] that is gzip-compressed.
+    ///
+    /// # Note
+    /// This method will return an error if the stream is **not** gzip-compressed.
+    ///
+    /// Not all formats can be read from an `io` type, these will
+    /// fail to open and an error will be returned
+    pub fn open_gzipped_read_seek(mut stream: R) -> io::Result<MZReaderType<RestartableGzDecoder<io::BufReader<R>>, C, D>> {
+        let (fmt, gzipped) = infer_from_stream(&mut stream)?;
+        if !gzipped {
+            return Err(io::Error::new(io::ErrorKind::Unsupported, "This method does not support non-gzipped streams"))
+        }
+        let stream = RestartableGzDecoder::new(io::BufReader::new(stream));
+        match fmt {
+            #[cfg(feature = "mgf")]
+            MassSpectrometryFormat::MGF => Ok(MZReaderType::MGF(MGFReaderType::new_indexed(stream))),
+            #[cfg(feature = "mzml")]
+            MassSpectrometryFormat::MzML => Ok(MZReaderType::MzML(MzMLReaderType::new_indexed(stream))),
             _ => {
                 Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
             }
@@ -1151,14 +1177,16 @@ impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mas
 mod test {
     use super::*;
 
-    #[cfg(feature = "bruker_tdf")]
     #[test]
     fn test_tdf() -> io::Result<()> {
-        let mut reader = MZReader::open_path("test/data/diaPASEF.d")?;
-        assert_eq!(reader.as_format(), MassSpectrometryFormat::BrukerTDF);
-        eprintln!("{}", reader.len());
-        let s = reader.get_spectrum_by_index(0).unwrap();
-        assert!(s.peaks.is_some());
+        #[cfg(feature = "bruker_tdf")]
+        {
+            let mut reader = MZReader::open_path("test/data/diaPASEF.d")?;
+            assert_eq!(reader.as_format(), MassSpectrometryFormat::BrukerTDF);
+            eprintln!("{}", reader.len());
+            let s = reader.get_spectrum_by_index(0).unwrap();
+            assert!(s.peaks.is_some());
+        }
         Ok(())
     }
 }
