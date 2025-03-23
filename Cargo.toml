@@ -51,7 +51,7 @@ default = ["zlib-ng-compat", "mgf", "mzml"]
 checksum = ["dep:md5", "dep:sha1", "dep:base16ct"]
 
 mgf = []
-mzml = ["dep:quick-xml", "checksum"]
+mzml = ["dep:quick-xml", "checksum", "dep:memchr"]
 
 
 openblas = ["mzsignal", "mzsignal/openblas"]
@@ -84,7 +84,13 @@ thermo = [
     "checksum",
 ]
 
-bruker_tdf = ["dep:timsrust", "dep:parking_lot", "dep:rusqlite", "mzsignal", "checksum"]
+bruker_tdf = [
+    "dep:timsrust",
+    "dep:parking_lot",
+    "dep:rusqlite",
+    "mzsignal",
+    "checksum",
+]
 
 doc-only = []
 
@@ -107,6 +113,7 @@ async_partial = [
 
 proxi = ["dep:reqwest", "serde"]
 proxi-async = ["proxi", "dep:futures"]
+libloading = ["dep:libloading"]
 
 [dependencies]
 regex = "1"
@@ -173,6 +180,8 @@ timsrust = { version = "0.4.1", default-features = false, features = [
 
 parking_lot = { version = "0.12.3", optional = true }
 pin-project-lite = { version = "0.2.16", optional = true }
+memchr = { version = "2.7.4", optional = true }
+libloading = { version = "0.8.6", optional = true }
 
 
 [dev-dependencies]

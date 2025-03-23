@@ -56,7 +56,8 @@ macro_rules! attrib {
         // Because quick_xml::escape does not escape newlines
         let decoded = unsafe { std::str::from_utf8_unchecked(&value) };
         let mut escaped_value = escape::escape(&decoded);
-        if escaped_value.contains(['\n', '\r']) {
+
+        if memchr::memchr2(b'\n', b'\r', &value).is_some() {
             escaped_value = Cow::Owned(escaped_value.replace('\n', "&#10;"));
             if escaped_value.contains('\r') {
                 escaped_value = Cow::Owned(escaped_value.replace('\r', "&#13;"));
