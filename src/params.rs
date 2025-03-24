@@ -1195,7 +1195,13 @@ macro_rules! find_param_method {
         }
     };
     ($meth:ident, $curie:expr, $conv:expr, $result:ty) => {
-        $crate::find_param_method!($meth, $curie, $conv, $result, "Find a parameter by its CURIE");
+        $crate::find_param_method!(
+            $meth,
+            $curie,
+            $conv,
+            $result,
+            "Find a parameter by its CURIE"
+        );
     };
     ($meth:ident, $curie:expr, $conv:expr, $result:ty, $desc:literal) => {
         #[doc=$desc]
@@ -1304,7 +1310,9 @@ impl FromStr for CURIE {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut tokens = s.split(':');
-        let cv = tokens.next().ok_or(CURIEParsingError::MissingNamespaceSeparator)?;
+        let cv = tokens
+            .next()
+            .ok_or(CURIEParsingError::MissingNamespaceSeparator)?;
         let accession = tokens.next();
         if accession.is_none() {
             Err(CURIEParsingError::MissingNamespaceSeparator)
@@ -2126,8 +2134,7 @@ pub trait ParamDescribedRead {
     /// This is equivalent to [`ParamDescribed::get_param_by_curie`] on `accession.parse::<CURIE>().unwrap()`
     fn get_param_by_accession(&self, accession: &str) -> Option<&Param> {
         let (cv, acc_num) = curie_to_num(accession);
-        self
-            .params()
+        self.params()
             .iter()
             .find(|&param| param.accession == acc_num && param.controlled_vocabulary == cv)
     }
@@ -2212,8 +2219,7 @@ pub trait ParamDescribed {
     /// This is equivalent to [`ParamDescribed::get_param_by_curie`] on `accession.parse::<CURIE>().unwrap()`
     fn get_param_by_accession(&self, accession: &str) -> Option<&Param> {
         let (cv, acc_num) = curie_to_num(accession);
-        self
-            .params()
+        self.params()
             .iter()
             .find(|&param| param.accession == acc_num && param.controlled_vocabulary == cv)
     }
@@ -2318,9 +2324,17 @@ pub enum Unit {
 
     // Collision Energy
     Electronvolt,
-    PercentElectronVolt,
     Volt,
 
+    Celsius,
+    Kelvin,
+
+    Pascal,
+    Psi,
+
+    MicrolitersPerMinute,
+
+    Percent,
     Dimensionless,
 }
 
@@ -2344,7 +2358,15 @@ impl Unit {
             Self::CountsPerSecond => ("MS:1000814", "counts per second"),
 
             Self::Electronvolt => ("UO:0000266", "electronvolt"),
-            Self::PercentElectronVolt => ("UO:0000187", "percent"),
+            Self::Percent => ("UO:0000187", "percent"),
+
+            Self::Celsius => ("UO:0000027", "degree Celsius"),
+            Self::Kelvin => ("UO:0000012", "kelvin"),
+
+            Self::Pascal => ("UO:0000110", "pascal"),
+            Self::Psi => ("UO:0010052", "pounds per square inch"),
+
+            Self::MicrolitersPerMinute => ("UO:0000271", "microliters per minute"),
 
             Self::Dimensionless => ("UO:0000186", "dimensionless unit"),
 
@@ -2369,7 +2391,15 @@ impl Unit {
             b"counts per second" => Self::CountsPerSecond,
 
             b"electronvolt" => Self::Electronvolt,
-            b"percent" => Self::PercentElectronVolt,
+            b"percent" => Self::Percent,
+
+            b"degree Celsius" => Self::Celsius,
+            b"kelvin" => Self::Kelvin,
+
+            b"pascal" => Self::Pascal,
+            b"pounds per square inch" => Self::Psi,
+
+            b"microliters per minute" => Self::MicrolitersPerMinute,
 
             b"dimensionless unit" => Self::Dimensionless,
             b"volt-second per square centimeter" => Self::VoltSecondPerSquareCentimeter,
@@ -2395,11 +2425,19 @@ impl Unit {
             b"MS:1000814" => Self::CountsPerSecond,
 
             b"UO:0000266" => Self::Electronvolt,
-            b"UO:0000187" => Self::PercentElectronVolt,
+            b"UO:0000187" => Self::Percent,
 
             b"UO:0000186" => Self::Dimensionless,
 
             b"MS:1002814" => Self::VoltSecondPerSquareCentimeter,
+
+            b"UO:0000027" => Self::Celsius,
+            b"UO:0000012" => Self::Kelvin,
+
+            b"UO:0000110" => Self::Pascal,
+            b"UO:0010052" => Self::Psi,
+
+            b"UO:0000271" => Self::MicrolitersPerMinute,
 
             _ => Unit::Unknown,
         }
@@ -2453,7 +2491,7 @@ impl Unit {
             CURIE {
                 controlled_vocabulary: ControlledVocabulary::UO,
                 accession: 187,
-            } => Self::PercentElectronVolt,
+            } => Self::Percent,
             CURIE {
                 controlled_vocabulary: ControlledVocabulary::UO,
                 accession: 186,
@@ -2462,6 +2500,26 @@ impl Unit {
                 controlled_vocabulary: ControlledVocabulary::MS,
                 accession: 1002814,
             } => Self::VoltSecondPerSquareCentimeter,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 27,
+            } => Self::Celsius,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 12,
+            } => Unit::Kelvin,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 110,
+            } => Unit::Pascal,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 10052,
+            } => Self::Psi,
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 271,
+            } => Self::MicrolitersPerMinute,
             _ => Unit::Unknown,
         }
     }
@@ -2511,7 +2569,7 @@ impl Unit {
                 controlled_vocabulary: ControlledVocabulary::UO,
                 accession: 266,
             }),
-            Self::PercentElectronVolt => Some(CURIE {
+            Self::Percent => Some(CURIE {
                 controlled_vocabulary: ControlledVocabulary::UO,
                 accession: 187,
             }),
@@ -2525,6 +2583,31 @@ impl Unit {
                 controlled_vocabulary: ControlledVocabulary::MS,
                 accession: 1002814,
             }),
+
+            Self::Celsius => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 27,
+            }),
+
+            Self::Kelvin => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 12,
+            }),
+
+            Self::Pascal => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 110,
+            }),
+            Self::Psi => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 10052,
+            }),
+
+            Self::MicrolitersPerMinute => Some(CURIE {
+                controlled_vocabulary: ControlledVocabulary::UO,
+                accession: 271,
+            }),
+
             _ => None,
         }
     }
