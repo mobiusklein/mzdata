@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::io::{BufWriter, Write};
 use std::marker::PhantomData;
-use std::{borrow::Cow, io, mem};
+use std::{io, mem};
 
 use log::warn;
 use mzpeaks::feature::FeatureLike;
@@ -51,12 +51,14 @@ macro_rules! bstart {
 
 macro_rules! attrib {
     ($name:expr, $value:expr, $elt:ident) => {
-        let key = $name.as_bytes();
-        let value = $value.as_bytes();
-        // Because quick_xml::escape does not escape newlines
-        let decoded = unsafe { std::str::from_utf8_unchecked(&value) };
-        let escaped_value = escape::escape(&decoded);
-        $elt.push_attribute((key, escaped_value.as_bytes()));
+        {
+            let key = $name.as_bytes();
+            let value = $value.as_bytes();
+            // Because quick_xml::escape does not escape newlines
+            let decoded = unsafe { std::str::from_utf8_unchecked(&value) };
+            let escaped_value = escape::escape(&decoded);
+            $elt.push_attribute((key, escaped_value.as_bytes()));
+        }
     };
 }
 
@@ -277,7 +279,7 @@ impl<W: io::Write> InnerXMLWriter<W> {
 
         attrib!("name", param.name(), elt);
         let param_val = param.value();
-        if !param_val.is_empty() {
+        if !param_val.is_empty() && !param_val.is_buffer() {
             attrib!("value", param_val, elt);
         }
         match param.unit() {
