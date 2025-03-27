@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.51.0] - 2025-03-27
+
+### Added
+
+- Add temperature and pressure units
+- Avoid attempting to serialize a parameter value that is a buffer.
+
+### Fixed
+
+- Change attribute newline detection to use `memchr`
+
+### Removed
+
+- Remove newline escaping in mzML attribute values, trust the XML library to escape what needs to be
+
 ## [0.50.0] - 2025-03-20
 
 ### Added
@@ -728,7 +743,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.50.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.51.0...HEAD
+[0.51.0]: https://github.com/mobiusklein/mzdata/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/mobiusklein/mzdata/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/mobiusklein/mzdata/compare/v0.48.3...v0.49.0
 [0.48.3]: https://github.com/mobiusklein/mzdata/compare/v0.48.2...v0.48.3
