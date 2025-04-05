@@ -536,6 +536,7 @@ pub struct PROXIParam {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PROXIAccession {
     #[serde(
+        untagged,
         serialize_with = "curie_serialize",
         deserialize_with = "curie_deserialize"
     )]
