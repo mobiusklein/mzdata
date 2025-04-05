@@ -51,7 +51,7 @@ use super::{
     },
 };
 
-const PEAK_MERGE_TOLERANCE: Tolerance = Tolerance::Da(0.01);
+const PEAK_MERGE_TOLERANCE: Tolerance = Tolerance::PPM(10.0);
 
 fn inverse_reduce_ion_mobility_param(value: f64) -> Param {
     ControlledVocabulary::MS
@@ -518,7 +518,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         frame: MultiLayerIonMobilityFrame<C, D>,
         error_tolerance: Tolerance,
     ) -> MultiLayerSpectrum<CP, DP> {
-        let (feature_d, descr) = frame.into_features_and_parts();
+        let (feature_d, mut descr) = frame.into_features_and_parts();
         match feature_d {
             crate::spectrum::FeatureDataLevel::Missing => MultiLayerSpectrum {
                 description: descr.into(),
@@ -534,13 +534,15 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                     error_tolerance,
                 )
                 .unwrap();
+                descr.signal_continuity = SignalContinuity::Centroid;
                 let arrays = arrays.unstack().unwrap();
-                MultiLayerSpectrum {
+                let spec = MultiLayerSpectrum {
                     description: descr.into(),
                     arrays: Some(arrays),
                     peaks: Some(peaks),
                     deconvoluted_peaks: None,
-                }
+                };
+                spec
             }
             _ => panic!("Failed to extract array data"),
         }
