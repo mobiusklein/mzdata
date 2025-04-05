@@ -1200,6 +1200,9 @@ where
     pub fn try_build_peaks(
         &mut self,
     ) -> Result<RefPeakDataLevel<'_, C, D>, SpectrumConversionError> {
+        if self.peaks.is_some() || self.deconvoluted_peaks.is_some() {
+            return Ok(self.peaks())
+        }
         if matches!(self.signal_continuity(), SignalContinuity::Centroid) {
             if let Some(arrays) = self.arrays.as_ref() {
                 if let ArraysAvailable::Ok = D::has_arrays_for(arrays) {
