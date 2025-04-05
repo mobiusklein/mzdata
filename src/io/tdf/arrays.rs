@@ -1,6 +1,9 @@
-use std::{iter::FromIterator, ops::{Range, RangeBounds}};
+use std::{
+    iter::FromIterator,
+    ops::{Range, RangeBounds},
+};
 
-use mzpeaks::MZPeakSetType;
+use mzpeaks::{feature::Feature, IonMobility, MZPeakSetType, MZ};
 use timsrust::{converters::ConvertableDomain, Metadata};
 
 use crate::{
@@ -13,7 +16,7 @@ use crate::{
     },
 };
 
-use mzsignal::feature_mapping::IMMSMapExtracter;
+use mzsignal::feature_mapping::{FeatureGraphBuilder, IMMSMapExtracter};
 
 pub struct FrameToArraysMapper<'a> {
     frame: &'a timsrust::Frame,
@@ -54,7 +57,11 @@ impl<'a> FrameToArraysMapper<'a> {
                 break;
             }
             if scan_end > self.frame.tof_indices.len() {
-                log::warn!("Limiting scan_end {scan_end} for index {i} ({}, {})", self.frame.tof_indices.len(), self.frame.intensities.len());
+                log::warn!(
+                    "Limiting scan_end {scan_end} for index {i} ({}, {})",
+                    self.frame.tof_indices.len(),
+                    self.frame.intensities.len()
+                );
                 scan_end = self.frame.tof_indices.len();
             }
             let width = scan_end.saturating_sub(scan_begin);
@@ -71,12 +78,11 @@ impl<'a> FrameToArraysMapper<'a> {
                         &self.metadata.mz_converter.convert(*tof_idx).to_le_bytes(),
                     )
                 });
-            (scan_begin..(scan_begin + width))
-                .for_each(|idx| {
-                    intensity_array_bytes.extend_from_slice(
-                        &((self.frame.intensities[idx] as u64) as f32).to_le_bytes(),
-                    );
-                });
+            (scan_begin..(scan_begin + width)).for_each(|idx| {
+                intensity_array_bytes.extend_from_slice(
+                    &((self.frame.intensities[idx] as u64) as f32).to_le_bytes(),
+                );
+            });
             let drift = self.metadata.im_converter.convert((i + first_scan) as u32);
             im_dimension.push(drift);
 
@@ -103,7 +109,6 @@ impl<'a> FrameToArraysMapper<'a> {
         im_dimension.reverse();
         arrays.reverse();
 
-
         BinaryArrayMap3D::from_ion_mobility_dimension_and_arrays(
             im_dimension,
             ArrayType::MeanInverseReducedIonMobilityArray,
@@ -120,7 +125,8 @@ pub fn consolidate_peaks<CP: CentroidLike + From<CentroidPeak>>(
     error_tolerance: Tolerance,
 ) -> Result<MZPeakSetType<CP>, ArrayRetrievalError> {
     let peaks: Result<Vec<_>, ArrayRetrievalError> = scan_range
-        .clone().rev()
+        .clone()
+        .rev()
         .map(|i| -> Result<(f64, PeakSet), ArrayRetrievalError> {
             let im = metadata.im_converter.convert(i);
             if let Some(arrays_point) = arrays.get_ion_mobility(im) {
@@ -145,11 +151,26 @@ pub fn consolidate_peaks<CP: CentroidLike + From<CentroidPeak>>(
     }
 
     if peaks.len() == 1 {
-        return Ok(peaks.into_iter().next().unwrap().1.into_iter().map(|p| p.into()).collect());
+        return Ok(peaks
+            .into_iter()
+            .next()
+            .unwrap()
+            .1
+            .into_iter()
+            .map(|p| p.into())
+            .collect());
     }
 
     let mut extracter = IMMSMapExtracter::from_iter(peaks);
-    let features = extracter.extract_features(error_tolerance, 2, f64::INFINITY);
+    let features = extracter.extract_features(error_tolerance, 2, 0.01);
+    let merger = mzsignal::feature_mapping::FeatureMerger::<
+        MZ,
+        IonMobility,
+        Feature<MZ, IonMobility>,
+    >::default();
+    let features = merger
+        .bridge_feature_gaps(features, error_tolerance, f64::INFINITY)
+        .features;
 
     let peaks: MZPeakSetType<CP> = features
         .iter()
