@@ -13,11 +13,11 @@ use super::MultiLayerSpectrum;
 pub enum HasIonMobility {
     /// No ion mobility measurement found
     #[default]
-    None,
+    None = 0,
     /// A single ion mobility point measurement
-    Point,
+    Point = 1,
     /// Multiple ion mobility point measurements along an axis
-    Dimension
+    Dimension = 2
 }
 
 impl PartialOrd for HasIonMobility {
