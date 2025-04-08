@@ -45,7 +45,7 @@ impl Ord for HasIonMobility {
             HasIonMobility::Dimension => {
                 match other {
                     HasIonMobility::Dimension => Ordering::Equal,
-                    _ => Ordering::Less
+                    _ => Ordering::Greater
                 }
             },
         }

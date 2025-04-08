@@ -1006,7 +1006,7 @@ pub trait IntoIonMobilityFrameSource<C: CentroidLike, D: DeconvolutedCentroidLik
         for i in (0..n).step_by(step_size) {
             let spec = handle.get_spectrum_by_index(i)?;
             let cls = spec.has_ion_mobility_class();
-            status = if status < cls { cls } else { status };
+            status = status.max(cls);
             if status > HasIonMobility::None {
                 break;
             }
