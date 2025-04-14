@@ -6,8 +6,6 @@ use std::{io, mem};
 
 use log::warn;
 use mzpeaks::feature::FeatureLike;
-#[cfg(feature = "parallelism")]
-use rayon::prelude::*;
 use thiserror::Error;
 
 use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, IonMobility, KnownCharge, Mass, MZ};
@@ -40,9 +38,6 @@ use crate::{curie, impl_param_described, RawSpectrum};
 
 const BUFFER_SIZE: usize = 10000;
 
-#[cfg(feature = "parallelism")]
-const PARALLEL_COMPRESSION_FAN: usize = 3;
-
 macro_rules! bstart {
     ($e:tt) => {
         BytesStart::from_content($e, $e.len())
@@ -50,16 +45,14 @@ macro_rules! bstart {
 }
 
 macro_rules! attrib {
-    ($name:expr, $value:expr, $elt:ident) => {
-        {
-            let key = $name.as_bytes();
-            let value = $value.as_bytes();
-            // Because quick_xml::escape does not escape newlines
-            let decoded = unsafe { std::str::from_utf8_unchecked(&value) };
-            let escaped_value = escape::escape(&decoded);
-            $elt.push_attribute((key, escaped_value.as_bytes()));
-        }
-    };
+    ($name:expr, $value:expr, $elt:ident) => {{
+        let key = $name.as_bytes();
+        let value = $value.as_bytes();
+        // Because quick_xml::escape does not escape newlines
+        let decoded = unsafe { std::str::from_utf8_unchecked(&value) };
+        let escaped_value = escape::escape(&decoded);
+        $elt.push_attribute((key, escaped_value.as_bytes()));
+    }};
 }
 
 macro_rules! start_event {
@@ -449,6 +442,85 @@ impl From<ChromatogramCollector> for Chromatogram {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct CompressionRegistry {
+    methods: Vec<((ArrayType, BinaryDataArrayType), BinaryCompressionType)>,
+    default_method: BinaryCompressionType,
+}
+
+impl Default for CompressionRegistry {
+    fn default() -> Self {
+        Self::new(Vec::default(), BinaryCompressionType::Zlib)
+    }
+}
+
+
+impl CompressionRegistry {
+    pub fn new(
+        methods: Vec<((ArrayType, BinaryDataArrayType), BinaryCompressionType)>,
+        default_method: BinaryCompressionType,
+    ) -> Self {
+        let mut this = Self {
+            methods,
+            default_method,
+        };
+        this.set_default_compression_method(default_method);
+        this
+    }
+
+    fn check(method: BinaryCompressionType) -> BinaryCompressionType {
+        match method {
+            BinaryCompressionType::Decoded => {
+                warn!("The mzML writer was asked to use the `Decoded` array compression, using `Zlib` instead");
+                BinaryCompressionType::Zlib
+            }
+            _ => method,
+        }
+    }
+
+    pub fn set_compression_method(
+        &mut self,
+        array_type: ArrayType,
+        dtype: BinaryDataArrayType,
+        method: BinaryCompressionType,
+    ) {
+        let val = self.methods.iter_mut().find(|(k, _)| {
+            (k.0 == array_type) && (k.1 == dtype)
+        });
+        if let Some((_, v)) = val {
+            *v = Self::check(method);
+        } else {
+            self.methods.push(((array_type, dtype), Self::check(method)))
+        }
+    }
+
+    pub fn set_default_compression_method(&mut self, method: BinaryCompressionType) {
+        self.default_method = Self::check(method);
+    }
+
+    pub fn get_compression_method_for(&self, array: &DataArray) -> BinaryCompressionType {
+        self.get_compression_method(&array.name, array.dtype)
+    }
+
+    pub fn get_compression_method(&self, array_type: &ArrayType, dtype: BinaryDataArrayType) -> BinaryCompressionType {
+        let val = self.methods.iter().find(|(k, _)| {
+            (k.0 == *array_type) && (k.1 == dtype)
+        });
+        if let Some((_, v)) = val {
+            *v
+        } else {
+            self.default_method
+        }
+    }
+}
+
+
+impl From<BinaryCompressionType> for CompressionRegistry {
+    fn from(value: BinaryCompressionType) -> Self {
+        Self::new(Default::default(), value)
+    }
+}
+
 /**
 An indexed mzML writer that writes [`MultiLayerSpectrum`](crate::spectrum::MultiLayerSpectrum).
 
@@ -477,7 +549,7 @@ pub struct MzMLWriterType<
     pub chromatogram_counter: u64,
 
     /// The compression type to use when generating binary data arrays.
-    pub data_array_compression: BinaryCompressionType,
+    pub data_array_compression: CompressionRegistry,
 
     /// The file-level metadata describing the provenance of the original data
     pub file_description: FileDescription,
@@ -687,8 +759,7 @@ impl IntoIterator for ParamGroup {
 
 impl_param_described!(ParamGroup);
 
-impl<W: Write, C: CentroidLike, D: DeconvolutedCentroidLike>
-    MzMLWriterType<W, C, D>
+impl<W: Write, C: CentroidLike, D: DeconvolutedCentroidLike> MzMLWriterType<W, C, D>
 where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
@@ -710,16 +781,9 @@ where
     pub fn new_with_index_and_compression(
         file: W,
         write_index: bool,
-        data_array_compression: BinaryCompressionType,
+        data_array_compression: impl Into<CompressionRegistry>,
     ) -> MzMLWriterType<W, C, D> {
         let handle = InnerXMLWriter::new(file);
-        let data_array_compression = match data_array_compression {
-            BinaryCompressionType::Decoded => {
-                warn!("The mzML writer was asked to use the `Decoded` array compression, using `Zlib` instead");
-                BinaryCompressionType::Zlib
-            }
-            _ => data_array_compression,
-        };
         MzMLWriterType {
             handle,
             file_description: FileDescription::default(),
@@ -741,7 +805,7 @@ where
             tic_collector: ChromatogramCollector::of(ChromatogramType::TotalIonCurrentChromatogram),
             bic_collector: ChromatogramCollector::of(ChromatogramType::BasePeakChromatogram),
             ms_cv: ControlledVocabulary::MS,
-            data_array_compression,
+            data_array_compression: data_array_compression.into(),
             wrote_summaries: false,
             run: MassSpectrometryRun::default(),
             param_groups: Vec::default(),
@@ -1159,10 +1223,39 @@ where
     pub const fn get_ms_cv(&self) -> &ControlledVocabulary {
         &self.ms_cv
     }
+
+    /// Get the compression method for the specified [`ArrayType`] and [`BinaryDataArrayType`],
+    /// or the default compression method if a match is not found.
+    pub fn get_compression_method(&self, array_type: &ArrayType, dtype: BinaryDataArrayType) -> BinaryCompressionType {
+        self.data_array_compression.get_compression_method(array_type, dtype)
+    }
+
+    /// Get the compression method for the provided [`DataArray`].
+    ///
+    /// This is a helper method that calls [`Self::get_compression_method`]
+    pub fn get_compression_method_for(&self, array: &DataArray) -> BinaryCompressionType {
+        self.data_array_compression.get_compression_method_for(array)
+    }
+
+    /// Set the compression method for the specified [`ArrayType`] and [`BinaryDataArrayType`].
+    ///
+    /// Has no effect on the default compression method.
+    pub fn set_compression_method(
+            &mut self,
+            array_type: ArrayType,
+            dtype: BinaryDataArrayType,
+            method: BinaryCompressionType,
+        ) {
+        self.data_array_compression.set_compression_method(array_type, dtype, method)
+    }
+
+    /// Specify the default compression method used
+    pub fn set_default_compression_method(&mut self, method: BinaryCompressionType) {
+        self.data_array_compression.set_default_compression_method(method)
+    }
 }
 
-impl<W: Write, C: CentroidLike, D: DeconvolutedCentroidLike>
-    MzMLWriterType<W, C, D>
+impl<W: Write, C: CentroidLike, D: DeconvolutedCentroidLike> MzMLWriterType<W, C, D>
 where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
@@ -1305,8 +1398,7 @@ where
     }
 }
 
-impl<W: Write, C: CentroidLike, D: DeconvolutedCentroidLike>
-    MzMLWriterType<W, C, D>
+impl<W: Write, C: CentroidLike, D: DeconvolutedCentroidLike> MzMLWriterType<W, C, D>
 where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
@@ -1581,8 +1673,7 @@ where
     }
 }
 
-impl<W: Write, C: CentroidLike, D: DeconvolutedCentroidLike>
-    MzMLWriterType<W, C, D>
+impl<W: Write, C: CentroidLike, D: DeconvolutedCentroidLike> MzMLWriterType<W, C, D>
 where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
@@ -1645,7 +1736,7 @@ where
         }
 
         self.handle.write_param(
-            self.data_array_compression
+            self.data_array_compression.get_compression_method_for(&array)
                 .clone()
                 .as_param()
                 .as_ref()
@@ -1661,14 +1752,14 @@ where
             | ArrayType::FlowRateArray
             | ArrayType::PressureArray
             | ArrayType::WavelengthArray
+            | ArrayType::SignalToNoiseArray
+            | ArrayType::BaselineArray
             | ArrayType::IonMobilityArray => self
                 .handle
                 .write_param(&array.name.as_param_with_unit_const(array.unit))?,
-            x if x.is_ion_mobility() => {
-                self
+            x if x.is_ion_mobility() => self
                 .handle
-                .write_param(&array.name.as_param_with_unit_const(array.unit))?
-            },
+                .write_param(&array.name.as_param_with_unit_const(array.unit))?,
             ArrayType::NonStandardDataArray { name } => {
                 let mut p =
                     self.ms_cv
@@ -1702,7 +1793,7 @@ where
         array: &DataArray,
         default_array_len: usize,
     ) -> WriterResult {
-        let encoded_array = array.encode_bytestring(self.data_array_compression);
+        let encoded_array = array.encode_bytestring(self.data_array_compression.get_compression_method_for(array));
         self.write_binary_data_array_pre_encoded(array, default_array_len, &encoded_array)
     }
 
@@ -1715,34 +1806,6 @@ where
         let mut outer = bstart!("binaryDataArrayList");
         attrib!("count", count, outer);
         start_event!(self, outer);
-        #[cfg(feature = "parallelism")]
-        {
-            let compression = self.data_array_compression;
-            let mut array_pairs: Vec<(&ArrayType, &DataArray, Vec<u8>)> =
-                if arrays.len() < PARALLEL_COMPRESSION_FAN {
-                    arrays
-                        .iter()
-                        .map(|(t, d)| {
-                            let encoded = d.encode_bytestring(compression);
-                            (t, d, encoded)
-                        })
-                        .collect()
-                } else {
-                    arrays
-                        .par_iter()
-                        .map(|(t, d)| {
-                            let encoded = d.encode_bytestring(compression);
-                            (t, d, encoded)
-                        })
-                        .collect()
-                };
-            array_pairs.sort_by_key(|f| f.0);
-            for (_tp, array, encoded) in array_pairs {
-                self.write_binary_data_array_pre_encoded(array, default_array_len, &encoded)?
-            }
-        }
-
-        #[cfg(not(feature = "parallelism"))]
         {
             let mut array_pairs: Vec<(&ArrayType, &DataArray)> = arrays.iter().collect();
             array_pairs.sort_by_key(|f| f.0);

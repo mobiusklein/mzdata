@@ -11,12 +11,17 @@ use flate2::Compression;
 use crate::params::{ParamList, Unit};
 
 use super::encodings::{
-    to_bytes, ArrayRetrievalError, ArrayType, BinaryCompressionType,
-    BinaryDataArrayType, Bytes,
+    to_bytes, ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType, Bytes,
 };
 use super::traits::{ByteArrayView, ByteArrayViewMut};
 #[allow(unused)]
 use super::vec_as_bytes;
+
+#[allow(unused)]
+use super::encodings::{
+    reverse_transpose_f32, reverse_transpose_f64, reverse_transpose_i32, reverse_transpose_i64,
+    transpose_f32, transpose_f64, transpose_i32, transpose_i64,
+};
 
 /// Represents a data array that holds a byte buffer that may be compressed, base64 encoded,
 /// or raw little endian bytes, and provides views of those bytes as a small range of supported
@@ -45,7 +50,7 @@ pub struct DataArray {
     pub name: ArrayType,
     pub params: Option<Box<ParamList>>,
     pub unit: Unit,
-    item_count: Option<usize>
+    item_count: Option<usize>,
 }
 
 impl core::fmt::Debug for DataArray {
@@ -195,7 +200,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     pub fn encode_bytestring(&self, compression: BinaryCompressionType) -> Bytes {
         if self.compression == compression {
             log::debug!("Fast-path encoding {}:{}", self.name, self.dtype);
-            return self.data.clone()
+            return self.data.clone();
         }
         let bytestring = match self.compression {
             BinaryCompressionType::Decoded => Cow::Borrowed(self.data.as_slice()),
@@ -206,8 +211,21 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                 let compressed = Self::compress_zlib(&bytestring);
                 base64_simd::STANDARD.encode_type::<Bytes>(&compressed)
             }
-            BinaryCompressionType::NoCompression => base64_simd::STANDARD.encode_type::<Bytes>(bytestring.as_ref()),
+            BinaryCompressionType::NoCompression => {
+                base64_simd::STANDARD.encode_type::<Bytes>(bytestring.as_ref())
+            }
             BinaryCompressionType::Decoded => panic!("Should never happen"),
+
+            #[cfg(feature = "zstd")]
+            BinaryCompressionType::Zstd => {
+                let compressed = Self::compress_zstd(&bytestring, self.dtype);
+                base64_simd::STANDARD.encode_type::<Bytes>(&compressed)
+            }
+            #[cfg(feature = "zstd")]
+            BinaryCompressionType::DeltaZstd => {
+                let compressed = Self::compress_delta_zstd(&bytestring, self.dtype);
+                base64_simd::STANDARD.encode_type::<Bytes>(&compressed)
+            }
             _ => {
                 panic!("Compresion type {:?} is unsupported", compression)
             }
@@ -227,7 +245,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         decompressor
             .write_all(bytestring)
             .unwrap_or_else(|e| panic!("Decompression error: {}", e));
-        decompressor.finish().unwrap_or_else(|e| panic!("Decompression error: {}", e))
+        decompressor
+            .finish()
+            .unwrap_or_else(|e| panic!("Decompression error: {}", e))
     }
 
     #[cfg(feature = "numpress")]
@@ -244,6 +264,104 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         match numpress::numpress_decompress(data) {
             Ok(data) => Ok(data),
             Err(e) => Err(ArrayRetrievalError::DecompressionError(e.to_string())),
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    pub(crate) fn compress_zstd(bytestring: &[u8], dtype: BinaryDataArrayType) -> Bytes {
+        const LEVEL: zstd::zstd_safe::CompressionLevel = zstd::DEFAULT_COMPRESSION_LEVEL;
+        match dtype {
+            BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => {
+                zstd::bulk::compress(bytestring, LEVEL).unwrap()
+            }
+            BinaryDataArrayType::Float64 => {
+                zstd::bulk::compress(&transpose_f64(bytemuck::cast_slice(bytestring)), LEVEL).unwrap()
+            }
+            BinaryDataArrayType::Float32 => {
+                zstd::bulk::compress(&transpose_f32(bytemuck::cast_slice(bytestring)), LEVEL).unwrap()
+            }
+            BinaryDataArrayType::Int64 => {
+                zstd::bulk::compress(&transpose_i64(bytemuck::cast_slice(bytestring)), LEVEL).unwrap()
+            }
+            BinaryDataArrayType::Int32 => {
+                zstd::bulk::compress(&transpose_i32(bytemuck::cast_slice(bytestring)), LEVEL).unwrap()
+            }
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    pub(crate) fn compress_delta_zstd(bytestring: &[u8], dtype: BinaryDataArrayType) -> Bytes {
+        use bytemuck::cast_slice;
+
+        use super::delta_encoding;
+
+        match dtype {
+            BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => {
+                Self::compress_zstd(bytestring, dtype)
+            }
+            BinaryDataArrayType::Float64 => {
+                let mut buf = cast_slice::<_, f64>(bytestring).to_vec();
+                delta_encoding(&mut buf);
+                Self::compress_zstd(cast_slice(&buf), dtype)
+            }
+            BinaryDataArrayType::Float32 => {
+                let mut buf = cast_slice::<_, f32>(bytestring).to_vec();
+                delta_encoding(&mut buf);
+                Self::compress_zstd(cast_slice(&buf), dtype)
+            }
+            BinaryDataArrayType::Int64 => {
+                let mut buf = cast_slice::<_, i64>(bytestring).to_vec();
+                delta_encoding(&mut buf);
+                Self::compress_zstd(cast_slice(&buf), dtype)
+            }
+            BinaryDataArrayType::Int32 => {
+                let mut buf = cast_slice::<_, i32>(bytestring).to_vec();
+                delta_encoding(&mut buf);
+                Self::compress_zstd(cast_slice(&buf), dtype)
+            }
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    pub(crate) fn decompress_zstd(data: &[u8], dtype: BinaryDataArrayType) -> Bytes {
+        let mut decoder = zstd::Decoder::new(std::io::Cursor::new(data)).unwrap();
+        let mut buf = Vec::new();
+        decoder.read_to_end(&mut buf).unwrap();
+        match dtype {
+            BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => buf,
+            BinaryDataArrayType::Float64 => reverse_transpose_f64(&buf),
+            BinaryDataArrayType::Float32 => reverse_transpose_f32(&buf),
+            BinaryDataArrayType::Int64 => reverse_transpose_i64(&buf),
+            BinaryDataArrayType::Int32 => reverse_transpose_i32(&buf),
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    pub(crate) fn decompress_delta_zstd(data: &[u8], dtype: BinaryDataArrayType) -> Bytes {
+        use super::delta_decoding;
+        let mut delta = Self::decompress_zstd(data, dtype);
+        match dtype {
+            BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => delta,
+            BinaryDataArrayType::Float64 => {
+                let buf = bytemuck::cast_slice_mut::<_, f64>(&mut delta);
+                delta_decoding(buf);
+                delta
+            }
+            BinaryDataArrayType::Float32 => {
+                let buf = bytemuck::cast_slice_mut::<_, f32>(&mut delta);
+                delta_decoding(buf);
+                delta
+            }
+            BinaryDataArrayType::Int64 => {
+                let buf = bytemuck::cast_slice_mut::<_, i64>(&mut delta);
+                delta_decoding(buf);
+                delta
+            }
+            BinaryDataArrayType::Int32 => {
+                let buf = bytemuck::cast_slice_mut::<_, i32>(&mut delta);
+                delta_decoding(buf);
+                delta
+            }
         }
     }
 
@@ -278,24 +396,45 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     /// more buffers may be allocated to hold the decompressed and decoded bytes.
     pub fn decode(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError> {
         if self.data.is_empty() {
-            return Ok(Cow::Borrowed(&EMPTY_BUFFER))
+            return Ok(Cow::Borrowed(&EMPTY_BUFFER));
         }
         match self.compression {
             BinaryCompressionType::Decoded => Ok(Cow::Borrowed(self.data.as_slice())),
             BinaryCompressionType::NoCompression => {
-                let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
+                let bytestring = base64_simd::STANDARD
+                    .decode_type::<Bytes>(&self.data)
                     .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                 Ok(Cow::Owned(bytestring))
             }
             BinaryCompressionType::Zlib => {
-                let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
+                let bytestring = base64_simd::STANDARD
+                    .decode_type::<Bytes>(&self.data)
                     .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                 Ok(Cow::Owned(Self::decompres_zlib(&bytestring)))
+            }
+
+            #[cfg(feature = "zstd")]
+            BinaryCompressionType::Zstd => {
+                let bytestring = base64_simd::STANDARD
+                    .decode_type::<Bytes>(&self.data)
+                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
+                Ok(Cow::Owned(Self::decompress_zstd(&bytestring, self.dtype)))
+            }
+            #[cfg(feature = "zstd")]
+            BinaryCompressionType::DeltaZstd => {
+                let bytestring = base64_simd::STANDARD
+                    .decode_type::<Bytes>(&self.data)
+                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
+                Ok(Cow::Owned(Self::decompress_delta_zstd(
+                    &bytestring,
+                    self.dtype,
+                )))
             }
             #[cfg(feature = "numpress")]
             BinaryCompressionType::NumpressLinear => match self.dtype {
                 BinaryDataArrayType::Float64 => {
-                    let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
+                    let bytestring = base64_simd::STANDARD
+                        .decode_type::<Bytes>(&self.data)
                         .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                     let decoded = Self::decompres_numpress_linear(&bytestring)?;
                     let view = vec_as_bytes(decoded);
@@ -325,15 +464,35 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         match self.compression {
             BinaryCompressionType::Decoded => Ok(Cow::Borrowed(&self.data.as_slice()[start..end])),
             BinaryCompressionType::NoCompression => {
-                let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
+                let bytestring = base64_simd::STANDARD
+                    .decode_type::<Bytes>(&self.data)
                     .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                 Ok(Cow::Owned(bytestring[start..end].to_vec()))
             }
             BinaryCompressionType::Zlib => {
-                let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
+                let bytestring = base64_simd::STANDARD
+                    .decode_type::<Bytes>(&self.data)
                     .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                 Ok(Cow::Owned(
                     Self::decompres_zlib(&bytestring)[start..end].to_vec(),
+                ))
+            }
+            #[cfg(feature = "zstd")]
+            BinaryCompressionType::Zstd => {
+                let bytestring = base64_simd::STANDARD
+                    .decode_type::<Bytes>(&self.data)
+                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
+                Ok(Cow::Owned(
+                    Self::decompress_zstd(&bytestring, self.dtype)[start..end].to_vec(),
+                ))
+            }
+            #[cfg(feature = "zstd")]
+            BinaryCompressionType::DeltaZstd => {
+                let bytestring = base64_simd::STANDARD
+                    .decode_type::<Bytes>(&self.data)
+                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
+                Ok(Cow::Owned(
+                    Self::decompress_delta_zstd(&bytestring, self.dtype)[start..end].to_vec(),
                 ))
             }
             mode => Err(ArrayRetrievalError::DecompressionError(format!(
@@ -345,28 +504,49 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
     pub fn decode_mut(&'transient mut self) -> Result<&'transient mut Bytes, ArrayRetrievalError> {
         if self.data.is_empty() {
-            return Ok(&mut self.data)
+            return Ok(&mut self.data);
         }
         match self.compression {
             BinaryCompressionType::Decoded => Ok(&mut self.data),
             BinaryCompressionType::NoCompression => {
-                let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
+                let bytestring = base64_simd::STANDARD
+                    .decode_type::<Bytes>(&self.data)
                     .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                 self.data = bytestring;
                 self.compression = BinaryCompressionType::Decoded;
                 Ok(&mut self.data)
             }
             BinaryCompressionType::Zlib => {
-                let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
+                let bytestring = base64_simd::STANDARD
+                    .decode_type::<Bytes>(&self.data)
                     .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                 self.data = bytestring;
                 self.compression = BinaryCompressionType::Decoded;
                 Ok(&mut self.data)
-            },
+            }
+            #[cfg(feature = "zstd")]
+            BinaryCompressionType::Zstd => {
+                let bytestring = base64_simd::STANDARD
+                    .decode_type::<Bytes>(&self.data)
+                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
+                self.data = Self::decompress_zstd(&bytestring, self.dtype);
+                self.compression = BinaryCompressionType::Decoded;
+                Ok(&mut self.data)
+            }
+            #[cfg(feature = "zstd")]
+            BinaryCompressionType::DeltaZstd => {
+                let bytestring = base64_simd::STANDARD
+                    .decode_type::<Bytes>(&self.data)
+                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
+                self.data = Self::decompress_delta_zstd(&bytestring, self.dtype);
+                self.compression = BinaryCompressionType::Decoded;
+                Ok(&mut self.data)
+            }
             #[cfg(feature = "numpress")]
             BinaryCompressionType::NumpressLinear => match self.dtype {
                 BinaryDataArrayType::Float64 => {
-                    let bytestring = base64_simd::STANDARD.decode_type::<Bytes>(&self.data)
+                    let bytestring = base64_simd::STANDARD
+                        .decode_type::<Bytes>(&self.data)
                         .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e));
                     let decoded = Self::decompres_numpress_linear(&bytestring)?;
                     let view = vec_as_bytes(decoded);
@@ -394,7 +574,10 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
     /// The reverse of [`DataArray::decode_and_store`], this method compresses `self.data` to the desired
     /// compression method and stores that buffer as `self.data`.
-    pub fn store_compressed(&mut self, compression: BinaryCompressionType) -> Result<(), ArrayRetrievalError> {
+    pub fn store_compressed(
+        &mut self,
+        compression: BinaryCompressionType,
+    ) -> Result<(), ArrayRetrievalError> {
         if self.compression == compression {
             Ok(())
         } else {
@@ -489,7 +672,6 @@ impl<'transient, 'lifespan: 'transient> ByteArrayViewMut<'transient, 'lifespan> 
 
 impl_param_described_deferred!(DataArray);
 
-
 /// Represent a slice of a [`DataArray`] that manages offsets and decoding automatically.
 #[derive(Clone, Debug)]
 pub struct DataArraySlice<'a> {
@@ -535,12 +717,11 @@ impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan>
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::io;
     use std::fs;
+    use std::io;
 
     use super::DataArray;
 
@@ -576,20 +757,76 @@ mod test {
         let view = da.to_f64()?;
         assert_eq!(view.len(), 19800);
         for (a, b) in back.iter_f64()?.zip(view.iter().copied()) {
-            let err= (a - b).abs();
+            let err = (a - b).abs();
             assert!((a - b).abs() < 1e-3, "{} - {} = {}", a, b, err);
         }
         for (a, b) in back.iter_f64()?.zip(da.iter_f32()?.map(|x| x as f64)) {
-            let err= (a - b).abs();
+            let err = (a - b).abs();
             assert!((a - b).abs() < 1e-3, "{} - {} = {}", a, b, err);
         }
         da.store_as(BinaryDataArrayType::Float64)?;
         let view = da.to_f64()?;
         assert_eq!(view.len(), 19800);
         for (a, b) in back.iter_f64()?.zip(view.iter().copied()) {
-            let err= (a - b).abs();
+            let err = (a - b).abs();
             assert!((a - b).abs() < 1e-3, "{} - {} = {}", a, b, err);
         }
+        Ok(())
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn test_decode_delta_zstd() {
+        let points: Vec<f64> = (0..200_000usize).map(|i| i as f64 * 0.01 + 100.0).collect();
+        let mut da = DataArray::from_name(&ArrayType::MZArray);
+        da.extend(&points).unwrap();
+
+        let decoded_len = da.data.len();
+        da.store_compressed(BinaryCompressionType::Zstd).unwrap();
+        let zstd_len = da.data.len();
+
+        da.store_compressed(BinaryCompressionType::Zlib).unwrap();
+        let zlib_len = da.data.len();
+
+        da.decode_and_store().unwrap();
+
+        da.store_compressed(BinaryCompressionType::DeltaZstd)
+            .unwrap();
+        let delta_zstd_len = da.data.len();
+        eprintln!("decoded: {decoded_len};\nzlib: {zlib_len};\nzstd: {zstd_len};\ndelta-zstd: {delta_zstd_len}");
+        da.decode_and_store().unwrap();
+        let view = da.to_f64().unwrap();
+        let err: f64 = points
+            .iter()
+            .zip(view.iter())
+            .map(|(a, b)| {
+                assert!((a - b).abs() < 1e-3, "{a} - {b} = {}", a - b);
+                (a - b).abs()
+            })
+            .sum();
+        let mean_err = err / (points.len() as f64);
+        eprintln!("mean abs error: {mean_err:0.8}")
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn test_decode_zstd() -> io::Result<()> {
+        let mut da = make_array_from_file()?;
+        let zlib_len = da.data.len();
+        da.decode_and_store()?;
+
+        let decoded_len = da.data.len();
+
+        da.store_compressed(BinaryCompressionType::Zstd)?;
+
+        let zstd_len = da.data.len();
+
+        eprintln!("zlib: {zlib_len};\ndecoded: {decoded_len};\nzstd: {zstd_len}");
+        da.decode_and_store()?;
+
+        let mut da_ref = make_array_from_file()?;
+        da_ref.decode_and_store()?;
+        assert_eq!(da.data, da_ref.data);
         Ok(())
     }
 
@@ -611,7 +848,11 @@ mod test {
 
     #[test]
     fn test_decode_empty() {
-        let mut da = DataArray::wrap(&ArrayType::MZArray, BinaryDataArrayType::Float64, Vec::new());
+        let mut da = DataArray::wrap(
+            &ArrayType::MZArray,
+            BinaryDataArrayType::Float64,
+            Vec::new(),
+        );
         da.compression = BinaryCompressionType::Zlib;
 
         assert_eq!(da.data.len(), 0);

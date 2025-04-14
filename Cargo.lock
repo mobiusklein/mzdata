@@ -2088,6 +2088,7 @@ dependencies = [
  "thiserror 2.0.12",
  "timsrust",
  "tokio",
+ "zstd",
 ]
 
 [[package]]

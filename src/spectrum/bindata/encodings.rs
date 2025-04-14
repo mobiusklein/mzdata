@@ -6,7 +6,7 @@ use std::{
 };
 use thiserror::{self, Error};
 
-use num_traits::Float;
+use num_traits::{Float, Num};
 #[cfg(feature = "numpress")]
 use numpress;
 
@@ -28,6 +28,90 @@ pub fn as_bytes<T: Pod>(data: &[T]) -> &[u8] {
 pub fn vec_as_bytes<T: Pod>(data: Vec<T>) -> Bytes {
     bytemuck::cast_vec(data)
 }
+
+#[allow(unused)]
+mod byte_rotation {
+    use super::*;
+    fn transpose_bytes<T: Pod, const N: usize>(data: &[T]) -> Bytes {
+        let bytes = bytemuck::cast_slice::<T, [u8; N]>(data);
+        let mut result = Bytes::with_capacity(data.len() * N);
+        for i in 0..N {
+            result.extend(bytes.iter().map(|b| b[i]))
+        }
+        result
+    }
+
+    fn transpose_4bytes<T: Pod>(data: &[T]) -> Bytes {
+        assert_eq!(std::mem::size_of::<T>(), 4);
+        transpose_bytes::<_, 4>(data)
+    }
+
+    fn transpose_8bytes<T: Pod>(data: &[T]) -> Bytes {
+        assert_eq!(std::mem::size_of::<T>(), 8);
+        transpose_bytes::<_, 8>(data)
+    }
+
+    pub fn transpose_i32(data: &[i32]) -> Bytes {
+        transpose_4bytes(data)
+    }
+
+    pub fn transpose_f32(data: &[f32]) -> Bytes {
+        transpose_4bytes(data)
+    }
+
+    pub fn transpose_i64(data: &[i64]) -> Bytes {
+        transpose_8bytes(data)
+    }
+
+    pub fn transpose_f64(data: &[f64]) -> Bytes {
+        transpose_8bytes(data)
+    }
+
+    fn reverse_transpose_bytes<T: Pod, const N: usize>(data: &[u8]) -> Bytes {
+        let rem = data.len() % N;
+        assert_eq!(rem, 0);
+        let mut result: Bytes = Vec::new();
+        let n_entries = data.len() / N;
+        result.resize(data.len(), 0);
+
+        for (i, band) in data.chunks_exact(n_entries).enumerate() {
+            for (j, byte) in band.iter().copied().enumerate() {
+                bytemuck::cast_slice_mut::<_, [u8; N]>(&mut result)[j][i] = byte;
+                // bytemuck::cast_mut::<_, [u8; N]>(&mut result[j])[i] = byte;
+            }
+        }
+        result
+    }
+
+    fn reverse_transpose_4bytes<T: Pod>(data: &[u8]) -> Bytes {
+        assert_eq!(std::mem::size_of::<T>(), 4);
+        reverse_transpose_bytes::<T, 4>(data)
+    }
+
+    fn reverse_transpose_8bytes<T: Pod>(data: &[u8]) -> Bytes {
+        assert_eq!(std::mem::size_of::<T>(), 8);
+        reverse_transpose_bytes::<T, 8>(data)
+    }
+
+    pub fn reverse_transpose_i32(data: &[u8]) -> Vec<u8> {
+        reverse_transpose_4bytes::<i32>(data)
+    }
+
+    pub fn reverse_transpose_f32(data: &[u8]) -> Vec<u8> {
+        reverse_transpose_4bytes::<f32>(data)
+    }
+
+    pub fn reverse_transpose_i64(data: &[u8]) -> Vec<u8> {
+        reverse_transpose_8bytes::<f64>(data)
+    }
+
+    pub fn reverse_transpose_f64(data: &[u8]) -> Vec<u8> {
+        reverse_transpose_8bytes::<i64>(data)
+    }
+}
+
+#[allow(unused)]
+pub use byte_rotation::*;
 
 /// The kinds of data arrays found in mass spectrometry data files governed
 /// by the PSI-MS controlled vocabulary.
@@ -126,7 +210,9 @@ impl ArrayType {
             | Self::MeanDriftTimeArray => Self::DeconvolutedDriftTimeArray,
             Self::RawInverseReducedIonMobilityArray
             | Self::DeconvolutedInverseReducedIonMobilityArray
-            | Self::MeanInverseReducedIonMobilityArray => Self::DeconvolutedInverseReducedIonMobilityArray,
+            | Self::MeanInverseReducedIonMobilityArray => {
+                Self::DeconvolutedInverseReducedIonMobilityArray
+            }
             Self::RawIonMobilityArray
             | Self::DeconvolutedIonMobilityArray
             | Self::MeanIonMobilityArray => Self::DeconvolutedIonMobilityArray,
@@ -460,6 +546,8 @@ pub enum BinaryCompressionType {
     LinearPrediction,
     DeltaPrediction,
     Decoded,
+    Zstd,
+    DeltaZstd,
 }
 
 impl BinaryCompressionType {
@@ -471,6 +559,10 @@ impl BinaryCompressionType {
         }
     }
 
+    /// Convert the compression type to a [`ParamCow`].
+    ///
+    /// Most compression methods have a controlled vocabulary
+    /// term.
     pub const fn as_param(&self) -> Option<ParamCow> {
         let (name, accession) = match self {
             BinaryCompressionType::NoCompression => ("no compression", 1000576),
@@ -499,6 +591,24 @@ impl BinaryCompressionType {
             BinaryCompressionType::LinearPrediction => todo!(),
             BinaryCompressionType::DeltaPrediction => todo!(),
             BinaryCompressionType::Decoded => return None,
+            BinaryCompressionType::Zstd => {
+                return Some(ParamCow::const_new(
+                    "byte-shuffle-zstd compression",
+                    crate::params::ValueRef::Empty,
+                    None,
+                    None,
+                    Unit::Unknown,
+                ))
+            }
+            BinaryCompressionType::DeltaZstd => {
+                return Some(ParamCow::const_new(
+                    "delta-byte-shuffle-zstd compression",
+                    crate::params::ValueRef::Empty,
+                    None,
+                    None,
+                    Unit::Unknown,
+                ))
+            }
         };
         Some(ControlledVocabulary::MS.const_param_ident(name, accession))
     }
@@ -610,7 +720,7 @@ pub fn linear_prediction_encoding<F: Float + Mul<F> + AddAssign>(values: &mut [F
     values
 }
 
-pub fn delta_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
+pub fn delta_decoding<F: Num + Copy + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
     if values.len() < 2 {
         return values;
     }
@@ -625,7 +735,7 @@ pub fn delta_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] 
     values
 }
 
-pub fn delta_encoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
+pub fn delta_encoding<F: Num + Copy + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
     let n = values.len();
     if n < 2 {
         return values;
@@ -721,5 +831,14 @@ mod test {
                 assert_eq!(p.accession.unwrap(), reps.1);
             }
         }
+    }
+
+    #[test]
+    fn test_transpose() {
+        let data: Vec<_> = (0..128i32).map(|i| i.pow(2u32) as f64).collect();
+        let flip = transpose_f64(&data);
+        let rev = reverse_transpose_f64(&flip);
+        let rev_cast: &[f64] = bytemuck::cast_slice(&rev);
+        assert_eq!(data, rev_cast);
     }
 }
