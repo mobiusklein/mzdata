@@ -1793,7 +1793,9 @@ where
         array: &DataArray,
         default_array_len: usize,
     ) -> WriterResult {
-        let encoded_array = array.encode_bytestring(self.data_array_compression.get_compression_method_for(array));
+        let encoded_array = array.encode_bytestring(
+            self.get_compression_method_for(array)
+        );
         self.write_binary_data_array_pre_encoded(array, default_array_len, &encoded_array)
     }
 

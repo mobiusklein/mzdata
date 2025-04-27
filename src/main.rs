@@ -13,6 +13,7 @@ use mzdata::prelude::*;
 use mzdata::spectrum::{
     DeconvolutedSpectrum, MultiLayerSpectrum, RefPeakDataLevel, SignalContinuity, SpectrumLike,
 };
+use mzdata::MZReader;
 
 struct MSDataFileSummary {
     pub start_time: f64,
@@ -111,11 +112,13 @@ impl MSDataFileSummary {
         let start = time::Instant::now();
         let (sender, receiver) = sync_channel(2usize.pow(12));
         let read_handle = spawn(move || {
-            reader
+            reader.into_iter()
                 .enumerate()
-                .for_each(|(i, scan)| sender.send((i, scan)).unwrap());
+                .for_each(|(i, scan)| {
+                    sender.send((i, scan)).unwrap()
+                });
         });
-        receiver.iter().for_each(|(i, scan)| {
+        let i = receiver.iter().fold(0, |_, (i, scan)| {
             if i % 10000 == 0 && i > 0 {
                 println!(
                     "\tScan {}: {} ({:0.3} seconds, {} peaks|points)",
@@ -126,11 +129,12 @@ impl MSDataFileSummary {
                 );
             }
             self.handle_scan(scan);
+            i
         });
         read_handle.join().unwrap();
         let end = time::Instant::now();
         let elapsed = end - start;
-        println!("{:0.3} seconds elapsed", elapsed.as_secs_f64());
+        println!("{:0.3} seconds elapsed, handled {i} spectra", elapsed.as_secs_f64());
     }
 
     pub fn write_out(&self) {
@@ -195,9 +199,9 @@ fn main() -> io::Result<()> {
             summarizer.scan_file(reader)
         })?;
     } else {
-        mzdata::mz_read!(path.as_ref(), reader => {
-            summarizer.scan_file(reader)
-        })?;
+        let reader = MZReader::open_path(path)?;
+        eprintln!("Format: {}", reader.as_format());
+        summarizer.scan_file(reader)
     };
 
     summarizer.write_out();

@@ -18,6 +18,7 @@ use mzdata::params::ControlledVocabulary;
 use mzdata::prelude::*;
 
 use mzdata::spectrum::bindata::BinaryCompressionType;
+use mzdata::spectrum::ArrayType;
 use mzdata::spectrum::ArrayType::IntensityArray;
 use mzdata::spectrum::ArrayType::MZArray;
 use mzdata::spectrum::BinaryDataArrayType;
@@ -25,18 +26,15 @@ use mzdata::MzMLWriter;
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 fn compression_parser(compression: &str) -> Result<BinaryCompressionType, String> {
-    match compression {
-        x if x == BinaryCompressionType::Zlib.as_param().unwrap().name() => {
-            Ok(BinaryCompressionType::Zlib)
-        }
-        x if x == BinaryCompressionType::Zstd.as_param().unwrap().name() => {
-            Ok(BinaryCompressionType::Zstd)
-        }
-        x if x == BinaryCompressionType::DeltaZstd.as_param().unwrap().name() => {
-            Ok(BinaryCompressionType::DeltaZstd)
-        }
-        _ => Err(compression.to_string()),
-    }
+    let compression = if !compression.ends_with(" compression") {
+        format!("{compression} compression")
+    } else {
+        compression.to_string()
+    };
+
+    BinaryCompressionType::COMPRESSION_METHODS.iter().find(|x| {
+        x.as_param().unwrap().name() == compression
+    }).copied().ok_or_else(|| compression.to_string())
 }
 
 #[derive(Debug, Clone, Parser)]
@@ -46,10 +44,14 @@ pub struct MZConvert {
     #[arg()]
     pub outpath: String,
 
-    #[arg(long, value_parser=compression_parser, default_value_t=BinaryCompressionType::Zlib)]
+    #[arg(long, value_parser=compression_parser, default_value="zlib compression")]
     pub mz_compression: BinaryCompressionType,
-    #[arg(long, value_parser=compression_parser, default_value_t=BinaryCompressionType::Zlib)]
+
+    #[arg(long, value_parser=compression_parser, default_value="zlib compression")]
     pub intensity_compression: BinaryCompressionType,
+
+    #[arg(long, value_parser=compression_parser, default_value="zlib compression")]
+    pub ion_mobility_compression: BinaryCompressionType,
 }
 
 impl MZConvert {
@@ -59,6 +61,7 @@ impl MZConvert {
             outpath,
             mz_compression: BinaryCompressionType::Zlib,
             intensity_compression: BinaryCompressionType::Zlib,
+            ion_mobility_compression: BinaryCompressionType::Zlib,
         }
     }
 
@@ -111,12 +114,16 @@ impl MZConvert {
         if let Some(reader) = reader.downcast_mut::<mzdata::io::thermo::ThermoRawReader>() {
             reader.set_load_extended_spectrum_data(false);
         }
+        #[cfg(feature = "bruker_tdf")]
+        if let Some(reader) = reader.downcast_mut::<mzdata::io::tdf::TDFSpectrumReader>() {
+            reader.set_consolidate_peaks(false);
+        }
     }
 
     fn configure_writer(&self, writer: &mut dyn Any) {
         info!("Configuring writer...");
         if let Some(writer) = writer.downcast_mut::<MzMLWriter<io::BufWriter<File>>>() {
-            log::info!("Configuring compression methods: {:?}", self.mz_compression);
+            log::debug!("Configuring compression methods: {:?}", self.mz_compression);
             writer.set_compression_method(
                 MZArray,
                 BinaryDataArrayType::Float32,
@@ -128,7 +135,7 @@ impl MZConvert {
                 self.mz_compression,
             );
 
-            log::info!(
+            log::debug!(
                 "Configuring compression methods: {:?}",
                 self.intensity_compression
             );
@@ -142,6 +149,33 @@ impl MZConvert {
                 BinaryDataArrayType::Float64,
                 self.intensity_compression,
             );
+
+            log::debug!(
+                "Configuring compression methods: {:?}",
+                self.ion_mobility_compression
+            );
+
+            let im_arrays = [
+                ArrayType::MeanInverseReducedIonMobilityArray,
+                ArrayType::RawDriftTimeArray,
+                ArrayType::MeanDriftTimeArray,
+                ArrayType::RawIonMobilityArray,
+                ArrayType::MeanIonMobilityArray,
+            ];
+
+            for im_array in im_arrays {
+                writer.set_compression_method(
+                    im_array.clone(),
+                    BinaryDataArrayType::Float64,
+                    self.ion_mobility_compression,
+                );
+                writer.set_compression_method(
+                    im_array,
+                    BinaryDataArrayType::Float32,
+                    self.ion_mobility_compression,
+                );
+            }
+
         }
     }
 }
@@ -195,12 +229,16 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
         mut writer: W,
         writer_format: MassSpectrometryFormat,
     ) -> Result<(R, W), Self::ErrorType> {
-        info!("Writer type: {:?}", writer.type_id());
         self.configure_writer(&mut writer);
         if self.inpath != "-" {
             let pb: PathBuf = self.inpath.clone().into();
-            info!("Computing checksum for {}", pb.display());
-            let checksum = checksum_file(&pb)?;
+            let checksum = if pb.is_dir() {
+                Default::default()
+            } else {
+                info!("Computing checksum for {}", pb.display());
+                let checksum = checksum_file(&pb)?;
+                checksum
+            };
             let has_already = reader
                 .file_description()
                 .source_files
@@ -281,22 +319,4 @@ fn main() -> io::Result<()> {
     let elapsed = end - start;
     eprintln!("Conversion finished: {:0.2} seconds", elapsed.as_secs_f64());
     Ok(())
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-
-    #[test]
-    fn test_compression() {
-        let mut job = MZConvert::new(
-            r#"C:\Users\mobiu\Dropbox\GlycomicsSandbox\Projects\RB_161104_Janus_45_TiO2.raw"#.to_string(),
-            "test.mzML".to_string()
-        );
-        job.mz_compression = BinaryCompressionType::Zstd;
-        job.intensity_compression = BinaryCompressionType::Zstd;
-
-        job.main().unwrap();
-    }
 }

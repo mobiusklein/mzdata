@@ -150,7 +150,7 @@ base16ct = { version = "0.2.0", features = ["alloc"], optional = true }
 
 # Bytes and compression
 flate2 = { version = "1.0.20" }
-numpress = { version = "1.1.0", optional = true }
+numpress = { version = "1.1.0", optional = true, package = "numpress-rs" }
 bytemuck = { version = "1.18.0", features = ["extern_crate_alloc", "min_const_generics"] }
 base64-simd = "0.8.0"
 

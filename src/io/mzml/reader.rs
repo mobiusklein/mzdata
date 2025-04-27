@@ -103,6 +103,24 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                 1003090 => {
                     self.current_array_mut().compression = BinaryCompressionType::LinearPrediction
                 }
+                x if x == unsafe { BinaryCompressionType::ShuffleZstd.as_param().unwrap_unchecked().accession.unwrap_unchecked() } => {
+                    self.current_array_mut().compression = BinaryCompressionType::ShuffleZstd
+                }
+                x if x == unsafe { BinaryCompressionType::DeltaShuffleZstd.as_param().unwrap_unchecked().accession.unwrap_unchecked() } => {
+                    self.current_array_mut().compression = BinaryCompressionType::DeltaShuffleZstd
+                }
+                x if x == unsafe { BinaryCompressionType::Zstd.as_param().unwrap_unchecked().accession.unwrap_unchecked() } => {
+                    self.current_array_mut().compression = BinaryCompressionType::Zstd
+                }
+                x if x == unsafe { BinaryCompressionType::ZstdDict.as_param().unwrap_unchecked().accession.unwrap_unchecked() } => {
+                    self.current_array_mut().compression = BinaryCompressionType::ZstdDict
+                }
+                x if x == unsafe { BinaryCompressionType::NumpressLinearZstd.as_param().unwrap_unchecked().accession.unwrap_unchecked() } => {
+                    self.current_array_mut().compression = BinaryCompressionType::NumpressLinearZstd
+                }
+                x if x == unsafe { BinaryCompressionType::NumpressSLOFZstd.as_param().unwrap_unchecked().accession.unwrap_unchecked() } => {
+                    self.current_array_mut().compression = BinaryCompressionType::NumpressSLOFZstd
+                }
                 // Array data types
                 1000523 => {
                     self.current_array_mut().dtype = BinaryDataArrayType::Float64;
@@ -927,7 +945,9 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                 let mut array = mem::take(&mut self.current_array);
                 if self.detail_level == DetailLevel::Full {
                     array.decode_and_store().map_err(|e| {
-                        MzMLParserError::ArrayDecodingError(state, array.name.clone(), e)
+                        let new_err = MzMLParserError::ArrayDecodingError(state, array.name.clone(), e);
+                        log::error!("Failed to decode mzML array: {new_err}");
+                        new_err
                     })?;
                 }
                 self.arrays.add(array);
@@ -1410,7 +1430,10 @@ impl<
                 }
                 Ok(sz)
             }
-            Err(err) => Err(err),
+            Err(err) => {
+                log::error!("Error while reading mzML spectrum: {err}");
+                Err(err)
+            },
         }
     }
 
@@ -1460,7 +1483,10 @@ impl<
                     Err(MzMLParserError::UnknownError(self.state))
                 }
             }
-            Err(err) => Err(err),
+            Err(err) => {
+                log::error!("Error while reading mzML chromatogram: {err}");
+                Err(err)
+            },
         }
     }
 }

@@ -2070,7 +2070,7 @@ dependencies = [
  "mzsignal",
  "ndarray",
  "num-traits",
- "numpress",
+ "numpress-rs",
  "parking_lot 0.12.3",
  "pin-project-lite",
  "quick-xml",
@@ -2329,10 +2329,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "numpress"
+name = "numpress-rs"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5c8c027ca789dc1c2f9625b7a2d2e5daa6493e24f22adf0727d4d86736e0e52"
+checksum = "a2dcdf7709b8d8f136a3e084c019e31add1505408f2670263fba9475e882bb46"
 
 [[package]]
 name = "object"
