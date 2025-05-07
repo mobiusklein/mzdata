@@ -1119,20 +1119,20 @@ mod test {
                     ("MS-Numpress linear prediction compression", 1002312)
                 }
                 BinaryCompressionType::NumpressSLOF => {
-                    ("MS-Numpress positive integer compression", 1002313)
+                    ("MS-Numpress short logged float compression", 1002314)
                 }
                 BinaryCompressionType::NumpressPIC => {
-                    ("MS-Numpress short logged float compression", 1002314)
+                    ("MS-Numpress positive integer compression", 1002313)
                 }
                 BinaryCompressionType::NumpressLinearZlib => (
                     "MS-Numpress linear prediction compression followed by zlib compression",
                     1002746,
                 ),
-                BinaryCompressionType::NumpressSLOFZlib => (
+                BinaryCompressionType::NumpressPICZlib => (
                     "MS-Numpress positive integer compression followed by zlib compression",
                     1002477,
                 ),
-                BinaryCompressionType::NumpressPICZlib => (
+                BinaryCompressionType::NumpressSLOFZlib => (
                     "MS-Numpress short logged float compression followed by zlib compression",
                     1002478,
                 ),
