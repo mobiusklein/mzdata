@@ -139,14 +139,27 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                 }
 
                 // Array types
-                1000514 => self.current_array_mut().name = ArrayType::MZArray,
-                1000515 => self.current_array_mut().name = ArrayType::IntensityArray,
-                1000516 => self.current_array_mut().name = ArrayType::ChargeArray,
-                1000517 => self.current_array_mut().name = ArrayType::SignalToNoiseArray,
+                1000514 => {
+                    self.current_array_mut().name = ArrayType::MZArray;
+                    *self.current_array_mut().unit_mut() = param.unit();
+                },
+                1000515 => {
+                    self.current_array_mut().name = ArrayType::IntensityArray;
+                    *self.current_array_mut().unit_mut() = param.unit();
+                },
+                1000516 => {
+                    self.current_array_mut().name = ArrayType::ChargeArray;
+                    *self.current_array_mut().unit_mut() = param.unit();
+                },
+                1000517 => {
+                    self.current_array_mut().name = ArrayType::SignalToNoiseArray;
+                    *self.current_array_mut().unit_mut() = param.unit();
+                },
                 1000786 => {
                     self.current_array_mut().name = ArrayType::NonStandardDataArray {
                         name: Box::new(param.value().to_string()),
                     };
+                    *self.current_array_mut().unit_mut() = param.unit();
                 }
                 1000595 => {
                     self.current_array_mut().name = ArrayType::TimeArray;
