@@ -1211,7 +1211,7 @@ impl<
     > TDFSpectrumReaderType<C, D, CP, DP>
 {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, TimsRustError> {
-        Self::new_with_peak_merging_tolerance(path, PEAK_MERGE_TOLERANCE, true)
+        Self::new_with_peak_merging_tolerance(path, PEAK_MERGE_TOLERANCE, false)
     }
 
     pub fn new_with_peak_merging_tolerance<P: AsRef<Path>>(
