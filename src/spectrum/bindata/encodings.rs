@@ -33,7 +33,6 @@ pub fn vec_as_bytes<T: Pod>(data: Vec<T>) -> Bytes {
     buf
 }
 
-#[allow(unused)]
 mod byte_rotation {
     use super::*;
     fn transpose_bytes<T: Pod, const N: usize>(data: &[T]) -> Bytes {
@@ -795,16 +794,27 @@ impl BinaryCompressionType {
         Self::NoCompression,
 
         Self::Zlib,
+
+        #[cfg(feature = "numpress")]
         Self::NumpressLinear,
+        #[cfg(feature = "numpress")]
         Self::NumpressLinearZlib,
+        #[cfg(feature = "numpress")]
         Self::NumpressSLOF,
+        #[cfg(feature = "numpress")]
         Self::NumpressSLOFZlib,
 
+        #[cfg(feature = "zstd")]
         Self::Zstd,
+        #[cfg(feature = "zstd")]
         Self::ShuffleZstd,
+        #[cfg(feature = "zstd")]
         Self::DeltaShuffleZstd,
+        #[cfg(feature = "zstd")]
         Self::ZstdDict,
+        #[cfg(all(feature = "zstd", feature = "numpress"))]
         Self::NumpressLinearZstd,
+        #[cfg(all(feature = "zstd", feature = "numpress"))]
         Self::NumpressSLOFZstd,
     ];
 
@@ -828,22 +838,22 @@ impl BinaryCompressionType {
                 ("MS-Numpress linear prediction compression", 1002312)
             }
             BinaryCompressionType::NumpressSLOF => {
-                ("MS-Numpress positive integer compression", 1002313)
+                ("MS-Numpress short logged float compression", 1002314)
             }
             BinaryCompressionType::NumpressPIC => {
-                ("MS-Numpress short logged float compression", 1002314)
+                ("MS-Numpress positive integer compression", 1002313)
             }
             BinaryCompressionType::NumpressLinearZlib => (
                 "MS-Numpress linear prediction compression followed by zlib compression",
                 1002746,
             ),
             BinaryCompressionType::NumpressSLOFZlib => (
-                "MS-Numpress positive integer compression followed by zlib compression",
-                1002477,
-            ),
-            BinaryCompressionType::NumpressPICZlib => (
                 "MS-Numpress short logged float compression followed by zlib compression",
                 1002478,
+            ),
+            BinaryCompressionType::NumpressPICZlib => (
+                "MS-Numpress positive integer compression followed by zlib compression",
+                1002477,
             ),
             BinaryCompressionType::DeltaPrediction => {
                 ("truncation, delta prediction and zlib compression", 1003089)
