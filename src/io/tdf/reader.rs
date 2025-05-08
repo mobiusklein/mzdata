@@ -994,8 +994,11 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 pub type TDFFrameReader =
     TDFFrameReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>;
 
-/// A flat spectrum reader for Bruker TDF file format. It sums over ion mobility
-/// spectra, consolidating features into peaks.
+/// A flat spectrum reader for Bruker TDF file format wrapping a [`TDFFrameReaderType`].
+///
+/// It can sum over ion mobility spectra, consolidating features into peaks. Enable this
+/// behavior by [`Self::set_consolidate_peaks`] `true`. The granularity of the merging
+/// in the m/z dimension [`Self::peak_merging_tolerance`].
 #[derive(Debug)]
 pub struct TDFSpectrumReaderType<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
