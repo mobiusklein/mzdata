@@ -25,6 +25,7 @@ use crate::{
     params::{ControlledVocabulary, Unit, Value},
     prelude::*,
     spectrum::{
+        bindata::{ArrayRetrievalError, BinaryArrayMap3D},
         Activation, ArrayType, BinaryArrayMap, BinaryDataArrayType, Chromatogram,
         ChromatogramDescription, ChromatogramType, DataArray, IonMobilityFrameDescription,
         IsolationWindow, IsolationWindowState, MultiLayerIonMobilityFrame, MultiLayerSpectrum,
@@ -1253,6 +1254,31 @@ impl<
 
     pub fn is_empty(&self) -> bool {
         self.frame_reader.is_empty()
+    }
+
+    /// Merge peaks in the ion mobility dimension. This will be done automatically
+    /// if [`Self::will_consolidate_peaks`] returns true.
+    ///
+    /// This modifies the spectrum in-place.
+    ///
+    /// # See Also
+    /// - [`Self::will_consolidate_peaks`]
+    /// - [`Self::set_consolidate_peaks`]
+    pub fn consolidate_peaks(
+        &self,
+        spectrum: &mut MultiLayerSpectrum<CP, DP>,
+    ) -> Result<(), ArrayRetrievalError> where CP: From<CentroidPeak> {
+        if let Some(arrays) = spectrum.arrays.as_ref() {
+            let arrays = BinaryArrayMap3D::stack(arrays)?;
+            spectrum.peaks = Some(consolidate_peaks(
+                &arrays,
+                &(0..arrays.ion_mobility_dimension.len() as u32),
+                &self.frame_reader.metadata,
+                self.peak_merging_tolerance,
+            )?);
+        };
+
+        Ok(())
     }
 
     /// Retrieve a spectrum by index
