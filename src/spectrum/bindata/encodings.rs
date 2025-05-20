@@ -35,21 +35,31 @@ pub fn vec_as_bytes<T: Pod>(data: Vec<T>) -> Bytes {
 
 mod byte_rotation {
     use super::*;
-    fn transpose_bytes<T: Pod, const N: usize>(data: &[T]) -> Bytes {
+
+    pub fn transpose_bytes_into<T: Pod, const N: usize>(data: &[T], buffer: &mut Vec<u8>) {
         let bytes = bytemuck::cast_slice::<T, [u8; N]>(data);
-        let mut result = Bytes::with_capacity(data.len() * N);
-        for i in 0..N {
-            result.extend(bytes.iter().map(|b| b[i]))
+        buffer.clear();
+        let delta = (data.len() * N).saturating_sub(buffer.capacity());
+        if delta > 0 {
+            buffer.reserve(delta);
         }
+        for i in 0..N {
+            buffer.extend(bytes.iter().map(|b| b[i]))
+        }
+    }
+
+    pub fn transpose_bytes<T: Pod, const N: usize>(data: &[T]) -> Bytes {
+        let mut result = Bytes::with_capacity(data.len() * N);
+        transpose_bytes_into::<T, N>(data, &mut result);
         result
     }
 
-    fn transpose_4bytes<T: Pod>(data: &[T]) -> Bytes {
+    pub fn transpose_4bytes<T: Pod>(data: &[T]) -> Bytes {
         assert_eq!(std::mem::size_of::<T>(), 4);
         transpose_bytes::<_, 4>(data)
     }
 
-    fn transpose_8bytes<T: Pod>(data: &[T]) -> Bytes {
+    pub fn transpose_8bytes<T: Pod>(data: &[T]) -> Bytes {
         assert_eq!(std::mem::size_of::<T>(), 8);
         transpose_bytes::<_, 8>(data)
     }
@@ -70,27 +80,33 @@ mod byte_rotation {
         transpose_8bytes(data)
     }
 
-    fn reverse_transpose_bytes<T: Pod, const N: usize>(data: &[u8]) -> Bytes {
+    pub fn reverse_transpose_bytes_into<T: Pod, const N: usize>(data: &[u8], buffer: &mut Vec<u8>) {
         let rem = data.len() % N;
         assert_eq!(rem, 0);
-        let mut result: Bytes = Vec::new();
         let n_entries = data.len() / N;
-        result.resize(data.len(), 0);
+        buffer.clear();
+        buffer.resize(data.len(), 0);
 
         for (i, band) in data.chunks_exact(n_entries).enumerate() {
             for (j, byte) in band.iter().copied().enumerate() {
-                bytemuck::cast_slice_mut::<_, [u8; N]>(&mut result)[j][i] = byte;
+                bytemuck::cast_slice_mut::<_, [u8; N]>(buffer)[j][i] = byte;
             }
         }
+    }
+
+    pub fn reverse_transpose_bytes<T: Pod, const N: usize>(data: &[u8]) -> Bytes {
+        let mut result: Bytes = Vec::new();
+        result.resize(data.len(), 0);
+        reverse_transpose_bytes_into::<T, N>(data, &mut result);
         result
     }
 
-    fn reverse_transpose_4bytes<T: Pod>(data: &[u8]) -> Bytes {
+    pub fn reverse_transpose_4bytes<T: Pod>(data: &[u8]) -> Bytes {
         assert_eq!(std::mem::size_of::<T>(), 4);
         reverse_transpose_bytes::<T, 4>(data)
     }
 
-    fn reverse_transpose_8bytes<T: Pod>(data: &[u8]) -> Bytes {
+    pub fn reverse_transpose_8bytes<T: Pod>(data: &[u8]) -> Bytes {
         assert_eq!(std::mem::size_of::<T>(), 8);
         reverse_transpose_bytes::<T, 8>(data)
     }
@@ -138,7 +154,9 @@ mod dictionary_encoding {
     impl_dict_value!(u32, 4);
     impl_dict_value!(u64, 8);
 
-    trait DictIndex<const W: usize>: Pod + ToBytes<Bytes = [u8; W]> + FromBytes<Bytes = [u8; W]> {
+    trait DictIndex<const W: usize>:
+        Pod + ToBytes<Bytes = [u8; W]> + FromBytes<Bytes = [u8; W]>
+    {
         fn from_usize(index: usize) -> Self;
         fn to_usize(&self) -> usize;
     }
@@ -162,183 +180,286 @@ mod dictionary_encoding {
     impl_dict_index!(u32, 4);
     impl_dict_index!(u64, 8);
 
-    fn encode_dict_indices<
-        T: Pod,
-        const W1: usize,
-        V: Pod + Ord + Hash + ToBytes<Bytes = [u8; W1]> + Eq,
-        const W2: usize,
-        K: DictIndex<W2>,
-    >(
-        data: &[T],
-        value_codes: &[V],
-        byte_map: HashMap<V, usize>,
-    ) -> io::Result<Vec<u8>> {
-        let data_offset = 16 + value_codes.len() * core::mem::size_of::<V>();
-        let dict_buffer: Vec<u8> =
-            Vec::with_capacity(data_offset + data.len() * core::mem::size_of::<V>());
-        let mut writer = BufWriter::new(dict_buffer);
-        writer.write(&(data_offset as u64).to_le_bytes())?;
-        writer.write(&(value_codes.len() as u64).to_le_bytes())?;
-
-        for v in value_codes.iter() {
-            let bts = v.to_le_bytes();
-            writer.write_all(&bts)?;
-        }
-
-        for v in data {
-            let i = *byte_map
-                .get(bytemuck::from_bytes(bytemuck::bytes_of(v)))
-                .unwrap();
-            let ik: K = K::from_usize(i);
-            writer.write_all(&ik.to_le_bytes())?;
-        }
-
-        writer.flush()?;
-        let val = writer.into_inner().unwrap();
-        Ok(val)
+    #[derive(Default, Debug)]
+    pub struct DictionaryEncoder {
+        shuffle: bool,
+        buffer: Vec<u8>
     }
 
-    fn encode_values<T: Pod, const W1: usize, V: DictValue<W1>>(
-        data: &[T],
-    ) -> Result<Vec<u8>, io::Error> {
-        let mut value_codes = HashSet::new();
-        for v in data {
-            let k: V = *bytemuck::from_bytes(bytemuck::bytes_of(v));
-            value_codes.insert(k);
+    impl DictionaryEncoder {
+        pub fn new(shuffle: bool) -> Self {
+            Self { shuffle, buffer: Vec::new() }
         }
 
-        let mut value_codes: Vec<_> = value_codes.into_iter().collect();
-        value_codes.sort();
+        fn build_value_map<T: Pod, const W1: usize, V: DictValue<W1>>(
+            &self,
+            data: &[T],
+        ) -> (Vec<V>, HashMap<V, usize>) {
+            let mut value_codes = HashSet::new();
+            for v in data {
+                let k: V = *bytemuck::from_bytes(bytemuck::bytes_of(v));
+                value_codes.insert(k);
+            }
 
-        let n_value_codes = value_codes.len();
-        let byte_map: HashMap<V, usize> = value_codes
-            .iter()
-            .enumerate()
-            .map(|(i, k)| (*k, i))
-            .collect();
+            let mut value_codes: Vec<_> = value_codes.into_iter().collect();
+            value_codes.sort();
 
-        if n_value_codes <= 2usize.pow(8) {
-            encode_dict_indices::<T, W1, V, 1, u8>(data, &value_codes, byte_map)
-        } else if n_value_codes <= 2usize.pow(16) {
-            encode_dict_indices::<T, W1, V, 2, u16>(data, &value_codes, byte_map)
-        } else if n_value_codes <= 2usize.pow(32) {
-            encode_dict_indices::<T, W1, V, 4, u32>(data, &value_codes, byte_map)
-        } else if n_value_codes <= 2usize.pow(64) {
-            encode_dict_indices::<T, W1, V, 8, u64>(data, &value_codes, byte_map)
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "Cannot encode a dictionary with more than 2 ** 64 values",
-            ))
+            let byte_map: HashMap<V, usize> = value_codes
+                .iter()
+                .enumerate()
+                .map(|(i, k)| (*k, i))
+                .collect();
+            (value_codes, byte_map)
         }
+
+        fn create_writer<
+            T: Pod,
+            const W1: usize,
+            V: Pod + Ord + Hash + ToBytes<Bytes = [u8; W1]> + Eq,
+            const W2: usize,
+            K: DictIndex<W2>,
+        >(
+            &self,
+            data: &[T],
+            value_codes: &[V],
+        ) -> BufWriter<Vec<u8>> {
+            let data_offset = 16 + value_codes.len() * core::mem::size_of::<V>();
+            let dict_buffer: Vec<u8> =
+                Vec::with_capacity(data_offset + data.len() * core::mem::size_of::<K>());
+            let writer = BufWriter::new(dict_buffer);
+            writer
+        }
+
+        fn encode_dict_indices<
+            T: Pod,
+            const W1: usize,
+            V: Pod + Ord + Hash + ToBytes<Bytes = [u8; W1]> + Eq,
+            const W2: usize,
+            K: DictIndex<W2>,
+        >(
+            &mut self,
+            data: &[T],
+            value_codes: &[V],
+            byte_map: HashMap<V, usize>,
+        ) -> io::Result<Vec<u8>> {
+            let data_offset = 16 + value_codes.len() * core::mem::size_of::<V>();
+            let mut writer = self.create_writer::<T, W1, V, W2, K>(data, value_codes);
+            writer.write(&(data_offset as u64).to_le_bytes())?;
+            writer.write(&(value_codes.len() as u64).to_le_bytes())?;
+
+            if self.shuffle {
+                // This isn't endian-correct
+                byte_rotation::transpose_bytes_into::<V, W1>(value_codes, &mut self.buffer);
+                for v in self.buffer.iter() {
+                    let bts = v.to_le_bytes();
+                    writer.write_all(&bts)?;
+                }
+            } else {
+                for v in value_codes.iter() {
+                    let bts = v.to_le_bytes();
+                    writer.write_all(&bts)?;
+                }
+            }
+
+            if self.shuffle {
+                let mut buf = Vec::with_capacity(data.len());
+                for v in data {
+                    let i = *byte_map
+                        .get(bytemuck::from_bytes(bytemuck::bytes_of(v)))
+                        .unwrap();
+                    let ik: K = K::from_usize(i);
+                    buf.push(ik);
+                }
+                // This isn't endian-correct
+                let buf = byte_rotation::transpose_bytes::<K, W2>(&buf);
+                for ik in buf {
+                    writer.write_all(&ik.to_le_bytes())?;
+                }
+            } else {
+                for v in data {
+                    let i = *byte_map
+                        .get(bytemuck::from_bytes(bytemuck::bytes_of(v)))
+                        .unwrap();
+                    let ik: K = K::from_usize(i);
+                    writer.write_all(&ik.to_le_bytes())?;
+                }
+            }
+
+            writer.flush()?;
+            let val = writer.into_inner().unwrap();
+            Ok(val)
+        }
+
+        fn encode_values<T: Pod, const W1: usize, V: DictValue<W1>>(
+            &mut self,
+            data: &[T],
+        ) -> Result<Vec<u8>, io::Error> {
+            let (value_codes, byte_map) = self.build_value_map(data);
+            let n_value_codes = value_codes.len();
+
+            if n_value_codes <= 2usize.pow(8) {
+                self.encode_dict_indices::<T, W1, V, 1, u8>(data, &value_codes, byte_map)
+            } else if n_value_codes <= 2usize.pow(16) {
+                self.encode_dict_indices::<T, W1, V, 2, u16>(data, &value_codes, byte_map)
+            } else if n_value_codes <= 2usize.pow(32) {
+                self.encode_dict_indices::<T, W1, V, 4, u32>(data, &value_codes, byte_map)
+            } else if n_value_codes <= 2usize.pow(64) {
+                self.encode_dict_indices::<T, W1, V, 8, u64>(data, &value_codes, byte_map)
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "Cannot encode a dictionary with more than 2 ** 64 values",
+                ))
+            }
+        }
+
+        pub fn encode<T: Pod>(&mut self, data: &[T]) -> io::Result<Bytes> {
+            let z_val = core::mem::size_of::<T>();
+            if z_val <= 1 {
+                self.encode_values::<T, 1, u8>(data)
+            } else if z_val <= 2 {
+                self.encode_values::<T, 2, u16>(data)
+            } else if z_val <= 4 {
+                self.encode_values::<T, 4, u32>(data)
+            } else if z_val <= 8 {
+                self.encode_values::<T, 8, u64>(data)
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "Cannot encode a dictionary with more than 2 ** 64 keys",
+                ))
+            }
+        }
+    }
+
+
+    #[derive(Default, Debug)]
+    pub struct DictionaryDecoder {
+        shuffle: bool,
+    }
+
+    impl DictionaryDecoder {
+        pub fn new(shuffle: bool) -> Self {
+            Self { shuffle }
+        }
+
+        fn make_reader<'a>(&self, buffer: &'a [u8]) -> io::BufReader<&'a [u8]> {
+            let reader = io::BufReader::new(buffer);
+            reader
+        }
+
+        fn decode_value_buffer<T: Pod, const W1: usize, V: DictValue<W1>>(
+            &mut self,
+            buffer: &[u8],
+            n_values: usize,
+        ) -> Vec<T> {
+            macro_rules! decode_chunk {
+                ($chunk:ident) => {
+                    {
+                        let chunk_a: [u8; W1] = $chunk.try_into().unwrap();
+                        let val = V::from_le_bytes(&chunk_a);
+                        let val: T = *bytemuck::from_bytes(bytemuck::bytes_of(&val));
+                        val
+                    }
+                };
+            }
+            let mut value_buffer = Vec::with_capacity(n_values);
+            if self.shuffle {
+                for chunk in byte_rotation::reverse_transpose_bytes::<T, W1>(buffer).chunks_exact(W1) {
+                    let val = decode_chunk!(chunk);
+                    value_buffer.push(val);
+                }
+            } else {
+                for chunk in buffer.chunks_exact(W1) {
+                    let val = decode_chunk!(chunk);
+                    value_buffer.push(val);
+                }
+            };
+            value_buffer
+        }
+
+        fn decode_index_buffer<T: Pod, const W2: usize, K: DictIndex<W2>>(
+            &mut self,
+            value_codes: &[T],
+            index_buffer: &[u8],
+        ) -> Vec<T> {
+            let mut result = Vec::with_capacity(index_buffer.len() / W2);
+
+            for chunk in index_buffer.chunks_exact(W2) {
+                let b: [u8; W2] = chunk.try_into().unwrap();
+                let k: usize = K::from_le_bytes(&b).to_usize();
+                result.push(value_codes[k])
+            }
+            result
+        }
+
+        pub fn decode<'a, T: Pod>(&mut self, buffer: &'a [u8]) -> io::Result<Vec<T>> {
+            let mut reader = self.make_reader(buffer);
+            let mut z_buf = [0u8; 8];
+            reader.read_exact(&mut z_buf)?;
+            let data_offset = u64::from_le_bytes(z_buf);
+            let mut z_buf = [0u8; 8];
+            reader.read_exact(&mut z_buf)?;
+            let n_value_codes = u64::from_le_bytes(z_buf);
+
+            let value_buffer = &buffer[16..(data_offset as usize)];
+            let value_width = (data_offset - 16) / n_value_codes;
+
+            let index_buffer = &buffer[data_offset as usize..];
+
+            let n_value_codes = n_value_codes as usize;
+
+            macro_rules! decode_indices {
+                ($values:ident) => {
+                    if n_value_codes <= 2usize.pow(8) {
+                        self.decode_index_buffer::<T, 1, u8>(&$values, index_buffer)
+                    } else if n_value_codes <= 2usize.pow(16) {
+                        self.decode_index_buffer::<T, 2, u16>(&$values, index_buffer)
+                    } else if n_value_codes <= 2usize.pow(32) {
+                        self.decode_index_buffer::<T, 4, u32>(&$values, index_buffer)
+                    } else if n_value_codes <= 2usize.pow(64) {
+                        self.decode_index_buffer::<T, 8, u64>(&$values, index_buffer)
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Unsupported,
+                            "Cannot decode a dictionary with more than 2 ** 64 indices",
+                        ));
+                    }
+                };
+            }
+
+            let values = if value_width <= 1 {
+                let values = self.decode_value_buffer::<T, 1, u8>(value_buffer, n_value_codes as usize);
+                decode_indices!(values)
+            } else if value_width <= 2 {
+                let values = self.decode_value_buffer::<T, 2, u16>(value_buffer, n_value_codes as usize);
+                decode_indices!(values)
+            } else if value_width <= 4 {
+                let values = self.decode_value_buffer::<T, 4, u32>(value_buffer, n_value_codes as usize);
+                decode_indices!(values)
+            } else if value_width <= 8 {
+                let values = self.decode_value_buffer::<T, 8, u64>(value_buffer, n_value_codes as usize);
+                decode_indices!(values)
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "Cannot decode dictionary with value byte width greater than 8",
+                ));
+            };
+
+            Ok(values)
+        }
+
     }
 
     pub fn dictionary_encoding<T: Pod>(data: &[T]) -> Result<Vec<u8>, io::Error> {
-        let z_val = core::mem::size_of::<T>();
-        if z_val <= 1 {
-            encode_values::<T, 1, u8>(data)
-        } else if z_val <= 2 {
-            encode_values::<T, 2, u16>(data)
-        } else if z_val <= 4 {
-            encode_values::<T, 4, u32>(data)
-        } else if z_val <= 8 {
-            encode_values::<T, 8, u64>(data)
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "Cannot encode a dictionary with more than 2 ** 64 keys",
-            ))
-        }
-    }
-
-    fn decode_value_buffer<T: Pod, const W1: usize, V: DictValue<W1>>(
-        buffer: &[u8],
-        n_values: usize,
-    ) -> Vec<T> {
-        let mut value_buffer = Vec::with_capacity(n_values);
-        for chunk in buffer.chunks_exact(W1) {
-            let chunk_a: [u8; W1] = chunk.try_into().unwrap();
-            let val = V::from_le_bytes(&chunk_a);
-            let val: T = *bytemuck::from_bytes(bytemuck::bytes_of(&val));
-            value_buffer.push(val);
-        }
-        value_buffer
-    }
-
-    fn decode_index_buffer<
-        T: Pod,
-        const W2: usize,
-        K: DictIndex<W2>,
-    >(
-        value_codes: &[T],
-        index_buffer: &[u8],
-    ) -> Vec<T>
-    {
-        let mut result = Vec::with_capacity(index_buffer.len() / W2);
-
-        for chunk in index_buffer.chunks_exact(W2) {
-            let b: [u8; W2] = chunk.try_into().unwrap();
-            let k: usize = K::from_le_bytes(&b).to_usize();
-            result.push(value_codes[k])
-        }
-        result
+        let mut encoder = DictionaryEncoder::new(true);
+        encoder.encode(data)
     }
 
     pub fn dictionary_decoding<T: Pod>(buffer: &[u8]) -> io::Result<Vec<T>> {
-        let mut reader = io::BufReader::new(buffer);
-        let mut z_buf = [0u8; 8];
-        reader.read_exact(&mut z_buf)?;
-        let data_offset = u64::from_le_bytes(z_buf);
-        let mut z_buf = [0u8; 8];
-        reader.read_exact(&mut z_buf)?;
-        let n_value_codes = u64::from_le_bytes(z_buf);
-
-        let value_buffer = &buffer[16..(data_offset as usize)];
-        let value_width = (data_offset - 16) / n_value_codes;
-
-        let index_buffer = &buffer[data_offset as usize..];
-
-        let n_value_codes = n_value_codes as usize;
-
-        macro_rules! decode_indices {
-            ($values:ident) => {
-                if n_value_codes <= 2usize.pow(8) {
-                    decode_index_buffer::<T, 1, u8>(&$values, index_buffer)
-                } else if n_value_codes <= 2usize.pow(16) {
-                    decode_index_buffer::<T, 2, u16>(&$values, index_buffer)
-                } else if n_value_codes <= 2usize.pow(32) {
-                    decode_index_buffer::<T, 4, u32>(&$values, index_buffer)
-                } else if n_value_codes <= 2usize.pow(64) {
-                    decode_index_buffer::<T, 8, u64>(&$values, index_buffer)
-                } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Unsupported,
-                        "Cannot decode a dictionary with more than 2 ** 64 indices",
-                    ));
-                }
-            };
-        }
-
-        let values = if value_width <= 1 {
-            let values = decode_value_buffer::<T, 1, u8>(value_buffer, n_value_codes as usize);
-            decode_indices!(values)
-        } else if value_width <= 2 {
-            let values = decode_value_buffer::<T, 2, u16>(value_buffer, n_value_codes as usize);
-            decode_indices!(values)
-        } else if value_width <= 4 {
-            let values = decode_value_buffer::<T, 4, u32>(value_buffer, n_value_codes as usize);
-            decode_indices!(values)
-        } else if value_width <= 8 {
-            let values = decode_value_buffer::<T, 8, u64>(value_buffer, n_value_codes as usize);
-            decode_indices!(values)
-        } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "Cannot decode dictionary with value byte width greater than 8",
-            ));
-        };
-
-        Ok(values)
+        let mut decoder = DictionaryDecoder::new(true);
+        return decoder.decode(buffer);
     }
 }
 
@@ -792,9 +913,7 @@ pub enum BinaryCompressionType {
 impl BinaryCompressionType {
     pub const COMPRESSION_METHODS: &[Self] = &[
         Self::NoCompression,
-
         Self::Zlib,
-
         #[cfg(feature = "numpress")]
         Self::NumpressLinear,
         #[cfg(feature = "numpress")]
@@ -803,7 +922,6 @@ impl BinaryCompressionType {
         Self::NumpressSLOF,
         #[cfg(feature = "numpress")]
         Self::NumpressSLOFZlib,
-
         #[cfg(feature = "zstd")]
         Self::Zstd,
         #[cfg(feature = "zstd")]
@@ -872,7 +990,7 @@ impl BinaryCompressionType {
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
                 ))
-            },
+            }
             BinaryCompressionType::NumpressLinearZstd => {
                 return Some(ParamCow::const_new(
                     "MS-Numpress linear prediction compression followed by zstd compression",
@@ -881,7 +999,7 @@ impl BinaryCompressionType {
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
                 ))
-            },
+            }
             BinaryCompressionType::ZstdDict => {
                 return Some(ParamCow::const_new(
                     "dict-zstd compression",
@@ -890,7 +1008,7 @@ impl BinaryCompressionType {
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
                 ))
-            },
+            }
             BinaryCompressionType::Zstd => {
                 return Some(ParamCow::const_new(
                     "zstd compression",
