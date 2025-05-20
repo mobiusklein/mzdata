@@ -365,7 +365,24 @@ mod dictionary_encoding {
             }
             let mut value_buffer = Vec::with_capacity(n_values);
             if self.shuffle {
-                for chunk in byte_rotation::reverse_transpose_bytes::<T, W1>(buffer).chunks_exact(W1) {
+                let blocks = match core::mem::size_of::<T>() {
+                    1 => {
+                        buffer.to_vec()
+                    }
+                    2 => {
+                        byte_rotation::reverse_transpose_bytes::<T, 2>(buffer)
+                    }
+                    4 => {
+                        byte_rotation::reverse_transpose_bytes::<T, 4>(buffer)
+                    }
+                    8 => {
+                        byte_rotation::reverse_transpose_bytes::<T, 8>(buffer)
+                    }
+                    x => {
+                        panic!("Unsupported size {x}");
+                    }
+                };
+                for chunk in blocks.chunks_exact(W1) {
                     let val = decode_chunk!(chunk);
                     value_buffer.push(val);
                 }
@@ -384,11 +401,19 @@ mod dictionary_encoding {
             index_buffer: &[u8],
         ) -> Vec<T> {
             let mut result = Vec::with_capacity(index_buffer.len() / W2);
-
-            for chunk in index_buffer.chunks_exact(W2) {
-                let b: [u8; W2] = chunk.try_into().unwrap();
-                let k: usize = K::from_le_bytes(&b).to_usize();
-                result.push(value_codes[k])
+            if self.shuffle {
+                let new_index_buffer = byte_rotation::reverse_transpose_bytes::<K, W2>(index_buffer);
+                for chunk in new_index_buffer.chunks_exact(W2) {
+                    let b: [u8; W2] = chunk.try_into().unwrap();
+                    let k: usize = K::from_le_bytes(&b).to_usize();
+                    result.push(value_codes[k])
+                }
+            } else {
+                for chunk in index_buffer.chunks_exact(W2) {
+                    let b: [u8; W2] = chunk.try_into().unwrap();
+                    let k: usize = K::from_le_bytes(&b).to_usize();
+                    result.push(value_codes[k])
+                }
             }
             result
         }
@@ -401,10 +426,8 @@ mod dictionary_encoding {
             let mut z_buf = [0u8; 8];
             reader.read_exact(&mut z_buf)?;
             let n_value_codes = u64::from_le_bytes(z_buf);
-
             let value_buffer = &buffer[16..(data_offset as usize)];
             let value_width = (data_offset - 16) / n_value_codes;
-
             let index_buffer = &buffer[data_offset as usize..];
 
             let n_value_codes = n_value_codes as usize;

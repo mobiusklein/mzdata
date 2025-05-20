@@ -574,7 +574,21 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         use super::encodings::dictionary_decoding;
 
         let data = Self::decompress_zstd(bytestring, dtype, false);
-        dictionary_decoding(&data).unwrap()
+        match dtype {
+            BinaryDataArrayType::ASCII | BinaryDataArrayType::Unknown => dictionary_decoding(&data).unwrap(),
+            BinaryDataArrayType::Float64 => {
+                to_bytes(&dictionary_decoding::<f64>(&data).unwrap())
+            },
+            BinaryDataArrayType::Float32 => {
+                to_bytes(&dictionary_decoding::<f32>(&data).unwrap())
+            },
+            BinaryDataArrayType::Int64 => {
+                to_bytes(&dictionary_decoding::<i64>(&data).unwrap())
+            },
+            BinaryDataArrayType::Int32 => {
+                to_bytes(&dictionary_decoding::<i32>(&data).unwrap())
+            },
+        }
     }
 
     /// Decode the compressed data, if needed, and store that buffer in `self.data`. After
