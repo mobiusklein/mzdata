@@ -22,7 +22,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: "1.86.0" # Until hostfxr-sys issue with dlopen2 is fixed: https://github.com/OpenByteDev/dlopen2/pull/19
           override: true
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
