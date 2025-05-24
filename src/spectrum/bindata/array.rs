@@ -1062,6 +1062,7 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "numpress")]
     #[test]
     fn test_numpress_linear() -> io::Result<()> {
         let mut da = make_array_from_file()?;
@@ -1073,7 +1074,7 @@ mod test {
         da.store_compressed(BinaryCompressionType::NumpressLinear)?;
         let numpress_len = da.data.len();
 
-        eprintln!("zlib: {zlib_len};\ndecoded: {decoded_len};\nzstd: {numpress_len}");
+        eprintln!("zlib: {zlib_len};\ndecoded: {decoded_len};\nnumpress: {numpress_len}");
         da.decode_and_store()?;
 
         let mut da_ref = make_array_from_file()?;
