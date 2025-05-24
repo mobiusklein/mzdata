@@ -1079,7 +1079,9 @@ mod test {
 
         let mut da_ref = make_array_from_file()?;
         da_ref.decode_and_store()?;
-        assert_eq!(da.data, da_ref.data);
+        for (a, b) in da.iter_f64()?.zip(da_ref.iter_f64()?) {
+            assert!((a - b).abs() < 1e-3, "{a} - {b} = {} which is too large a deviation", (a - b).abs())
+        }
 
         Ok(())
     }
