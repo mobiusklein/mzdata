@@ -970,6 +970,20 @@ mod test {
         Ok(da)
     }
 
+    fn make_array_from_file_im_zstd() -> io::Result<DataArray> {
+        let mut fh = fs::File::open("test/data/im_f64_zstd_base64.txt")?;
+        let mut buf = String::new();
+        fh.read_to_string(&mut buf)?;
+        let bytes: Vec<u8> = buf.into();
+        let mut da = DataArray::wrap(&ArrayType::MeanInverseReducedIonMobilityArray, BinaryDataArrayType::Float64, bytes);
+        da.compression = BinaryCompressionType::Zstd;
+        *da.unit_mut() = Unit::VoltSecondPerSquareCentimeter;
+        assert_eq!(da.unit(), Unit::VoltSecondPerSquareCentimeter);
+        assert!(da.is_ion_mobility());
+        assert_eq!(da.name(), &ArrayType::MeanInverseReducedIonMobilityArray);
+        Ok(da)
+    }
+
     #[test]
     fn test_decode() -> io::Result<()> {
         let mut da = make_array_from_file()?;
@@ -1115,5 +1129,20 @@ mod test {
         assert_eq!(da.data_len().unwrap(), 0);
         assert_eq!(da.decode().unwrap().len(), 0);
         assert_eq!(da.to_f64().unwrap().len(), 0);
+    }
+
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn test_dict_from_base64() -> io::Result<()> {
+        let mut da = make_array_from_file_im_zstd()?;
+
+        da.decode_and_store()?;
+        assert_eq!(da.data_len()?, 221);
+
+        da.store_compressed(BinaryCompressionType::ZstdDict)?;
+        assert_eq!(da.data_len()?, 221);
+
+        Ok(())
     }
 }
