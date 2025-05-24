@@ -478,7 +478,10 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     #[cfg(feature = "zstd")]
     pub fn compress_dict_zstd(bytestring: &[u8], dtype: BinaryDataArrayType) -> Bytes {
         use super::encodings::dictionary_encoding;
-
+        log::trace!("Dictionary encoding {} bytes as {dtype}", bytestring.len());
+        if bytestring.is_empty() {
+            return Self::compress_zstd(&bytestring, dtype, false);
+        }
         match dtype {
             BinaryDataArrayType::Float64 => {
                 let compressed =
@@ -1056,6 +1059,27 @@ mod test {
         let mut da_ref = make_array_from_file()?;
         da_ref.decode_and_store()?;
         assert_eq!(da.data, da_ref.data);
+        Ok(())
+    }
+
+    #[test]
+    fn test_numpress_linear() -> io::Result<()> {
+        let mut da = make_array_from_file()?;
+        let zlib_len = da.data.len();
+        da.decode_and_store()?;
+
+        let decoded_len = da.data.len();
+
+        da.store_compressed(BinaryCompressionType::NumpressLinear)?;
+        let numpress_len = da.data.len();
+
+        eprintln!("zlib: {zlib_len};\ndecoded: {decoded_len};\nzstd: {numpress_len}");
+        da.decode_and_store()?;
+
+        let mut da_ref = make_array_from_file()?;
+        da_ref.decode_and_store()?;
+        assert_eq!(da.data, da_ref.data);
+
         Ok(())
     }
 

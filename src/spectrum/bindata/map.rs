@@ -229,7 +229,7 @@ impl BinaryArrayMap {
             .get(&ArrayType::IntensityArray)
             .ok_or(ArrayRetrievalError::NotFound(ArrayType::IntensityArray))?
             .to_f32().inspect_err(|e| {
-                log::error!("Failed to decode intensity array: {e}")
+                log::error!("Failed to decode intensity array: {e:?}")
             })?;
         Ok(intensities)
     }

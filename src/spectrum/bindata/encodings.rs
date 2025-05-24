@@ -33,18 +33,30 @@ pub fn vec_as_bytes<T: Pod>(data: Vec<T>) -> Bytes {
     buf
 }
 
+const fn is_target_little_endian() -> bool {
+    u16::from_ne_bytes([1, 0]) == 1
+}
+
 mod byte_rotation {
     use super::*;
 
     pub fn transpose_bytes_into<T: Pod, const N: usize>(data: &[T], buffer: &mut Vec<u8>) {
+        assert_eq!(core::mem::size_of::<T>(), N);
         let bytes = bytemuck::cast_slice::<T, [u8; N]>(data);
         buffer.clear();
         let delta = (data.len() * N).saturating_sub(buffer.capacity());
         if delta > 0 {
             buffer.reserve(delta);
         }
-        for i in 0..N {
-            buffer.extend(bytes.iter().map(|b| b[i]))
+
+        if is_target_little_endian() {
+            for i in 0..N {
+                buffer.extend(bytes.iter().map(|b| b[i]))
+            }
+        } else {
+            for i in (0..N).rev() {
+                buffer.extend(bytes.iter().map(|b| b[i]))
+            }
         }
     }
 
@@ -87,9 +99,17 @@ mod byte_rotation {
         buffer.clear();
         buffer.resize(data.len(), 0);
 
-        for (i, band) in data.chunks_exact(n_entries).enumerate() {
-            for (j, byte) in band.iter().copied().enumerate() {
-                bytemuck::cast_slice_mut::<_, [u8; N]>(buffer)[j][i] = byte;
+        if is_target_little_endian() {
+            for (i, band) in data.chunks_exact(n_entries).enumerate() {
+                for (j, byte) in band.iter().copied().enumerate() {
+                    bytemuck::cast_slice_mut::<_, [u8; N]>(buffer)[j][i] = byte;
+                }
+            }
+        } else {
+            for (i, band) in data.chunks_exact(n_entries).enumerate() {
+                for (j, byte) in band.iter().copied().enumerate() {
+                    bytemuck::cast_slice_mut::<_, [u8; N]>(buffer)[j][(N - 1) - i] = byte;
+                }
             }
         }
     }
@@ -133,9 +153,7 @@ mod dictionary_encoding {
     use io::prelude::*;
     use num_traits::ops::bytes::{FromBytes, ToBytes};
     use std::{
-        collections::{HashMap, HashSet},
-        hash::Hash,
-        io::BufWriter,
+        borrow::Cow, collections::{HashMap, HashSet}, hash::Hash, io::BufWriter
     };
 
     trait DictValue<const W: usize>:
@@ -195,6 +213,8 @@ mod dictionary_encoding {
             &self,
             data: &[T],
         ) -> (Vec<V>, HashMap<V, usize>) {
+            debug_assert_eq!(core::mem::size_of::<T>(), core::mem::size_of::<V>());
+            debug_assert_eq!(core::mem::size_of::<T>(), W1);
             let mut value_codes = HashSet::new();
             for v in data {
                 let k: V = *bytemuck::from_bytes(bytemuck::bytes_of(v));
@@ -248,12 +268,12 @@ mod dictionary_encoding {
             writer.write(&(value_codes.len() as u64).to_le_bytes())?;
 
             if self.shuffle {
-                // This isn't endian-correct
+                // This isn't endian-correct yet, see note in `transpose_bytes_into`
                 byte_rotation::transpose_bytes_into::<V, W1>(value_codes, &mut self.buffer);
-                for v in self.buffer.iter() {
-                    let bts = v.to_le_bytes();
-                    writer.write_all(&bts)?;
-                }
+                writer.write_all(&self.buffer)?;
+                // for v in self.buffer.chunks(W1) {
+                //     writer.write_all(v)?;
+                // }
             } else {
                 for v in value_codes.iter() {
                     let bts = v.to_le_bytes();
@@ -271,10 +291,8 @@ mod dictionary_encoding {
                     buf.push(ik);
                 }
                 // This isn't endian-correct
-                let buf = byte_rotation::transpose_bytes::<K, W2>(&buf);
-                for ik in buf {
-                    writer.write_all(&ik.to_le_bytes())?;
-                }
+                byte_rotation::transpose_bytes_into::<K, W2>(&buf, &mut self.buffer);
+                writer.write_all(&self.buffer)?;
             } else {
                 for v in data {
                     let i = *byte_map
@@ -314,6 +332,9 @@ mod dictionary_encoding {
         }
 
         pub fn encode<T: Pod>(&mut self, data: &[T]) -> io::Result<Bytes> {
+            if data.is_empty() {
+                return Ok(Vec::new())
+            }
             let z_val = core::mem::size_of::<T>();
             if z_val <= 1 {
                 self.encode_values::<T, 1, u8>(data)
@@ -336,11 +357,12 @@ mod dictionary_encoding {
     #[derive(Default, Debug)]
     pub struct DictionaryDecoder {
         shuffle: bool,
+        buffer: Vec<u8>,
     }
 
     impl DictionaryDecoder {
         pub fn new(shuffle: bool) -> Self {
-            Self { shuffle }
+            Self { shuffle, buffer: Default::default() }
         }
 
         fn make_reader<'a>(&self, buffer: &'a [u8]) -> io::BufReader<&'a [u8]> {
@@ -367,16 +389,19 @@ mod dictionary_encoding {
             if self.shuffle {
                 let blocks = match core::mem::size_of::<T>() {
                     1 => {
-                        buffer.to_vec()
+                        Cow::Borrowed(buffer)
                     }
                     2 => {
-                        byte_rotation::reverse_transpose_bytes::<T, 2>(buffer)
+                        byte_rotation::reverse_transpose_bytes_into::<T, 2>(buffer, &mut self.buffer);
+                        Cow::Borrowed(self.buffer.as_slice())
                     }
                     4 => {
-                        byte_rotation::reverse_transpose_bytes::<T, 4>(buffer)
+                        byte_rotation::reverse_transpose_bytes_into::<T, 4>(buffer, &mut self.buffer);
+                        Cow::Borrowed(self.buffer.as_slice())
                     }
                     8 => {
-                        byte_rotation::reverse_transpose_bytes::<T, 8>(buffer)
+                        byte_rotation::reverse_transpose_bytes_into::<T, 8>(buffer, &mut self.buffer);
+                        Cow::Borrowed(self.buffer.as_slice())
                     }
                     x => {
                         panic!("Unsupported size {x}");
@@ -402,8 +427,8 @@ mod dictionary_encoding {
         ) -> Vec<T> {
             let mut result = Vec::with_capacity(index_buffer.len() / W2);
             if self.shuffle {
-                let new_index_buffer = byte_rotation::reverse_transpose_bytes::<K, W2>(index_buffer);
-                for chunk in new_index_buffer.chunks_exact(W2) {
+                byte_rotation::reverse_transpose_bytes_into::<K, W2>(index_buffer, &mut self.buffer);
+                for chunk in self.buffer.chunks_exact(W2) {
                     let b: [u8; W2] = chunk.try_into().unwrap();
                     let k: usize = K::from_le_bytes(&b).to_usize();
                     result.push(value_codes[k])
@@ -419,13 +444,22 @@ mod dictionary_encoding {
         }
 
         pub fn decode<'a, T: Pod>(&mut self, buffer: &'a [u8]) -> io::Result<Vec<T>> {
+            if buffer.is_empty() {
+                return Ok(Vec::new())
+            }
             let mut reader = self.make_reader(buffer);
             let mut z_buf = [0u8; 8];
             reader.read_exact(&mut z_buf)?;
             let data_offset = u64::from_le_bytes(z_buf);
+            if data_offset == 0 {
+                return Ok(Vec::new())
+            }
             let mut z_buf = [0u8; 8];
             reader.read_exact(&mut z_buf)?;
             let n_value_codes = u64::from_le_bytes(z_buf);
+            if n_value_codes == 0 {
+                return Ok(Vec::new())
+            }
             let value_buffer = &buffer[16..(data_offset as usize)];
             let value_width = (data_offset - 16) / n_value_codes;
             let index_buffer = &buffer[data_offset as usize..];
@@ -1297,7 +1331,7 @@ mod test {
 
     #[test]
     fn test_dict() {
-        let data: Vec<_> = (0..128i32).map(|i| i.pow(2u32) as f64).collect();
+        let data: Vec<_> = (0..127i32).map(|i| i.pow(2u32) as f64).collect();
         let encoded = dictionary_encoding(&data).unwrap();
         let decoded: Vec<f64> = dictionary_decoding(&encoded).unwrap();
 
