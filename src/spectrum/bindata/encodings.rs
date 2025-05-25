@@ -1001,49 +1001,92 @@ impl BinaryCompressionType {
         }
     }
 
+    pub const fn accession(&self) -> Option<u32> {
+        let acc = match self {
+            BinaryCompressionType::NoCompression => 1000576,
+            BinaryCompressionType::Zlib => 1000574,
+            BinaryCompressionType::NumpressLinear => {
+                1002312
+            }
+            BinaryCompressionType::NumpressSLOF => {
+                1002314
+            }
+            BinaryCompressionType::NumpressPIC => {
+                1002313
+            }
+            BinaryCompressionType::NumpressLinearZlib => 1002746,
+            BinaryCompressionType::NumpressSLOFZlib => 1002478,
+            BinaryCompressionType::NumpressPICZlib => 1002477,
+            BinaryCompressionType::DeltaPrediction => {
+                1003089
+            }
+            BinaryCompressionType::LinearPrediction => 1003090,
+            BinaryCompressionType::NumpressSLOFZstd => {
+                9999994
+            }
+            BinaryCompressionType::NumpressLinearZstd => {
+                9999995
+            }
+            BinaryCompressionType::ZstdDict => {
+                9999996
+
+            }
+            BinaryCompressionType::Zstd => {
+                9999997
+            }
+            BinaryCompressionType::ShuffleZstd => {
+                9999998
+            }
+            BinaryCompressionType::DeltaShuffleZstd => {
+                9999999
+            }
+            BinaryCompressionType::Decoded => return None
+        };
+        Some(acc)
+    }
+
     /// Convert the compression type to a [`ParamCow`].
     ///
     /// Most compression methods have a controlled vocabulary
     /// term.
-    pub const fn as_param(&self) -> Option<ParamCow> {
+    pub const fn as_param(&self) -> Option<ParamCow<'static>> {
         let (name, accession) = match self {
-            BinaryCompressionType::NoCompression => ("no compression", 1000576),
-            BinaryCompressionType::Zlib => ("zlib compression", 1000574),
+            BinaryCompressionType::Decoded => return None,
+            BinaryCompressionType::NoCompression => ("no compression", self.accession()),
+            BinaryCompressionType::Zlib => ("zlib compression", self.accession()),
             BinaryCompressionType::NumpressLinear => {
-                ("MS-Numpress linear prediction compression", 1002312)
+                ("MS-Numpress linear prediction compression", self.accession())
             }
             BinaryCompressionType::NumpressSLOF => {
-                ("MS-Numpress short logged float compression", 1002314)
+                ("MS-Numpress short logged float compression", self.accession())
             }
             BinaryCompressionType::NumpressPIC => {
-                ("MS-Numpress positive integer compression", 1002313)
+                ("MS-Numpress positive integer compression", self.accession())
             }
             BinaryCompressionType::NumpressLinearZlib => (
                 "MS-Numpress linear prediction compression followed by zlib compression",
-                1002746,
+                self.accession(),
             ),
             BinaryCompressionType::NumpressSLOFZlib => (
                 "MS-Numpress short logged float compression followed by zlib compression",
-                1002478,
+                self.accession(),
             ),
             BinaryCompressionType::NumpressPICZlib => (
                 "MS-Numpress positive integer compression followed by zlib compression",
-                1002477,
+                self.accession(),
             ),
             BinaryCompressionType::DeltaPrediction => {
-                ("truncation, delta prediction and zlib compression", 1003089)
+                ("truncation, delta prediction and zlib compression", self.accession())
             }
             BinaryCompressionType::LinearPrediction => (
                 "truncation, linear prediction and zlib compression",
-                1003090,
+                self.accession(),
             ),
-            BinaryCompressionType::Decoded => return None,
-
             BinaryCompressionType::NumpressSLOFZstd => {
                 return Some(ParamCow::const_new(
                     "MS-Numpress short logged float compression followed by zstd compression",
                     crate::params::ValueRef::Empty,
-                    Some(9999994),
+                    self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
                 ))
@@ -1052,7 +1095,7 @@ impl BinaryCompressionType {
                 return Some(ParamCow::const_new(
                     "MS-Numpress linear prediction compression followed by zstd compression",
                     crate::params::ValueRef::Empty,
-                    Some(9999995),
+                    self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
                 ))
@@ -1061,7 +1104,7 @@ impl BinaryCompressionType {
                 return Some(ParamCow::const_new(
                     "dict-zstd compression",
                     crate::params::ValueRef::Empty,
-                    Some(9999996),
+                    self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
                 ))
@@ -1070,7 +1113,7 @@ impl BinaryCompressionType {
                 return Some(ParamCow::const_new(
                     "zstd compression",
                     crate::params::ValueRef::Empty,
-                    Some(9999997),
+                    self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
                 ))
@@ -1079,7 +1122,7 @@ impl BinaryCompressionType {
                 return Some(ParamCow::const_new(
                     "byte-shuffle-zstd compression",
                     crate::params::ValueRef::Empty,
-                    Some(9999998),
+                    self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
                 ))
@@ -1088,13 +1131,13 @@ impl BinaryCompressionType {
                 return Some(ParamCow::const_new(
                     "delta-byte-shuffle-zstd compression",
                     crate::params::ValueRef::Empty,
-                    Some(9999999),
+                    self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
                 ))
             }
         };
-        Some(ControlledVocabulary::MS.const_param_ident(name, accession))
+        Some(ControlledVocabulary::MS.const_param_ident(name, unsafe { accession.unwrap_unchecked() }))
     }
 }
 

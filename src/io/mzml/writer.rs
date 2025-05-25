@@ -1793,9 +1793,13 @@ where
         array: &DataArray,
         default_array_len: usize,
     ) -> WriterResult {
-        let encoded_array = array.encode_bytestring(
-            self.get_compression_method_for(array)
+        let compression_method = self.get_compression_method_for(array);
+        log::trace!(
+            "Encoding {:?} using {compression_method:?} with {}/{default_array_len} bytes",
+            array.name(),
+            array.raw_len()
         );
+        let encoded_array = array.encode_bytestring(compression_method);
         self.write_binary_data_array_pre_encoded(array, default_array_len, &encoded_array)
     }
 
@@ -1936,6 +1940,7 @@ where
         &mut self,
         spectrum: &S,
     ) -> WriterResult {
+        log::trace!(r#"Writing spectrum "{}""#, spectrum.id());
         match self.state {
             MzMLWriterState::SpectrumList => {}
             state if state < MzMLWriterState::SpectrumList => {

@@ -69,57 +69,62 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
 
     fn fill_spectrum<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P);
 
+    fn set_current_compressiion(&mut self, compression: BinaryCompressionType) {
+        trace!("Setting current compression method for {:?} to {compression:?}", self.current_array_mut().name());
+        self.current_array_mut().compression = compression;
+    }
+
     fn fill_binary_data_array<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P) {
         if param.is_ms() {
             match param.accession().unwrap() {
                 // Compression types
-                1000574 => {
-                    self.current_array_mut().compression = BinaryCompressionType::Zlib;
+                x if x == unsafe { BinaryCompressionType::Zlib.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::Zlib);
                 }
-                1000576 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NoCompression;
+                x if x == unsafe { BinaryCompressionType::NoCompression.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NoCompression);
                 }
-                1002312 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressLinear
+                x if x == unsafe { BinaryCompressionType::NumpressLinear.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressLinear);
                 }
-                1002313 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressPIC
+                x if x == unsafe { BinaryCompressionType::NumpressPIC.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressPIC);
                 }
-                1002314 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressSLOF
+                x if x == unsafe { BinaryCompressionType::NumpressSLOF.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressSLOF);
                 }
-                1002746 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressLinearZlib
+                x if x == unsafe { BinaryCompressionType::NumpressLinearZlib.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressLinearZlib);
                 }
-                1002747 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressPICZlib
+                x if x == unsafe { BinaryCompressionType::NumpressPICZlib.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressPICZlib);
                 }
-                1002748 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressSLOFZlib
+                x if x == unsafe { BinaryCompressionType::NumpressSLOFZlib.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressSLOFZlib);
                 }
-                1003089 => {
-                    self.current_array_mut().compression = BinaryCompressionType::DeltaPrediction
+                x if x == unsafe { BinaryCompressionType::DeltaPrediction.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::DeltaPrediction);
                 }
-                1003090 => {
-                    self.current_array_mut().compression = BinaryCompressionType::LinearPrediction
+                x if x == unsafe { BinaryCompressionType::LinearPrediction.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::LinearPrediction);
                 }
-                x if x == unsafe { BinaryCompressionType::ShuffleZstd.as_param().unwrap_unchecked().accession.unwrap_unchecked() } => {
-                    self.current_array_mut().compression = BinaryCompressionType::ShuffleZstd
+                x if x == unsafe { BinaryCompressionType::ShuffleZstd.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::ShuffleZstd);
                 }
-                x if x == unsafe { BinaryCompressionType::DeltaShuffleZstd.as_param().unwrap_unchecked().accession.unwrap_unchecked() } => {
-                    self.current_array_mut().compression = BinaryCompressionType::DeltaShuffleZstd
+                x if x == unsafe { BinaryCompressionType::DeltaShuffleZstd.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::DeltaShuffleZstd);
                 }
-                x if x == unsafe { BinaryCompressionType::Zstd.as_param().unwrap_unchecked().accession.unwrap_unchecked() } => {
-                    self.current_array_mut().compression = BinaryCompressionType::Zstd
+                x if x == unsafe { BinaryCompressionType::Zstd.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::Zstd);
                 }
-                x if x == unsafe { BinaryCompressionType::ZstdDict.as_param().unwrap_unchecked().accession.unwrap_unchecked() } => {
-                    self.current_array_mut().compression = BinaryCompressionType::ZstdDict
+                x if x == unsafe { BinaryCompressionType::ZstdDict.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::ZstdDict);
                 }
-                x if x == unsafe { BinaryCompressionType::NumpressLinearZstd.as_param().unwrap_unchecked().accession.unwrap_unchecked() } => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressLinearZstd
+                x if x == unsafe { BinaryCompressionType::NumpressLinearZstd.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressLinearZstd);
                 }
-                x if x == unsafe { BinaryCompressionType::NumpressSLOFZstd.as_param().unwrap_unchecked().accession.unwrap_unchecked() } => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressSLOFZstd
+                x if x == unsafe { BinaryCompressionType::NumpressSLOFZstd.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressSLOFZstd);
                 }
                 // Array data types
                 1000523 => {
@@ -679,12 +684,14 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                             "Failed to decode spectrum id".into()
                                         ))
                                     }
-                                }
+                                };
+                                trace!("Stored spectrum id = {}", self.entry_id);
                             }
                             b"index" => {
                                 self.index = String::from_utf8_lossy(&attr.value)
                                     .parse::<usize>()
                                     .expect("Failed to parse index");
+                                trace!("Stored spectrum index = {}", self.index);
                             }
                             _ => {}
                         },
@@ -793,11 +800,13 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                     .unescape_value()
                                     .expect("Error decoding id")
                                     .to_string();
+                                trace!("Stored chromatogram id = {}", self.entry_id);
                             }
                             b"index" => {
                                 self.index = String::from_utf8_lossy(&attr.value)
                                     .parse::<usize>()
                                     .expect("Failed to parse index");
+                                trace!("Stored chromatogram index = {}", self.index);
                             }
                             _ => {}
                         },
@@ -1406,6 +1415,9 @@ impl<
                 );
                 Ok((accumulator, offset))
             }
+            MzMLParserState::EOF => {
+                Err(MzMLParserError::EOF)
+            }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
@@ -1444,7 +1456,10 @@ impl<
                 Ok(sz)
             }
             Err(err) => {
-                log::error!("Error while reading mzML spectrum: {err}");
+                match &err {
+                    MzMLParserError::EOF => {},
+                    err => log::error!("Error while reading mzML spectrum: {err}")
+                };
                 Err(err)
             },
         }
@@ -1459,7 +1474,12 @@ impl<
         match self.read_into(&mut spectrum) {
             Ok(_sz) => Some(spectrum),
             Err(err) => {
-                trace!("Failed to read next spectrum: {err}");
+                match err {
+                    MzMLParserError::EOF => {},
+                    err => {
+                        trace!("Failed to read next spectrum: {err}");
+                    }
+                }
                 None
             }
         }
@@ -1819,16 +1839,18 @@ impl<
 
     fn verify_index(&mut self) -> Result<(), IndexRecoveryOperation> {
         let n = self.spectrum_index.len();
+        trace!("Verifying offset index of length {n}");
         if n > 0 {
             // Try to pick a spectrum that's close to the beginning of the file to avoid large
             // amounts of wasted scanning for non-linear files, but pick one far enough in it would
             // be affected by byte drift.
             let center = (n / 2).min(100);
+            trace!("Checking offset of {center}th spectrum");
             let dl = self.detail_level;
             self.set_detail_level(DetailLevel::MetadataOnly);
             let s = self.get_spectrum_by_index(center);
             self.set_detail_level(dl);
-            let s_found = s.is_none();
+            let s_found = s.is_some_and(|s| s.index() == center);
             if s_found {
                 return Ok(());
             }

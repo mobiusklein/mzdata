@@ -129,6 +129,8 @@ pub enum MzMLParserError {
     SectionOver(&'static str),
     #[error("Failed to decode {1}: {2} for {0}")]
     ArrayDecodingError(MzMLParserState, ArrayType, ArrayRetrievalError),
+    #[error("Reached the end of the file")]
+    EOF
 }
 
 impl From<MzMLParserError> for io::Error {

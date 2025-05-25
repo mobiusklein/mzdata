@@ -371,25 +371,27 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
     #[cfg(feature = "numpress")]
     pub fn decompress_numpress_slof(data: &[u8], dtype: BinaryDataArrayType) -> Result<Cow<'static, [u8]>, ArrayRetrievalError> {
-        let mut buf = Vec::new();
+        use log::trace;
 
+        let mut buf = Vec::new();
         let decoded = match numpress::decode_slof(data, &mut buf) {
             Ok(_) => buf,
             Err(e) => return Err(ArrayRetrievalError::DecompressionError(e.to_string())),
         };
-
+        trace!("Numpress SLOF decoded to {} points", decoded.len());
         match dtype {
             BinaryDataArrayType::Float64 => {
                 let view = vec_as_bytes(decoded);
                 Ok(Cow::Owned(view))
             },
             BinaryDataArrayType::Float32 => {
-                let n = decoded.len() * 4;
+                let n = decoded.len() * BinaryDataArrayType::Float32.size_of();
+                trace!("Mapping to {n} bytes for f32 storage");
                 let mut view: Vec<u8> = Vec::with_capacity(n);
-                view = decoded.into_iter().map(|v| v as f32).fold(view, |mut view, val| {
-                    view.extend_from_slice(bytemuck::bytes_of(&val));
-                    view
-                });
+                for val in decoded {
+                    let val = val as f32;
+                    view.extend(bytemuck::bytes_of(&val))
+                }
                 Ok(Cow::Owned(view))
             },
             _ => {
@@ -861,6 +863,11 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     pub const fn is_ion_mobility(&self) -> bool {
         self.name.is_ion_mobility()
     }
+
+    /// The size of the raw byte buffer
+    pub fn raw_len(&self) -> usize {
+        self.data.len()
+    }
 }
 
 impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan> for DataArray {
@@ -1141,6 +1148,9 @@ mod test {
         assert_eq!(da.data_len()?, 221);
 
         da.store_compressed(BinaryCompressionType::ZstdDict)?;
+        assert_eq!(da.data_len()?, 221);
+
+        da.store_compressed(BinaryCompressionType::ShuffleZstd)?;
         assert_eq!(da.data_len()?, 221);
 
         Ok(())
