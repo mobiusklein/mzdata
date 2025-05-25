@@ -1015,8 +1015,8 @@ impl BinaryCompressionType {
                 1002313
             }
             BinaryCompressionType::NumpressLinearZlib => 1002746,
-            BinaryCompressionType::NumpressSLOFZlib => 1002478,
-            BinaryCompressionType::NumpressPICZlib => 1002477,
+            BinaryCompressionType::NumpressSLOFZlib => 1002748,
+            BinaryCompressionType::NumpressPICZlib => 1002747,
             BinaryCompressionType::DeltaPrediction => {
                 1003089
             }
@@ -1348,11 +1348,11 @@ mod test {
                 ),
                 BinaryCompressionType::NumpressPICZlib => (
                     "MS-Numpress positive integer compression followed by zlib compression",
-                    1002477,
+                    1002747,
                 ),
                 BinaryCompressionType::NumpressSLOFZlib => (
                     "MS-Numpress short logged float compression followed by zlib compression",
-                    1002478,
+                    1002748,
                 ),
                 _ => ("", 0),
             };

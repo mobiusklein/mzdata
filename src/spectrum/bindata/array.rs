@@ -977,6 +977,7 @@ mod test {
         Ok(da)
     }
 
+    #[cfg(feature = "zstd")]
     fn make_array_from_file_im_zstd() -> io::Result<DataArray> {
         let mut fh = fs::File::open("test/data/im_f64_zstd_base64.txt")?;
         let mut buf = String::new();
