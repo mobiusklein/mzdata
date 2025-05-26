@@ -188,6 +188,7 @@ impl MSDataFileSummary {
 }
 
 fn main() -> io::Result<()> {
+    env_logger::init();
     let path = path::PathBuf::from(env::args().nth(1).unwrap_or_else(|| {
         eprintln!("Please provide a path to an MS data file");
         process::exit(1)

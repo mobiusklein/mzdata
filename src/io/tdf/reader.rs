@@ -25,6 +25,7 @@ use crate::{
     params::{ControlledVocabulary, Unit, Value},
     prelude::*,
     spectrum::{
+        bindata::{ArrayRetrievalError, BinaryArrayMap3D},
         Activation, ArrayType, BinaryArrayMap, BinaryDataArrayType, Chromatogram,
         ChromatogramDescription, ChromatogramType, DataArray, IonMobilityFrameDescription,
         IsolationWindow, IsolationWindowState, MultiLayerIonMobilityFrame, MultiLayerSpectrum,
@@ -256,6 +257,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         TDFSpectrumReaderType {
             frame_reader: self,
             peak_merging_tolerance,
+            do_consolidate_peaks: true,
             _cp: PhantomData,
             _dp: PhantomData,
         }
@@ -517,6 +519,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         &self,
         frame: MultiLayerIonMobilityFrame<C, D>,
         error_tolerance: Tolerance,
+        do_consolidate: bool,
     ) -> MultiLayerSpectrum<CP, DP> {
         let (feature_d, mut descr) = frame.into_features_and_parts();
         match feature_d {
@@ -527,19 +530,23 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                 deconvoluted_peaks: None,
             },
             crate::spectrum::FeatureDataLevel::RawData(arrays) => {
-                let peaks = consolidate_peaks(
-                    &arrays,
-                    &(0..arrays.ion_mobility_dimension.len() as u32),
-                    &self.metadata,
-                    error_tolerance,
-                )
-                .unwrap();
+                let peaks = if do_consolidate {
+                    consolidate_peaks(
+                        &arrays,
+                        &(0..arrays.ion_mobility_dimension.len() as u32),
+                        &self.metadata,
+                        error_tolerance,
+                    )
+                    .ok()
+                } else {
+                    None
+                };
                 descr.signal_continuity = SignalContinuity::Centroid;
                 let arrays = arrays.unstack().unwrap();
                 let spec = MultiLayerSpectrum {
                     description: descr.into(),
                     arrays: Some(arrays),
-                    peaks: Some(peaks),
+                    peaks,
                     deconvoluted_peaks: None,
                 };
                 spec
@@ -987,8 +994,11 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 pub type TDFFrameReader =
     TDFFrameReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>;
 
-/// A flat spectrum reader for Bruker TDF file format. It sums over ion mobility
-/// spectra, consolidating features into peaks.
+/// A flat spectrum reader for Bruker TDF file format wrapping a [`TDFFrameReaderType`].
+///
+/// It can sum over ion mobility spectra, consolidating features into peaks. Enable this
+/// behavior by [`Self::set_consolidate_peaks`] `true`. The granularity of the merging
+/// in the m/z dimension [`Self::peak_merging_tolerance`].
 #[derive(Debug)]
 pub struct TDFSpectrumReaderType<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
@@ -998,6 +1008,7 @@ pub struct TDFSpectrumReaderType<
 > {
     frame_reader: TDFFrameReaderType<C, D>,
     peak_merging_tolerance: Tolerance,
+    do_consolidate_peaks: bool,
     _cp: PhantomData<CP>,
     _dp: PhantomData<DP>,
 }
@@ -1086,22 +1097,31 @@ impl<
 
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<CP, DP>> {
         self.frame_reader.get_frame_by_id(id).map(|f| {
-            self.frame_reader
-                .frame_to_spectrum(f, self.peak_merging_tolerance)
+            self.frame_reader.frame_to_spectrum(
+                f,
+                self.peak_merging_tolerance,
+                self.do_consolidate_peaks,
+            )
         })
     }
 
     fn get_spectrum_by_index(&mut self, index: usize) -> Option<MultiLayerSpectrum<CP, DP>> {
         self.frame_reader.get_frame_by_index(index).map(|f| {
-            self.frame_reader
-                .frame_to_spectrum(f, self.peak_merging_tolerance)
+            self.frame_reader.frame_to_spectrum(
+                f,
+                self.peak_merging_tolerance,
+                self.do_consolidate_peaks,
+            )
         })
     }
 
     fn get_spectrum_by_time(&mut self, time: f64) -> Option<MultiLayerSpectrum<CP, DP>> {
         self.frame_reader.get_frame_by_time(time).map(|f| {
-            self.frame_reader
-                .frame_to_spectrum(f, self.peak_merging_tolerance)
+            self.frame_reader.frame_to_spectrum(
+                f,
+                self.peak_merging_tolerance,
+                self.do_consolidate_peaks,
+            )
         })
     }
 
@@ -1133,15 +1153,21 @@ impl<
 
     fn next(&mut self) -> Option<Self::Item> {
         self.frame_reader.next().map(|f| {
-            self.frame_reader
-                .frame_to_spectrum(f, self.peak_merging_tolerance)
+            self.frame_reader.frame_to_spectrum(
+                f,
+                self.peak_merging_tolerance,
+                self.do_consolidate_peaks,
+            )
         })
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         self.frame_reader.nth(n).map(|f| {
-            self.frame_reader
-                .frame_to_spectrum(f, self.peak_merging_tolerance)
+            self.frame_reader.frame_to_spectrum(
+                f,
+                self.peak_merging_tolerance,
+                self.do_consolidate_peaks,
+            )
         })
     }
 }
@@ -1189,16 +1215,18 @@ impl<
     > TDFSpectrumReaderType<C, D, CP, DP>
 {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, TimsRustError> {
-        Self::new_with_peak_merging_tolerance(path, PEAK_MERGE_TOLERANCE)
+        Self::new_with_peak_merging_tolerance(path, PEAK_MERGE_TOLERANCE, false)
     }
 
     pub fn new_with_peak_merging_tolerance<P: AsRef<Path>>(
         path: P,
         peak_merging_tolerance: Tolerance,
+        do_consolidate_peaks: bool,
     ) -> Result<Self, TimsRustError> {
         TDFFrameReaderType::<C, D>::new(path).map(|s| Self {
             frame_reader: s,
             peak_merging_tolerance,
+            do_consolidate_peaks,
             _cp: PhantomData,
             _dp: PhantomData,
         })
@@ -1207,6 +1235,7 @@ impl<
     pub fn new_with_detail_level<P: AsRef<Path>>(
         path: P,
         peak_merging_tolerance: Option<Tolerance>,
+        do_consolidate_peaks: bool,
         detail_level: DetailLevel,
     ) -> Result<Self, TimsRustError> {
         TDFFrameReaderType::<C, D>::new(path).map(|mut s| {
@@ -1214,6 +1243,7 @@ impl<
             Self {
                 frame_reader: s,
                 peak_merging_tolerance: peak_merging_tolerance.unwrap_or(PEAK_MERGE_TOLERANCE),
+                do_consolidate_peaks,
                 _cp: PhantomData,
                 _dp: PhantomData,
             }
@@ -1229,12 +1259,40 @@ impl<
         self.frame_reader.is_empty()
     }
 
+    /// Merge peaks in the ion mobility dimension. This will be done automatically
+    /// if [`Self::will_consolidate_peaks`] returns true.
+    ///
+    /// This modifies the spectrum in-place.
+    ///
+    /// # See Also
+    /// - [`Self::will_consolidate_peaks`]
+    /// - [`Self::set_consolidate_peaks`]
+    pub fn consolidate_peaks(
+        &self,
+        spectrum: &mut MultiLayerSpectrum<CP, DP>,
+    ) -> Result<(), ArrayRetrievalError> where CP: From<CentroidPeak> {
+        if let Some(arrays) = spectrum.arrays.as_ref() {
+            let arrays = BinaryArrayMap3D::stack(arrays)?;
+            spectrum.peaks = Some(consolidate_peaks(
+                &arrays,
+                &(0..arrays.ion_mobility_dimension.len() as u32),
+                &self.frame_reader.metadata,
+                self.peak_merging_tolerance,
+            )?);
+        };
+
+        Ok(())
+    }
+
     /// Retrieve a spectrum by index
     pub fn get(&self, index: usize) -> Result<Option<MultiLayerSpectrum>, TimsRustError> {
         self.frame_reader.get(index).map(|f| {
             f.map(|f| {
-                self.frame_reader
-                    .frame_to_spectrum(f, self.peak_merging_tolerance)
+                self.frame_reader.frame_to_spectrum(
+                    f,
+                    self.peak_merging_tolerance,
+                    self.do_consolidate_peaks,
+                )
             })
         })
     }
@@ -1271,6 +1329,14 @@ impl<
 
     pub fn get_trace_reader(&self) -> Result<ChromatographyData, TimsRustError> {
         self.frame_reader.get_trace_reader()
+    }
+
+    pub fn will_consolidate_peaks(&self) -> bool {
+        self.do_consolidate_peaks
+    }
+
+    pub fn set_consolidate_peaks(&mut self, do_consolidate_peaks: bool) {
+        self.do_consolidate_peaks = do_consolidate_peaks;
     }
 }
 

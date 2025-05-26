@@ -114,6 +114,7 @@ async_partial = [
 proxi = ["dep:reqwest", "serde"]
 proxi-async = ["proxi", "dep:futures"]
 libloading = ["dep:libloading"]
+zstd = ["dep:zstd"]
 
 [dependencies]
 regex = "1"
@@ -149,8 +150,8 @@ base16ct = { version = "0.2.0", features = ["alloc"], optional = true }
 
 # Bytes and compression
 flate2 = { version = "1.0.20" }
-numpress = { version = "1.1.0", optional = true }
-bytemuck = { version = "1.18.0", features = ["extern_crate_alloc"] }
+numpress = { version = "1.1.0", optional = true, package = "numpress-rs" }
+bytemuck = { version = "1.18.0", features = ["extern_crate_alloc", "min_const_generics"] }
 base64-simd = "0.8.0"
 
 # Async reader features
@@ -182,6 +183,7 @@ parking_lot = { version = "0.12.3", optional = true }
 pin-project-lite = { version = "0.2.16", optional = true }
 memchr = { version = "2.7.4", optional = true }
 libloading = { version = "0.8.6", optional = true }
+zstd = { version = "0.13.3", optional = true }
 
 
 [dev-dependencies]

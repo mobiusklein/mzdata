@@ -448,7 +448,7 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
         if is_gzipped {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
-                "Gzipped files are not supported",
+                "Gzipped files are not supported with this method. See `MZReaderType::open_gzipped_read_seek`.",
             ))
         }
         match format {

@@ -204,14 +204,18 @@ impl BinaryArrayMap {
         let mz_array = self
             .get(&ArrayType::MZArray)
             .ok_or(ArrayRetrievalError::NotFound(ArrayType::MZArray))?
-            .to_f64()?;
+            .to_f64().inspect_err(|e| {
+                log::error!("Failed to decode m/z array: {e}")
+            })?;
         Ok(mz_array)
     }
 
     /// Get a mutable reference to the m/z array if it is present
     pub fn mzs_mut(&mut self) -> Result<&mut [f64], ArrayRetrievalError> {
         if let Some(mz_array) = self.get_mut(&ArrayType::MZArray) {
-            mz_array.decode_and_store()?;
+            mz_array.decode_and_store().inspect_err(|e| {
+                log::error!("Failed to decode m/z array: {e}")
+            })?;
             mz_array.store_as(BinaryDataArrayType::Float64)?;
             mz_array.coerce_mut()
         } else {
@@ -224,15 +228,21 @@ impl BinaryArrayMap {
         let intensities = self
             .get(&ArrayType::IntensityArray)
             .ok_or(ArrayRetrievalError::NotFound(ArrayType::IntensityArray))?
-            .to_f32()?;
+            .to_f32().inspect_err(|e| {
+                log::error!("Failed to decode intensity array: {e:?}")
+            })?;
         Ok(intensities)
     }
 
     /// Get a mutable reference to the intensity array if it is present
     pub fn intensities_mut(&mut self) -> Result<&mut [f32], ArrayRetrievalError> {
         if let Some(mz_array) = self.get_mut(&ArrayType::IntensityArray) {
-            mz_array.decode_and_store()?;
-            mz_array.store_as(BinaryDataArrayType::Float32)?;
+            mz_array.decode_and_store().inspect_err(|e| {
+                log::error!("Failed to decode intensity array: {e}")
+            })?;
+            mz_array.store_as(BinaryDataArrayType::Float32).inspect_err(|e| {
+                log::error!("Failed to decode intensity array: {e}")
+            })?;
             mz_array.coerce_mut()
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::IntensityArray))
@@ -251,7 +261,9 @@ impl BinaryArrayMap {
     pub fn charge_mut(&mut self) -> Result<&mut [i32], ArrayRetrievalError> {
         if let Some(mz_array) = self.get_mut(&ArrayType::ChargeArray) {
             mz_array.decode_and_store()?;
-            mz_array.store_as(BinaryDataArrayType::Int32)?;
+            mz_array.store_as(BinaryDataArrayType::Int32).inspect_err(|e| {
+                log::error!("Failed to decode charge array: {e}")
+            })?;
             mz_array.coerce_mut()
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::ChargeArray))
@@ -265,7 +277,9 @@ impl BinaryArrayMap {
             .iter()
             .find(|(a, _)| a.is_ion_mobility())
         {
-            Ok((data_array.to_f64()?, array_type.clone()))
+            Ok((data_array.to_f64().inspect_err(|e| {
+                log::error!("Failed to decode ion mobility array: {e}")
+            })?, array_type.clone()))
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::IonMobilityArray))
         }
@@ -278,7 +292,9 @@ impl BinaryArrayMap {
             .iter_mut()
             .find(|(a, _)| a.is_ion_mobility())
         {
-            data_array.decode_and_store()?;
+            data_array.decode_and_store().inspect_err(|e| {
+                log::error!("Failed to decode ion mobility array: {e}")
+            })?;
             data_array.store_as(BinaryDataArrayType::Float32)?;
             Ok((data_array.coerce_mut()?, array_type.clone()))
         } else {

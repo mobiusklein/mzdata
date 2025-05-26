@@ -69,39 +69,62 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
 
     fn fill_spectrum<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P);
 
+    fn set_current_compressiion(&mut self, compression: BinaryCompressionType) {
+        trace!("Setting current compression method for {:?} to {compression:?}", self.current_array_mut().name());
+        self.current_array_mut().compression = compression;
+    }
+
     fn fill_binary_data_array<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P) {
         if param.is_ms() {
             match param.accession().unwrap() {
                 // Compression types
-                1000574 => {
-                    self.current_array_mut().compression = BinaryCompressionType::Zlib;
+                x if x == unsafe { BinaryCompressionType::Zlib.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::Zlib);
                 }
-                1000576 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NoCompression;
+                x if x == unsafe { BinaryCompressionType::NoCompression.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NoCompression);
                 }
-                1002312 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressLinear
+                x if x == unsafe { BinaryCompressionType::NumpressLinear.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressLinear);
                 }
-                1002313 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressPIC
+                x if x == unsafe { BinaryCompressionType::NumpressPIC.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressPIC);
                 }
-                1002314 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressSLOF
+                x if x == unsafe { BinaryCompressionType::NumpressSLOF.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressSLOF);
                 }
-                1002746 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressLinearZlib
+                x if x == unsafe { BinaryCompressionType::NumpressLinearZlib.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressLinearZlib);
                 }
-                1002747 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressPICZlib
+                x if x == unsafe { BinaryCompressionType::NumpressPICZlib.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressPICZlib);
                 }
-                1002748 => {
-                    self.current_array_mut().compression = BinaryCompressionType::NumpressSLOFZlib
+                x if x == unsafe { BinaryCompressionType::NumpressSLOFZlib.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressSLOFZlib);
                 }
-                1003089 => {
-                    self.current_array_mut().compression = BinaryCompressionType::DeltaPrediction
+                x if x == unsafe { BinaryCompressionType::DeltaPrediction.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::DeltaPrediction);
                 }
-                1003090 => {
-                    self.current_array_mut().compression = BinaryCompressionType::LinearPrediction
+                x if x == unsafe { BinaryCompressionType::LinearPrediction.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::LinearPrediction);
+                }
+                x if x == unsafe { BinaryCompressionType::ShuffleZstd.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::ShuffleZstd);
+                }
+                x if x == unsafe { BinaryCompressionType::DeltaShuffleZstd.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::DeltaShuffleZstd);
+                }
+                x if x == unsafe { BinaryCompressionType::Zstd.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::Zstd);
+                }
+                x if x == unsafe { BinaryCompressionType::ZstdDict.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::ZstdDict);
+                }
+                x if x == unsafe { BinaryCompressionType::NumpressLinearZstd.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressLinearZstd);
+                }
+                x if x == unsafe { BinaryCompressionType::NumpressSLOFZstd.accession().unwrap_unchecked() } => {
+                    self.set_current_compressiion(BinaryCompressionType::NumpressSLOFZstd);
                 }
                 // Array data types
                 1000523 => {
@@ -121,14 +144,27 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                 }
 
                 // Array types
-                1000514 => self.current_array_mut().name = ArrayType::MZArray,
-                1000515 => self.current_array_mut().name = ArrayType::IntensityArray,
-                1000516 => self.current_array_mut().name = ArrayType::ChargeArray,
-                1000517 => self.current_array_mut().name = ArrayType::SignalToNoiseArray,
+                1000514 => {
+                    self.current_array_mut().name = ArrayType::MZArray;
+                    *self.current_array_mut().unit_mut() = param.unit();
+                },
+                1000515 => {
+                    self.current_array_mut().name = ArrayType::IntensityArray;
+                    *self.current_array_mut().unit_mut() = param.unit();
+                },
+                1000516 => {
+                    self.current_array_mut().name = ArrayType::ChargeArray;
+                    *self.current_array_mut().unit_mut() = param.unit();
+                },
+                1000517 => {
+                    self.current_array_mut().name = ArrayType::SignalToNoiseArray;
+                    *self.current_array_mut().unit_mut() = param.unit();
+                },
                 1000786 => {
                     self.current_array_mut().name = ArrayType::NonStandardDataArray {
                         name: Box::new(param.value().to_string()),
                     };
+                    *self.current_array_mut().unit_mut() = param.unit();
                 }
                 1000595 => {
                     self.current_array_mut().name = ArrayType::TimeArray;
@@ -648,12 +684,14 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                             "Failed to decode spectrum id".into()
                                         ))
                                     }
-                                }
+                                };
+                                trace!("Stored spectrum id = {}", self.entry_id);
                             }
                             b"index" => {
                                 self.index = String::from_utf8_lossy(&attr.value)
                                     .parse::<usize>()
                                     .expect("Failed to parse index");
+                                trace!("Stored spectrum index = {}", self.index);
                             }
                             _ => {}
                         },
@@ -762,11 +800,13 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                     .unescape_value()
                                     .expect("Error decoding id")
                                     .to_string();
+                                trace!("Stored chromatogram id = {}", self.entry_id);
                             }
                             b"index" => {
                                 self.index = String::from_utf8_lossy(&attr.value)
                                     .parse::<usize>()
                                     .expect("Failed to parse index");
+                                trace!("Stored chromatogram index = {}", self.index);
                             }
                             _ => {}
                         },
@@ -927,7 +967,9 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                 let mut array = mem::take(&mut self.current_array);
                 if self.detail_level == DetailLevel::Full {
                     array.decode_and_store().map_err(|e| {
-                        MzMLParserError::ArrayDecodingError(state, array.name.clone(), e)
+                        let new_err = MzMLParserError::ArrayDecodingError(state, array.name.clone(), e);
+                        log::error!("Failed to decode mzML array: {new_err}");
+                        new_err
                     })?;
                 }
                 self.arrays.add(array);
@@ -1373,6 +1415,9 @@ impl<
                 );
                 Ok((accumulator, offset))
             }
+            MzMLParserState::EOF => {
+                Err(MzMLParserError::EOF)
+            }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
@@ -1410,7 +1455,13 @@ impl<
                 }
                 Ok(sz)
             }
-            Err(err) => Err(err),
+            Err(err) => {
+                match &err {
+                    MzMLParserError::EOF => {},
+                    err => log::error!("Error while reading mzML spectrum: {err}")
+                };
+                Err(err)
+            },
         }
     }
 
@@ -1423,7 +1474,12 @@ impl<
         match self.read_into(&mut spectrum) {
             Ok(_sz) => Some(spectrum),
             Err(err) => {
-                trace!("Failed to read next spectrum: {err}");
+                match err {
+                    MzMLParserError::EOF => {},
+                    err => {
+                        trace!("Failed to read next spectrum: {err}");
+                    }
+                }
                 None
             }
         }
@@ -1460,7 +1516,10 @@ impl<
                     Err(MzMLParserError::UnknownError(self.state))
                 }
             }
-            Err(err) => Err(err),
+            Err(err) => {
+                log::error!("Error while reading mzML chromatogram: {err}");
+                Err(err)
+            },
         }
     }
 }
@@ -1753,6 +1812,7 @@ impl<
             match self.seek(SeekFrom::Start(0)) {
                 Ok(_) => {
                     self.build_index();
+                    return;
                 }
                 Err(error) => {
                     panic!(
@@ -1769,6 +1829,9 @@ impl<
             Err(e) => match e {
                 IndexRecoveryOperation::EOLMismatchSuspected => {
                     warn!("Rebuilding index, EOL mismatch suspected");
+                    self.seek(SeekFrom::Start(0)).unwrap_or_else(|e| {
+                        panic!("An IO error occurred while trying to recover the index: {e}")
+                    });
                     self.build_index();
                 },
                 IndexRecoveryOperation::IOFailure(err) => {
@@ -1780,34 +1843,43 @@ impl<
 
     fn verify_index(&mut self) -> Result<(), IndexRecoveryOperation> {
         let n = self.spectrum_index.len();
+        trace!("Verifying offset index of length {n}");
+        let position = self.handle.stream_position().map_err(|e| IndexRecoveryOperation::IOFailure(e))?;
         if n > 0 {
             // Try to pick a spectrum that's close to the beginning of the file to avoid large
             // amounts of wasted scanning for non-linear files, but pick one far enough in it would
             // be affected by byte drift.
             let center = (n / 2).min(100);
+            trace!("Checking offset of {center}th spectrum");
             let dl = self.detail_level;
             self.set_detail_level(DetailLevel::MetadataOnly);
             let s = self.get_spectrum_by_index(center);
             self.set_detail_level(dl);
-            let s_found = s.is_none();
+            let s_found = s.is_some_and(|s| s.index() == center);
             if s_found {
+                self.seek(SeekFrom::Start(position)).map_err(|e| IndexRecoveryOperation::IOFailure(e))?;
                 return Ok(());
-            }
-            match self.handle.fill_buf() {
-                Ok(buf) => {
-                    if let Some(i) = buf.iter().position(|b| *b == b'\r') {
-                        if let Some(b2) = buf.get(i + 1) {
-                            let has_windows_eol = *b2 == b'\n';
-                            if has_windows_eol {
-                                warn!("Carriage return line endings detected and offset index is not valid");
-                                return Err(IndexRecoveryOperation::EOLMismatchSuspected);
+            } else {
+                match self.handle.fill_buf() {
+                    Ok(buf) => {
+                        if let Some(i) = buf.iter().position(|b| *b == b'\r') {
+                            if let Some(b2) = buf.get(i + 1) {
+                                let has_windows_eol = *b2 == b'\n';
+                                if has_windows_eol {
+                                    warn!("Carriage return line endings detected and offset index is not valid");
+                                    self.seek(SeekFrom::Start(position)).map_err(|e| IndexRecoveryOperation::IOFailure(e))?;
+                                    return Err(IndexRecoveryOperation::EOLMismatchSuspected);
+                                }
                             }
                         }
                     }
+                    Err(e) => {
+                        return Err(IndexRecoveryOperation::IOFailure(e))
+                    },
                 }
-                Err(e) => return Err(IndexRecoveryOperation::IOFailure(e)),
             }
         }
+        self.seek(SeekFrom::Start(position)).map_err(|e| IndexRecoveryOperation::IOFailure(e))?;
         Ok(())
     }
 
@@ -1927,6 +1999,7 @@ impl<
             .handle
             .stream_position()
             .expect("Failed to save restore location");
+        trace!("Starting to build offset index by traversing the file, storing last position as {start}");
         self.seek(SeekFrom::Start(0))
             .expect("Failed to reset stream to beginning");
         let mut reader = Reader::from_reader(&mut self.handle);
@@ -1973,6 +2046,7 @@ impl<
             self.buffer.clear();
         }
         let offset = reader.buffer_position() as u64;
+        trace!("Ended indexing scan at offset {offset}. Restoring starting position {start}");
         self.handle
             .seek(SeekFrom::Start(start))
             .expect("Failed to restore location");
@@ -1992,10 +2066,17 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
     }
 
     fn construct_index_from_stream(&mut self) -> u64 {
+        trace!("Constructing index from stream");
         if let Ok(count) = self.read_index_from_end() {
             count
         } else {
-            self.build_index()
+            self.seek(SeekFrom::Start(0)).unwrap();
+            if self.spectrum_index.is_empty() && !self.spectrum_index.init {
+                self.build_index()
+            } else {
+                trace!("Index already constructed, skipping full scan");
+                self.spectrum_index.len() as u64
+            }
         }
     }
 }

@@ -1006,7 +1006,11 @@ pub(crate) mod sealed {
             }
 
             if let Some(data) = view.data() {
-                let extra = self.handle.get_extended_spectrum_data(index, false);
+                let extra = if self.load_extended_spectrum_data {
+                    self.handle.get_extended_spectrum_data(index, false)
+                } else {
+                    None
+                };
                 if spec.signal_continuity() == SignalContinuity::Centroid {
                     spec.peaks = Some(self.populate_peaks(&data));
                     if let Some(extra) = extra {

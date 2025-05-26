@@ -6,7 +6,7 @@ use std::{
 };
 use thiserror::{self, Error};
 
-use num_traits::Float;
+use num_traits::Num;
 #[cfg(feature = "numpress")]
 use numpress;
 
@@ -26,8 +26,505 @@ pub fn as_bytes<T: Pod>(data: &[T]) -> &[u8] {
 }
 
 pub fn vec_as_bytes<T: Pod>(data: Vec<T>) -> Bytes {
-    bytemuck::cast_vec(data)
+    let mut buf = Bytes::with_capacity(data.len() * std::mem::size_of::<T>());
+    for val in data {
+        buf.extend_from_slice(bytemuck::bytes_of(&val));
+    }
+    buf
 }
+
+const fn is_target_little_endian() -> bool {
+    u16::from_ne_bytes([1, 0]) == 1
+}
+
+mod byte_rotation {
+    use super::*;
+
+    pub fn transpose_bytes_into<T: Pod, const N: usize>(data: &[T], buffer: &mut Vec<u8>) {
+        assert_eq!(core::mem::size_of::<T>(), N);
+        let bytes = bytemuck::cast_slice::<T, [u8; N]>(data);
+        buffer.clear();
+        let delta = (data.len() * N).saturating_sub(buffer.capacity());
+        if delta > 0 {
+            buffer.reserve(delta);
+        }
+
+        if is_target_little_endian() {
+            for i in 0..N {
+                buffer.extend(bytes.iter().map(|b| b[i]))
+            }
+        } else {
+            for i in (0..N).rev() {
+                buffer.extend(bytes.iter().map(|b| b[i]))
+            }
+        }
+    }
+
+    pub fn transpose_bytes<T: Pod, const N: usize>(data: &[T]) -> Bytes {
+        let mut result = Bytes::with_capacity(data.len() * N);
+        transpose_bytes_into::<T, N>(data, &mut result);
+        result
+    }
+
+    pub fn transpose_4bytes<T: Pod>(data: &[T]) -> Bytes {
+        assert_eq!(std::mem::size_of::<T>(), 4);
+        transpose_bytes::<_, 4>(data)
+    }
+
+    pub fn transpose_8bytes<T: Pod>(data: &[T]) -> Bytes {
+        assert_eq!(std::mem::size_of::<T>(), 8);
+        transpose_bytes::<_, 8>(data)
+    }
+
+    pub fn transpose_i32(data: &[i32]) -> Bytes {
+        transpose_4bytes(data)
+    }
+
+    pub fn transpose_f32(data: &[f32]) -> Bytes {
+        transpose_4bytes(data)
+    }
+
+    pub fn transpose_i64(data: &[i64]) -> Bytes {
+        transpose_8bytes(data)
+    }
+
+    pub fn transpose_f64(data: &[f64]) -> Bytes {
+        transpose_8bytes(data)
+    }
+
+    pub fn reverse_transpose_bytes_into<T: Pod, const N: usize>(data: &[u8], buffer: &mut Vec<u8>) {
+        let rem = data.len() % N;
+        assert_eq!(rem, 0);
+        let n_entries = data.len() / N;
+        buffer.clear();
+        buffer.resize(data.len(), 0);
+
+        if is_target_little_endian() {
+            for (i, band) in data.chunks_exact(n_entries).enumerate() {
+                for (j, byte) in band.iter().copied().enumerate() {
+                    bytemuck::cast_slice_mut::<_, [u8; N]>(buffer)[j][i] = byte;
+                }
+            }
+        } else {
+            for (i, band) in data.chunks_exact(n_entries).enumerate() {
+                for (j, byte) in band.iter().copied().enumerate() {
+                    bytemuck::cast_slice_mut::<_, [u8; N]>(buffer)[j][(N - 1) - i] = byte;
+                }
+            }
+        }
+    }
+
+    pub fn reverse_transpose_bytes<T: Pod, const N: usize>(data: &[u8]) -> Bytes {
+        let mut result: Bytes = Vec::new();
+        result.resize(data.len(), 0);
+        reverse_transpose_bytes_into::<T, N>(data, &mut result);
+        result
+    }
+
+    pub fn reverse_transpose_4bytes<T: Pod>(data: &[u8]) -> Bytes {
+        assert_eq!(std::mem::size_of::<T>(), 4);
+        reverse_transpose_bytes::<T, 4>(data)
+    }
+
+    pub fn reverse_transpose_8bytes<T: Pod>(data: &[u8]) -> Bytes {
+        assert_eq!(std::mem::size_of::<T>(), 8);
+        reverse_transpose_bytes::<T, 8>(data)
+    }
+
+    pub fn reverse_transpose_i32(data: &[u8]) -> Vec<u8> {
+        reverse_transpose_4bytes::<i32>(data)
+    }
+
+    pub fn reverse_transpose_f32(data: &[u8]) -> Vec<u8> {
+        reverse_transpose_4bytes::<f32>(data)
+    }
+
+    pub fn reverse_transpose_i64(data: &[u8]) -> Vec<u8> {
+        reverse_transpose_8bytes::<f64>(data)
+    }
+
+    pub fn reverse_transpose_f64(data: &[u8]) -> Vec<u8> {
+        reverse_transpose_8bytes::<i64>(data)
+    }
+}
+
+mod dictionary_encoding {
+    use super::*;
+    use io::prelude::*;
+    use num_traits::ops::bytes::{FromBytes, ToBytes};
+    use std::{
+        borrow::Cow, collections::{HashMap, HashSet}, hash::Hash, io::BufWriter
+    };
+
+    trait DictValue<const W: usize>:
+        Pod + ToBytes<Bytes = [u8; W]> + Hash + Eq + Ord + FromBytes<Bytes = [u8; W]>
+    {
+    }
+
+    macro_rules! impl_dict_value {
+        ($val:ty, $size:literal) => {
+            impl DictValue<$size> for $val {}
+        };
+    }
+
+    impl_dict_value!(u8, 1);
+    impl_dict_value!(u16, 2);
+    impl_dict_value!(u32, 4);
+    impl_dict_value!(u64, 8);
+
+    trait DictIndex<const W: usize>:
+        Pod + ToBytes<Bytes = [u8; W]> + FromBytes<Bytes = [u8; W]>
+    {
+        fn from_usize(index: usize) -> Self;
+        fn to_usize(&self) -> usize;
+    }
+
+    macro_rules! impl_dict_index {
+        ($idx:ty, $size:literal) => {
+            impl DictIndex<$size> for $idx {
+                fn from_usize(index: usize) -> Self {
+                    index as Self
+                }
+
+                fn to_usize(&self) -> usize {
+                    *self as usize
+                }
+            }
+        };
+    }
+
+    impl_dict_index!(u8, 1);
+    impl_dict_index!(u16, 2);
+    impl_dict_index!(u32, 4);
+    impl_dict_index!(u64, 8);
+
+    #[derive(Default, Debug)]
+    pub struct DictionaryEncoder {
+        shuffle: bool,
+        buffer: Vec<u8>
+    }
+
+    impl DictionaryEncoder {
+        pub fn new(shuffle: bool) -> Self {
+            Self { shuffle, buffer: Vec::new() }
+        }
+
+        fn build_value_map<T: Pod, const W1: usize, V: DictValue<W1>>(
+            &self,
+            data: &[T],
+        ) -> (Vec<V>, HashMap<V, usize>) {
+            debug_assert_eq!(core::mem::size_of::<T>(), core::mem::size_of::<V>());
+            debug_assert_eq!(core::mem::size_of::<T>(), W1);
+            let mut value_codes = HashSet::new();
+            for v in data {
+                let k: V = *bytemuck::from_bytes(bytemuck::bytes_of(v));
+                value_codes.insert(k);
+            }
+
+            let mut value_codes: Vec<_> = value_codes.into_iter().collect();
+            value_codes.sort();
+
+            let byte_map: HashMap<V, usize> = value_codes
+                .iter()
+                .enumerate()
+                .map(|(i, k)| (*k, i))
+                .collect();
+            (value_codes, byte_map)
+        }
+
+        fn create_writer<
+            T: Pod,
+            const W1: usize,
+            V: Pod + Ord + Hash + ToBytes<Bytes = [u8; W1]> + Eq,
+            const W2: usize,
+            K: DictIndex<W2>,
+        >(
+            &self,
+            data: &[T],
+            value_codes: &[V],
+        ) -> BufWriter<Vec<u8>> {
+            let data_offset = 16 + value_codes.len() * core::mem::size_of::<V>();
+            let dict_buffer: Vec<u8> =
+                Vec::with_capacity(data_offset + data.len() * core::mem::size_of::<K>());
+            let writer = BufWriter::new(dict_buffer);
+            writer
+        }
+
+        fn encode_dict_indices<
+            T: Pod,
+            const W1: usize,
+            V: Pod + Ord + Hash + ToBytes<Bytes = [u8; W1]> + Eq,
+            const W2: usize,
+            K: DictIndex<W2>,
+        >(
+            &mut self,
+            data: &[T],
+            value_codes: &[V],
+            byte_map: HashMap<V, usize>,
+        ) -> io::Result<Vec<u8>> {
+            let data_offset = 16 + value_codes.len() * core::mem::size_of::<V>();
+            let mut writer = self.create_writer::<T, W1, V, W2, K>(data, value_codes);
+            writer.write(&(data_offset as u64).to_le_bytes())?;
+            writer.write(&(value_codes.len() as u64).to_le_bytes())?;
+
+            if self.shuffle {
+                // This isn't endian-correct yet, see note in `transpose_bytes_into`
+                byte_rotation::transpose_bytes_into::<V, W1>(value_codes, &mut self.buffer);
+                writer.write_all(&self.buffer)?;
+                // for v in self.buffer.chunks(W1) {
+                //     writer.write_all(v)?;
+                // }
+            } else {
+                for v in value_codes.iter() {
+                    let bts = v.to_le_bytes();
+                    writer.write_all(&bts)?;
+                }
+            }
+
+            if self.shuffle {
+                let mut buf = Vec::with_capacity(data.len());
+                for v in data {
+                    let i = *byte_map
+                        .get(bytemuck::from_bytes(bytemuck::bytes_of(v)))
+                        .unwrap();
+                    let ik: K = K::from_usize(i);
+                    buf.push(ik);
+                }
+                // This isn't endian-correct
+                byte_rotation::transpose_bytes_into::<K, W2>(&buf, &mut self.buffer);
+                writer.write_all(&self.buffer)?;
+            } else {
+                for v in data {
+                    let i = *byte_map
+                        .get(bytemuck::from_bytes(bytemuck::bytes_of(v)))
+                        .unwrap();
+                    let ik: K = K::from_usize(i);
+                    writer.write_all(&ik.to_le_bytes())?;
+                }
+            }
+
+            writer.flush()?;
+            let val = writer.into_inner().unwrap();
+            Ok(val)
+        }
+
+        fn encode_values<T: Pod, const W1: usize, V: DictValue<W1>>(
+            &mut self,
+            data: &[T],
+        ) -> Result<Vec<u8>, io::Error> {
+            let (value_codes, byte_map) = self.build_value_map(data);
+            let n_value_codes = value_codes.len();
+
+            if n_value_codes <= 2usize.pow(8) {
+                self.encode_dict_indices::<T, W1, V, 1, u8>(data, &value_codes, byte_map)
+            } else if n_value_codes <= 2usize.pow(16) {
+                self.encode_dict_indices::<T, W1, V, 2, u16>(data, &value_codes, byte_map)
+            } else if n_value_codes <= 2usize.pow(32) {
+                self.encode_dict_indices::<T, W1, V, 4, u32>(data, &value_codes, byte_map)
+            } else if n_value_codes <= 2usize.pow(64) {
+                self.encode_dict_indices::<T, W1, V, 8, u64>(data, &value_codes, byte_map)
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "Cannot encode a dictionary with more than 2 ** 64 values",
+                ))
+            }
+        }
+
+        pub fn encode<T: Pod>(&mut self, data: &[T]) -> io::Result<Bytes> {
+            if data.is_empty() {
+                return Ok(Vec::new())
+            }
+            let z_val = core::mem::size_of::<T>();
+            if z_val <= 1 {
+                self.encode_values::<T, 1, u8>(data)
+            } else if z_val <= 2 {
+                self.encode_values::<T, 2, u16>(data)
+            } else if z_val <= 4 {
+                self.encode_values::<T, 4, u32>(data)
+            } else if z_val <= 8 {
+                self.encode_values::<T, 8, u64>(data)
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "Cannot encode a dictionary with more than 2 ** 64 keys",
+                ))
+            }
+        }
+    }
+
+
+    #[derive(Default, Debug)]
+    pub struct DictionaryDecoder {
+        shuffle: bool,
+        buffer: Vec<u8>,
+    }
+
+    impl DictionaryDecoder {
+        pub fn new(shuffle: bool) -> Self {
+            Self { shuffle, buffer: Default::default() }
+        }
+
+        fn make_reader<'a>(&self, buffer: &'a [u8]) -> io::BufReader<&'a [u8]> {
+            let reader = io::BufReader::new(buffer);
+            reader
+        }
+
+        fn decode_value_buffer<T: Pod, const W1: usize, V: DictValue<W1>>(
+            &mut self,
+            buffer: &[u8],
+            n_values: usize,
+        ) -> Vec<T> {
+            macro_rules! decode_chunk {
+                ($chunk:ident) => {
+                    {
+                        let chunk_a: [u8; W1] = $chunk.try_into().unwrap();
+                        let val = V::from_le_bytes(&chunk_a);
+                        let val: T = *bytemuck::from_bytes(bytemuck::bytes_of(&val));
+                        val
+                    }
+                };
+            }
+            let mut value_buffer = Vec::with_capacity(n_values);
+            if self.shuffle {
+                let blocks = match core::mem::size_of::<T>() {
+                    1 => {
+                        Cow::Borrowed(buffer)
+                    }
+                    2 => {
+                        byte_rotation::reverse_transpose_bytes_into::<T, 2>(buffer, &mut self.buffer);
+                        Cow::Borrowed(self.buffer.as_slice())
+                    }
+                    4 => {
+                        byte_rotation::reverse_transpose_bytes_into::<T, 4>(buffer, &mut self.buffer);
+                        Cow::Borrowed(self.buffer.as_slice())
+                    }
+                    8 => {
+                        byte_rotation::reverse_transpose_bytes_into::<T, 8>(buffer, &mut self.buffer);
+                        Cow::Borrowed(self.buffer.as_slice())
+                    }
+                    x => {
+                        panic!("Unsupported size {x}");
+                    }
+                };
+                for chunk in blocks.chunks_exact(W1) {
+                    let val = decode_chunk!(chunk);
+                    value_buffer.push(val);
+                }
+            } else {
+                for chunk in buffer.chunks_exact(W1) {
+                    let val = decode_chunk!(chunk);
+                    value_buffer.push(val);
+                }
+            };
+            value_buffer
+        }
+
+        fn decode_index_buffer<T: Pod, const W2: usize, K: DictIndex<W2>>(
+            &mut self,
+            value_codes: &[T],
+            index_buffer: &[u8],
+        ) -> Vec<T> {
+            let mut result = Vec::with_capacity(index_buffer.len() / W2);
+            if self.shuffle {
+                byte_rotation::reverse_transpose_bytes_into::<K, W2>(index_buffer, &mut self.buffer);
+                for chunk in self.buffer.chunks_exact(W2) {
+                    let b: [u8; W2] = chunk.try_into().unwrap();
+                    let k: usize = K::from_le_bytes(&b).to_usize();
+                    result.push(value_codes[k])
+                }
+            } else {
+                for chunk in index_buffer.chunks_exact(W2) {
+                    let b: [u8; W2] = chunk.try_into().unwrap();
+                    let k: usize = K::from_le_bytes(&b).to_usize();
+                    result.push(value_codes[k])
+                }
+            }
+            result
+        }
+
+        pub fn decode<'a, T: Pod>(&mut self, buffer: &'a [u8]) -> io::Result<Vec<T>> {
+            if buffer.is_empty() {
+                return Ok(Vec::new())
+            }
+            let mut reader = self.make_reader(buffer);
+            let mut z_buf = [0u8; 8];
+            reader.read_exact(&mut z_buf)?;
+            let data_offset = u64::from_le_bytes(z_buf);
+            if data_offset == 0 {
+                return Ok(Vec::new())
+            }
+            let mut z_buf = [0u8; 8];
+            reader.read_exact(&mut z_buf)?;
+            let n_value_codes = u64::from_le_bytes(z_buf);
+            if n_value_codes == 0 {
+                return Ok(Vec::new())
+            }
+            let value_buffer = &buffer[16..(data_offset as usize)];
+            let value_width = (data_offset - 16) / n_value_codes;
+            let index_buffer = &buffer[data_offset as usize..];
+
+            let n_value_codes = n_value_codes as usize;
+
+            macro_rules! decode_indices {
+                ($values:ident) => {
+                    if n_value_codes <= 2usize.pow(8) {
+                        self.decode_index_buffer::<T, 1, u8>(&$values, index_buffer)
+                    } else if n_value_codes <= 2usize.pow(16) {
+                        self.decode_index_buffer::<T, 2, u16>(&$values, index_buffer)
+                    } else if n_value_codes <= 2usize.pow(32) {
+                        self.decode_index_buffer::<T, 4, u32>(&$values, index_buffer)
+                    } else if n_value_codes <= 2usize.pow(64) {
+                        self.decode_index_buffer::<T, 8, u64>(&$values, index_buffer)
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Unsupported,
+                            "Cannot decode a dictionary with more than 2 ** 64 indices",
+                        ));
+                    }
+                };
+            }
+
+            let values = if value_width <= 1 {
+                let values = self.decode_value_buffer::<T, 1, u8>(value_buffer, n_value_codes as usize);
+                decode_indices!(values)
+            } else if value_width <= 2 {
+                let values = self.decode_value_buffer::<T, 2, u16>(value_buffer, n_value_codes as usize);
+                decode_indices!(values)
+            } else if value_width <= 4 {
+                let values = self.decode_value_buffer::<T, 4, u32>(value_buffer, n_value_codes as usize);
+                decode_indices!(values)
+            } else if value_width <= 8 {
+                let values = self.decode_value_buffer::<T, 8, u64>(value_buffer, n_value_codes as usize);
+                decode_indices!(values)
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "Cannot decode dictionary with value byte width greater than 8",
+                ));
+            };
+
+            Ok(values)
+        }
+
+    }
+
+    pub fn dictionary_encoding<T: Pod>(data: &[T]) -> Result<Vec<u8>, io::Error> {
+        let mut encoder = DictionaryEncoder::new(true);
+        encoder.encode(data)
+    }
+
+    pub fn dictionary_decoding<T: Pod>(buffer: &[u8]) -> io::Result<Vec<T>> {
+        let mut decoder = DictionaryDecoder::new(true);
+        return decoder.decode(buffer);
+    }
+}
+
+#[allow(unused)]
+pub use byte_rotation::*;
+
+#[allow(unused)]
+pub use dictionary_encoding::{dictionary_decoding, dictionary_encoding};
 
 /// The kinds of data arrays found in mass spectrometry data files governed
 /// by the PSI-MS controlled vocabulary.
@@ -126,7 +623,9 @@ impl ArrayType {
             | Self::MeanDriftTimeArray => Self::DeconvolutedDriftTimeArray,
             Self::RawInverseReducedIonMobilityArray
             | Self::DeconvolutedInverseReducedIonMobilityArray
-            | Self::MeanInverseReducedIonMobilityArray => Self::DeconvolutedInverseReducedIonMobilityArray,
+            | Self::MeanInverseReducedIonMobilityArray => {
+                Self::DeconvolutedInverseReducedIonMobilityArray
+            }
             Self::RawIonMobilityArray
             | Self::DeconvolutedIonMobilityArray
             | Self::MeanIonMobilityArray => Self::DeconvolutedIonMobilityArray,
@@ -460,9 +959,40 @@ pub enum BinaryCompressionType {
     LinearPrediction,
     DeltaPrediction,
     Decoded,
+    Zstd,
+    ShuffleZstd,
+    DeltaShuffleZstd,
+    ZstdDict,
+    NumpressLinearZstd,
+    NumpressSLOFZstd,
 }
 
 impl BinaryCompressionType {
+    pub const COMPRESSION_METHODS: &[Self] = &[
+        Self::NoCompression,
+        Self::Zlib,
+        #[cfg(feature = "numpress")]
+        Self::NumpressLinear,
+        #[cfg(feature = "numpress")]
+        Self::NumpressLinearZlib,
+        #[cfg(feature = "numpress")]
+        Self::NumpressSLOF,
+        #[cfg(feature = "numpress")]
+        Self::NumpressSLOFZlib,
+        #[cfg(feature = "zstd")]
+        Self::Zstd,
+        #[cfg(feature = "zstd")]
+        Self::ShuffleZstd,
+        #[cfg(feature = "zstd")]
+        Self::DeltaShuffleZstd,
+        #[cfg(feature = "zstd")]
+        Self::ZstdDict,
+        #[cfg(all(feature = "zstd", feature = "numpress"))]
+        Self::NumpressLinearZstd,
+        #[cfg(all(feature = "zstd", feature = "numpress"))]
+        Self::NumpressSLOFZstd,
+    ];
+
     /// Generate a user-understandable message about why a compression conversion operation failed
     pub fn unsupported_msg(&self, context: Option<&str>) -> String {
         match context {
@@ -471,36 +1001,143 @@ impl BinaryCompressionType {
         }
     }
 
-    pub const fn as_param(&self) -> Option<ParamCow> {
-        let (name, accession) = match self {
-            BinaryCompressionType::NoCompression => ("no compression", 1000576),
-            BinaryCompressionType::Zlib => ("zlib compression", 1000574),
+    pub const fn accession(&self) -> Option<u32> {
+        let acc = match self {
+            BinaryCompressionType::NoCompression => 1000576,
+            BinaryCompressionType::Zlib => 1000574,
             BinaryCompressionType::NumpressLinear => {
-                ("MS-Numpress linear prediction compression", 1002312)
+                1002312
             }
             BinaryCompressionType::NumpressSLOF => {
-                ("MS-Numpress positive integer compression", 1002313)
+                1002314
             }
             BinaryCompressionType::NumpressPIC => {
-                ("MS-Numpress short logged float compression", 1002314)
+                1002313
+            }
+            BinaryCompressionType::NumpressLinearZlib => 1002746,
+            BinaryCompressionType::NumpressSLOFZlib => 1002748,
+            BinaryCompressionType::NumpressPICZlib => 1002747,
+            BinaryCompressionType::DeltaPrediction => {
+                1003089
+            }
+            BinaryCompressionType::LinearPrediction => 1003090,
+            BinaryCompressionType::NumpressSLOFZstd => {
+                9999994
+            }
+            BinaryCompressionType::NumpressLinearZstd => {
+                9999995
+            }
+            BinaryCompressionType::ZstdDict => {
+                9999996
+
+            }
+            BinaryCompressionType::Zstd => {
+                9999997
+            }
+            BinaryCompressionType::ShuffleZstd => {
+                9999998
+            }
+            BinaryCompressionType::DeltaShuffleZstd => {
+                9999999
+            }
+            BinaryCompressionType::Decoded => return None
+        };
+        Some(acc)
+    }
+
+    /// Convert the compression type to a [`ParamCow`].
+    ///
+    /// Most compression methods have a controlled vocabulary
+    /// term.
+    pub const fn as_param(&self) -> Option<ParamCow<'static>> {
+        let (name, accession) = match self {
+            BinaryCompressionType::Decoded => return None,
+            BinaryCompressionType::NoCompression => ("no compression", self.accession()),
+            BinaryCompressionType::Zlib => ("zlib compression", self.accession()),
+            BinaryCompressionType::NumpressLinear => {
+                ("MS-Numpress linear prediction compression", self.accession())
+            }
+            BinaryCompressionType::NumpressSLOF => {
+                ("MS-Numpress short logged float compression", self.accession())
+            }
+            BinaryCompressionType::NumpressPIC => {
+                ("MS-Numpress positive integer compression", self.accession())
             }
             BinaryCompressionType::NumpressLinearZlib => (
                 "MS-Numpress linear prediction compression followed by zlib compression",
-                1002746,
+                self.accession(),
             ),
             BinaryCompressionType::NumpressSLOFZlib => (
-                "MS-Numpress positive integer compression followed by zlib compression",
-                1002477,
+                "MS-Numpress short logged float compression followed by zlib compression",
+                self.accession(),
             ),
             BinaryCompressionType::NumpressPICZlib => (
-                "MS-Numpress short logged float compression followed by zlib compression",
-                1002478,
+                "MS-Numpress positive integer compression followed by zlib compression",
+                self.accession(),
             ),
-            BinaryCompressionType::LinearPrediction => todo!(),
-            BinaryCompressionType::DeltaPrediction => todo!(),
-            BinaryCompressionType::Decoded => return None,
+            BinaryCompressionType::DeltaPrediction => {
+                ("truncation, delta prediction and zlib compression", self.accession())
+            }
+            BinaryCompressionType::LinearPrediction => (
+                "truncation, linear prediction and zlib compression",
+                self.accession(),
+            ),
+            BinaryCompressionType::NumpressSLOFZstd => {
+                return Some(ParamCow::const_new(
+                    "MS-Numpress short logged float compression followed by zstd compression",
+                    crate::params::ValueRef::Empty,
+                    self.accession(),
+                    Some(ControlledVocabulary::MS),
+                    Unit::Unknown,
+                ))
+            }
+            BinaryCompressionType::NumpressLinearZstd => {
+                return Some(ParamCow::const_new(
+                    "MS-Numpress linear prediction compression followed by zstd compression",
+                    crate::params::ValueRef::Empty,
+                    self.accession(),
+                    Some(ControlledVocabulary::MS),
+                    Unit::Unknown,
+                ))
+            }
+            BinaryCompressionType::ZstdDict => {
+                return Some(ParamCow::const_new(
+                    "dict-zstd compression",
+                    crate::params::ValueRef::Empty,
+                    self.accession(),
+                    Some(ControlledVocabulary::MS),
+                    Unit::Unknown,
+                ))
+            }
+            BinaryCompressionType::Zstd => {
+                return Some(ParamCow::const_new(
+                    "zstd compression",
+                    crate::params::ValueRef::Empty,
+                    self.accession(),
+                    Some(ControlledVocabulary::MS),
+                    Unit::Unknown,
+                ))
+            }
+            BinaryCompressionType::ShuffleZstd => {
+                return Some(ParamCow::const_new(
+                    "byte-shuffle-zstd compression",
+                    crate::params::ValueRef::Empty,
+                    self.accession(),
+                    Some(ControlledVocabulary::MS),
+                    Unit::Unknown,
+                ))
+            }
+            BinaryCompressionType::DeltaShuffleZstd => {
+                return Some(ParamCow::const_new(
+                    "delta-byte-shuffle-zstd compression",
+                    crate::params::ValueRef::Empty,
+                    self.accession(),
+                    Some(ControlledVocabulary::MS),
+                    Unit::Unknown,
+                ))
+            }
         };
-        Some(ControlledVocabulary::MS.const_param_ident(name, accession))
+        Some(ControlledVocabulary::MS.const_param_ident(name, unsafe { accession.unwrap_unchecked() }))
     }
 }
 
@@ -557,11 +1194,12 @@ impl From<numpress::Error> for ArrayRetrievalError {
     }
 }
 
-pub fn linear_prediction_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
+pub fn linear_prediction_decoding<F: Num + Copy + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
     if values.len() < 2 {
         return values;
     }
-    let two = F::from(2.0).unwrap();
+
+    let two = F::one() + F::one();
 
     let prev2 = values[1];
     let prev1 = values[2];
@@ -588,7 +1226,9 @@ pub fn linear_prediction_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) 
     values
 }
 
-pub fn linear_prediction_encoding<F: Float + Mul<F> + AddAssign>(values: &mut [F]) -> &mut [F] {
+pub fn linear_prediction_encoding<F: Num + Copy + Mul<F> + AddAssign>(
+    values: &mut [F],
+) -> &mut [F] {
     let n = values.len();
     if n < 3 {
         return values;
@@ -596,7 +1236,7 @@ pub fn linear_prediction_encoding<F: Float + Mul<F> + AddAssign>(values: &mut [F
     let offset = values[1];
     let prev2 = values[0];
     let prev1 = values[1];
-    let two = F::from(2.0).unwrap();
+    let two = F::one() + F::one();
 
     values
         .iter_mut()
@@ -610,7 +1250,7 @@ pub fn linear_prediction_encoding<F: Float + Mul<F> + AddAssign>(values: &mut [F
     values
 }
 
-pub fn delta_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
+pub fn delta_decoding<F: Num + Copy + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
     if values.len() < 2 {
         return values;
     }
@@ -625,7 +1265,7 @@ pub fn delta_decoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] 
     values
 }
 
-pub fn delta_encoding<F: Float + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
+pub fn delta_encoding<F: Num + Copy + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
     let n = values.len();
     if n < 2 {
         return values;
@@ -697,22 +1337,22 @@ mod test {
                     ("MS-Numpress linear prediction compression", 1002312)
                 }
                 BinaryCompressionType::NumpressSLOF => {
-                    ("MS-Numpress positive integer compression", 1002313)
+                    ("MS-Numpress short logged float compression", 1002314)
                 }
                 BinaryCompressionType::NumpressPIC => {
-                    ("MS-Numpress short logged float compression", 1002314)
+                    ("MS-Numpress positive integer compression", 1002313)
                 }
                 BinaryCompressionType::NumpressLinearZlib => (
                     "MS-Numpress linear prediction compression followed by zlib compression",
                     1002746,
                 ),
-                BinaryCompressionType::NumpressSLOFZlib => (
-                    "MS-Numpress positive integer compression followed by zlib compression",
-                    1002477,
-                ),
                 BinaryCompressionType::NumpressPICZlib => (
+                    "MS-Numpress positive integer compression followed by zlib compression",
+                    1002747,
+                ),
+                BinaryCompressionType::NumpressSLOFZlib => (
                     "MS-Numpress short logged float compression followed by zlib compression",
-                    1002478,
+                    1002748,
                 ),
                 _ => ("", 0),
             };
@@ -721,5 +1361,23 @@ mod test {
                 assert_eq!(p.accession.unwrap(), reps.1);
             }
         }
+    }
+
+    #[test]
+    fn test_transpose() {
+        let data: Vec<_> = (0..128i32).map(|i| i.pow(2u32) as f64).collect();
+        let flip = transpose_f64(&data);
+        let rev = reverse_transpose_f64(&flip);
+        let rev_cast: &[f64] = bytemuck::cast_slice(&rev);
+        assert_eq!(data, rev_cast);
+    }
+
+    #[test]
+    fn test_dict() {
+        let data: Vec<_> = (0..127i32).map(|i| i.pow(2u32) as f64).collect();
+        let encoded = dictionary_encoding(&data).unwrap();
+        let decoded: Vec<f64> = dictionary_decoding(&encoded).unwrap();
+
+        assert_eq!(data, decoded);
     }
 }
