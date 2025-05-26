@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.53.0] - 2025-05-26
+
+### Added
+
+- Add prototype Zstandard, Numpress, and dictionary-based binary data array compression methods (#24)
+* add more `MS-Numpress` encodings
+* feature: add units to common arrays
+* change: change TDF peak collapsing to be off by default
+* doc: document the behavior of `TDFSpectrumReaderType`
+* feature: add byte shuffling to the dictionary encoding
+* chore: pin Rust toolchain version in test to 1.86 due to hostfxr-sys + syn issue
+
 ## [0.52.0] - 2025-04-08
 
 ### Added
@@ -765,7 +777,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.52.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.53.0...HEAD
+[0.53.0]: https://github.com/mobiusklein/mzdata/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/mobiusklein/mzdata/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/mobiusklein/mzdata/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/mobiusklein/mzdata/compare/v0.49.0...v0.50.0
