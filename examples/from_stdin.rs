@@ -11,6 +11,7 @@ use mzdata::io::{
 use mzdata::{MGFReader, MzMLReader};
 
 fn main() -> io::Result<()> {
+    env_logger::init();
     let start = Instant::now();
     let stream = io::stdin();
     let mut stream = PreBufferedStream::new(stream)?;
