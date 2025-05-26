@@ -84,7 +84,7 @@ patch-version:
     target_toml = "crates/mzdata-spectra/Cargo.toml"
 
     pattern = re.compile(r"^version\s*=\s*\"(.+?)\"")
-    dep_pattern = re.compile("version\s*=\s*\"(.+?)\"")
+    dep_pattern = re.compile(r"version\s*=\s*\"(.+?)\"")
 
     version = None
 
