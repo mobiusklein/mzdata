@@ -4,3 +4,5 @@ test/data/*.index.json
 Untitled*
 test.mzML
 tmp.mzML
+*.sh
+*.py
