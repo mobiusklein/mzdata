@@ -1,20 +1,21 @@
 use std::{collections::HashSet, convert::TryInto, mem};
 
 use mzpeaks::{
+    prelude::*,
     feature::{ChargedFeature, Feature},
     CentroidLike, CentroidPeak, CoordinateLike, DeconvolutedPeak, DeconvolutedPeakSet,
-    IntensityMeasurement, IonMobility, KnownCharge, MZPeakSetType, Mass, PeakCollection, PeakSet,
+    IonMobility,MZPeakSetType, Mass, PeakSet,
     MZ,
 };
 
 use crate::utils::{mass_charge_ratio, neutral_mass};
 
-use super::encodings::{
-    ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType,
+use super::{
+    array::DataArray,
+    encodings::{ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType},
+    map::BinaryArrayMap,
+    BinaryArrayMap3D, ByteArrayView,
 };
-use super::map::BinaryArrayMap;
-use super::ByteArrayView;
-use super::{array::DataArray, BinaryArrayMap3D};
 
 impl From<&PeakSet> for BinaryArrayMap {
     fn from(peaks: &PeakSet) -> BinaryArrayMap {
@@ -445,7 +446,9 @@ impl BuildArrayMapFrom for Feature<MZ, IonMobility> {
             mz_array.data.extend_from_slice(&mz.to_le_bytes());
             intensity_array.data.extend_from_slice(&inten.to_le_bytes());
             ion_mobility_array.data.extend_from_slice(&im.to_le_bytes());
-            marker_array.data.extend_from_slice(&(*key as i32).to_le_bytes());
+            marker_array
+                .data
+                .extend_from_slice(&(*key as i32).to_le_bytes());
         }
 
         arrays.add(mz_array);
@@ -625,6 +628,7 @@ impl BuildFromArrayMap for ChargedFeature<Mass, IonMobility> {
 }
 
 impl BuildArrayMap3DFrom for Feature<MZ, IonMobility> {}
+
 impl BuildFromArrayMap3D for Feature<MZ, IonMobility> {
     fn try_from_arrays_3d(arrays: &BinaryArrayMap3D) -> Result<Vec<Self>, ArrayRetrievalError> {
         let key = ArrayType::nonstandard("feature identifier array");
@@ -673,6 +677,7 @@ impl BuildFromArrayMap3D for Feature<MZ, IonMobility> {
 }
 
 impl BuildArrayMap3DFrom for ChargedFeature<Mass, IonMobility> {}
+
 impl BuildFromArrayMap3D for ChargedFeature<Mass, IonMobility> {
     fn try_from_arrays_3d(arrays: &BinaryArrayMap3D) -> Result<Vec<Self>, ArrayRetrievalError> {
         let key = ArrayType::nonstandard("feature identifier array");
@@ -720,5 +725,194 @@ impl BuildFromArrayMap3D for ChargedFeature<Mass, IonMobility> {
         }
 
         Ok(index)
+    }
+}
+
+impl BuildArrayMapFrom for mzpeaks::peak::IonMobilityAwareCentroidPeak {
+    fn arrays_included(&self) -> Option<Vec<ArrayType>> {
+        Some(vec![
+            ArrayType::MZArray,
+            ArrayType::IntensityArray,
+            ArrayType::IonMobilityArray,
+        ])
+    }
+
+    fn as_arrays(source: &[Self]) -> BinaryArrayMap {
+        let mut arrays = BinaryArrayMap::new();
+
+        let mut mz_array = DataArray::from_name_type_size(
+            &ArrayType::MZArray,
+            BinaryDataArrayType::Float64,
+            source.len() * BinaryDataArrayType::Float64.size_of(),
+        );
+
+        let mut intensity_array = DataArray::from_name_type_size(
+            &ArrayType::IntensityArray,
+            BinaryDataArrayType::Float32,
+            source.len() * BinaryDataArrayType::Float32.size_of(),
+        );
+
+        let mut im_array = DataArray::from_name_type_size(
+            &ArrayType::IonMobilityArray,
+            BinaryDataArrayType::Float64,
+            source.len() * BinaryDataArrayType::Float64.size_of(),
+        );
+
+        mz_array.compression = BinaryCompressionType::Decoded;
+        intensity_array.compression = BinaryCompressionType::Decoded;
+        im_array.compression = BinaryCompressionType::Decoded;
+
+        for p in source.iter() {
+            let mz: f64 = p.mz();
+            let inten: f32 = p.intensity();
+            let im = p.ion_mobility();
+
+            let raw_bytes: [u8; mem::size_of::<f64>()] = mz.to_le_bytes();
+            mz_array.data.extend_from_slice(&raw_bytes);
+
+            let raw_bytes: [u8; mem::size_of::<f32>()] = inten.to_le_bytes();
+            intensity_array.data.extend_from_slice(&raw_bytes);
+
+            let raw_bytes: [u8; mem::size_of::<f64>()] = im.to_le_bytes();
+            im_array.data.extend_from_slice(&raw_bytes);
+        }
+
+        arrays.add(mz_array);
+        arrays.add(intensity_array);
+        arrays.add(im_array);
+        arrays
+    }
+}
+
+impl BuildFromArrayMap for mzpeaks::peak::IonMobilityAwareCentroidPeak {
+    fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Vec<Self>, ArrayRetrievalError> {
+        let mz_array = arrays.mzs()?;
+        let intensity_array = arrays.intensities()?;
+        let (im_array, _) = arrays.ion_mobility()?;
+        let mut peaks = Vec::with_capacity(mz_array.len());
+
+        for (i, (mz, (intensity, ion_mobility))) in mz_array
+            .iter()
+            .zip(intensity_array.iter().zip(im_array.iter()))
+            .enumerate()
+        {
+            peaks.push(mzpeaks::peak::IonMobilityAwareCentroidPeak {
+                mz: *mz,
+                intensity: *intensity,
+                index: i as u32,
+                ion_mobility: *ion_mobility,
+            })
+        }
+        Ok(peaks)
+    }
+
+    fn arrays_required() -> Option<Vec<ArrayType>> {
+        Some(vec![
+            ArrayType::MZArray,
+            ArrayType::IntensityArray,
+            ArrayType::IonMobilityArray,
+        ])
+    }
+}
+
+impl BuildArrayMapFrom for mzpeaks::peak::IonMobilityAwareDeconvolutedPeak {
+    fn arrays_included(&self) -> Option<Vec<ArrayType>> {
+        Some(vec![
+            ArrayType::MZArray,
+            ArrayType::IntensityArray,
+            ArrayType::ChargeArray,
+            ArrayType::IonMobilityArray,
+        ])
+    }
+
+    fn as_arrays(source: &[Self]) -> BinaryArrayMap {
+        let mut arrays = BinaryArrayMap::new();
+
+        let mut mz_array = DataArray::from_name_type_size(
+            &ArrayType::MZArray,
+            BinaryDataArrayType::Float64,
+            source.len() * BinaryDataArrayType::Float64.size_of(),
+        );
+
+        let mut intensity_array = DataArray::from_name_type_size(
+            &ArrayType::IntensityArray,
+            BinaryDataArrayType::Float32,
+            source.len() * BinaryDataArrayType::Float32.size_of(),
+        );
+
+        let mut charge_array = DataArray::from_name_type_size(
+            &ArrayType::ChargeArray,
+            BinaryDataArrayType::Int32,
+            source.len() * BinaryDataArrayType::Int32.size_of(),
+        );
+
+        let mut im_array = DataArray::from_name_type_size(
+            &ArrayType::IonMobilityArray,
+            BinaryDataArrayType::Float64,
+            source.len() * BinaryDataArrayType::Float64.size_of(),
+        );
+
+        mz_array.compression = BinaryCompressionType::Decoded;
+        intensity_array.compression = BinaryCompressionType::Decoded;
+        im_array.compression = BinaryCompressionType::Decoded;
+        charge_array.compression = BinaryCompressionType::Decoded;
+
+        for p in source.iter() {
+            let mz: f64 = p.mz();
+            let inten: f32 = p.intensity();
+            let im = p.ion_mobility();
+
+            mz_array.data.extend_from_slice(&mz.to_le_bytes());
+            intensity_array.data.extend_from_slice(&inten.to_le_bytes());
+            im_array.data.extend_from_slice(&im.to_le_bytes());
+            charge_array
+                .data
+                .extend_from_slice(&p.charge().to_le_bytes());
+        }
+
+        arrays.add(mz_array);
+        arrays.add(intensity_array);
+        arrays.add(im_array);
+        arrays.add(charge_array);
+        arrays
+    }
+}
+
+impl BuildFromArrayMap for mzpeaks::peak::IonMobilityAwareDeconvolutedPeak {
+    fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Vec<Self>, ArrayRetrievalError> {
+        let mz_array = arrays.mzs()?;
+        let intensity_array = arrays.intensities()?;
+        let charge_array = arrays.charges()?;
+        let (im_array, _) = arrays.ion_mobility()?;
+        let mut peaks = Vec::with_capacity(mz_array.len());
+
+        for (i, (mz, (intensity, (ion_mobility, charge)))) in mz_array
+            .iter()
+            .zip(
+                intensity_array
+                    .iter()
+                    .zip(im_array.iter().zip(charge_array.iter())),
+            )
+            .enumerate()
+        {
+            let mass = neutral_mass(*mz, *charge);
+            peaks.push(mzpeaks::peak::IonMobilityAwareDeconvolutedPeak {
+                neutral_mass: mass,
+                intensity: *intensity,
+                index: i as u32,
+                ion_mobility: *ion_mobility,
+                charge: *charge,
+            })
+        }
+        Ok(peaks)
+    }
+
+    fn arrays_required() -> Option<Vec<ArrayType>> {
+        Some(vec![
+            ArrayType::MZArray,
+            ArrayType::IntensityArray,
+            ArrayType::ChargeArray,
+            ArrayType::IonMobilityArray,
+        ])
     }
 }

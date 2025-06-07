@@ -1,8 +1,6 @@
 use bytemuck::{self, Pod};
 use std::{
-    fmt::Display,
-    io,
-    ops::{AddAssign, Mul},
+    fmt::Display, io, ops::{AddAssign, Mul}
 };
 use thiserror::{self, Error};
 
@@ -11,7 +9,7 @@ use num_traits::Num;
 use numpress;
 
 use crate::{
-    params::{ControlledVocabulary, ParamCow, Unit},
+    params::{ControlledVocabulary, ParamCow, Unit, CURIE},
     Param,
 };
 
@@ -153,7 +151,10 @@ mod dictionary_encoding {
     use io::prelude::*;
     use num_traits::ops::bytes::{FromBytes, ToBytes};
     use std::{
-        borrow::Cow, collections::{HashMap, HashSet}, hash::Hash, io::BufWriter
+        borrow::Cow,
+        collections::{HashMap, HashSet},
+        hash::Hash,
+        io::BufWriter,
     };
 
     trait DictValue<const W: usize>:
@@ -201,12 +202,15 @@ mod dictionary_encoding {
     #[derive(Default, Debug)]
     pub struct DictionaryEncoder {
         shuffle: bool,
-        buffer: Vec<u8>
+        buffer: Vec<u8>,
     }
 
     impl DictionaryEncoder {
         pub fn new(shuffle: bool) -> Self {
-            Self { shuffle, buffer: Vec::new() }
+            Self {
+                shuffle,
+                buffer: Vec::new(),
+            }
         }
 
         fn build_value_map<T: Pod, const W1: usize, V: DictValue<W1>>(
@@ -333,7 +337,7 @@ mod dictionary_encoding {
 
         pub fn encode<T: Pod>(&mut self, data: &[T]) -> io::Result<Bytes> {
             if data.is_empty() {
-                return Ok(Vec::new())
+                return Ok(Vec::new());
             }
             let z_val = core::mem::size_of::<T>();
             if z_val <= 1 {
@@ -353,7 +357,6 @@ mod dictionary_encoding {
         }
     }
 
-
     #[derive(Default, Debug)]
     pub struct DictionaryDecoder {
         shuffle: bool,
@@ -362,7 +365,10 @@ mod dictionary_encoding {
 
     impl DictionaryDecoder {
         pub fn new(shuffle: bool) -> Self {
-            Self { shuffle, buffer: Default::default() }
+            Self {
+                shuffle,
+                buffer: Default::default(),
+            }
         }
 
         fn make_reader<'a>(&self, buffer: &'a [u8]) -> io::BufReader<&'a [u8]> {
@@ -376,31 +382,36 @@ mod dictionary_encoding {
             n_values: usize,
         ) -> Vec<T> {
             macro_rules! decode_chunk {
-                ($chunk:ident) => {
-                    {
-                        let chunk_a: [u8; W1] = $chunk.try_into().unwrap();
-                        let val = V::from_le_bytes(&chunk_a);
-                        let val: T = *bytemuck::from_bytes(bytemuck::bytes_of(&val));
-                        val
-                    }
-                };
+                ($chunk:ident) => {{
+                    let chunk_a: [u8; W1] = $chunk.try_into().unwrap();
+                    let val = V::from_le_bytes(&chunk_a);
+                    let val: T = *bytemuck::from_bytes(bytemuck::bytes_of(&val));
+                    val
+                }};
             }
             let mut value_buffer = Vec::with_capacity(n_values);
             if self.shuffle {
                 let blocks = match core::mem::size_of::<T>() {
-                    1 => {
-                        Cow::Borrowed(buffer)
-                    }
+                    1 => Cow::Borrowed(buffer),
                     2 => {
-                        byte_rotation::reverse_transpose_bytes_into::<T, 2>(buffer, &mut self.buffer);
+                        byte_rotation::reverse_transpose_bytes_into::<T, 2>(
+                            buffer,
+                            &mut self.buffer,
+                        );
                         Cow::Borrowed(self.buffer.as_slice())
                     }
                     4 => {
-                        byte_rotation::reverse_transpose_bytes_into::<T, 4>(buffer, &mut self.buffer);
+                        byte_rotation::reverse_transpose_bytes_into::<T, 4>(
+                            buffer,
+                            &mut self.buffer,
+                        );
                         Cow::Borrowed(self.buffer.as_slice())
                     }
                     8 => {
-                        byte_rotation::reverse_transpose_bytes_into::<T, 8>(buffer, &mut self.buffer);
+                        byte_rotation::reverse_transpose_bytes_into::<T, 8>(
+                            buffer,
+                            &mut self.buffer,
+                        );
                         Cow::Borrowed(self.buffer.as_slice())
                     }
                     x => {
@@ -427,7 +438,10 @@ mod dictionary_encoding {
         ) -> Vec<T> {
             let mut result = Vec::with_capacity(index_buffer.len() / W2);
             if self.shuffle {
-                byte_rotation::reverse_transpose_bytes_into::<K, W2>(index_buffer, &mut self.buffer);
+                byte_rotation::reverse_transpose_bytes_into::<K, W2>(
+                    index_buffer,
+                    &mut self.buffer,
+                );
                 for chunk in self.buffer.chunks_exact(W2) {
                     let b: [u8; W2] = chunk.try_into().unwrap();
                     let k: usize = K::from_le_bytes(&b).to_usize();
@@ -445,20 +459,20 @@ mod dictionary_encoding {
 
         pub fn decode<'a, T: Pod>(&mut self, buffer: &'a [u8]) -> io::Result<Vec<T>> {
             if buffer.is_empty() {
-                return Ok(Vec::new())
+                return Ok(Vec::new());
             }
             let mut reader = self.make_reader(buffer);
             let mut z_buf = [0u8; 8];
             reader.read_exact(&mut z_buf)?;
             let data_offset = u64::from_le_bytes(z_buf);
             if data_offset == 0 {
-                return Ok(Vec::new())
+                return Ok(Vec::new());
             }
             let mut z_buf = [0u8; 8];
             reader.read_exact(&mut z_buf)?;
             let n_value_codes = u64::from_le_bytes(z_buf);
             if n_value_codes == 0 {
-                return Ok(Vec::new())
+                return Ok(Vec::new());
             }
             let value_buffer = &buffer[16..(data_offset as usize)];
             let value_width = (data_offset - 16) / n_value_codes;
@@ -486,16 +500,20 @@ mod dictionary_encoding {
             }
 
             let values = if value_width <= 1 {
-                let values = self.decode_value_buffer::<T, 1, u8>(value_buffer, n_value_codes as usize);
+                let values =
+                    self.decode_value_buffer::<T, 1, u8>(value_buffer, n_value_codes as usize);
                 decode_indices!(values)
             } else if value_width <= 2 {
-                let values = self.decode_value_buffer::<T, 2, u16>(value_buffer, n_value_codes as usize);
+                let values =
+                    self.decode_value_buffer::<T, 2, u16>(value_buffer, n_value_codes as usize);
                 decode_indices!(values)
             } else if value_width <= 4 {
-                let values = self.decode_value_buffer::<T, 4, u32>(value_buffer, n_value_codes as usize);
+                let values =
+                    self.decode_value_buffer::<T, 4, u32>(value_buffer, n_value_codes as usize);
                 decode_indices!(values)
             } else if value_width <= 8 {
-                let values = self.decode_value_buffer::<T, 8, u64>(value_buffer, n_value_codes as usize);
+                let values =
+                    self.decode_value_buffer::<T, 8, u64>(value_buffer, n_value_codes as usize);
                 decode_indices!(values)
             } else {
                 return Err(io::Error::new(
@@ -506,7 +524,6 @@ mod dictionary_encoding {
 
             Ok(values)
         }
-
     }
 
     pub fn dictionary_encoding<T: Pod>(data: &[T]) -> Result<Vec<u8>, io::Error> {
@@ -657,6 +674,10 @@ impl ArrayType {
         )
     }
 
+    /// Create a [`Param`] for this array type.
+    ///
+    /// If a unit is provided, that unit will be specified, otherwise a default unit may
+    /// be used instead.
     pub fn as_param(&self, unit: Option<Unit>) -> Param {
         const CV: ControlledVocabulary = ControlledVocabulary::MS;
         match self {
@@ -774,6 +795,10 @@ impl ArrayType {
         }
     }
 
+    /// Create a [`ParamCow`] for this array type in a `const` context using the default unit.
+    ///
+    /// **NOTE**: If this is a [`Self::NonStandardDataArray`], this function *will* panic as
+    /// this variant requires allocation.
     pub const fn as_param_const(&self) -> ParamCow<'static> {
         const CV: ControlledVocabulary = ControlledVocabulary::MS;
         match self {
@@ -846,6 +871,10 @@ impl ArrayType {
         }
     }
 
+    /// Create a [`ParamCow`] for this array type in a `const` context using the provided unit.
+    ///
+    /// **NOTE**: If this is a [`Self::NonStandardDataArray`], this function *will* panic as
+    /// this variant requires allocation.
     pub const fn as_param_with_unit_const(&self, unit: Unit) -> ParamCow<'static> {
         const CV: ControlledVocabulary = ControlledVocabulary::MS;
         match self {
@@ -932,11 +961,48 @@ impl Display for BinaryDataArrayType {
 }
 
 impl BinaryDataArrayType {
+
+    /// Get the size in bytes of a single value of this type
     pub const fn size_of(&self) -> usize {
         match self {
             BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => 1,
             BinaryDataArrayType::Float32 | BinaryDataArrayType::Int32 => 4,
             BinaryDataArrayType::Float64 | BinaryDataArrayType::Int64 => 8,
+        }
+    }
+
+    /// Convert the data type to a [`ParamCow`] if possible.
+    pub const fn as_param_const(&self) -> Option<ParamCow<'static>> {
+        let name = match self {
+            BinaryDataArrayType::Unknown => return None,
+            BinaryDataArrayType::Float64 => "64-bit float",
+            BinaryDataArrayType::Float32 => "32-bit float",
+            BinaryDataArrayType::Int64 => "64-bit integer",
+            BinaryDataArrayType::Int32 => "32-bit integer",
+            BinaryDataArrayType::ASCII => "null-terminated ASCII string",
+        };
+        if let Some(curie) = self.curie() {
+            Some(ParamCow::const_new(
+                name,
+                crate::params::ValueRef::Empty,
+                Some(curie.accession),
+                Some(curie.controlled_vocabulary),
+                Unit::Unknown,
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// Convert the data type to a [`CURIE`] if one exists for it
+    pub const fn curie(&self) -> Option<CURIE> {
+        match self {
+            Self::Float32 => Some(curie!(MS:1000521)),
+            Self::Float64 => Some(curie!(MS:1000523)),
+            Self::Int32 => Some(curie!(MS:1000519)),
+            Self::Int64 => Some(curie!(MS:1000522)),
+            Self::ASCII => Some(curie!(MS:1001479)),
+            _ => None,
         }
     }
 }
@@ -1005,42 +1071,21 @@ impl BinaryCompressionType {
         let acc = match self {
             BinaryCompressionType::NoCompression => 1000576,
             BinaryCompressionType::Zlib => 1000574,
-            BinaryCompressionType::NumpressLinear => {
-                1002312
-            }
-            BinaryCompressionType::NumpressSLOF => {
-                1002314
-            }
-            BinaryCompressionType::NumpressPIC => {
-                1002313
-            }
+            BinaryCompressionType::NumpressLinear => 1002312,
+            BinaryCompressionType::NumpressSLOF => 1002314,
+            BinaryCompressionType::NumpressPIC => 1002313,
             BinaryCompressionType::NumpressLinearZlib => 1002746,
             BinaryCompressionType::NumpressSLOFZlib => 1002748,
             BinaryCompressionType::NumpressPICZlib => 1002747,
-            BinaryCompressionType::DeltaPrediction => {
-                1003089
-            }
+            BinaryCompressionType::DeltaPrediction => 1003089,
             BinaryCompressionType::LinearPrediction => 1003090,
-            BinaryCompressionType::NumpressSLOFZstd => {
-                9999994
-            }
-            BinaryCompressionType::NumpressLinearZstd => {
-                9999995
-            }
-            BinaryCompressionType::ZstdDict => {
-                9999996
-
-            }
-            BinaryCompressionType::Zstd => {
-                9999997
-            }
-            BinaryCompressionType::ShuffleZstd => {
-                9999998
-            }
-            BinaryCompressionType::DeltaShuffleZstd => {
-                9999999
-            }
-            BinaryCompressionType::Decoded => return None
+            BinaryCompressionType::NumpressSLOFZstd => 9999994,
+            BinaryCompressionType::NumpressLinearZstd => 9999995,
+            BinaryCompressionType::ZstdDict => 9999996,
+            BinaryCompressionType::Zstd => 9999997,
+            BinaryCompressionType::ShuffleZstd => 9999998,
+            BinaryCompressionType::DeltaShuffleZstd => 9999999,
+            BinaryCompressionType::Decoded => return None,
         };
         Some(acc)
     }
@@ -1054,12 +1099,14 @@ impl BinaryCompressionType {
             BinaryCompressionType::Decoded => return None,
             BinaryCompressionType::NoCompression => ("no compression", self.accession()),
             BinaryCompressionType::Zlib => ("zlib compression", self.accession()),
-            BinaryCompressionType::NumpressLinear => {
-                ("MS-Numpress linear prediction compression", self.accession())
-            }
-            BinaryCompressionType::NumpressSLOF => {
-                ("MS-Numpress short logged float compression", self.accession())
-            }
+            BinaryCompressionType::NumpressLinear => (
+                "MS-Numpress linear prediction compression",
+                self.accession(),
+            ),
+            BinaryCompressionType::NumpressSLOF => (
+                "MS-Numpress short logged float compression",
+                self.accession(),
+            ),
             BinaryCompressionType::NumpressPIC => {
                 ("MS-Numpress positive integer compression", self.accession())
             }
@@ -1075,9 +1122,10 @@ impl BinaryCompressionType {
                 "MS-Numpress positive integer compression followed by zlib compression",
                 self.accession(),
             ),
-            BinaryCompressionType::DeltaPrediction => {
-                ("truncation, delta prediction and zlib compression", self.accession())
-            }
+            BinaryCompressionType::DeltaPrediction => (
+                "truncation, delta prediction and zlib compression",
+                self.accession(),
+            ),
             BinaryCompressionType::LinearPrediction => (
                 "truncation, linear prediction and zlib compression",
                 self.accession(),
@@ -1137,7 +1185,10 @@ impl BinaryCompressionType {
                 ))
             }
         };
-        Some(ControlledVocabulary::MS.const_param_ident(name, unsafe { accession.unwrap_unchecked() }))
+        Some(
+            ControlledVocabulary::MS
+                .const_param_ident(name, unsafe { accession.unwrap_unchecked() }),
+        )
     }
 }
 
