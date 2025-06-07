@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.54.0] - 2025-06-07
+
+### Added
+
+- Add controlled vocabulary-related methods to `BinaryDataArrayType`
+
 ## [0.53.0] - 2025-05-26
 
 ### Added
@@ -777,7 +783,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.53.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.54.0...HEAD
+[0.54.0]: https://github.com/mobiusklein/mzdata/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/mobiusklein/mzdata/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/mobiusklein/mzdata/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/mobiusklein/mzdata/compare/v0.50.0...v0.51.0
