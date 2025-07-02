@@ -19,7 +19,7 @@ pub use crate::spectrum::bindata::{
 };
 pub use crate::spectrum::{
     IonProperties, PrecursorSelection, SpectrumLike, IonMobilityMeasure, IonMobilityFrameLike,
-    SpectrumGrouping, IonMobilityFrameGrouping,
+    SpectrumGrouping, IonMobilityFrameGrouping, ChromatogramLike,
 };
 
 #[cfg(feature = "mzsignal")]
