@@ -160,12 +160,6 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                     self.current_array_mut().name = ArrayType::SignalToNoiseArray;
                     *self.current_array_mut().unit_mut() = param.unit();
                 },
-                1000786 => {
-                    self.current_array_mut().name = ArrayType::NonStandardDataArray {
-                        name: Box::new(param.value().to_string()),
-                    };
-                    *self.current_array_mut().unit_mut() = param.unit();
-                }
                 1000595 => {
                     self.current_array_mut().name = ArrayType::TimeArray;
                     let unit = param.unit();
@@ -177,7 +171,17 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                             warn!("Invalid unit {} found for time array", unit)
                         }
                     }
-                }
+                },
+                1000617 => {
+                    self.current_array_mut().name = ArrayType::WavelengthArray;
+                    self.current_array_mut().unit = param.unit();
+                },
+                1000786 => {
+                    self.current_array_mut().name = ArrayType::NonStandardDataArray {
+                        name: Box::new(param.value().to_string()),
+                    };
+                    *self.current_array_mut().unit_mut() = param.unit();
+                },
                 1002477 => {
                     self.current_array_mut().name = ArrayType::MeanDriftTimeArray;
                     self.current_array_mut().unit = param.unit();
