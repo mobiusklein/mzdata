@@ -1,6 +1,8 @@
 use bytemuck::{self, Pod};
 use std::{
-    fmt::Display, io, ops::{AddAssign, Mul}
+    fmt::Display,
+    io,
+    ops::{AddAssign, Mul},
 };
 use thiserror::{self, Error};
 
@@ -938,6 +940,91 @@ impl ArrayType {
             }
         }
     }
+
+    pub fn from_accession(x: CURIE) -> Option<Self> {
+        let tp = if x == Self::MZArray.as_param_const().curie().unwrap() {
+            Self::MZArray
+        } else if x == Self::IntensityArray.as_param_const().curie().unwrap() {
+            Self::IntensityArray
+        } else if x == Self::ChargeArray.as_param_const().curie().unwrap() {
+            Self::ChargeArray
+        } else if x == Self::SignalToNoiseArray.as_param_const().curie().unwrap() {
+            Self::SignalToNoiseArray
+        } else if x == Self::TimeArray.as_param_const().curie().unwrap() {
+            Self::TimeArray
+        } else if x == Self::WavelengthArray.as_param_const().curie().unwrap() {
+            Self::WavelengthArray
+        } else if x == Self::IonMobilityArray.as_param_const().curie().unwrap() {
+            Self::IonMobilityArray
+        } else if x == Self::MeanIonMobilityArray.as_param_const().curie().unwrap() {
+            Self::MeanIonMobilityArray
+        } else if x == Self::MeanDriftTimeArray.as_param_const().curie().unwrap() {
+            Self::MeanDriftTimeArray
+        } else if x
+            == Self::MeanInverseReducedIonMobilityArray
+                .as_param_const()
+                .curie()
+                .unwrap()
+        {
+            Self::MeanInverseReducedIonMobilityArray
+        } else if x == Self::RawIonMobilityArray.as_param_const().curie().unwrap() {
+            Self::RawIonMobilityArray
+        } else if x == Self::RawDriftTimeArray.as_param_const().curie().unwrap() {
+            Self::RawDriftTimeArray
+        } else if x
+            == Self::RawInverseReducedIonMobilityArray
+                .as_param_const()
+                .curie()
+                .unwrap()
+        {
+            Self::RawInverseReducedIonMobilityArray
+        } else if x
+            == Self::DeconvolutedIonMobilityArray
+                .as_param_const()
+                .curie()
+                .unwrap()
+        {
+            Self::DeconvolutedIonMobilityArray
+        } else if x
+            == Self::DeconvolutedDriftTimeArray
+                .as_param_const()
+                .curie()
+                .unwrap()
+        {
+            Self::DeconvolutedDriftTimeArray
+        } else if x
+            == Self::DeconvolutedInverseReducedIonMobilityArray
+                .as_param_const()
+                .curie()
+                .unwrap()
+        {
+            Self::DeconvolutedInverseReducedIonMobilityArray
+        } else if x == Self::BaselineArray.as_param_const().curie().unwrap() {
+            Self::BaselineArray
+        } else if x == Self::ResolutionArray.as_param_const().curie().unwrap() {
+            Self::ResolutionArray
+        } else if x == Self::PressureArray.as_param_const().curie().unwrap() {
+            Self::PressureArray
+        } else if x == Self::TemperatureArray.as_param_const().curie().unwrap() {
+            Self::TemperatureArray
+        } else if x == Self::FlowRateArray.as_param_const().curie().unwrap() {
+            Self::FlowRateArray
+        } else if x
+            == (Self::NonStandardDataArray {
+                name: "".to_string().into(),
+            })
+            .as_param_const()
+            .curie()
+            .unwrap()
+        {
+            Self::NonStandardDataArray {
+                name: "".to_string().into(),
+            }
+        } else {
+            return None;
+        };
+        Some(tp)
+    }
 }
 
 /// The canonical primitive data types found in MS data file formats
@@ -961,7 +1048,6 @@ impl Display for BinaryDataArrayType {
 }
 
 impl BinaryDataArrayType {
-
     /// Get the size in bytes of a single value of this type
     pub const fn size_of(&self) -> usize {
         match self {
@@ -1002,6 +1088,17 @@ impl BinaryDataArrayType {
             Self::Int32 => Some(curie!(MS:1000519)),
             Self::Int64 => Some(curie!(MS:1000522)),
             Self::ASCII => Some(curie!(MS:1001479)),
+            _ => None,
+        }
+    }
+
+    pub fn from_accession(accession: CURIE) -> Option<Self> {
+        match accession {
+            x if Some(x) == Self::Float32.curie() => Some(Self::Float32),
+            x if Some(x) == Self::Float64.curie() => Some(Self::Float64),
+            x if Some(x) == Self::Int32.curie() => Some(Self::Int32),
+            x if Some(x) == Self::Int64.curie() => Some(Self::Int64),
+            x if Some(x) == Self::ASCII.curie() => Some(Self::ASCII),
             _ => None,
         }
     }
