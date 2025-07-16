@@ -82,6 +82,7 @@ pub enum InstrumentModelType {
     DFS,
     DSQ_II,
     ISQ,
+    ISQ_7000,
     MALDI_LTQ_XL,
     MALDI_LTQ_Orbitrap,
     TSQ_Quantum,
@@ -150,6 +151,7 @@ impl InstrumentModelType {
             InstrumentModelType::GC_IsoLink => param!("GC IsoLink", 1000648),
             InstrumentModelType::GC_Quantum => param!("GC Quantum", 1000558),
             InstrumentModelType::ISQ => param!("ISQ", 1001908),
+            InstrumentModelType::ISQ_7000 => param!("ISQ 7000", 1003449),
             InstrumentModelType::ITQ_1100 => param!("ITQ 1100", 1000637),
             InstrumentModelType::ITQ_700 => param!("ITQ 700", 1000635),
             InstrumentModelType::ITQ_900 => param!("ITQ 900", 1000636),
@@ -428,6 +430,7 @@ static INSTRUMENT_MODEL_TYPE_MATCH: [(&str, InstrumentModelType, MatchType); 89]
     ("DFS", InstrumentModelType::DFS, MatchType::Exact),
     ("DSQ II", InstrumentModelType::DSQ_II, MatchType::Exact),
     ("ISQ SERIES", InstrumentModelType::ISQ, MatchType::Exact),
+    ("ISQ 7000", InstrumentModelType::ISQ_7000, MatchType::Exact),
     (
         "MALDI LTQ XL",
         InstrumentModelType::MALDI_LTQ_XL,
@@ -684,6 +687,7 @@ pub fn instrument_model_to_mass_analyzers(model: InstrumentModelType) -> Vec<Mas
         | InstrumentModelType::DSQ
         | InstrumentModelType::DSQ_II
         | InstrumentModelType::ISQ
+        | InstrumentModelType::ISQ_7000
         | InstrumentModelType::Trace_DSQ
         | InstrumentModelType::GC_IsoLink => {
             vec![MassAnalyzerTerm::Quadrupole]
@@ -822,6 +826,7 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<DetectorT
         InstrumentModelType::DSQ |
         InstrumentModelType::DSQ_II |
         InstrumentModelType::ISQ |
+        InstrumentModelType::ISQ_7000 |
         InstrumentModelType::Trace_DSQ |
         InstrumentModelType::GC_IsoLink => {
             vec![DetectorTypeTerm::ElectronMultiplier]
@@ -873,7 +878,7 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<DetectorT
         }
 
         InstrumentModelType::Unknown => {
-            vec![]
+            vec![DetectorTypeTerm::Unknown]
         },
     }
 }
@@ -954,6 +959,9 @@ pub fn instrument_model_to_ion_sources(model: InstrumentModelType) -> Vec<Ioniza
         }
         InstrumentModelType::MALDI_LTQ_XL | InstrumentModelType::MALDI_LTQ_Orbitrap => {
             vec![IonizationTypeTerm::MatrixAssistedLaserDesorptionIonization]
+        }
+        InstrumentModelType::ISQ_7000 => {
+            vec![IonizationTypeTerm::ElectronIonization, IonizationTypeTerm::ChemicalIonization]
         }
         _ => Vec::default(),
     }
@@ -1140,6 +1148,7 @@ pub fn create_instrument_configurations(model: InstrumentModelType, source: Comp
         InstrumentModelType::DSQ |
         InstrumentModelType::DSQ_II |
         InstrumentModelType::ISQ |
+        InstrumentModelType::ISQ_7000 |
         InstrumentModelType::Trace_DSQ |
         InstrumentModelType::GC_IsoLink => {
             configs.push(InstrumentConfiguration::default());
