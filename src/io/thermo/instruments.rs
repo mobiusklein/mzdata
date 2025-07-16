@@ -232,7 +232,7 @@ impl InstrumentModelType {
     }
 }
 
-static INSTRUMENT_MODEL_TYPE_MATCH: [(&str, InstrumentModelType, MatchType); 89] = [
+static INSTRUMENT_MODEL_TYPE_MATCH: [(&str, InstrumentModelType, MatchType); 90] = [
     (
         "MAT253",
         InstrumentModelType::MAT253,
@@ -878,7 +878,7 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<DetectorT
         }
 
         InstrumentModelType::Unknown => {
-            vec![DetectorTypeTerm::Unknown]
+            vec![]
         },
     }
 }
