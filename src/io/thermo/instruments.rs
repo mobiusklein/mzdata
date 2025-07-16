@@ -13,6 +13,7 @@ macro_rules! param {
 }
 
 #[allow(unused)]
+#[derive(Debug)]
 enum MatchType {
     Exact,
     Contains,
@@ -115,6 +116,7 @@ pub enum InstrumentModelType {
     Orbitrap_Exploris_120,
     Orbitrap_Exploris_240,
     Orbitrap_Exploris_480,
+    Orbitrap_Exploris_GC_240,
     Orbitrap_Eclipse,
     Orbitrap_GC,
     Orbitrap_Astral,
@@ -189,6 +191,7 @@ impl InstrumentModelType {
             InstrumentModelType::Orbitrap_Exploris_120 => param!("Orbitrap Exploris 120", 1003095),
             InstrumentModelType::Orbitrap_Exploris_240 => param!("Orbitrap Exploris 240", 1003094),
             InstrumentModelType::Orbitrap_Exploris_480 => param!("Orbitrap Exploris 480", 1003028),
+            InstrumentModelType::Orbitrap_Exploris_GC_240 => param!("Orbitrap Exploris GC 240", 1003423),
             InstrumentModelType::Orbitrap_Fusion => param!("Orbitrap Fusion", 1002416),
             InstrumentModelType::Orbitrap_Fusion_ETD => param!("Orbitrap Fusion ETD", 1002417),
             InstrumentModelType::Orbitrap_Fusion_Lumos => param!("Orbitrap Fusion Lumos", 1002732),
@@ -227,7 +230,7 @@ impl InstrumentModelType {
     }
 }
 
-static INSTRUMENT_MODEL_TYPE_MATCH: [(&str, InstrumentModelType, MatchType); 88] = [
+static INSTRUMENT_MODEL_TYPE_MATCH: [(&str, InstrumentModelType, MatchType); 89] = [
     (
         "MAT253",
         InstrumentModelType::MAT253,
@@ -556,6 +559,11 @@ static INSTRUMENT_MODEL_TYPE_MATCH: [(&str, InstrumentModelType, MatchType); 88]
         MatchType::Exact,
     ),
     (
+        "ORBITRAP EXPLORIS GC 240",
+        InstrumentModelType::Orbitrap_Exploris_GC_240,
+        MatchType::Exact,
+    ),
+    (
         "ORBITRAP GC",
         InstrumentModelType::Orbitrap_GC,
         MatchType::Contains,
@@ -605,6 +613,9 @@ static INSTRUMENT_MODEL_TYPE_MATCH: [(&str, InstrumentModelType, MatchType); 88]
 pub fn parse_instrument_model(instrument_model: &str) -> InstrumentModelType {
     let model_type = instrument_model.to_uppercase();
     let model_type_no_spaces = model_type.replace(" ", "");
+    log::debug!("Parsing instrument model: '{}' -> '{}' (no spaces: '{}')",
+        instrument_model, model_type, model_type_no_spaces);
+    
     for (key, model_enum, match_type) in INSTRUMENT_MODEL_TYPE_MATCH.iter() {
         let hit = match match_type {
             MatchType::Exact => **key == model_type,
@@ -614,10 +625,12 @@ pub fn parse_instrument_model(instrument_model: &str) -> InstrumentModelType {
             MatchType::ExactNoSpaces => **key == model_type_no_spaces,
         };
         if hit {
+            log::debug!("Matched instrument model '{}' with pattern '{}' ({:?}) -> {:?}",
+                instrument_model, key, match_type, model_enum);
             return *model_enum;
         }
     }
-    log::debug!("Failed to infer instrument model from name string {instrument_model}");
+    log::warn!("Failed to infer instrument model from name string '{}' - will use Unknown", instrument_model);
     InstrumentModelType::Unknown
 }
 
@@ -634,6 +647,7 @@ pub fn instrument_model_to_mass_analyzers(model: InstrumentModelType) -> Vec<Mas
         | InstrumentModelType::Orbitrap_Exploris_120
         | InstrumentModelType::Orbitrap_Exploris_240
         | InstrumentModelType::Orbitrap_Exploris_480
+        | InstrumentModelType::Orbitrap_Exploris_GC_240
         | InstrumentModelType::Orbitrap_GC => {
             vec![MassAnalyzerTerm::Orbitrap]
         }
@@ -739,6 +753,7 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<DetectorT
         InstrumentModelType::Orbitrap_Exploris_120 |
         InstrumentModelType::Orbitrap_Exploris_240 |
         InstrumentModelType::Orbitrap_Exploris_480 |
+        InstrumentModelType::Orbitrap_Exploris_GC_240 |
         InstrumentModelType::Orbitrap_GC => {
             vec![DetectorTypeTerm::InductiveDetector]
         },
@@ -933,6 +948,7 @@ pub fn instrument_model_to_ion_sources(model: InstrumentModelType) -> Vec<Ioniza
         | InstrumentModelType::DSQ_II
         | InstrumentModelType::ISQ
         | InstrumentModelType::GC_IsoLink
+        | InstrumentModelType::Orbitrap_Exploris_GC_240
         | InstrumentModelType::Orbitrap_GC => {
             vec![IonizationTypeTerm::ElectronIonization]
         }
@@ -990,6 +1006,7 @@ pub fn create_instrument_configurations(model: InstrumentModelType, source: Comp
         InstrumentModelType::Orbitrap_Exploris_120 |
         InstrumentModelType::Orbitrap_Exploris_240 |
         InstrumentModelType::Orbitrap_Exploris_480 |
+        InstrumentModelType::Orbitrap_Exploris_GC_240|
 		InstrumentModelType::Orbitrap_GC  => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
