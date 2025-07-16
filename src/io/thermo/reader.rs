@@ -585,10 +585,13 @@ pub(crate) mod sealed {
             );
 
             let model_type = if let Some(model_name) = descr.model() {
+                log::debug!("Detected instrument model: {}", model_name);
                 parse_instrument_model(model_name)
             } else {
+                log::warn!("No instrument model found in RAW file metadata");
                 InstrumentModelType::Unknown
             };
+            log::debug!("Parsed instrument model type: {:?}", model_type);
 
             let mut configs = HashMap::new();
             let mut components_to_instrument_id = HashMap::new();
@@ -689,10 +692,13 @@ pub(crate) mod sealed {
             // If the whole configurations weren't specified by the instrument model,
             // try to guess them piece-meal.
             if configs.is_empty() {
-                debug!("Using instrument mode {model_type} to infer configurations by parts");
+                log::debug!("Still no configurations found. Using instrument model {} to infer configurations by parts", model_type);
                 let mass_analyzers = instrument_model_to_mass_analyzers(model_type);
                 let ionization_types = instrument_model_to_ion_sources(model_type);
                 let detectors = instrument_model_to_detector(model_type);
+                log::debug!("Found {} mass analyzers, {} ionization types, {} detectors for model",
+                    mass_analyzers.len(), ionization_types.len(), detectors.len());
+                
                 let mut i = 0;
                 for ionization in ionization_types.iter() {
                     for (mass_analyzer, detector_type) in
@@ -722,6 +728,7 @@ pub(crate) mod sealed {
 
                         let vconf_mass_analyzer = translate_mass_analyzer_reverse(mass_analyzer);
                         components_to_instrument_id.insert(vconf_mass_analyzer, i);
+                        log::debug!("Created piece-meal configuration {}: {:?} -> {:?}", i, mass_analyzer, vconf_mass_analyzer);
 
                         configs.insert(i, config);
                         i += 1;
@@ -729,7 +736,9 @@ pub(crate) mod sealed {
                 }
             }
             if configs.is_empty() {
-                log::warn!("No instrument configurations were found in Thermo RAW file?")
+                log::warn!("No instrument configurations were found in Thermo RAW file")
+            } else {
+                log::debug!("Final result: {} configurations, mapping: {:?}", configs.len(), components_to_instrument_id);
             }
             (sw, configs, components_to_instrument_id)
         }
