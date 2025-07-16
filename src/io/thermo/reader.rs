@@ -864,11 +864,16 @@ pub(crate) mod sealed {
             event.injection_time = vevent.injection_time();
             let window = ScanWindow::new(vevent.low_mz() as f32, vevent.high_mz() as f32);
             event.scan_windows.push(window);
-            if let Some(cv) = vevent.compensation_voltage() {
-                let mut param =
-                    ControlledVocabulary::MS.param_val(1001581, "FAIMS compensation voltage", cv);
-                param.unit = Unit::Volt;
-                event.add_param(param);
+            if let Some(cv) = vevent.compensation_voltages() {
+                for cv in cv.iter() {
+                    let mut param = ControlledVocabulary::MS.param_val(
+                        1001580,
+                        "FAIMS compensation voltage",
+                        cv,
+                    );
+                    param.unit = Unit::Volt;
+                    event.add_param(param);
+                }
             }
             if let Some(resolution) = vevent.resolution() {
                 event.add_param(ControlledVocabulary::MS.param_val(
