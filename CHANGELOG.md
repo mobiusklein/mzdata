@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.55.0] - 2025-07-17
+
+### Added
+
+- Add `ChromatogramLike` to the prelude
+- Add `ArrayType::from_accession` and `BinaryDataArrayType::from_accession` to convert from CURIEs
+- Add ISQ7000, Orbitrap Exploris GC 240, support multiple FAIMS voltages (#26)
+* Add Orbitrap Exploris GC 240, to supported instruments. Added some debugging statements to make diagnosing missing instrument types easier in the future
+
+* Add ISQ 7000, fix typo in reverse_transpose
+
+* remove unknown detector type, bump number of instruments
+
+* support multiple CompensationVoltageValues
+
+* Add handling of FAIMS start and end ramp, add warning if there are more than 2 faims voltages
+
+* Update Cargo.toml
+
+---------
+- Add support for `ScanSettings` section; fix bug in decompression of Numpress
+
+### Fixed
+
+- Fix recognition of wavelength array in mzML
+
 ## [0.53.0] - 2025-05-26
 
 ### Added
@@ -777,7 +803,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.54.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.55.0...HEAD
+[0.55.0]: https://github.com/mobiusklein/mzdata/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/mobiusklein/mzdata/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/mobiusklein/mzdata/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/mobiusklein/mzdata/compare/v0.51.0...v0.52.0
