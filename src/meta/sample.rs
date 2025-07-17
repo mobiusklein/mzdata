@@ -2,11 +2,15 @@ use crate::impl_param_described;
 use crate::params::{ParamDescribed, ParamList};
 
 
+/// A sample that was used to generate a MS dataset
 #[derive(Debug, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Sample {
+    /// A "unique" identifier
     pub id: String,
+    /// The sample's human-friendly name
     pub name: Option<String>,
+    /// The controlled vocabulary and user parameters of the sample
     pub params: ParamList
 }
 

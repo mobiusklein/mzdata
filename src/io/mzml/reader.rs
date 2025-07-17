@@ -18,8 +18,7 @@ use quick_xml::{
 use crate::{
     io::{utils::DetailLevel, Generic3DIonMobilityFrameSource, IntoIonMobilityFrameSource},
     meta::{
-        DataProcessing, DissociationEnergyTerm, FileDescription, InstrumentConfiguration,
-        MSDataFileMetadata, MassSpectrometryRun, Sample, Software,
+        DataProcessing, DissociationEnergyTerm, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, ScanSettings, Software
     },
     params::{Param, ParamList, Unit},
     prelude::{ParamLike, *},
@@ -1064,6 +1063,7 @@ pub struct MzMLReaderType<
     /// The data processing and signal transformation operations performed on the raw data in previous
     /// source files to produce this file's contents.
     pub(crate) data_processings: Vec<DataProcessing>,
+    pub(crate) scan_settings: Vec<ScanSettings>,
     /// A cache of repeated paramters
     pub reference_param_groups: HashMap<String, Vec<Param>>,
     pub detail_level: DetailLevel,
@@ -1138,6 +1138,7 @@ impl<
             chromatogram_index: Box::new(OffsetIndex::new("chromatogram".to_owned())),
 
             file_description: FileDescription::default(),
+            scan_settings: Default::default(),
             instrument_configurations: HashMap::new(),
             softwares: Vec::new(),
             samples: Vec::new(),
@@ -1269,7 +1270,7 @@ impl<
         self.samples = accumulator.samples;
         self.data_processings = accumulator.data_processings;
         self.reference_param_groups = accumulator.reference_param_groups;
-
+        self.scan_settings = accumulator.scan_settings;
         self.run.id = accumulator.run_id;
         self.run.default_instrument_id = accumulator.default_instrument_config;
         self.run.default_source_file_id = accumulator.default_source_file;
@@ -2089,6 +2090,14 @@ impl<R: Read, C: CentroidLike, D: DeconvolutedCentroidLike> MSDataFileMetadata
     for MzMLReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
+
+    fn scan_settings(&self) -> Option<&Vec<ScanSettings>> {
+        Some(&self.scan_settings)
+    }
+
+    fn scan_settings_mut(&mut self) -> Option<&mut Vec<ScanSettings>> {
+        Some(&mut self.scan_settings)
+    }
 
     fn spectrum_count_hint(&self) -> Option<u64> {
         self.num_spectra

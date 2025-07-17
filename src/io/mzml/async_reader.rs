@@ -27,7 +27,7 @@ use crate::{
     },
     meta::{
         DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
-        MassSpectrometryRun, Sample, Software,
+        MassSpectrometryRun, Sample, Software, ScanSettings,
     },
     params::Param,
     prelude::*,
@@ -83,6 +83,7 @@ pub struct MzMLReaderType<
     /// The different software components that were involved in the processing and creation of this
     /// file.
     pub(crate) softwares: Vec<Software>,
+    pub(crate) scan_settings: Vec<ScanSettings>,
     pub(crate) samples: Vec<Sample>,
     /// The data processing and signal transformation operations performed on the raw data in previous
     /// source files to produce this file's contents.
@@ -133,6 +134,7 @@ impl<
             file_description: FileDescription::default(),
             instrument_configurations: HashMap::new(),
             softwares: Vec::new(),
+            scan_settings: Vec::new(),
             samples: Vec::new(),
             data_processings: Vec::new(),
             reference_param_groups: HashMap::new(),
@@ -268,6 +270,7 @@ impl<
         self.run.start_time = accumulator.start_timestamp;
         self.run.default_data_processing_id = accumulator.default_data_processing;
         self.num_spectra = accumulator.num_spectra;
+        self.scan_settings = accumulator.scan_settings;
 
         match self.state {
             MzMLParserState::SpectrumDone => Ok(()),
@@ -520,6 +523,14 @@ impl<
 
     fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
         Some(&mut self.run)
+    }
+
+    fn scan_settings(&self) -> Option<&Vec<ScanSettings>> {
+        Some(&self.scan_settings)
+    }
+
+    fn scan_settings_mut(&mut self) -> Option<&mut Vec<ScanSettings>> {
+        Some(&mut self.scan_settings)
     }
 }
 

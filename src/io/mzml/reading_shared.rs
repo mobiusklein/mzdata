@@ -14,9 +14,7 @@ use super::reader::Bytes;
 use crate::io::traits::SeekRead;
 use crate::io::OffsetIndex;
 use crate::meta::{
-    Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration,
-    MassSpectrometerFileFormatTerm, NativeSpectrumIdentifierFormatTerm, ProcessingMethod, Sample,
-    Software, SourceFile,
+    Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometerFileFormatTerm, NativeSpectrumIdentifierFormatTerm, ProcessingMethod, Sample, ScanSettings, Software, SourceFile
 };
 use crate::params::{curie_to_num, ControlledVocabulary, Param, ParamCow, Unit};
 use crate::prelude::*;
@@ -39,6 +37,12 @@ pub enum MzMLParserState {
     FileContents,
     SourceFileList,
     SourceFile,
+
+    ScanSettingsList,
+    ScanSettings,
+    SourceFileRefList,
+    TargetList,
+    Target,
 
     ReferenceParamGroupList,
     ReferenceParamGroup,
@@ -563,6 +567,7 @@ pub struct FileMetadataBuilder<'a> {
     pub instrument_configurations: Vec<InstrumentConfiguration>,
     pub softwares: Vec<Software>,
     pub samples: Vec<Sample>,
+    pub scan_settings: Vec<ScanSettings>,
     pub data_processings: Vec<DataProcessing>,
     pub reference_param_groups: HashMap<String, Vec<Param>>,
     pub last_group: String,
@@ -920,6 +925,39 @@ impl FileMetadataBuilder<'_> {
                 }
                 return Ok(MzMLParserState::SpectrumList);
             }
+            b"scanSettingsList" => {
+                return Ok(MzMLParserState::ScanSettingsList)
+            }
+            b"scanSettings" => {
+                let mut settings = ScanSettings::default();
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key.as_ref() == b"id" {
+                                settings.id = attr
+                                    .unescape_value()
+                                    .expect("Error decoding id")
+                                    .to_string();
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg.into(), state));
+                        }
+                    }
+                }
+                self.scan_settings.push(settings);
+                return Ok(MzMLParserState::ScanSettings)
+            }
+            b"sourceFileRefList" => {
+                return Ok(MzMLParserState::SourceFileRefList)
+            }
+            b"targetList" => {
+                return Ok(MzMLParserState::TargetList)
+            }
+            b"target" => {
+                self.scan_settings.last_mut().unwrap().targets.push(Default::default());
+                return Ok(MzMLParserState::Target)
+            }
             _ => {}
         }
 
@@ -977,6 +1015,12 @@ impl FileMetadataBuilder<'_> {
                     .get_mut(&self.last_group)
                     .unwrap()
                     .push(param);
+            }
+            MzMLParserState::ScanSettings => {
+                self.scan_settings.last_mut().unwrap().add_param(param);
+            }
+            MzMLParserState::Target => {
+                self.scan_settings.last_mut().unwrap().targets.last_mut().unwrap().add_param(param);
             }
             _ => {}
         }
@@ -1045,6 +1089,26 @@ impl FileMetadataBuilder<'_> {
                     }
                 }
             }
+            b"sourceFileRef" => {
+                if state == MzMLParserState::SourceFileRefList {
+                    let settings = self.scan_settings.last_mut().unwrap();
+                    for attr_parsed in event.attributes() {
+                        match attr_parsed {
+                            Ok(attr) => {
+                                if attr.key.as_ref() == b"ref" {
+                                    settings.source_file_refs.push(attr
+                                        .unescape_value()
+                                        .expect("Error decoding software reference")
+                                        .to_string());
+                                }
+                            }
+                            Err(msg) => {
+                                return Err(self.handle_xml_error(msg.into(), state));
+                            }
+                        }
+                    }
+                }
+            }
             &_ => {}
         }
         Ok(state)
@@ -1074,6 +1138,11 @@ impl FileMetadataBuilder<'_> {
             b"dataProcessingList" => return Ok(MzMLParserState::DataProcessingList),
             b"dataProcessing" => return Ok(MzMLParserState::DataProcessingList),
             b"processingMethod" => return Ok(MzMLParserState::DataProcessing),
+            b"scanSettings" => return Ok(MzMLParserState::ScanSettingsList),
+            b"scanSettingsList" => return Ok(MzMLParserState::ScanSettingsList),
+            b"targetList" => return Ok(MzMLParserState::ScanSettings),
+            b"sourceFileRefList" => return Ok(MzMLParserState::ScanSettings),
+            b"target" => return Ok(MzMLParserState::TargetList),
             b"run" => {
                 // TODO
             }

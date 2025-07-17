@@ -2,7 +2,7 @@ use std::any::Any;
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
-use std::sync::mpsc::sync_channel;
+use std::sync::{mpsc::sync_channel, Arc, atomic::{AtomicU64, Ordering as AtomicOrdering}};
 use std::thread;
 use std::time;
 
@@ -44,6 +44,9 @@ pub struct MZConvert {
     #[arg()]
     pub outpath: String,
 
+    #[arg(short='b', long, default_value_t=8192)]
+    pub buffer_size: usize,
+
     #[arg(long, value_parser=compression_parser, default_value="zlib compression")]
     pub mz_compression: BinaryCompressionType,
 
@@ -59,6 +62,7 @@ impl MZConvert {
         Self {
             inpath,
             outpath,
+            buffer_size: 8192,
             mz_compression: BinaryCompressionType::Zlib,
             intensity_compression: BinaryCompressionType::Zlib,
             ion_mobility_compression: BinaryCompressionType::Zlib,
@@ -86,20 +90,30 @@ impl MZConvert {
         reader: R,
         mut writer: W,
     ) -> io::Result<()> {
-        let (send, recv) = sync_channel(2usize.pow(14));
-
+        let (send, recv) = sync_channel(self.buffer_size);
+        let buffered= Arc::new(AtomicU64::default());
+        let buffered_w = Arc::clone(&buffered);
         let reader_handle = thread::spawn(move || {
             reader.enumerate().for_each(|(i, s)| {
+                let waiting_cnt = buffered.fetch_add(1, AtomicOrdering::SeqCst);
                 if i % 5000 == 0 && i > 0 {
-                    log::info!("Reading {} {}", i, s.id());
+                    log::info!("Reading {} {} ({waiting_cnt} to write)", i, s.id());
                 }
+                if i % 100 == 0 && i > 0 {
+                    log::debug!("Reading {} {} ({waiting_cnt} to write)", i, s.id());
+                }
+
                 send.send(s).unwrap()
             });
         });
 
         let writer_handle = thread::spawn(move || {
             for s in recv.iter() {
-                writer.write_owned(s).unwrap();
+                let i = s.index();
+                buffered_w.fetch_sub(1, AtomicOrdering::SeqCst);
+                writer.write_owned(s).inspect_err(|e| {
+                    log::error!("Failed to write spectrum {i}: {e}")
+                }).unwrap();
             }
             writer.close().unwrap();
         });
@@ -109,6 +123,7 @@ impl MZConvert {
         Ok(())
     }
 
+    #[allow(unused)]
     fn configure_reader(&self, reader: &mut dyn Any) {
         #[cfg(feature = "thermo")]
         if let Some(reader) = reader.downcast_mut::<mzdata::io::thermo::ThermoRawReader>() {

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::meta::ScanSettings;
+
 use super::{
     DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software,
 };
@@ -23,6 +25,15 @@ pub trait MSDataFileMetadata {
     /// available.
     fn samples(&self) -> &Vec<Sample>;
 
+    /// A list of scan settings in [`ScanSettings`] pre-configured by the instrument
+    ///  operator prior to the start of data acquisition.
+    ///
+    /// This information is relatively unstructured and unless manually specified will be absent
+    /// from most formats.
+    fn scan_settings(&self) -> Option<&Vec<ScanSettings>> {
+        None
+    }
+
     /// Mutably access the [`DataProcessing`] list for this data file
     fn data_processings_mut(&mut self) -> &mut Vec<DataProcessing>;
     /// Mutably access the [`InstrumentConfiguration`] mapping for this data file
@@ -33,6 +44,12 @@ pub trait MSDataFileMetadata {
     /// Mutably access the list of [`Software`] of this data file.
     fn softwares_mut(&mut self) -> &mut Vec<Software>;
     fn samples_mut(&mut self) -> &mut Vec<Sample>;
+
+    /// Mutably access the list of [`ScanSettings`] for this dataset. Most formats do not
+    /// possess a related concept and will not carry one.
+    fn scan_settings_mut(&mut self) -> Option<&mut Vec<ScanSettings>> {
+        None
+    }
 
     /// Copy the metadata from another [`MSDataFileMetadata`] implementation into
     /// this one.
@@ -46,6 +63,19 @@ pub trait MSDataFileMetadata {
         *self.softwares_mut() = source.softwares().clone();
         *self.samples_mut() = source.samples().clone();
         self.set_spectrum_count_hint(source.spectrum_count_hint());
+
+        if let Some(settings) = source.scan_settings() {
+            match self.scan_settings_mut() {
+                Some(mine) => {
+                    *mine = settings.clone()
+                },
+                None => {
+                    log::debug!("Cannot store scan settings on this type of data file");
+                },
+            }
+        } else {
+            self.scan_settings_mut().take();
+        }
 
         match source.run_description() {
             Some(run) => {
@@ -105,6 +135,8 @@ pub struct FileMetadataConfig {
 
     pub(crate) samples: Vec<Sample>,
 
+    pub(crate) scan_settings: Vec<ScanSettings>,
+
     /// The data processing and signal transformation operations performed on the raw data in previous
     /// source files to produce this file's contents.
     pub(crate) data_processings: Vec<DataProcessing>,
@@ -120,6 +152,7 @@ impl FileMetadataConfig {
         instrument_configurations: HashMap<u32, InstrumentConfiguration>,
         softwares: Vec<Software>,
         samples: Vec<Sample>,
+        scan_settings: Vec<ScanSettings>,
         data_processings: Vec<DataProcessing>,
         run: MassSpectrometryRun,
         num_spectra: Option<u64>,
@@ -129,6 +162,7 @@ impl FileMetadataConfig {
             instrument_configurations,
             softwares,
             samples,
+            scan_settings,
             data_processings,
             run,
             num_spectra,
@@ -146,6 +180,14 @@ impl<T> From<&T> for FileMetadataConfig where T: MSDataFileMetadata {
 
 impl MSDataFileMetadata for FileMetadataConfig {
     crate::impl_metadata_trait!();
+
+    fn scan_settings(&self) -> Option<&Vec<ScanSettings>> {
+        Some(&self.scan_settings)
+    }
+
+    fn scan_settings_mut(&mut self) -> Option<&mut Vec<ScanSettings>> {
+        Some(&mut self.scan_settings)
+    }
 
     fn run_description(&self) -> Option<&MassSpectrometryRun> {
         Some(&self.run)

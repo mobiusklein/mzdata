@@ -133,9 +133,14 @@ type ScanWindowList = Vec<ScanWindow>;
 /// Describes a single scan event. Unless additional post-processing is done,
 /// there is usually only one event per spectrum.
 pub struct ScanEvent {
+    /// When did the scan start acquisition relative to the run start, in minutes
     pub start_time: f64,
+    /// The time spent filling the ion trapping device, in milliseconds
     pub injection_time: f32,
+    /// The windows of the primary axis covered by this event
     pub scan_windows: ScanWindowList,
+    /// The identifier of the [`InstrumentConfiguration`](crate::meta::InstrumentConfiguration) associated
+    /// with the event
     pub instrument_configuration_id: u32,
     pub params: Option<Box<ParamList>>,
     pub spectrum_reference: Option<Box<str>>,

@@ -31,14 +31,17 @@ bitflags::bitflags! {
 
 #[allow(unused)]
 impl SoftwareType {
+    /// Is this software for analysis?
     pub const fn is_analysis(&self) -> bool {
         self.contains(Self::Analysis)
     }
 
+    /// Is this software for data processing?
     pub const fn is_data_processing(&self) -> bool {
         self.contains(Self::DataProcessing)
     }
 
+    /// Is this software for data acquisition?
     pub const fn is_acquisition(&self) -> bool {
         self.contains(Self::Acquisition)
     }
@@ -59,6 +62,7 @@ impl Software {
         }
     }
 
+    /// Find the term defining the software
     pub fn find_software_term(&self) -> Option<SoftwareTerm> {
         self.params
             .iter()
@@ -72,14 +76,17 @@ impl Software {
             .next()
     }
 
+    /// Is this software for analysis?
     pub fn is_analysis(&self) -> bool {
         self.find_software_term().map(|s| s.flags().is_analysis()).unwrap_or(false)
     }
 
+    /// Is this software for data processing?
     pub fn is_data_processing(&self) -> bool {
         self.find_software_term().map(|s| s.flags().is_data_processing()).unwrap_or(false)
     }
 
+    /// Is this software for data acquisition?
     pub fn is_acquisition(&self) -> bool {
         self.find_software_term().map(|s| s.flags().is_acquisition()).unwrap_or(false)
     }

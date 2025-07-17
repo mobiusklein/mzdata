@@ -35,14 +35,8 @@ pub trait CentroidPeakAdapting: CentroidLike + From<CentroidPeak> {}
 impl<C: CentroidLike + From<CentroidPeak>> CentroidPeakAdapting for C {}
 
 /// A blanket trait that ties together all the assumed behaviors of an neutral mass coordinate centroid peak
-pub trait DeconvolutedPeakAdapting:
-    DeconvolutedCentroidLike + From<DeconvolutedPeak>
-{
-}
-impl<D: DeconvolutedCentroidLike + From<DeconvolutedPeak>> DeconvolutedPeakAdapting
-    for D
-{
-}
+pub trait DeconvolutedPeakAdapting: DeconvolutedCentroidLike + From<DeconvolutedPeak> {}
+impl<D: DeconvolutedCentroidLike + From<DeconvolutedPeak>> DeconvolutedPeakAdapting for D {}
 
 /// A trait for providing a uniform delegated access to spectrum metadata
 pub trait SpectrumLike<
@@ -157,7 +151,9 @@ pub trait SpectrumLike<
     /// Check if this spectrum has an ion mobility dimension/array. This is distinct from
     /// having a scan-level point measure of ion mobility.
     fn has_ion_mobility_dimension(&self) -> bool {
-        self.raw_arrays().map(|a| a.has_ion_mobility()).unwrap_or_default()
+        self.raw_arrays()
+            .map(|a| a.has_ion_mobility())
+            .unwrap_or_default()
     }
 
     /// A single point of entry for checking if ion mobility is present.
@@ -335,11 +331,9 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
     ///
     /// # See also
     /// To pick peaks from profile data, see [`RawSpectrum::pick_peaks_into`]
-    pub fn into_centroid<C>(
-        self,
-    ) -> Result<CentroidSpectrumType<C>, SpectrumConversionError>
+    pub fn into_centroid<C>(self) -> Result<CentroidSpectrumType<C>, SpectrumConversionError>
     where
-        C: BuildFromArrayMap + CentroidLike
+        C: BuildFromArrayMap + CentroidLike,
     {
         if !matches!(
             self.description.signal_continuity,
@@ -397,11 +391,11 @@ impl<'transient, 'lifespan: 'transient> RawSpectrum {
     }
 
     /// Convert a spectrum into a [`MultiLayerSpectrum`].
-    pub fn into_spectrum<C, D>(
-        self,
-    ) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
+    pub fn into_spectrum<C, D>(self) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
     where
-        C: BuildFromArrayMap, C: CentroidLike, D: DeconvolutedCentroidLike
+        C: BuildFromArrayMap,
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
     {
         Ok(MultiLayerSpectrum::<C, D> {
             arrays: Some(self.arrays),
@@ -593,8 +587,15 @@ impl RawSpectrum {
         <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::peaks(self)
     }
 
-    pub fn into_peaks_and_description(self) -> (PeakDataLevel<CentroidPeak, DeconvolutedPeak>, SpectrumDescription) {
-        <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::into_peaks_and_description(self)
+    pub fn into_peaks_and_description(
+        self,
+    ) -> (
+        PeakDataLevel<CentroidPeak, DeconvolutedPeak>,
+        SpectrumDescription,
+    ) {
+        <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::into_peaks_and_description(
+            self,
+        )
     }
 
     /// Obtain a reference to the [`BinaryArrayMap`] if one is available for the peak
@@ -607,7 +608,9 @@ impl RawSpectrum {
     /// Check if this spectrum has an ion mobility dimension/array. This is distinct from
     /// having a scan-level point measure of ion mobility.
     pub fn has_ion_mobility_dimension(&self) -> bool {
-        self.raw_arrays().map(|a| a.has_ion_mobility()).unwrap_or_default()
+        self.raw_arrays()
+            .map(|a| a.has_ion_mobility())
+            .unwrap_or_default()
     }
 
     /// Compute and update the the total ion current, base peak, and m/z range for
@@ -617,7 +620,6 @@ impl RawSpectrum {
     pub fn update_summaries(&mut self) {
         <RawSpectrum as SpectrumLike<CentroidPeak, DeconvolutedPeak>>::update_summaries(self)
     }
-
 }
 
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> SpectrumLike<C, D> for RawSpectrum {
@@ -658,10 +660,15 @@ pub struct CentroidSpectrumType<C: CentroidLike> {
 
 impl<C: CentroidLike> Default for CentroidSpectrumType<C> {
     fn default() -> Self {
-        Self { description: Default::default(), peaks: PeakSetVec::empty() }
+        Self {
+            description: Default::default(),
+            peaks: PeakSetVec::empty(),
+        }
     }
 }
 
+/// When the `mzsignal` feature is enabled, [`CentroidSpectrumType`] can be converted back into a profile-like
+/// state using a peak shape model.
 #[cfg(feature = "mzsignal")]
 impl<C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap> CentroidSpectrumType<C> {
     /// Convert the centroid peaks in theoretical profile signal, producing a [`MultiLayerSpectrum`]
@@ -692,6 +699,7 @@ impl<C: CentroidLike> ParamDescribed for CentroidSpectrumType<C> {
     }
 }
 
+/// [`CentroidSpectrumType`] implements [`SpectrumLike`] for `C`.
 impl<C: CentroidLike> SpectrumLike<C> for CentroidSpectrumType<C> {
     #[inline]
     fn description(&self) -> &SpectrumDescription {
@@ -722,7 +730,8 @@ impl<C: CentroidLike> CentroidSpectrumType<C> {
         Self { description, peaks }
     }
 
-    /// Convert a spectrum into a [`MultiLayerSpectrum`]
+    /// Convert a spectrum into a [`MultiLayerSpectrum`] on `C`, but preserve all information
+    /// associated with this spectrum as-is.
     pub fn into_spectrum<D>(self) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
     where
         D: DeconvolutedCentroidLike,
@@ -733,6 +742,18 @@ impl<C: CentroidLike> CentroidSpectrumType<C> {
             ..Default::default()
         };
         Ok(val)
+    }
+
+    /// Convert a [`CentroidSpectrumType`] into a [`MultiLayerSpectrum`] over any peak type, but
+    /// recode the peak list as [`DataArray`], potentially losing information.
+    pub fn reinterpret<C1, D1>(self) -> Result<MultiLayerSpectrum<C1, D1>, SpectrumConversionError>
+    where
+        C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D1: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        C: BuildArrayMapFrom
+    {
+        let arrays = C::as_arrays(self.peaks.as_slice());
+        Ok(MultiLayerSpectrum::new(self.description, Some(arrays), None, None))
     }
 }
 
@@ -790,7 +811,10 @@ pub struct DeconvolutedSpectrumType<D: DeconvolutedCentroidLike> {
 
 impl<D: DeconvolutedCentroidLike> Default for DeconvolutedSpectrumType<D> {
     fn default() -> Self {
-        Self { description: Default::default(), deconvoluted_peaks: PeakSetVec::empty() }
+        Self {
+            description: Default::default(),
+            deconvoluted_peaks: PeakSetVec::empty(),
+        }
     }
 }
 
@@ -802,7 +826,8 @@ impl<D: DeconvolutedCentroidLike> DeconvolutedSpectrumType<D> {
         }
     }
 
-    /// Convert a spectrum into a [`MultiLayerSpectrum`]
+    /// Convert a spectrum into a [`MultiLayerSpectrum`] on `D`, but preserve all information
+    /// associated with this spectrum as-is.
     pub fn into_spectrum<C>(self) -> Result<MultiLayerSpectrum<C, D>, SpectrumConversionError>
     where
         C: CentroidLike,
@@ -813,6 +838,18 @@ impl<D: DeconvolutedCentroidLike> DeconvolutedSpectrumType<D> {
             ..Default::default()
         };
         Ok(val)
+    }
+
+    /// Convert a [`DeconvolutedSpectrumType`] into a [`MultiLayerSpectrum`] over any peak type, but
+    /// recode the peak list as [`DataArray`], potentially losing information.
+    pub fn reinterpret<C1, D1>(self) -> MultiLayerSpectrum<C1, D1>
+    where
+        C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D1: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: BuildArrayMapFrom
+    {
+        let arrays = D::as_arrays(self.deconvoluted_peaks.as_slice());
+        MultiLayerSpectrum::new(self.description, Some(arrays), None, None)
     }
 }
 
@@ -826,9 +863,8 @@ impl<D: DeconvolutedCentroidLike> ParamDescribed for DeconvolutedSpectrumType<D>
     }
 }
 
-impl<D: DeconvolutedCentroidLike> SpectrumLike<CentroidPeak, D>
-    for DeconvolutedSpectrumType<D>
-{
+/// [`DeconvolutedSpectrumType`] implements [`SpectrumLike`] for `D`.
+impl<D: DeconvolutedCentroidLike> SpectrumLike<CentroidPeak, D> for DeconvolutedSpectrumType<D> {
     #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
@@ -920,13 +956,16 @@ pub struct MultiLayerSpectrum<
 
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> Default for MultiLayerSpectrum<C, D> {
     fn default() -> Self {
-        Self { description: Default::default(), arrays: None, peaks: None, deconvoluted_peaks: None }
+        Self {
+            description: Default::default(),
+            arrays: None,
+            peaks: None,
+            deconvoluted_peaks: None,
+        }
     }
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike> ParamDescribed
-    for MultiLayerSpectrum<C, D>
-{
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> ParamDescribed for MultiLayerSpectrum<C, D> {
     fn params(&self) -> &[crate::params::Param] {
         <SpectrumDescription as ParamDescribed>::params(&self.description)
     }
@@ -936,9 +975,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> ParamDescribed
     }
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike> SpectrumLike<C, D>
-    for MultiLayerSpectrum<C, D>
-{
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> SpectrumLike<C, D> for MultiLayerSpectrum<C, D> {
     #[inline]
     fn description(&self) -> &SpectrumDescription {
         &self.description
@@ -1094,6 +1131,28 @@ where
         Self::from_peaks_data_levels_and_description(peaks, description)
     }
 
+    /// Convert a [`DeconvolutedSpectrumType`] into a [`MultiLayerSpectrum`] over any peak type, but
+    /// recode the peak list as [`DataArray`], potentially losing information.
+    pub fn reinterpret<C1, D1>(self) -> MultiLayerSpectrum<C1, D1>
+    where
+        C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D1: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        C: BuildArrayMapFrom,
+        D: BuildArrayMapFrom
+    {
+        let arrays = if let Some(peaks) = self.deconvoluted_peaks {
+            D::as_arrays(peaks.as_slice())
+        } else if let Some(peaks) = self.peaks {
+            C::as_arrays(peaks.as_slice())
+        } else if let Some(arrays) = self.arrays {
+            arrays
+        } else {
+            BinaryArrayMap::new()
+        };
+
+        MultiLayerSpectrum::new(self.description, Some(arrays), None, None)
+    }
+
     #[cfg(feature = "mzsignal")]
     /// Apply a local denoising algorithm to the signal that is suitable for profile mode
     /// data using [`mzsignal::denoise`].
@@ -1165,10 +1224,7 @@ where
             arrays.add(DataArray::wrap(
                 &ArrayType::MZArray,
                 BinaryDataArrayType::Float64,
-                pair.mz_array
-                    .iter()
-                    .flat_map(|i| i.to_le_bytes())
-                    .collect(),
+                pair.mz_array.iter().flat_map(|i| i.to_le_bytes()).collect(),
             ));
 
             arrays.add(DataArray::wrap(
@@ -1201,7 +1257,7 @@ where
         &mut self,
     ) -> Result<RefPeakDataLevel<'_, C, D>, SpectrumConversionError> {
         if self.peaks.is_some() || self.deconvoluted_peaks.is_some() {
-            return Ok(self.peaks())
+            return Ok(self.peaks());
         }
         if matches!(self.signal_continuity(), SignalContinuity::Centroid) {
             if let Some(arrays) = self.arrays.as_ref() {
@@ -1267,9 +1323,7 @@ where
 /// The peak picking steps need to convert an [`mzsignal::FittedPeak`] into `C`. This is trivial for [`CentroidPeak`]
 /// and [`mzsignal::FittedPeak`] itself.
 #[cfg(feature = "mzsignal")]
-impl<C: CentroidLike + From<FittedPeak>, D: DeconvolutedCentroidLike>
-    MultiLayerSpectrum<C, D>
-{
+impl<C: CentroidLike + From<FittedPeak>, D: DeconvolutedCentroidLike> MultiLayerSpectrum<C, D> {
     /// Using a pre-configured [`mzsignal::PeakPicker`](mzsignal::peak_picker::PeakPicker) to pick peaks
     /// from `arrays`'s signal, populating the `peaks` field.
     ///
@@ -1392,8 +1446,8 @@ impl<C: CentroidLike + From<FittedPeak>, D: DeconvolutedCentroidLike>
     }
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike>
-    TryFrom<MultiLayerSpectrum<C, D>> for CentroidSpectrumType<C>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> TryFrom<MultiLayerSpectrum<C, D>>
+    for CentroidSpectrumType<C>
 where
     C: BuildFromArrayMap + BuildArrayMapFrom,
     D: BuildFromArrayMap + BuildArrayMapFrom,
@@ -1419,8 +1473,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> From<CentroidSpectrumType<C>>
     }
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike> From<RawSpectrum>
-    for MultiLayerSpectrum<C, D>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> From<RawSpectrum> for MultiLayerSpectrum<C, D>
 where
     C: BuildFromArrayMap,
     D: BuildFromArrayMap,
@@ -1430,8 +1483,7 @@ where
     }
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike>
-    From<MultiLayerSpectrum<C, D>> for RawSpectrum
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> From<MultiLayerSpectrum<C, D>> for RawSpectrum
 where
     C: BuildFromArrayMap + BuildArrayMapFrom,
     D: BuildFromArrayMap + BuildArrayMapFrom,
@@ -1452,8 +1504,8 @@ where
     }
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike>
-    TryFrom<MultiLayerSpectrum<C, D>> for DeconvolutedSpectrumType<D>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> TryFrom<MultiLayerSpectrum<C, D>>
+    for DeconvolutedSpectrumType<D>
 where
     C: BuildFromArrayMap + BuildArrayMapFrom,
     D: BuildFromArrayMap + BuildArrayMapFrom,
@@ -1483,7 +1535,6 @@ where
         }
     }
 }
-
 
 #[cfg(all(test, feature = "mzml"))]
 mod test {
@@ -1616,7 +1667,7 @@ mod test {
         behaviors!(cent_scan);
         cent_scan.update_summaries();
 
-        let tmp: Spectrum =  cent_scan.into_spectrum().unwrap();
+        let tmp: Spectrum = cent_scan.into_spectrum().unwrap();
         let raw_scan = tmp.into_raw().unwrap();
         behaviors!(raw_scan);
         assert_eq!(raw_scan.index(), 0);

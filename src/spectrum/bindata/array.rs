@@ -221,6 +221,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                 if self.dtype != BinaryDataArrayType::Float64 {
                     panic!("Cannot Numpress non-float64 data!");
                 }
+                if bytestring.is_empty() {
+                    return base64_simd::STANDARD.encode_type::<Bytes>(&bytestring)
+                }
                 let compressed =
                     Self::compress_numpress_linear(bytemuck::cast_slice(&bytestring)).unwrap();
                 base64_simd::STANDARD.encode_type::<Bytes>(&compressed)
@@ -245,6 +248,10 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                 if self.dtype != BinaryDataArrayType::Float64 {
                     panic!("Cannot Numpress non-float64 data!");
                 }
+                if bytestring.is_empty() {
+                    let compressed = Self::compress_zlib(&bytestring);
+                    return base64_simd::STANDARD.encode_type::<Bytes>(&compressed)
+                }
                 let compressed = Self::compress_numpress_linear(bytemuck::cast_slice(&bytestring))
                     .inspect_err(|e| {
                         log::error!("Failed to compress buffer with numpress: {e}");
@@ -258,6 +265,10 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                 if self.dtype != BinaryDataArrayType::Float64 {
                     panic!("Cannot Numpress non-float64 data!");
                 }
+                if bytestring.is_empty() {
+                    let compressed = Self::compress_zstd(&bytestring, BinaryDataArrayType::Unknown, false);
+                    return base64_simd::STANDARD.encode_type::<Bytes>(&compressed)
+                }
                 let compressed = Self::compress_numpress_linear(bytemuck::cast_slice(&bytestring))
                     .inspect_err(|e| {
                         log::error!("Failed to compress buffer with numpress: {e}");
@@ -268,6 +279,10 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             }
             #[cfg(feature = "numpress")]
             BinaryCompressionType::NumpressSLOFZlib => {
+                if bytestring.is_empty() {
+                    let bytestring = Self::compress_zlib(&bytestring);
+                    return base64_simd::STANDARD.encode_type::<Bytes>(&bytestring)
+                }
                 let compressed = match self.dtype {
                     BinaryDataArrayType::Float32 => {
                         Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f32>(&bytestring)).unwrap()
@@ -284,6 +299,10 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             }
             #[cfg(all(feature = "numpress", feature = "zstd"))]
             BinaryCompressionType::NumpressSLOFZstd => {
+                if bytestring.is_empty() {
+                    let bytestring = Self::compress_zstd(&bytestring, BinaryDataArrayType::Unknown, false);
+                    return base64_simd::STANDARD.encode_type::<Bytes>(&bytestring)
+                }
                 let compressed = match self.dtype {
                     BinaryDataArrayType::Float32 => {
                         Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f32>(&bytestring)).unwrap()
@@ -344,6 +363,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
     #[cfg(feature = "numpress")]
     pub fn compress_numpress_linear(data: &[f64]) -> Result<Bytes, ArrayRetrievalError> {
+        if data.is_empty() {
+            return Ok(Bytes::new());
+        }
         let scaling = numpress::optimal_scaling(data);
         match numpress::numpress_compress(data, scaling) {
             Ok(data) => Ok(data),
@@ -363,6 +385,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
     #[cfg(feature = "numpress")]
     pub fn decompress_numpress_linear(data: &[u8]) -> Result<Vec<f64>, ArrayRetrievalError> {
+        if data.is_empty() {
+            return Ok(Vec::new())
+        }
         match numpress::numpress_decompress(data) {
             Ok(data) => Ok(data),
             Err(e) => Err(ArrayRetrievalError::DecompressionError(e.to_string())),
@@ -709,7 +734,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             BinaryCompressionType::NumpressLinearZlib => match self.dtype {
                 BinaryDataArrayType::Float64 => {
                     let bytestring = base64_decode!();
-                    let bytestring = Self::decompress_zlib(bytemuck::cast_slice(&bytestring));
+                    let bytestring = Self::decompress_zlib(&bytestring);
                     let decoded = Self::decompress_numpress_linear(&bytestring)?;
                     let view = vec_as_bytes(decoded);
                     Ok(Cow::Owned(view))
@@ -724,7 +749,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             #[cfg(feature = "numpress")]
             BinaryCompressionType::NumpressSLOFZlib => {
                 let bytestring = base64_decode!();
-                let bytestring = Self::decompress_zlib(bytemuck::cast_slice(&bytestring));
+                let bytestring = Self::decompress_zlib(&bytestring);
                 Self::decompress_numpress_slof(&bytestring, self.dtype)
             }
 
@@ -733,7 +758,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                 BinaryDataArrayType::Float64 => {
                     let bytestring = base64_decode!();
                     let bytestring = Self::decompress_zstd(
-                        bytemuck::cast_slice(&bytestring),
+                        &bytestring,
                         BinaryDataArrayType::Unknown,
                         false,
                     );
@@ -751,7 +776,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             #[cfg(all(feature = "numpress", feature = "zstd"))]
             BinaryCompressionType::NumpressSLOFZstd => {
                 let bytestring = base64_decode!();
-                let bytestring = Self::decompress_zstd(bytemuck::cast_slice(&bytestring), BinaryDataArrayType::Unknown, false);
+                let bytestring = Self::decompress_zstd(&bytestring, BinaryDataArrayType::Unknown, false);
                 Self::decompress_numpress_slof(&bytestring, self.dtype)
             }
 

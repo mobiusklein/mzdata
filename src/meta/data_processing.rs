@@ -12,8 +12,11 @@ use super::Software;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProcessingMethod {
+    /// The order of application of this method in the processing pipeline
     pub order: i8,
+    /// The software used
     pub software_reference: String,
+    /// Controlled vocabulary and user parameters
     pub params: ParamList,
 }
 
@@ -24,7 +27,9 @@ pub struct ProcessingMethod {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataProcessing {
+    /// The identifier for this data processing pipeline
     pub id: String,
+    /// The set of processing steps applied
     pub methods: Vec<ProcessingMethod>,
 }
 
@@ -39,6 +44,10 @@ impl DataProcessing {
         self.methods.iter()
     }
 
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, ProcessingMethod> {
+        self.methods.iter_mut()
+    }
+
     pub fn len(&self) -> usize {
         self.methods.len()
     }
@@ -49,6 +58,10 @@ impl DataProcessing {
 
     pub fn highest_order(&self) -> i8 {
         self.iter().map(|p| p.order).max().unwrap_or_default()
+    }
+
+    pub fn remove(&mut self, index: usize) -> ProcessingMethod {
+        self.methods.remove(index)
     }
 }
 

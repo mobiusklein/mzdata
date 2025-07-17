@@ -8,6 +8,7 @@ mod instrument;
 mod run;
 mod sample;
 mod software;
+mod scan_settings;
 #[macro_use]
 mod traits;
 
@@ -35,6 +36,7 @@ pub use activation::{DissociationEnergy, DissociationEnergyTerm, DissociationMet
 pub use run::MassSpectrometryRun;
 pub use sample::Sample;
 pub use traits::{MSDataFileMetadata, FileMetadataConfig};
+pub use scan_settings::ScanSettings;
 
 use crate::params::{ParamValueParseError, Value, ValueRef};
 

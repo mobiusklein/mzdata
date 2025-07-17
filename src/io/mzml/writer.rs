@@ -21,8 +21,7 @@ use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 use crate::io::traits::IonMobilityFrameWriter;
 use crate::meta::{
-    ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
-    MassSpectrometryRun, Sample, Software,
+    ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, ScanSettings, Software
 };
 use crate::params::{
     AccessionIntCode, ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamDescribedRead,
@@ -557,6 +556,7 @@ pub struct MzMLWriterType<
     /// its current state
     pub softwares: Vec<Software>,
     pub samples: Vec<Sample>,
+    pub scan_settings: Vec<ScanSettings>,
     /// The types of data transformations applied to (parts of) the data
     pub data_processings: Vec<DataProcessing>,
     /// The different instrument configurations that were in use during the
@@ -786,6 +786,7 @@ where
         let handle = InnerXMLWriter::new(file);
         MzMLWriterType {
             handle,
+            scan_settings: Vec::new(),
             file_description: FileDescription::default(),
             instrument_configurations: HashMap::new(),
             softwares: Vec::new(),
@@ -980,6 +981,7 @@ where
         self.write_referenceable_param_group_list()?;
         self.write_sample_list()?;
         self.write_software_list()?;
+        self.write_scan_settings_list()?;
         self.write_instrument_configuration()?;
         self.write_data_processing()?;
 
@@ -1065,6 +1067,54 @@ where
             }
             self.handle.write_event(Event::End(tag.to_end()))?;
         }
+        self.handle.write_event(Event::End(outer.to_end()))?;
+        Ok(())
+    }
+
+    fn write_scan_settings_list(&mut self) -> WriterResult {
+        if self.scan_settings.is_empty() {
+            return Ok(())
+        }
+        let mut outer = bstart!("scanSettingsList");
+        let count = self.samples.len().to_string();
+        attrib!("count", count, outer);
+        self.handle.write_event(Event::Start(outer.borrow()))?;
+
+        for settings in self.scan_settings.iter() {
+            let mut level = bstart!("scanSettings");
+            attrib!("id", settings.id, level);
+            self.handle.write_event(Event::Start(level.borrow()))?;
+            self.handle.write_param_list(settings.iter_params())?;
+
+            if !settings.source_file_refs.is_empty() {
+                let mut inner = bstart!("sourceFileRefList");
+                let count = settings.source_file_refs.len().to_string();
+                attrib!("count", count, inner);
+                self.handle.write_event(Event::Start(inner.borrow()))?;
+                for sf_ref in settings.source_file_refs.iter() {
+                    let sf_ref_tag = bstart!("sourceFileRef");
+                    self.handle.write_event(Event::Start(sf_ref_tag.borrow()))?;
+                    self.handle.write_event(Event::Text(BytesText::new(sf_ref)))?;
+                    self.handle.write_event(Event::End(sf_ref_tag.to_end()))?;
+                }
+                self.handle.write_event(Event::End(inner.to_end()))?;
+            }
+            if !settings.targets.is_empty() {
+                let mut inner = bstart!("targetList");
+                let count = settings.targets.len().to_string();
+                attrib!("count", count, inner);
+                self.handle.write_event(Event::Start(inner.borrow()))?;
+                for target in settings.targets.iter() {
+                    let tag = bstart!("target");
+                    self.handle.write_event(Event::Start(tag.borrow()))?;
+                    self.handle.write_param_list(target.iter())?;
+                    self.handle.write_event(Event::End(tag.to_end()))?;
+                }
+                self.handle.write_event(Event::End(inner.to_end()))?;
+            }
+            self.handle.write_event(Event::End(level.to_end()))?;
+        }
+
         self.handle.write_event(Event::End(outer.to_end()))?;
         Ok(())
     }
