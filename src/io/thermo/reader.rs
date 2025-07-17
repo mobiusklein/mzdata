@@ -865,14 +865,45 @@ pub(crate) mod sealed {
             let window = ScanWindow::new(vevent.low_mz() as f32, vevent.high_mz() as f32);
             event.scan_windows.push(window);
             if let Some(cv) = vevent.compensation_voltages() {
-                for cv in cv.iter() {
+                // Per Thermo API if there are one compensation voltages, it's normal FAIMS
+                if cv.len() == 1 {
                     let mut param = ControlledVocabulary::MS.param_val(
                         1001580,
                         "FAIMS compensation voltage",
-                        cv,
+                        cv.get(0),
                     );
                     param.unit = Unit::Volt;
                     event.add_param(param);
+                }
+                // Per Thermo API if there are two compensation voltages, it's ramped FAIMS
+                else if cv.len() == 2 {
+                    let mut param = ControlledVocabulary::MS.param_val(
+                        1003450,
+                        "FAIMS compensation voltage ramp start",
+                        cv.get(0),
+                    );
+                    param.unit = Unit::Volt;
+                    event.add_param(param);
+                    let mut param = ControlledVocabulary::MS.param_val(
+                        1003451,
+                        "FAIMS compensation voltage ramp end",
+                        cv.get(1),
+                    );
+                    param.unit = Unit::Volt;
+                    event.add_param(param);
+                }
+                // Per Thermo API if there are more than two compensation voltages, it's SIM FAIMS
+                else {
+                    for cv in cv.iter() {
+                        let mut param = ControlledVocabulary::MS.param_val(
+                            1001580,
+                            "FAIMS compensation voltage",
+                            cv,
+                        );
+                        param.unit = Unit::Volt;
+                        event.add_param(param);
+                    }
+                    warn!("More than two FAIMS voltages detected. Adding repeat annotation");
                 }
             }
             if let Some(resolution) = vevent.resolution() {
