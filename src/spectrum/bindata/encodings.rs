@@ -140,11 +140,11 @@ mod byte_rotation {
     }
 
     pub fn reverse_transpose_i64(data: &[u8]) -> Vec<u8> {
-        reverse_transpose_8bytes::<f64>(data)
+        reverse_transpose_8bytes::<i64>(data)
     }
 
     pub fn reverse_transpose_f64(data: &[u8]) -> Vec<u8> {
-        reverse_transpose_8bytes::<i64>(data)
+        reverse_transpose_8bytes::<f64>(data)
     }
 }
 

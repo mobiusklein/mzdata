@@ -681,13 +681,23 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-version = "0.99.20"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6edb4b64a43d977b8e99788fe3a04d483834fba1215a7e02caa415b626497f7f"
+checksum = "093242cf7570c207c83073cf82f79706fe7b8317e98620a47d5be7c3d8497678"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.101",
+ "unicode-xid",
 ]
 
 [[package]]
@@ -775,9 +785,9 @@ dependencies = [
 
 [[package]]
 name = "dlopen2"
-version = "0.6.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bc2c7ed06fd72a8513ded8d0d2f6fd2655a85d6885c48cae8625d80faf28c03"
+checksum = "b54f373ccf864bf587a89e880fb7610f8d73f3045f13580948ccbcaff26febff"
 dependencies = [
  "dlopen2_derive",
  "libc",
@@ -798,9 +808,7 @@ dependencies = [
 
 [[package]]
 name = "dotnetrawfilereader-sys"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8aa617a5390fd3e8459dd968086b872b89d849bc7d4a8e34b1a154bdb50b2b73"
+version = "0.5.3"
 dependencies = [
  "include_dir",
  "netcorehost",
@@ -951,11 +959,11 @@ dependencies = [
 
 [[package]]
 name = "flatbuffers"
-version = "23.5.26"
+version = "25.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dac53e22462d78c16d64a1cd22371b54cc3fe94aa15e7886a2fa6e5d1ab8640"
+checksum = "1045398c1bfd89168b5fd3f1fc11f6e70b34f6f66300c87d44d3de849463abf1"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.9.1",
  "rustc_version",
 ]
 
@@ -1305,9 +1313,9 @@ dependencies = [
 
 [[package]]
 name = "hostfxr-sys"
-version = "0.10.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f03472152dee0240be92e7d776bd37b69995785acce08bc8defb884244158bb"
+checksum = "2d116fa54e808d6572c969818c2e36ec16eaa70ccd772955ef0f08a1ab8e5dc0"
 dependencies = [
  "coreclr-hosting-shared",
  "dlopen2",
@@ -2173,9 +2181,9 @@ dependencies = [
 
 [[package]]
 name = "netcorehost"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87b79d84cea554319a006af30e3fd687e69437d00efbd1541ea28601a273fa33"
+checksum = "696b63e1ed6aae6ac2a4e17377f7d82823306f5347aeeb928afdae47b35d5371"
 dependencies = [
  "coreclr-hosting-shared",
  "cstr",
@@ -2187,7 +2195,7 @@ dependencies = [
  "nethost-sys",
  "num_enum",
  "once_cell",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "widestring",
 ]
 
@@ -2319,14 +2327,12 @@ dependencies = [
 
 [[package]]
 name = "oci-spec"
-version = "0.6.8"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f5a3fe998d50101ae009351fec56d88a69f4ed182e11000e711068c2f5abf72"
+checksum = "bdf88ddc01cc6bccbe1044adb6a29057333f523deadcb4953c011a73158cfa5e"
 dependencies = [
  "derive_builder",
  "getset",
- "once_cell",
- "regex",
  "serde",
  "serde_json",
  "strum",
@@ -2363,9 +2369,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.19.0"
+version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
+checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
 name = "once_cell_polyfill"
@@ -3456,9 +3462,7 @@ dependencies = [
 
 [[package]]
 name = "thermorawfilereader"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23672085e9b1b63c8e0c30c71d7087f0e60b631e934014fbfba85a62daaec3da"
+version = "0.5.3"
 dependencies = [
  "bytemuck",
  "dotnetrawfilereader-sys",
@@ -3808,6 +3812,12 @@ name = "unicode-ident"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a5f39404a5da50712a4c1eecf25e90dd62b613502b7e925fd4e4d19b5c96512"
+
+[[package]]
+name = "unicode-xid"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "untrusted"
