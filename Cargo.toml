@@ -171,7 +171,7 @@ reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
 futures = { version = "0.3", optional = true }
 
 # Thermo RAW-related features
-thermorawfilereader = { version = "0.5.2", default-features = false, optional = true }
+thermorawfilereader = { version = "0.5.3", default-features = false, optional = true }
 
 # Bruker TDF-related features
 rusqlite = { version = "0.31.0", optional = true }
