@@ -204,18 +204,97 @@ impl BinaryArrayMap {
         let mz_array = self
             .get(&ArrayType::MZArray)
             .ok_or(ArrayRetrievalError::NotFound(ArrayType::MZArray))?
-            .to_f64().inspect_err(|e| {
-                log::error!("Failed to decode m/z array: {e}")
-            })?;
+            .to_f64()
+            .inspect_err(|e| log::error!("Failed to decode m/z array: {e}"))?;
         Ok(mz_array)
+    }
+
+    /// Sort all the arrays in the map by `name` if they are the same length
+    pub fn sort_by_array(&mut self, name: &ArrayType) -> Result<(), ArrayRetrievalError> {
+        let query_axis = self
+            .get(name)
+            .ok_or_else(|| ArrayRetrievalError::NotFound(name.clone()))?;
+        macro_rules! sort_mask {
+            ($conv:expr, $cmp:expr) => {{
+                let vals = $conv?;
+                if vals.is_sorted() {
+                    return Ok(());
+                }
+                let n = vals.len();
+                let mut mask: Vec<usize> = (0..n).into_iter().collect();
+                mask.sort_by(|i, j| {
+                    let a = vals[*i];
+                    let b = vals[*j];
+                    $cmp(&a, &b)
+                });
+                (mask, n)
+            }};
+        }
+        let (mut mask, n) = match query_axis.dtype() {
+            BinaryDataArrayType::Float64 => {
+                sort_mask!(query_axis.to_f64(), f64::total_cmp)
+            }
+            BinaryDataArrayType::Float32 => {
+                sort_mask!(query_axis.to_f32(), f32::total_cmp)
+            }
+            BinaryDataArrayType::Int64 => {
+                sort_mask!(query_axis.to_i64(), i64::cmp)
+            }
+            BinaryDataArrayType::Int32 => {
+                sort_mask!(query_axis.to_i32(), i32::cmp)
+            }
+            BinaryDataArrayType::ASCII => todo!(),
+            BinaryDataArrayType::Unknown => todo!(),
+        };
+
+        const TOMBSTONE: usize = usize::MAX;
+        for idx in 0..n {
+            if mask[idx] != TOMBSTONE {
+                let mut current_idx = idx;
+                loop {
+                    let next_idx = mask[current_idx];
+                    mask[current_idx] = TOMBSTONE;
+                    if mask[next_idx] == TOMBSTONE {
+                        break;
+                    }
+                    for (_, v) in self.iter_mut() {
+                        if v.data_len()? != n {
+                            continue;
+                        }
+                        match v.dtype {
+                            BinaryDataArrayType::Float64 => {
+                                let view = v.coerce_mut::<f64>()?;
+                                view.swap(current_idx, next_idx);
+                            }
+                            BinaryDataArrayType::Float32 => {
+                                let view = v.coerce_mut::<f32>()?;
+                                view.swap(current_idx, next_idx);
+                            }
+                            BinaryDataArrayType::Int64 => {
+                                let view = v.coerce_mut::<i64>()?;
+                                view.swap(current_idx, next_idx);
+                            }
+                            BinaryDataArrayType::Int32 => {
+                                let view = v.coerce_mut::<i32>()?;
+                                view.swap(current_idx, next_idx);
+                            }
+                            BinaryDataArrayType::ASCII => todo!(),
+                            BinaryDataArrayType::Unknown => todo!(),
+                        }
+                    }
+                    current_idx = next_idx;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Get a mutable reference to the m/z array if it is present
     pub fn mzs_mut(&mut self) -> Result<&mut [f64], ArrayRetrievalError> {
         if let Some(mz_array) = self.get_mut(&ArrayType::MZArray) {
-            mz_array.decode_and_store().inspect_err(|e| {
-                log::error!("Failed to decode m/z array: {e}")
-            })?;
+            mz_array
+                .decode_and_store()
+                .inspect_err(|e| log::error!("Failed to decode m/z array: {e}"))?;
             mz_array.store_as(BinaryDataArrayType::Float64)?;
             mz_array.coerce_mut()
         } else {
@@ -228,21 +307,20 @@ impl BinaryArrayMap {
         let intensities = self
             .get(&ArrayType::IntensityArray)
             .ok_or(ArrayRetrievalError::NotFound(ArrayType::IntensityArray))?
-            .to_f32().inspect_err(|e| {
-                log::error!("Failed to decode intensity array: {e:?}")
-            })?;
+            .to_f32()
+            .inspect_err(|e| log::error!("Failed to decode intensity array: {e:?}"))?;
         Ok(intensities)
     }
 
     /// Get a mutable reference to the intensity array if it is present
     pub fn intensities_mut(&mut self) -> Result<&mut [f32], ArrayRetrievalError> {
         if let Some(mz_array) = self.get_mut(&ArrayType::IntensityArray) {
-            mz_array.decode_and_store().inspect_err(|e| {
-                log::error!("Failed to decode intensity array: {e}")
-            })?;
-            mz_array.store_as(BinaryDataArrayType::Float32).inspect_err(|e| {
-                log::error!("Failed to decode intensity array: {e}")
-            })?;
+            mz_array
+                .decode_and_store()
+                .inspect_err(|e| log::error!("Failed to decode intensity array: {e}"))?;
+            mz_array
+                .store_as(BinaryDataArrayType::Float32)
+                .inspect_err(|e| log::error!("Failed to decode intensity array: {e}"))?;
             mz_array.coerce_mut()
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::IntensityArray))
@@ -261,9 +339,9 @@ impl BinaryArrayMap {
     pub fn charge_mut(&mut self) -> Result<&mut [i32], ArrayRetrievalError> {
         if let Some(mz_array) = self.get_mut(&ArrayType::ChargeArray) {
             mz_array.decode_and_store()?;
-            mz_array.store_as(BinaryDataArrayType::Int32).inspect_err(|e| {
-                log::error!("Failed to decode charge array: {e}")
-            })?;
+            mz_array
+                .store_as(BinaryDataArrayType::Int32)
+                .inspect_err(|e| log::error!("Failed to decode charge array: {e}"))?;
             mz_array.coerce_mut()
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::ChargeArray))
@@ -277,9 +355,12 @@ impl BinaryArrayMap {
             .iter()
             .find(|(a, _)| a.is_ion_mobility())
         {
-            Ok((data_array.to_f64().inspect_err(|e| {
-                log::error!("Failed to decode ion mobility array: {e}")
-            })?, array_type.clone()))
+            Ok((
+                data_array
+                    .to_f64()
+                    .inspect_err(|e| log::error!("Failed to decode ion mobility array: {e}"))?,
+                array_type.clone(),
+            ))
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::IonMobilityArray))
         }
@@ -292,9 +373,9 @@ impl BinaryArrayMap {
             .iter_mut()
             .find(|(a, _)| a.is_ion_mobility())
         {
-            data_array.decode_and_store().inspect_err(|e| {
-                log::error!("Failed to decode ion mobility array: {e}")
-            })?;
+            data_array
+                .decode_and_store()
+                .inspect_err(|e| log::error!("Failed to decode ion mobility array: {e}"))?;
             data_array.store_as(BinaryDataArrayType::Float32)?;
             Ok((data_array.coerce_mut()?, array_type.clone()))
         } else {
@@ -548,6 +629,7 @@ impl BinaryArrayMap3D {
 
         // Prepare the destination to have a waiting array of all types in the layers of this
         // array stack.
+        let mut total_points = 0;
         for layer in self.arrays.iter() {
             for (key, array) in layer.iter() {
                 if !destination.has_array(key) {
@@ -559,6 +641,7 @@ impl BinaryArrayMap3D {
                 }
             }
             let mzs = layer.mzs()?;
+            total_points += mzs.len();
             if let Some(mz) = mzs.first() {
                 current_mz = mz.min(current_mz);
             }
@@ -569,12 +652,14 @@ impl BinaryArrayMap3D {
             indices.push(0usize);
         }
 
+        let mut n_points_added = 0;
         while current_mz <= max_mz {
             let mut next_mz = f64::INFINITY;
             for (bin_i, (im, layer)) in self.iter().enumerate() {
                 if let Some(i) = indices.get(bin_i).copied() {
                     if let Some(mz) = mz_axes[bin_i].get(i).copied() {
-                        if (mz - current_mz).abs() < 1e-3 {
+                        if (mz - current_mz).abs() < 1e-12 {
+                            n_points_added += 1;
                             destination
                                 .get_mut(&ArrayType::MZArray)
                                 .as_mut()
@@ -616,6 +701,9 @@ impl BinaryArrayMap3D {
                                 }
                             }
                             indices[bin_i] += 1;
+                            if let Some(mz) = mz_axes[bin_i].get(i + 1).copied() {
+                                next_mz = mz.min(next_mz);
+                            }
                         } else if mz > current_mz {
                             next_mz = mz.min(next_mz);
                         }
@@ -624,6 +712,12 @@ impl BinaryArrayMap3D {
             }
             current_mz = next_mz;
         }
+
+        debug_assert_eq!(
+            n_points_added,
+            total_points,
+            "Expected to have unstacked {total_points} from {} arrays, got {n_points_added} instead", mz_axes.len()
+        );
 
         Ok(destination)
     }
@@ -731,11 +825,12 @@ impl TryFrom<&BinaryArrayMap> for BinaryArrayMap3D {
 
 #[cfg(test)]
 mod test {
+    use crate::prelude::*;
     use crate::spectrum::BinaryDataArrayType;
 
     use super::*;
     use std::fs;
-    use std::io::{self, prelude::*};
+    use std::io;
 
     fn make_array_from_file() -> io::Result<DataArray> {
         let mut fh = fs::File::open("./test/data/mz_f64_zlib_bas64.txt")?;
@@ -771,6 +866,38 @@ mod test {
             map.get(&ArrayType::MZArray).unwrap().compression,
             BinaryCompressionType::Decoded
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_3d_stack_unstack() -> io::Result<()> {
+        let mut reader = crate::MZReader::open_gzipped_read(io::BufReader::new(fs::File::open(
+            "test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz",
+        )?))?;
+
+        let spec = reader.get_spectrum_by_id("merged=42869 frame=9717 scanStart=1 scanEnd=705").unwrap();
+        let mut arrays = spec.arrays.unwrap();
+        let mzs = arrays.mzs()?;
+        assert!(!mzs.is_sorted());
+        drop(mzs);
+        arrays.sort_by_array(&ArrayType::MZArray)?;
+        let mzs = arrays.mzs()?;
+        assert!(mzs.is_sorted());
+        let n = mzs.len();
+
+        let arrays_3d = BinaryArrayMap3D::stack(&arrays)?;
+        let stacked_n: usize = arrays_3d
+            .iter()
+            .map(|(_, va)| va.mzs().unwrap().len())
+            .sum();
+
+        assert_eq!(n, stacked_n);
+
+        let unstacked = arrays_3d.unstack()?;
+        let unstacked_n = unstacked.mzs()?.len();
+
+        assert_eq!(unstacked_n, n);
+
         Ok(())
     }
 }
