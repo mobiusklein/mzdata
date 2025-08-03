@@ -212,6 +212,59 @@ pub(crate) mod sealed {
             self.handle.set_centroid_spectra(value)
         }
 
+        /// Directly load binary data arrays for a specific spectrum
+        pub fn get_data_arrays_for(&mut self, index: usize, centroiding: bool, extra_data: bool) -> Option<BinaryArrayMap> {
+            let data = self.handle.get_spectrum_data(index, centroiding)?;
+            let mut arrays = BinaryArrayMap::default();
+
+            let view = data.raw_view();
+
+            if let Some(mz) = view.mz() {
+                let buffer = mz.bytes();
+                let mz_array = DataArray::wrap(
+                    &ArrayType::MZArray,
+                    BinaryDataArrayType::Float64,
+                    buffer.to_vec(),
+                );
+                arrays.add(mz_array)
+            }
+
+            if let Some(intensity) = view.intensity() {
+                let buffer = intensity.bytes();
+                let intensity_array = DataArray::wrap(
+                    &ArrayType::IntensityArray,
+                    BinaryDataArrayType::Float32,
+                    buffer.to_vec(),
+                );
+                arrays.add(intensity_array);
+            }
+
+            if extra_data {
+                let data = self.handle.get_extended_spectrum_data(index, true)?;
+                if let Some(baseline) = data.baseline() {
+                    let buffer = to_bytes(baseline.as_ref());
+                    let intensity_array = DataArray::wrap(
+                        &ArrayType::BaselineArray,
+                        BinaryDataArrayType::Float32,
+                        buffer,
+                    );
+                    arrays.add(intensity_array);
+                }
+
+                if let Some(noise) = data.noise() {
+                    let buffer = to_bytes(noise.as_ref());
+                    let intensity_array = DataArray::wrap(
+                        &ArrayType::SignalToNoiseArray,
+                        BinaryDataArrayType::Float32,
+                        buffer,
+                    );
+                    arrays.add(intensity_array);
+                }
+            }
+
+            Some(arrays)
+        }
+
         fn unpack_chromatogram_signal(
             &self,
             descr: thermorawfilereader::ChromatogramDescription,
@@ -698,7 +751,7 @@ pub(crate) mod sealed {
                 let detectors = instrument_model_to_detector(model_type);
                 log::debug!("Found {} mass analyzers, {} ionization types, {} detectors for model",
                     mass_analyzers.len(), ionization_types.len(), detectors.len());
-                
+
                 let mut i = 0;
                 for ionization in ionization_types.iter() {
                     for (mass_analyzer, detector_type) in
@@ -1051,7 +1104,7 @@ pub(crate) mod sealed {
             }
 
             if let Some(data) = view.data() {
-                let extra = if self.load_extended_spectrum_data {
+                let extra: Option<ExtendedSpectrumData> = if self.load_extended_spectrum_data {
                     self.handle.get_extended_spectrum_data(index, false)
                 } else {
                     None
