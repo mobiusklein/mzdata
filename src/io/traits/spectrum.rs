@@ -746,6 +746,19 @@ impl<
         &mut self.source
     }
 
+    /// Get an immutable iterator over the pre-filled buffer.
+    ///
+    /// ## See also
+    /// [`StreamingSpectrumIterator::populate_buffer`]
+    pub fn iter_buffer(&self) -> std::collections::vec_deque::Iter<S> {
+        self.buffer.iter()
+    }
+
+    /// Push a spectrum back into the stream in front of the buffer.
+    ///
+    /// ## Warning
+    /// If the spectrum is *not* from the undelying stream of spectra, then
+    /// any and all series metadata might be inconsistent.
     fn push_front(&mut self, spectrum: S) {
         self.buffer.push_front(spectrum);
     }
