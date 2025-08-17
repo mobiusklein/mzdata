@@ -1786,7 +1786,7 @@ where
         }
 
         self.handle.write_param(
-            self.data_array_compression.get_compression_method_for(&array)
+            self.data_array_compression.get_compression_method_for(array)
                 .clone()
                 .as_param()
                 .as_ref()

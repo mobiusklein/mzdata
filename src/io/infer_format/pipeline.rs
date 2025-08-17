@@ -66,7 +66,7 @@ pub enum Source<C: CentroidLike
     /// A concrete path on the file system
     PathLike(PathBuf),
     /// An in-memory channel of existing spectra
-    Receiver(SpectrumReceiver<C, D, MultiLayerSpectrum<C, D>>),
+    Receiver(Box<SpectrumReceiver<C, D, MultiLayerSpectrum<C, D>>>),
     /// Read from Stdin
     Stdin,
     /// A thing implementing [`std::io::Read `] and [`std::io::Seek`], along with an expected format
@@ -117,14 +117,14 @@ impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayM
 impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
      D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<SpectrumReceiver<C, D, MultiLayerSpectrum<C, D>>> for Source<C, D> {
     fn from(value: SpectrumReceiver<C, D, MultiLayerSpectrum<C, D>>) -> Self {
-        Self::Receiver(value)
+        Self::Receiver(Box::new(value))
     }
 }
 
 impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
      D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<Receiver<MultiLayerSpectrum<C, D>>> for Source<C, D> {
     fn from(value: Receiver<MultiLayerSpectrum<C, D>>) -> Self {
-        Self::Receiver(value.into())
+        Self::Receiver(Box::new(value.into()))
     }
 }
 

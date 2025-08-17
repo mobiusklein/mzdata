@@ -804,10 +804,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     }
 
     pub fn decode_mut(&'transient mut self) -> Result<&'transient mut Bytes, ArrayRetrievalError> {
-        if self.data.is_empty() {
-            Ok(&mut self.data)
-        }
-        else if matches!(self.compression, BinaryCompressionType::Decoded) {
+        if self.data.is_empty() || matches!(self.compression, BinaryCompressionType::Decoded) {
             Ok(&mut self.data)
         } else {
             match self.decode()? {

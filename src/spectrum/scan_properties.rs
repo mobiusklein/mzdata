@@ -734,7 +734,7 @@ impl SpectrumDescription {
     /// to be the case. `mzdata` can handle non-MS spectra, but little of the signal processing
     /// machinery it provides currently supports those other kinds of data.
     pub fn spectrum_type(&self) -> Option<crate::meta::SpectrumType> {
-        const SPECTRUM_TYPES: &'static [(crate::meta::SpectrumType, crate::params::ParamCow<'static>)] = crate::meta::SpectrumType::all_types();
+        const SPECTRUM_TYPES: &[(crate::meta::SpectrumType, crate::params::ParamCow<'static>)] = crate::meta::SpectrumType::all_types();
 
         let conv_table: HashMap<CURIE, crate::meta::SpectrumType> = SPECTRUM_TYPES
             .iter()

@@ -491,7 +491,7 @@ impl From<IonMobilityFrameAccessError> for io::Error {
             }
             IonMobilityFrameAccessError::IOError(e) => match e {
                 Some(e) => e,
-                None => io::Error::new(io::ErrorKind::Other, s),
+                None => io::Error::other(s),
             },
         }
     }

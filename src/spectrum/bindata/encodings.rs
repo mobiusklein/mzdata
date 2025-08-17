@@ -114,7 +114,7 @@ mod byte_rotation {
         }
     }
 
-    pub fn reverse_transpose_bytes<T: Pod, const N: usize>(data: &[u8]) -> Bytes {
+    pub fn reverse_transpose_bytes<const N: usize>(data: &[u8]) -> Bytes {
         let mut result: Bytes = vec![0; data.len()];
         reverse_transpose_bytes_into::<N>(data, &mut result);
         result
@@ -122,12 +122,12 @@ mod byte_rotation {
 
     pub fn reverse_transpose_4bytes<T: Pod>(data: &[u8]) -> Bytes {
         assert_eq!(std::mem::size_of::<T>(), 4);
-        reverse_transpose_bytes::<T, 4>(data)
+        reverse_transpose_bytes::<4>(data)
     }
 
     pub fn reverse_transpose_8bytes<T: Pod>(data: &[u8]) -> Bytes {
         assert_eq!(std::mem::size_of::<T>(), 8);
-        reverse_transpose_bytes::<T, 8>(data)
+        reverse_transpose_bytes::<8>(data)
     }
 
     pub fn reverse_transpose_i32(data: &[u8]) -> Vec<u8> {
@@ -248,7 +248,7 @@ mod dictionary_encoding {
             data: &[T],
             value_codes: &[V],
         ) -> BufWriter<Vec<u8>> {
-            let data_offset = 16 + value_codes.len() * core::mem::size_of::<V>();
+            let data_offset = 16 + std::mem::size_of_val(value_codes);
             let dict_buffer: Vec<u8> =
                 Vec::with_capacity(data_offset + data.len() * core::mem::size_of::<K>());
             BufWriter::new(dict_buffer)

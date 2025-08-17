@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 use crate::meta::ScanSettings;
 
@@ -66,12 +69,10 @@ pub trait MSDataFileMetadata {
 
         if let Some(settings) = source.scan_settings() {
             match self.scan_settings_mut() {
-                Some(mine) => {
-                    *mine = settings.clone()
-                },
+                Some(mine) => *mine = settings.clone(),
                 None => {
                     log::debug!("Cannot store scan settings on this type of data file");
-                },
+                }
             }
         }
 
@@ -145,6 +146,7 @@ pub struct FileMetadataConfig {
 }
 
 impl FileMetadataConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         file_description: FileDescription,
         instrument_configurations: HashMap<u32, InstrumentConfiguration>,
@@ -168,7 +170,10 @@ impl FileMetadataConfig {
     }
 }
 
-impl<T> From<&T> for FileMetadataConfig where T: MSDataFileMetadata {
+impl<T> From<&T> for FileMetadataConfig
+where
+    T: MSDataFileMetadata,
+{
     fn from(value: &T) -> Self {
         let mut this = Self::default();
         this.copy_metadata_from(value);
@@ -366,4 +371,14 @@ macro_rules! delegate_impl_metadata_trait {
     ($src:tt) => {
         $crate::delegate_impl_metadata_trait!(expr, this => { &this.$src }, &mut => { &mut this.$src });
     };
+}
+
+impl<T: MSDataFileMetadata> MSDataFileMetadata for Box<T> {
+    delegate_impl_metadata_trait!(expr, x => { x.deref() }, &mut => { x.deref_mut() });
+}
+
+/// [`MSDataFileMetadata`] may be accessed on [`std::sync::Arc`] wrapping types that implement the trait,
+/// but attempting to use the mutable methods will panic if the underlying instance is already shared.
+impl<T: MSDataFileMetadata> MSDataFileMetadata for std::sync::Arc<T> {
+    delegate_impl_metadata_trait!(expr, x => { x.deref() }, &mut => { std::sync::Arc::get_mut(x).unwrap_or_else(|| panic!("Attempting to modify `MSDataFileMetadata` via a shared reference")) });
 }

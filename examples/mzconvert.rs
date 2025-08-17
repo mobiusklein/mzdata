@@ -251,8 +251,8 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
                 Default::default()
             } else {
                 info!("Computing checksum for {}", pb.display());
-                let checksum = checksum_file(&pb)?;
-                checksum
+                
+                checksum_file(&pb)?
             };
             let has_already = reader
                 .file_description()

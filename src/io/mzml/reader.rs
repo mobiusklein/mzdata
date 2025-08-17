@@ -1616,11 +1616,7 @@ impl<
         let result = self._read_next_chromatogram();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
-        if let Ok(chrom) = result {
-            Some(chrom)
-        } else {
-            None
-        }
+        result.ok()
     }
 
     pub fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
@@ -1639,11 +1635,7 @@ impl<
         let result = self._read_next_chromatogram();
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
-        if let Ok(chrom) = result {
-            Some(chrom)
-        } else {
-            None
-        }
+        result.ok()
     }
 
     pub fn iter_chromatograms(&mut self) -> ChromatogramIter<R, C, D> {
@@ -1849,7 +1841,7 @@ impl<
     fn verify_index(&mut self) -> Result<(), IndexRecoveryOperation> {
         let n = self.spectrum_index.len();
         trace!("Verifying offset index of length {n}");
-        let position = self.handle.stream_position().map_err(|e| IndexRecoveryOperation::IOFailure(e))?;
+        let position = self.handle.stream_position().map_err(IndexRecoveryOperation::IOFailure)?;
         if n > 0 {
             // Try to pick a spectrum that's close to the beginning of the file to avoid large
             // amounts of wasted scanning for non-linear files, but pick one far enough in it would
@@ -1862,7 +1854,7 @@ impl<
             self.set_detail_level(dl);
             let s_found = s.is_some_and(|s| s.index() == center);
             if s_found {
-                self.seek(SeekFrom::Start(position)).map_err(|e| IndexRecoveryOperation::IOFailure(e))?;
+                self.seek(SeekFrom::Start(position)).map_err(IndexRecoveryOperation::IOFailure)?;
                 return Ok(());
             } else {
                 match self.handle.fill_buf() {
@@ -1872,7 +1864,7 @@ impl<
                                 let has_windows_eol = *b2 == b'\n';
                                 if has_windows_eol {
                                     warn!("Carriage return line endings detected and offset index is not valid");
-                                    self.seek(SeekFrom::Start(position)).map_err(|e| IndexRecoveryOperation::IOFailure(e))?;
+                                    self.seek(SeekFrom::Start(position)).map_err(IndexRecoveryOperation::IOFailure)?;
                                     return Err(IndexRecoveryOperation::EOLMismatchSuspected);
                                 }
                             }
@@ -1884,7 +1876,7 @@ impl<
                 }
             }
         }
-        self.seek(SeekFrom::Start(position)).map_err(|e| IndexRecoveryOperation::IOFailure(e))?;
+        self.seek(SeekFrom::Start(position)).map_err(IndexRecoveryOperation::IOFailure)?;
         Ok(())
     }
 

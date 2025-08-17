@@ -954,7 +954,7 @@ macro_rules! t {
         ($t, $t.to_param())
     };
 }
-const SPECTRUM_TYPES: &'static [(crate::meta::SpectrumType, crate::params::ParamCow<'static>)] = &[
+const SPECTRUM_TYPES: &[(crate::meta::SpectrumType, crate::params::ParamCow<'static>)] = &[
     t!(crate::meta::SpectrumType::MS1Spectrum),
     t!(crate::meta::SpectrumType::MSnSpectrum),
     t!(crate::meta::SpectrumType::MassSpectrum),
