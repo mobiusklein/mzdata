@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.57.1] - 2025-08-17
+
+### Added
+
+- Add `SpectrumType` and related machinery for spectrum classification
+
 ## [0.57.0] - 2025-08-03
 
 ### Added
@@ -816,7 +822,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.57.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.57.1...HEAD
+[0.57.1]: https://github.com/mobiusklein/mzdata/compare/v0.57.0...v0.57.1
 [0.57.0]: https://github.com/mobiusklein/mzdata/compare/v0.56.0...v0.57.0
 [0.56.0]: https://github.com/mobiusklein/mzdata/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/mobiusklein/mzdata/compare/v0.54.0...v0.55.0
