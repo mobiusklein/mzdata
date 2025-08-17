@@ -7,8 +7,8 @@ mod data_processing;
 mod instrument;
 mod run;
 mod sample;
-mod software;
 mod scan_settings;
+mod software;
 #[macro_use]
 mod traits;
 
@@ -19,24 +19,24 @@ pub use data_processing::{
     ProcessingMethod,
 };
 pub use software::{
-    custom_software_name, Software, SoftwareTerm, SoftwareType as SoftwareTypeFlags
+    custom_software_name, Software, SoftwareTerm, SoftwareType as SoftwareTypeFlags,
 };
 
 pub use file_description::{
     FileDescription, MassSpectrometerFileFormatTerm, NativeIDFormatError, NativeSpectrumIDFormat,
-    NativeSpectrumIdentifierFormatTerm, SourceFile
+    NativeSpectrumIdentifierFormatTerm, SourceFile, SpectrumType,
 };
 
 pub use instrument::{
     Component, ComponentType, DetectorTypeTerm, InletTypeTerm, InstrumentConfiguration,
-    IonizationTypeTerm, MassAnalyzerTerm
+    IonizationTypeTerm, MassAnalyzerTerm,
 };
 
 pub use activation::{DissociationEnergy, DissociationEnergyTerm, DissociationMethodTerm};
 pub use run::MassSpectrometryRun;
 pub use sample::Sample;
-pub use traits::{MSDataFileMetadata, FileMetadataConfig};
 pub use scan_settings::ScanSettings;
+pub use traits::{FileMetadataConfig, MSDataFileMetadata};
 
 use crate::params::{ParamValueParseError, Value, ValueRef};
 

@@ -805,23 +805,23 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
     pub fn decode_mut(&'transient mut self) -> Result<&'transient mut Bytes, ArrayRetrievalError> {
         if self.data.is_empty() {
-            return Ok(&mut self.data);
+            Ok(&mut self.data)
+        }
+        else if matches!(self.compression, BinaryCompressionType::Decoded) {
+            Ok(&mut self.data)
+        } else {
+            match self.decode()? {
+                Cow::Borrowed(_) => {
+                    Ok(&mut self.data)
+                },
+                Cow::Owned(owned) => {
+                    self.data = owned;
+                    self.compression = BinaryCompressionType::Decoded;
+                    Ok(&mut self.data)
+                },
+            }
         }
 
-        if matches!(self.compression, BinaryCompressionType::Decoded) {
-            return Ok(&mut self.data)
-        }
-
-        match self.decode()? {
-            Cow::Borrowed(_) => {
-                return Ok(&mut self.data)
-            },
-            Cow::Owned(owned) => {
-                self.data = owned;
-                self.compression = BinaryCompressionType::Decoded;
-                return Ok(&mut self.data)
-            },
-        }
     }
 
     pub fn clear(&mut self) {

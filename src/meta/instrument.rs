@@ -268,7 +268,7 @@ crate::cvmap! {
         #[doc="asymmetric track lossless time-of-flight analyzer - A TOF-like mass analyzer with asymmetric ion mirrors to direct ions into transversal asymmetric oscillations and ion foil shapes and maintains ion packet for transmission and resolution."]
         AsymmetricTrackLosslessTimeOfFlightAnalyzer,
     }
-    //[[[end]]] (checksum: c5f6116107f827892b5242c01d0121e9)
+    //[[[end]]] (sum: xfYRYQf4J4)
 }
 
 crate::cvmap! {
@@ -432,7 +432,7 @@ crate::cvmap! {
         #[doc="proton transfer charge reduction - Process to transfer one or more protons from a multiply charged cation (peptide or protein ion) to a proton acceptor anion or neutral basic compound, thereby reducing the charge of the original analyte."]
         ProtonTransferChargeReduction,
     }
-    // [[[end]]] (checksum: b20074cead89cca38e563e71556ffa44)
+    // [[[end]]] (sum: sgB0zq2JzK)
 }
 
 crate::cvmap! {
@@ -509,7 +509,7 @@ crate::cvmap! {
         #[doc="nanospray inlet - Nanospray Inlet."]
         NanosprayInlet,
     }
-    // [[[end]]] (checksum: 4e55e9df1f53422329397edb1c222900)
+    // [[[end]]] (sum: TlXp3x9TQi)
 }
 
 crate::cvmap! {
@@ -598,5 +598,5 @@ crate::cvmap! {
         #[doc="fluorescence detector - A detector using a fluorescent signal after excitation with light."]
         FluorescenceDetector,
     }
-    //[[[end]]] (checksum: e8d6121c9696bed93a019796fe0e8b87)
+    //[[[end]]] (sum: 6NYSHJaWvt)
 }

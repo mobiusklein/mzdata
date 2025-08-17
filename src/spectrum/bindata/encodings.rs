@@ -92,7 +92,7 @@ mod byte_rotation {
         transpose_8bytes(data)
     }
 
-    pub fn reverse_transpose_bytes_into<T: Pod, const N: usize>(data: &[u8], buffer: &mut Vec<u8>) {
+    pub fn reverse_transpose_bytes_into<const N: usize>(data: &[u8], buffer: &mut Vec<u8>) {
         let rem = data.len() % N;
         assert_eq!(rem, 0);
         let n_entries = data.len() / N;
@@ -115,9 +115,8 @@ mod byte_rotation {
     }
 
     pub fn reverse_transpose_bytes<T: Pod, const N: usize>(data: &[u8]) -> Bytes {
-        let mut result: Bytes = Vec::new();
-        result.resize(data.len(), 0);
-        reverse_transpose_bytes_into::<T, N>(data, &mut result);
+        let mut result: Bytes = vec![0; data.len()];
+        reverse_transpose_bytes_into::<N>(data, &mut result);
         result
     }
 
@@ -252,8 +251,7 @@ mod dictionary_encoding {
             let data_offset = 16 + value_codes.len() * core::mem::size_of::<V>();
             let dict_buffer: Vec<u8> =
                 Vec::with_capacity(data_offset + data.len() * core::mem::size_of::<K>());
-            let writer = BufWriter::new(dict_buffer);
-            writer
+            BufWriter::new(dict_buffer)
         }
 
         fn encode_dict_indices<
@@ -268,10 +266,10 @@ mod dictionary_encoding {
             value_codes: &[V],
             byte_map: HashMap<V, usize>,
         ) -> io::Result<Vec<u8>> {
-            let data_offset = 16 + value_codes.len() * core::mem::size_of::<V>();
+            let data_offset = 16 + std::mem::size_of_val(value_codes);
             let mut writer = self.create_writer::<T, W1, V, W2, K>(data, value_codes);
-            writer.write(&(data_offset as u64).to_le_bytes())?;
-            writer.write(&(value_codes.len() as u64).to_le_bytes())?;
+            writer.write_all(&(data_offset as u64).to_le_bytes())?;
+            writer.write_all(&(value_codes.len() as u64).to_le_bytes())?;
 
             if self.shuffle {
                 // This isn't endian-correct yet, see note in `transpose_bytes_into`
@@ -374,8 +372,7 @@ mod dictionary_encoding {
         }
 
         fn make_reader<'a>(&self, buffer: &'a [u8]) -> io::BufReader<&'a [u8]> {
-            let reader = io::BufReader::new(buffer);
-            reader
+            io::BufReader::new(buffer)
         }
 
         fn decode_value_buffer<T: Pod, const W1: usize, V: DictValue<W1>>(
@@ -396,21 +393,21 @@ mod dictionary_encoding {
                 let blocks = match core::mem::size_of::<T>() {
                     1 => Cow::Borrowed(buffer),
                     2 => {
-                        byte_rotation::reverse_transpose_bytes_into::<T, 2>(
+                        byte_rotation::reverse_transpose_bytes_into::<2>(
                             buffer,
                             &mut self.buffer,
                         );
                         Cow::Borrowed(self.buffer.as_slice())
                     }
                     4 => {
-                        byte_rotation::reverse_transpose_bytes_into::<T, 4>(
+                        byte_rotation::reverse_transpose_bytes_into::<4>(
                             buffer,
                             &mut self.buffer,
                         );
                         Cow::Borrowed(self.buffer.as_slice())
                     }
                     8 => {
-                        byte_rotation::reverse_transpose_bytes_into::<T, 8>(
+                        byte_rotation::reverse_transpose_bytes_into::<8>(
                             buffer,
                             &mut self.buffer,
                         );
@@ -440,7 +437,7 @@ mod dictionary_encoding {
         ) -> Vec<T> {
             let mut result = Vec::with_capacity(index_buffer.len() / W2);
             if self.shuffle {
-                byte_rotation::reverse_transpose_bytes_into::<K, W2>(
+                byte_rotation::reverse_transpose_bytes_into::<W2>(
                     index_buffer,
                     &mut self.buffer,
                 );
@@ -459,7 +456,7 @@ mod dictionary_encoding {
             result
         }
 
-        pub fn decode<'a, T: Pod>(&mut self, buffer: &'a [u8]) -> io::Result<Vec<T>> {
+        pub fn decode<T: Pod>(&mut self, buffer: &[u8]) -> io::Result<Vec<T>> {
             if buffer.is_empty() {
                 return Ok(Vec::new());
             }
@@ -503,19 +500,19 @@ mod dictionary_encoding {
 
             let values = if value_width <= 1 {
                 let values =
-                    self.decode_value_buffer::<T, 1, u8>(value_buffer, n_value_codes as usize);
+                    self.decode_value_buffer::<T, 1, u8>(value_buffer, n_value_codes);
                 decode_indices!(values)
             } else if value_width <= 2 {
                 let values =
-                    self.decode_value_buffer::<T, 2, u16>(value_buffer, n_value_codes as usize);
+                    self.decode_value_buffer::<T, 2, u16>(value_buffer, n_value_codes);
                 decode_indices!(values)
             } else if value_width <= 4 {
                 let values =
-                    self.decode_value_buffer::<T, 4, u32>(value_buffer, n_value_codes as usize);
+                    self.decode_value_buffer::<T, 4, u32>(value_buffer, n_value_codes);
                 decode_indices!(values)
             } else if value_width <= 8 {
                 let values =
-                    self.decode_value_buffer::<T, 8, u64>(value_buffer, n_value_codes as usize);
+                    self.decode_value_buffer::<T, 8, u64>(value_buffer, n_value_codes);
                 decode_indices!(values)
             } else {
                 return Err(io::Error::new(
@@ -535,7 +532,7 @@ mod dictionary_encoding {
 
     pub fn dictionary_decoding<T: Pod>(buffer: &[u8]) -> io::Result<Vec<T>> {
         let mut decoder = DictionaryDecoder::new(true);
-        return decoder.decode(buffer);
+        decoder.decode(buffer)
     }
 }
 

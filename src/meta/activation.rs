@@ -86,7 +86,7 @@ crate::cvmap! {
         #[doc = "electron activated dissociation - A process to fragment ions in a high intensity electron beam which results in a dissociation of various analytes ranging from singly charged small molecules to multiply protonated proteins."]
         ElectronActivatedDissociation,
     }
-    //[[[end]]] (checksum: c0f6c7cfcb5d43054288f14702549985)
+    //[[[end]]] (sum: wPbHz8tdQw)
 }
 
 impl DissociationMethodTerm {
@@ -148,7 +148,7 @@ crate::cvmap! {
         #[doc = "electron beam energy - The kinetic energy of the electron beam used in dissociation methods induced by a free electron beam, such as electron-capture dissociation (ECD), electron-detachment dissociation (EDD), and electron-activated dissociation (EAD)."]
         ElectronBeamEnergy(f32),
     }
-    //[[[end]]] (checksum: 252597ff6067b90ae0bc37f63da81021)
+    //[[[end]]] (sum: JSWX/2BnuQ)
 }
 
 impl Display for DissociationEnergyTerm {

@@ -448,7 +448,7 @@ impl From<SpectrumAccessError> for io::Error {
             }
             SpectrumAccessError::IOError(e) => match e {
                 Some(e) => e,
-                None => io::Error::new(io::ErrorKind::Other, s),
+                None => io::Error::other(s),
             },
         }
     }

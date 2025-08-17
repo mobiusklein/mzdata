@@ -4,6 +4,7 @@ import io
 import itertools
 import re
 
+import sys
 from typing import Tuple, Dict, Set, List
 
 import fastobo
@@ -122,8 +123,8 @@ def main():
     type_name = "DissociationEnergy"
 
     term_specs = list(map(id_to_clause.get, sorted(term_ids)))
-    text = generate_term_enum(term_specs, type_name)
-    print(text)
+    text = generate_term_enum(term_specs, type_name).encode('utf8')
+    sys.stdout.buffer.write(text)
 
 
 if __name__ == "__main__":

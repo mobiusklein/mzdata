@@ -61,7 +61,7 @@ impl SummaryOps for BinaryArrayMap {
 
     fn mz_range(&self) -> (f64, f64) {
         if let Ok(mzs) = self.mzs() {
-            if mzs.len() == 0 {
+            if mzs.is_empty() {
                 (0.0, 0.0)
             } else {
                 (*mzs.first().unwrap(), *mzs.last().unwrap())
@@ -98,8 +98,13 @@ impl SummaryOps for BinaryArrayMap {
     }
 
     fn fetch_summaries(&self) -> SpectrumSummary {
-        let mzs = self.mzs().unwrap();
-        let intensities = self.intensities().unwrap();
+        let (mzs, intensities) = match (self.mzs(), self.intensities()) {
+            (Ok(mzs), Ok(intensities)) => (mzs, intensities),
+            (_, _) => {
+                (Cow::Owned(Vec::new()), Cow::Owned(Vec::new()))
+            }
+        };
+
         let (tic, (bpmz, bpint, bpidx)) = mzs.iter().zip(intensities.iter()).enumerate().fold(
             (0.0, (0.0, 0.0f32, 0)),
             |(mut tic, (mut bpmz, mut bpint, mut bpidx)), (idx, (mz, int))| {

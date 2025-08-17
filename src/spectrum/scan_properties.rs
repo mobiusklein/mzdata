@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 
 use log::warn;
@@ -6,10 +7,11 @@ use num_traits::Float;
 
 use super::spectrum_types::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
 use crate::io::traits::SpectrumSource;
-use crate::params::{
-    AccessionIntCode, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit, CURIE
-};
 use crate::meta::DissociationMethodTerm;
+use crate::params::{
+    AccessionIntCode, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit,
+    CURIE,
+};
 use crate::{curie, impl_param_described, ParamList};
 
 /**
@@ -198,7 +200,12 @@ impl ScanEvent {
         }
     }
 
-    crate::find_param_method!(filter_string, &FILTER_STRING, |p| { p.as_str() }, Option<Cow<'_, str>>);
+    crate::find_param_method!(
+        filter_string,
+        &FILTER_STRING,
+        |p| { p.as_str() },
+        Option<Cow<'_, str>>
+    );
     crate::find_param_method!(resolution, &MASS_RESOLUTION);
     crate::find_param_method!(scan_configuration, &PRESET_SCAN_CONFIGURATION);
 }
@@ -386,7 +393,6 @@ pub struct Activation {
 }
 
 impl Activation {
-
     /// Get a reference to the first activation method, if it exists
     pub fn method(&self) -> Option<&DissociationMethodTerm> {
         self._methods.first()
@@ -721,6 +727,54 @@ impl SpectrumDescription {
     }
 
     crate::find_param_method!(title, &SCAN_TITLE, |p| p.as_str(), Option<Cow<'_, str>>);
+
+    /// Find the type of spectrum described.
+    ///
+    /// A spectrum in `mzdata` is *usually* a mass spectrum of some sort, but that's not guaranteed
+    /// to be the case. `mzdata` can handle non-MS spectra, but little of the signal processing
+    /// machinery it provides currently supports those other kinds of data.
+    pub fn spectrum_type(&self) -> Option<crate::meta::SpectrumType> {
+        const SPECTRUM_TYPES: &'static [(crate::meta::SpectrumType, crate::params::ParamCow<'static>)] = crate::meta::SpectrumType::all_types();
+
+        let conv_table: HashMap<CURIE, crate::meta::SpectrumType> = SPECTRUM_TYPES
+            .iter()
+            .map(|(t, v)| (v.curie().unwrap(), *t))
+            .collect();
+
+        for param in self.params().iter() {
+            if let Some(c) = param.curie() {
+                if let Some(t) = conv_table.get(&c) {
+                    return Some(*t);
+                }
+            }
+        }
+        None
+    }
+
+    /// Set the kind of spectrum represented.
+    pub fn set_spectrum_type(&mut self, spectrum_type: crate::meta::SpectrumType) {
+        const SPECTRUM_TYPES: &[(crate::meta::SpectrumType, crate::params::ParamCow<'static>)] = crate::meta::SpectrumType::all_types();
+
+        let to_insert: crate::params::ParamCow<'_> = spectrum_type.to_param();
+
+        let conv_table: HashSet<CURIE> = SPECTRUM_TYPES
+            .iter()
+            .map(|(_, v)| v.curie().unwrap())
+            .collect();
+
+        for param in self.params_mut().iter_mut() {
+            if let Some(c) = param.curie() {
+                if conv_table.contains(&c) {
+                    *param = to_insert.into();
+                    return;
+                }
+            }
+        }
+
+        self.add_param(to_insert.into());
+    }
+
+
 }
 
 impl_param_described!(Activation, SpectrumDescription);

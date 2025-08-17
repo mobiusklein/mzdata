@@ -1,3 +1,4 @@
+import sys
 import gzip
 import json
 import io
@@ -109,8 +110,8 @@ def main():
     cv: OboDoc = fastobo.load(gzip.open("./cv/psi-ms.obo.gz"))
     software_ids, id_to_clause = collect_software_types(cv)
     sw_terms = list(map(id_to_clause.get, sorted(software_ids)))
-    text = generate_term_enum(sw_terms)
-    print(text)
+    text = generate_term_enum(sw_terms).encode('utf8')
+    sys.stdout.buffer.write(text)
 
 
 if __name__ == "__main__":

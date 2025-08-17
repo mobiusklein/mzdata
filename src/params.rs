@@ -1980,7 +1980,7 @@ impl<'a> ControlledVocabulary {
     ///
     /// # Arguments
     /// - `accession`: The accession code for the [`Param`]. If specified as a [`CURIE`] or a string-like type,
-    ///     any namespace is ignored.
+    ///   any namespace is ignored.
     /// - `name`: The name of the parameter
     /// # See Also
     /// - [`ControlledVocabulary::param_val`]
@@ -1997,7 +1997,7 @@ impl<'a> ControlledVocabulary {
 
         match accession {
             AccessionLike::Text(s) => {
-                if let Some(nb) = s.split(':').last() {
+                if let Some(nb) = s.split(':').next_back() {
                     param.accession =
                         Some(nb.parse().unwrap_or_else(|_| {
                             panic!("Expected accession to be numeric, got {}", s)
@@ -2072,7 +2072,7 @@ impl<'a> ControlledVocabulary {
     ///
     /// # Arguments
     /// - `accession`: The accession code for the [`Param`]. If specified as a [`CURIE`] or a string-like type,
-    ///     any namespace is ignored.
+    ///   any namespace is ignored.
     /// - `name`: The name of the parameter
     /// - `value`: The value of the parameter
     ///

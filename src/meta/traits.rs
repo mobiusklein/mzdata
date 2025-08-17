@@ -73,8 +73,6 @@ pub trait MSDataFileMetadata {
                     log::debug!("Cannot store scan settings on this type of data file");
                 },
             }
-        } else {
-            self.scan_settings_mut().take();
         }
 
         match source.run_description() {

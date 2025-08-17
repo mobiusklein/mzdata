@@ -141,6 +141,12 @@ pub trait SpectrumLike<
     /// Retrieve the most processed representation of the mass spectrum's signal
     fn peaks(&'_ self) -> RefPeakDataLevel<'_, C, D>;
 
+    /// Consume the spectrum, decomposing it into the [`SpectrumDescription`] and an owning
+    /// [`PeakDataLevel`].
+    ///
+    /// # See also
+    /// [`SpectrumLike::peaks`]
+    /// [`SpectrumLike::description`]
     fn into_peaks_and_description(self) -> (PeakDataLevel<C, D>, SpectrumDescription);
 
     /// Obtain a reference to the [`BinaryArrayMap`] if one is available for the peak
@@ -165,6 +171,21 @@ pub trait SpectrumLike<
         } else {
             HasIonMobility::None
         }
+    }
+
+    /// Find the type of spectrum described.
+    ///
+    /// A spectrum in `mzdata` is *usually* a mass spectrum of some sort,
+    /// but that's not guaranteed to be the case. `mzdata` can handle non-MS spectra,
+    /// but little of the signal processing machinery it provides currently supports
+    /// those other kinds of data.
+    fn spectrum_type(&self) -> Option<crate::meta::SpectrumType> {
+        self.description().spectrum_type()
+    }
+
+    /// Set the kind of spectrum represented.
+    fn set_spectrum_type(&mut self, spectrum_type: crate::meta::SpectrumType) {
+        self.description_mut().set_spectrum_type(spectrum_type);
     }
 
     /// Compute and update the the total ion current, base peak, and m/z range for
@@ -1583,6 +1604,7 @@ mod test {
 
     #[allow(unused)]
     fn test_spectrum_behavior<T: SpectrumLike>(spec: &T) {
+        assert_eq!(spec.spectrum_type(), Some(crate::meta::SpectrumType::MS1Spectrum));
         behaviors!(spec);
     }
 

@@ -19,13 +19,13 @@
 //! to unify access:
 //!
 //! 1. [`RawSpectrum`] for representing a spectrum that has not been decoded into distinct
-//!        peaks yet, but whose data may be continuous or discrete.
+//!    peaks yet, but whose data may be continuous or discrete.
 //! 2. [`CentroidSpectrum`] for representing spectra from sources which are guaranteed to
-//!        be pre-centroided, like those from MGF files or other simple text representations.
+//!    be pre-centroided, like those from MGF files or other simple text representations.
 //! 3. [`MultiLayerSpectrum`] for representing a multi-layer representation of a spectrum where both
-//!        raw data and a distinct peak list are available.
+//!    raw data and a distinct peak list are available.
 //! 4. [`DeconvolutedSpectrum`] for representing spectra from sources which are guaranteed to be
-//!     pre-centroided, deisotoped and charge state deconvoluted.
+//!    pre-centroided, deisotoped and charge state deconvoluted.
 //!
 //! These structures all implement the [`SpectrumLike`] trait
 //!

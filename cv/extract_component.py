@@ -6,6 +6,7 @@ import itertools
 import re
 
 from enum import IntFlag
+import sys
 from typing import Tuple, Dict, Set, List
 
 import fastobo
@@ -184,8 +185,8 @@ def main():
         type_name = t.title().replace(" ", "")
 
     term_specs = list(map(id_to_clause.get, sorted(component_ids)))
-    text = generate_term_enum(term_specs, type_name)
-    print(text)
+    text = generate_term_enum(term_specs, type_name).encode("utf8")
+    sys.stdout.buffer.write(text)
 
 
 if __name__ == "__main__":
