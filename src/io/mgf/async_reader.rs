@@ -14,7 +14,7 @@ use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, Deconvoluted
 use super::{
     super::{offset_index::OffsetIndex, utils::DetailLevel},
     reader::{MGFLineParsing, SpectrumBuilder},
-    MGFError, MGFParserState,
+    MGFError, MGFParserState, MGFIndexing, DefaultTitleIndexing
 };
 
 use crate::{
@@ -56,6 +56,7 @@ pub struct MGFReaderType<
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
     read_counter: usize,
+    indexer: Box<dyn MGFIndexing>,
 }
 
 #[cfg(feature = "async")]
@@ -88,6 +89,15 @@ impl<R: io::AsyncRead, C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCent
 
     fn error_mut(&mut self) -> &mut Option<MGFError> {
         &mut self.error
+    }
+
+    fn indexer(&self) -> &Box<dyn MGFIndexing> {
+        &self.indexer
+    }
+
+    fn set_indexer(&mut self, indexer: Box<dyn MGFIndexing>) {
+        self.indexer = indexer;
+        self.index = OffsetIndex::new("spectrum".into());
     }
 }
 
@@ -223,6 +233,7 @@ impl<R: io::AsyncRead + Unpin, C: CentroidLike + From<CentroidPeak>, D: Deconvol
             detail_level: DetailLevel::Full,
             run: MassSpectrometryRun::default(),
             read_counter: 0,
+            indexer: Box::new(DefaultTitleIndexing::default()),
         }
     }
 }
@@ -271,6 +282,8 @@ impl<
 
         let mut buffer: Vec<u8> = Vec::new();
 
+        self.index.clear();
+
         loop {
             buffer.clear();
             let b = match self.handle.read_until(b'\n', &mut buffer).await {
@@ -285,15 +298,16 @@ impl<
             if buffer.starts_with(b"BEGIN IONS") {
                 found_start = true;
                 last_start = offset;
-            } else if found_start && buffer.starts_with(b"TITLE=") {
-                match str::from_utf8(&buffer[6..]) {
-                    Ok(string) => {
-                        self.index.insert(string.trim().to_owned(), last_start);
+            } else if found_start {
+                let string_buffer = String::from_utf8_lossy(&buffer);
+                let indexer = self.indexer();
+                if let Some((key, value)) = string_buffer.split_once('=') {
+                    if indexer.is_index_key(key) {
+                        self.index.insert(indexer.handle_key(key, value), last_start);
+                        found_start = false;
+                        last_start = 0;
                     }
-                    Err(_err) => {}
-                };
-                found_start = false;
-                last_start = 0;
+                }
             }
             offset += b as u64;
         }

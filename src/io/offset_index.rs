@@ -77,6 +77,10 @@ impl OffsetIndex {
         self.offsets.keys()
     }
 
+    pub fn clear(&mut self) {
+        self.offsets.clear();
+    }
+
     /// Iterate over the keys and indices
     pub fn iter(&self) -> Iter<Box<str>, u64> {
         self.offsets.iter()
