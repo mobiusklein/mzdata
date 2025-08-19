@@ -393,24 +393,15 @@ mod dictionary_encoding {
                 let blocks = match core::mem::size_of::<T>() {
                     1 => Cow::Borrowed(buffer),
                     2 => {
-                        byte_rotation::reverse_transpose_bytes_into::<2>(
-                            buffer,
-                            &mut self.buffer,
-                        );
+                        byte_rotation::reverse_transpose_bytes_into::<2>(buffer, &mut self.buffer);
                         Cow::Borrowed(self.buffer.as_slice())
                     }
                     4 => {
-                        byte_rotation::reverse_transpose_bytes_into::<4>(
-                            buffer,
-                            &mut self.buffer,
-                        );
+                        byte_rotation::reverse_transpose_bytes_into::<4>(buffer, &mut self.buffer);
                         Cow::Borrowed(self.buffer.as_slice())
                     }
                     8 => {
-                        byte_rotation::reverse_transpose_bytes_into::<8>(
-                            buffer,
-                            &mut self.buffer,
-                        );
+                        byte_rotation::reverse_transpose_bytes_into::<8>(buffer, &mut self.buffer);
                         Cow::Borrowed(self.buffer.as_slice())
                     }
                     x => {
@@ -437,10 +428,7 @@ mod dictionary_encoding {
         ) -> Vec<T> {
             let mut result = Vec::with_capacity(index_buffer.len() / W2);
             if self.shuffle {
-                byte_rotation::reverse_transpose_bytes_into::<W2>(
-                    index_buffer,
-                    &mut self.buffer,
-                );
+                byte_rotation::reverse_transpose_bytes_into::<W2>(index_buffer, &mut self.buffer);
                 for chunk in self.buffer.chunks_exact(W2) {
                     let b: [u8; W2] = chunk.try_into().unwrap();
                     let k: usize = K::from_le_bytes(&b).to_usize();
@@ -499,20 +487,16 @@ mod dictionary_encoding {
             }
 
             let values = if value_width <= 1 {
-                let values =
-                    self.decode_value_buffer::<T, 1, u8>(value_buffer, n_value_codes);
+                let values = self.decode_value_buffer::<T, 1, u8>(value_buffer, n_value_codes);
                 decode_indices!(values)
             } else if value_width <= 2 {
-                let values =
-                    self.decode_value_buffer::<T, 2, u16>(value_buffer, n_value_codes);
+                let values = self.decode_value_buffer::<T, 2, u16>(value_buffer, n_value_codes);
                 decode_indices!(values)
             } else if value_width <= 4 {
-                let values =
-                    self.decode_value_buffer::<T, 4, u32>(value_buffer, n_value_codes);
+                let values = self.decode_value_buffer::<T, 4, u32>(value_buffer, n_value_codes);
                 decode_indices!(values)
             } else if value_width <= 8 {
-                let values =
-                    self.decode_value_buffer::<T, 8, u64>(value_buffer, n_value_codes);
+                let values = self.decode_value_buffer::<T, 8, u64>(value_buffer, n_value_codes);
                 decode_indices!(values)
             } else {
                 return Err(io::Error::new(
@@ -1182,6 +1166,103 @@ impl BinaryCompressionType {
             BinaryCompressionType::Decoded => return None,
         };
         Some(acc)
+    }
+
+    /// Convert a [`CURIE`] into a compression method, if one exists.
+    pub fn from_accession(accession: CURIE) -> Option<Self> {
+        match accession {
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1000576,
+            } => Some(Self::NoCompression),
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1000574,
+            } => Some(BinaryCompressionType::Zlib),
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1002312,
+            } => Some(BinaryCompressionType::NumpressLinear),
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1002314,
+            } => Some(BinaryCompressionType::NumpressSLOF),
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1002313,
+            } => Some(BinaryCompressionType::NumpressPIC),
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1002746,
+            } => Some(BinaryCompressionType::NumpressLinearZlib),
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1002748,
+            } => Some(BinaryCompressionType::NumpressSLOFZlib),
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1002747,
+            } => Some(BinaryCompressionType::NumpressPICZlib),
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1003089,
+            } => Some(BinaryCompressionType::DeltaPrediction),
+            CURIE {
+                controlled_vocabulary: ControlledVocabulary::MS,
+                accession: 1003090,
+            } => Some(BinaryCompressionType::LinearPrediction),
+            x if x
+                == CURIE {
+                    controlled_vocabulary: ControlledVocabulary::MS,
+                    accession: BinaryCompressionType::NumpressSLOFZstd.accession().unwrap(),
+                } =>
+            {
+                Some(BinaryCompressionType::NumpressSLOFZstd)
+            }
+            x if x
+                == CURIE {
+                    controlled_vocabulary: ControlledVocabulary::MS,
+                    accession: BinaryCompressionType::NumpressLinearZstd
+                        .accession()
+                        .unwrap(),
+                } =>
+            {
+                Some(BinaryCompressionType::NumpressLinearZstd)
+            }
+            x if x
+                == CURIE {
+                    controlled_vocabulary: ControlledVocabulary::MS,
+                    accession: BinaryCompressionType::ZstdDict.accession().unwrap(),
+                } =>
+            {
+                Some(BinaryCompressionType::ZstdDict)
+            }
+            x if x
+                == CURIE {
+                    controlled_vocabulary: ControlledVocabulary::MS,
+                    accession: BinaryCompressionType::Zstd.accession().unwrap(),
+                } =>
+            {
+                Some(BinaryCompressionType::Zstd)
+            }
+            x if x
+                == CURIE {
+                    controlled_vocabulary: ControlledVocabulary::MS,
+                    accession: BinaryCompressionType::ShuffleZstd.accession().unwrap(),
+                } =>
+            {
+                Some(BinaryCompressionType::ShuffleZstd)
+            }
+            x if x
+                == CURIE {
+                    controlled_vocabulary: ControlledVocabulary::MS,
+                    accession: BinaryCompressionType::DeltaShuffleZstd.accession().unwrap(),
+                } =>
+            {
+                Some(BinaryCompressionType::DeltaShuffleZstd)
+            }
+            _ => None,
+        }
     }
 
     /// Convert the compression type to a [`ParamCow`].
