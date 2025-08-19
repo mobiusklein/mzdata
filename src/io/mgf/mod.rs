@@ -6,7 +6,11 @@
 mod reader;
 mod writer;
 
-pub use reader::{MGFError, MGFParserState, MGFReader, MGFReaderType};
+pub use reader::{
+    DefaultTitleIndexing, DefaultTitleParser, MGFError, MGFParserState, MGFReader, MGFReaderType,
+    ScansIndexing, TPPTitleParser, TPPTitleParsingNativeIDIndexing,
+    TPPTitleParsingScanNumberIndexing, MGFIndexing,
+};
 pub use writer::{
     MGFHeaderStyle, MGFWriter, MGFWriterType, MZDataMGFStyle, SimpleMGFStyle, SimpleMGFWriter,
     SimpleMGFWriterType,
@@ -20,15 +24,16 @@ pub use crate::io::mgf::async_reader::{
     MGFReader as AsyncMGFReader, MGFReaderType as AsyncMGFReaderType,
 };
 
-
 pub fn is_mgf(buf: &[u8]) -> bool {
     let needle = b"BEGIN IONS";
     buf.windows(needle.len()).any(|window| window == needle)
 }
 
-
 #[cfg(test)]
 mod test {
+    use crate::io::mgf::reader::{
+        TPPTitleParsingNativeIDIndexing, TPPTitleParsingScanNumberIndexing,
+    };
     use crate::io::DetailLevel;
     use crate::spectrum::RefPeakDataLevel;
     use crate::CentroidSpectrum;
@@ -122,6 +127,74 @@ mod test {
 
         assert!(reader.run_description().is_some());
         Ok(())
+    }
+
+    #[test_log::test]
+    fn test_reader_tpp_native_id() {
+        let path = path::Path::new("./test/data/tpp/small.mgf");
+        let file = fs::File::open(path).expect("Test file doesn't exist");
+        let mut reader = MGFReaderType::<_, CentroidPeak, DeconvolutedPeak>::new_indexed_with(
+            file,
+            Box::new(TPPTitleParsingNativeIDIndexing::default()),
+        );
+
+        let mut ms1_count = 0;
+        let mut msn_count = 0;
+
+        let scan = reader
+            .get_spectrum_by_id("controllerType=0 controllerNumber=1 scan=48")
+            .expect("Failed to retrieve by ID");
+        assert_eq!(scan.index(), 33);
+
+        for (k, _) in reader.get_index().clone().iter().rev() {
+            let scan = reader.get_spectrum_by_id(k).expect("Missing spectrum");
+            let level = scan.ms_level();
+            if level == 1 {
+                ms1_count += 1;
+            } else {
+                msn_count += 1;
+            }
+            let centroided: CentroidSpectrum = scan.try_into().unwrap();
+            centroided.peaks.iter().for_each(|p| {
+                (centroided.peaks[p.get_index() as usize]).mz();
+            })
+        }
+        assert_eq!(ms1_count, 0);
+        assert_eq!(msn_count, 34);
+    }
+
+    #[test_log::test]
+    fn test_reader_tpp_scan_num() {
+        let path = path::Path::new("./test/data/tpp/small.mgf");
+        let file = fs::File::open(path).expect("Test file doesn't exist");
+        let mut reader = MGFReaderType::<_, CentroidPeak, DeconvolutedPeak>::new_indexed_with(
+            file,
+            Box::new(TPPTitleParsingScanNumberIndexing::default()),
+        );
+
+        let mut ms1_count = 0;
+        let mut msn_count = 0;
+
+        let scan = reader
+            .get_spectrum_by_id("48")
+            .expect("Failed to retrieve by ID");
+        assert_eq!(scan.index(), 33);
+
+        for (k, _) in reader.get_index().clone().iter().rev() {
+            let scan = reader.get_spectrum_by_id(k).expect("Missing spectrum");
+            let level = scan.ms_level();
+            if level == 1 {
+                ms1_count += 1;
+            } else {
+                msn_count += 1;
+            }
+            let centroided: CentroidSpectrum = scan.try_into().unwrap();
+            centroided.peaks.iter().for_each(|p| {
+                (centroided.peaks[p.get_index() as usize]).mz();
+            })
+        }
+        assert_eq!(ms1_count, 0);
+        assert_eq!(msn_count, 34);
     }
 
     #[test]
