@@ -139,7 +139,7 @@ pub trait SpectrumSource<
     }
 
     /// Open a new iterator over this stream
-    fn iter(&mut self) -> SpectrumIterator<C, D, S, Self>
+    fn iter(&mut self) -> SpectrumIterator<'_, C, D, S, Self>
     where
         Self: Sized,
     {
@@ -197,7 +197,7 @@ impl<
         S: SpectrumLike<C, D>,
     > SpectrumIterator<'_, C, D, S, R>
 {
-    pub fn new(source: &mut R) -> SpectrumIterator<C, D, S, R> {
+    pub fn new(source: &mut R) -> SpectrumIterator<'_, C, D, S, R> {
         SpectrumIterator::<C, D, S, R> {
             source,
             index: 0,
@@ -616,7 +616,7 @@ impl<
         panic!("Cannot reset StreamingSpectrumIterator")
     }
 
-    fn iter(&mut self) -> SpectrumIterator<C, D, S, Self>
+    fn iter(&mut self) -> SpectrumIterator<'_, C, D, S, Self>
     where
         Self: Sized,
     {
@@ -750,7 +750,7 @@ impl<
     ///
     /// ## See also
     /// [`StreamingSpectrumIterator::populate_buffer`]
-    pub fn iter_buffer(&self) -> std::collections::vec_deque::Iter<S> {
+    pub fn iter_buffer(&self) -> std::collections::vec_deque::Iter<'_, S> {
         self.buffer.iter()
     }
 

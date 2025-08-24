@@ -47,7 +47,7 @@ pub use crate::io::traits::{
 };
 
 #[cfg(feature = "async_partial")]
-pub use crate::io::traits::AsyncSpectrumSource;
+pub use crate::io::traits::{AsyncSpectrumSource, AsyncRandomAccessSpectrumIterator, SpectrumStream};
 
 #[cfg(feature = "async")]
 pub use crate::io::traits::AsyncMZFileReader;
