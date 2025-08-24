@@ -8,7 +8,7 @@ use mzpeaks::{
     MZ,
 };
 
-use crate::utils::{mass_charge_ratio, neutral_mass};
+use crate::{params::Unit, utils::{mass_charge_ratio, neutral_mass}};
 
 use super::{
     array::DataArray,
@@ -260,12 +260,14 @@ impl BuildArrayMapFrom for CentroidPeak {
             BinaryDataArrayType::Float64,
             source.len() * BinaryDataArrayType::Float64.size_of(),
         );
+        mz_array.unit = Unit::MZ;
 
         let mut intensity_array = DataArray::from_name_type_size(
             &ArrayType::IntensityArray,
             BinaryDataArrayType::Float32,
             source.len() * BinaryDataArrayType::Float32.size_of(),
         );
+        intensity_array.unit = Unit::DetectorCounts;
 
         mz_array.compression = BinaryCompressionType::Decoded;
         intensity_array.compression = BinaryCompressionType::Decoded;
@@ -317,12 +319,14 @@ impl BuildArrayMapFrom for DeconvolutedPeak {
             BinaryDataArrayType::Float64,
             source.len() * BinaryDataArrayType::Float64.size_of(),
         );
+        mz_array.unit = Unit::MZ;
 
         let mut intensity_array = DataArray::from_name_type_size(
             &ArrayType::IntensityArray,
             BinaryDataArrayType::Float32,
             source.len() * BinaryDataArrayType::Float32.size_of(),
         );
+        intensity_array.unit = Unit::DetectorCounts;
 
         let mut charge_array = DataArray::from_name_type_size(
             &ArrayType::ChargeArray,
@@ -407,12 +411,14 @@ impl BuildArrayMapFrom for Feature<MZ, IonMobility> {
             BinaryDataArrayType::Float64,
             n * BinaryDataArrayType::Float64.size_of(),
         );
+        mz_array.unit = Unit::MZ;
 
         let mut intensity_array = DataArray::from_name_type_size(
             &ArrayType::IntensityArray,
             BinaryDataArrayType::Float32,
             n * BinaryDataArrayType::Float32.size_of(),
         );
+        intensity_array.unit = Unit::DetectorCounts;
 
         let mut ion_mobility_array = DataArray::from_name_type_size(
             &ArrayType::RawIonMobilityArray,
@@ -519,12 +525,14 @@ impl BuildArrayMapFrom for ChargedFeature<Mass, IonMobility> {
             BinaryDataArrayType::Float64,
             n * BinaryDataArrayType::Float64.size_of(),
         );
+        mz_array.unit = Unit::MZ;
 
         let mut intensity_array = DataArray::from_name_type_size(
             &ArrayType::IntensityArray,
             BinaryDataArrayType::Float32,
             n * BinaryDataArrayType::Float32.size_of(),
         );
+        intensity_array.unit = Unit::DetectorCounts;
 
         let mut charge_array = DataArray::from_name_type_size(
             &ArrayType::ChargeArray,
@@ -745,12 +753,14 @@ impl BuildArrayMapFrom for mzpeaks::peak::IonMobilityAwareCentroidPeak {
             BinaryDataArrayType::Float64,
             source.len() * BinaryDataArrayType::Float64.size_of(),
         );
+        mz_array.unit = Unit::MZ;
 
         let mut intensity_array = DataArray::from_name_type_size(
             &ArrayType::IntensityArray,
             BinaryDataArrayType::Float32,
             source.len() * BinaryDataArrayType::Float32.size_of(),
         );
+        intensity_array.unit = Unit::DetectorCounts;
 
         let mut im_array = DataArray::from_name_type_size(
             &ArrayType::IonMobilityArray,
@@ -833,12 +843,14 @@ impl BuildArrayMapFrom for mzpeaks::peak::IonMobilityAwareDeconvolutedPeak {
             BinaryDataArrayType::Float64,
             source.len() * BinaryDataArrayType::Float64.size_of(),
         );
+        mz_array.unit = Unit::MZ;
 
         let mut intensity_array = DataArray::from_name_type_size(
             &ArrayType::IntensityArray,
             BinaryDataArrayType::Float32,
             source.len() * BinaryDataArrayType::Float32.size_of(),
         );
+        intensity_array.unit = Unit::DetectorCounts;
 
         let mut charge_array = DataArray::from_name_type_size(
             &ArrayType::ChargeArray,
