@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.58.0] - 2025-08-24
+
+### Added
+
+- Add configurable indexing and title parsing strategies for `MGFReaderType`  via `MGFIndexing` trait.
+- Add `from_accession` method to `BinaryCompressionType`
+- Add units to peak to array conversion
+
 ## [0.57.1] - 2025-08-17
 
 ### Added
@@ -822,7 +830,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.57.1...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.58.0...HEAD
+[0.58.0]: https://github.com/mobiusklein/mzdata/compare/v0.57.1...v0.58.0
 [0.57.1]: https://github.com/mobiusklein/mzdata/compare/v0.57.0...v0.57.1
 [0.57.0]: https://github.com/mobiusklein/mzdata/compare/v0.56.0...v0.57.0
 [0.56.0]: https://github.com/mobiusklein/mzdata/compare/v0.55.0...v0.56.0
