@@ -10,7 +10,10 @@
       - [When you know the format](#when-you-know-the-format)
         - [No `io::Seek` support](#no-ioseek-support)
       - [When you don't know the format](#when-you-dont-know-the-format)
-    - [Using `mz_read!`](#using-mz_read)
+      - [Using `MZReader`](#using-mzreader)
+      - [Manually handling format dispatch](#manually-handling-format-dispatch)
+      - [Using `mz_read!`](#using-mz_read)
+      - [`MassSpectrometryReadWriteProcess`](#massspectrometryreadwriteprocess)
   - [Getting a spectrum](#getting-a-spectrum)
     - [By native ID](#by-native-id)
     - [By index](#by-index)
@@ -22,8 +25,7 @@
 
 ## Open a `SpectrumSource`:
 
-All the spectrum reading operations in `mzdata` rely on a core trait called [`SpectrumSource`]
-which provides the shared set of behaviors for a mass spectrometry data file. There are additional behaviors that
+All the spectrum reading operations in `mzdata` rely on a core trait called [`SpectrumSource`] which provides the shared set of behaviors for a mass spectrometry data file. [`SpectrumSource`] requires that the type also be an [`Iterator`], and provides some basic features for random access when supported. See [Fancy iterators](#fancy-iterators) for further examples of specializing iterators.
 
 There are many different ways to access data, on disk, in memory, or from some other kind of byte stream
 transformation. They can change the ways we can interact with that data, be it the type of the data source,
@@ -52,8 +54,7 @@ When reading a file from disk, `mzdata` can make certain assumptions like that t
 the [`io::Seek`](std::io::Seek) trait and can read or build indices over the file quickly and guarantee
 that the file supports full random access, like [`RandomAccessSpectrumIterator`].
 
-Additionally, some binary formats like [`ThermoRawReader`] or [`MzMLbReader`] _require_ that there be a file on disk that
-exists outside of the Rust model of the file system in order to read it.
+Additionally, some binary formats like [`ThermoRawReader`], [`MzMLbReader`], or [`TDFFrameReader`] _require_ that there be a file on disk that exists outside of the Rust model of the file system in order to read it.
 
 ### From an `io::Read`
 
@@ -105,6 +106,52 @@ fn from_read() -> io::Result<()> {
 If you don't know the format, it's still possible to do so if your source supports [`io::Seek`](std::io::Seek), and this lets you
 be more flexible about things like file compression where the higher level features shown previously do not.
 
+#### Using `MZReader`
+
+The [`MZReader`] type, or more generally [`MZReaderType`] is an algebraic data type that wraps a data source, and proxies [`SpectrumSource`] and related traits to one of the underlying implementations.
+
+```rust
+use std::{io, fs};
+
+use mzdata;
+use mzdata::io::MZReader;
+use mzdata::prelude::*;
+
+fn dispatching() -> io::Result<()> {
+    let reader = MZReader::open_path("test/data/batching_test.mzML")?;
+    println!("Found {} spectra in {:?}", reader.len(), reader.as_format());
+    Ok(())
+}
+
+```
+
+If you need to customize the how the underlying reader works, [`MZReader`] is just an `enum` so you are free to use pattern matching to access it. For instance, if you have the `thermo` feature enabled, you can instruct the reader to use the Thermo peak centroiding algorithm on the backend before passing the data from .NET to Rust:
+
+```rust
+
+use std::{io, fs};
+
+use mzdata;
+#[cfg(feature = "thermo")]
+use mzdata::io::{MZReader, thermo::ThermoRawReader};
+use mzdata::prelude::*;
+
+#[cfg(feature = "thermo")]
+fn dispatching_features() -> io::Result<()> {
+    let mut reader = MZReader::open_path("test/data/small.RAW")?;
+    if let MZReader::ThermoRaw(thermo) = &mut reader {
+        // Do the specializing operation here
+        thermo.set_centroiding(true);
+    } else {
+        // Otherwise no peak picking specialization is done
+    }
+    Ok(())
+}
+
+```
+
+#### Manually handling format dispatch
+
 ```rust
 use std::{io, fs};
 
@@ -153,12 +200,9 @@ instance for each combination of formats and compression states, or move all log
 instance to another function that is generic over the `SpectrumSource` plus whatever other required traits
 you want to use.
 
-### Using `mz_read!`
+#### Using `mz_read!`
 
-All of the added complexity introduced by the type system can make anything that is flexible over how you come
-to open a mass spectrometry data source cumbersome. When you don't _need_ to keep the reader around beyond the
-current scope, the [`mz_read!`](crate::mz_read) macro can substantially simplify matters. It is like [`MZReader`],
-but it is even more flexible, provided that the reader instance only lives as long as the enclosing scope:
+When you don't _need_ to keep the reader around beyond the current scope, the [`mz_read!`](crate::mz_read) macro can substantially simplify. It is like [`MZReader`], but without the trivial dispatch overhead, provided that the reader instance only lives as long as the enclosing scope:
 
 ```rust
 use std::io;
@@ -174,10 +218,11 @@ fn mz_read_path() -> io::Result<()> {
 }
 ```
 
-Again, the drawback is that the reader itself cannot leave the scope created inside the macro, so you cannot hold onto the
-instance, nor do you know what kind of reader you have so you cannot customize what to do in each case.
-[`MassSpectrometryReadWriteProcess`] can help work around this limitation, but it carries its own restrictions. For an example
-of that, see [mzconvert](https://github.com/mobiusklein/mzdata/blob/main/examples/mzconvert.rs) example program.
+Again, the drawback is that the reader itself cannot leave the scope created inside the macro, so you cannot hold onto the instance, nor do you know what kind of reader you have so you cannot customize what to do in each case. The indirection incurred by [`MZReader`] is trivial compared to the cost of all the other operations involved in doing I/O. This method is kept for the sake of brevity.
+
+#### `MassSpectrometryReadWriteProcess`
+
+[`MassSpectrometryReadWriteProcess`] can help work around this limitation, but it carries its own restrictions. For an example of that, see [mzconvert](https://github.com/mobiusklein/mzdata/blob/main/examples/mzconvert.rs) example program.
 
 ## Getting a spectrum
 
@@ -260,23 +305,13 @@ if let Some(spec) = reader.get_spectrum_by_time(120.218212668) {
 
 ## What can you do with a spectrum?
 
-A mass spectrum can come in a variety of shapes, but most of them are a combination of "spectrum acquisition details" and "signal data".
-`mzdata` provides several types for dealing with this variation, but uses the [`SpectrumLike`] trait to provide a common interface for
-most of their facets.
+A mass spectrum can come in a variety of shapes, but most of them are a combination of "spectrum acquisition details" and "signal data". `mzdata` provides several types for dealing with this variation, but uses the [`SpectrumLike`] trait to provide a common interface for most of their facets.
 
-`mzdata` represents the "spectrum acquisition details" with the [`SpectrumDescription`] type. Most of the [`SpectrumLike`] interface can
-be treated as just an abstraction over [`SpectrumDescription`]-containing types.
+`mzdata` represents the "spectrum acquisition details" with the [`SpectrumDescription`] type. Most of the [`SpectrumLike`] interface can be treated as just an abstraction over [`SpectrumDescription`]-containing types.
 
-The "signal data" component is more varied. There are raw spectra which contain profile or continuous spectra, similar to what
-the instrument sees ([`RawSpectrum`]). There are centroid spectra which contain discrete points in the m/z dimension with a measured
-intensity ([`CentroidSpectrum`]), often produced from profile spectra post-acquisition or centroided by the instrument itself during
-data acquisition. A spectrum may be centroided, but also deisotoped and charge state deconvolved, where the discrete points are in the
-neutral mass dimension with a known charge ([`DeconvolutedSpectrum`]). A spectrum might be in any of these three states, or multiple
-of them when transforming from one to the other ([`MultiLayerSpectrum`]).
+The "signal data" component is more varied. There are raw spectra which contain profile or continuous spectra, similar to what the instrument sees ([`RawSpectrum`]). There are centroid spectra which contain discrete points in the m/z dimension with a measured intensity ([`CentroidSpectrum`]), often produced from profile spectra post-acquisition or centroided by the instrument itself during data acquisition. A spectrum may be centroided, but also deisotoped and charge state deconvolved, where the discrete points are in the neutral mass dimension with a known charge ([`DeconvolutedSpectrum`]). A spectrum might be in any of these three states, or multiple of them when transforming from one to the other ([`MultiLayerSpectrum`]).
 
-Because a single mass spectrometry data file may contain spectra in different states, `mzdata` always reads [`MultiLayerSpectrum`] instances,
-but it is possible to convert between these four types. With the [`mzsignal`](https://crates.io/crates/mzsignal) library `mzdata` can also
-perform peak picking to centroid profile spectra when dealing with raw signal [`MultiLayerSpectrum::pick_peaks`] and [`RawSpectrum::pick_peaks_into`].
+Because a single mass spectrometry data file may contain spectra in different states, `mzdata` always reads [`MultiLayerSpectrum`] instances, but it is possible to convert between these four types. With the [`mzsignal`](https://crates.io/crates/mzsignal) library `mzdata` can also perform peak picking to centroid profile spectra when dealing with raw signal [`MultiLayerSpectrum::pick_peaks`] and [`RawSpectrum::pick_peaks_into`].
 
 For more details, see the [spectrum tutorial](crate::tutorial::spectrum).
 
@@ -284,13 +319,7 @@ For more details, see the [spectrum tutorial](crate::tutorial::spectrum).
 
 ### Random access iterators
 
-The [`SpectrumSource`] trait requires that the type already be an [`Iterator`], which can be convenient for reading
-all the spectra in a data source sequentially. Sometimes we might want to iterate over a subset of spectra which appear
-part-way through an MS run. The natural solution would be to use [`Iterator::skip`] or [`Iterator::filter`], but these
-would *require* that the [`SpectrumSource`] consume all the intervening spectra until it reached some you were interested
-in. The [`RandomAccessSpectrumIterator`] trait extends [`SpectrumSource`] iterators with methods to immediately jump to
-the requested location without needing to do the intermediate parsing that mirror the `get_spectrum_by_` methods described
-earlier:
+The [`SpectrumSource`] trait requires that the type already be an [`Iterator`], which can be convenient for reading all the spectra in a data source sequentially. Sometimes we might want to iterate over a subset of spectra which appear part-way through an MS run. The natural solution would be to use [`Iterator::skip`] or [`Iterator::filter`], but these would *require* that the [`SpectrumSource`] consume all the intervening spectra until it reached some you were interested in. The [`RandomAccessSpectrumIterator`] trait extends [`SpectrumSource`] iterators with methods to immediately jump to the requested location without needing to do the intermediate parsing that mirror the `get_spectrum_by_` methods described earlier:
 
 1. [`RandomAccessSpectrumIterator::start_from_id`]
 2. [`RandomAccessSpectrumIterator::start_from_index`]

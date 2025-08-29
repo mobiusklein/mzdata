@@ -148,4 +148,40 @@ and after denoising the same region of the spectrum looks like this:
 
 ## Creating spectra in memory
 
-Spectra can carry a lot of metadata across several dimensions. TODO
+Spectra can carry a lot of metadata across several dimensions. Most of the work is in populating [`SpectrumDescription`] instance and its subsidiary members.
+
+```rust
+use mzdata;
+use mzdata::spectrum;
+use mzdata::prelude::*;
+
+fn make_description() -> spectrum::SpectrumDescription {
+  let mut desc = spectrum::SpectrumDescription::default();
+  desc.id = "scanId=42".to_string();
+  desc.index = 10;
+  // This is an MS2 spectrum
+  desc.ms_level = 2;
+  // This is a positive mode spectrum
+  desc.polarity = spectrum::ScanPolarity::Positive;
+  // This is a centroid spectrum
+  desc.signal_continuity = spectrum::SignalContinuity::Centroid;
+
+  // Initializes the first scan event automatically
+  if let Some(scan_event) = desc.acquisition.first_scan_mut() {
+    // This spectrum started at 20.1 minutes from the beginning of the run
+    scan_event.start_time = 20.1
+  }
+
+  // Populate the precursor information describing the parent ion
+  if let Some(precursor) = desc.precursor.as_mut() {
+    // Create the first selected ion automatically
+    let ion = precursor.ion_mut();
+    ion.mz = 645.3;
+    ion.intensity = 100.0;
+    ion.charge = Some(2);
+  }
+
+  desc
+}
+
+```

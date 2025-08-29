@@ -137,7 +137,8 @@ pub trait ParamValue {
     fn data_len(&self) -> usize;
 }
 
-#[doc(hidden)]
+/// Errors that might occur while trying to convert to a particular value type
+/// from whatever type might be stored in a [`ParamValue`]-like object.
 #[derive(Debug, Clone, Error, PartialEq)]
 pub enum ParamValueParseError {
     #[error("Failed to extract a float from {0:?}")]
@@ -150,6 +151,9 @@ pub enum ParamValueParseError {
     FailedToExtractBuffer,
 }
 
+/// A [`Value`] can be parsed from a string infallibly, even though an error type
+/// is given, but unless one of the numerical parsers succeeds, the stored value will
+/// just be a string.
 impl FromStr for Value {
     type Err = ParamValueParseError;
 
