@@ -464,7 +464,7 @@ pub struct Precursor {
 }
 
 impl Precursor {
-    /// Given a SpectrumSource object, look up the precursor scan in it.
+    /// Given a [`SpectrumSource`] object, look up the precursor scan in it.
     /// This is useful when examining the area *around* where the precursor
     /// ion was or to obtain a snapshot of the retention time when the spectrum
     /// was scheduled.
@@ -481,7 +481,7 @@ impl Precursor {
         }
     }
 
-    /// Given a SpectrumSource object, look up the product scan in it.
+    /// Given a [`SpectrumSource`] object, look up the product scan in it.
     /// This is rarely needed unless you have manually separated [`Precursor`]
     /// objects from their spectra.
     pub fn product_spectrum<C, D, S, R>(&self, source: &mut R) -> Option<S>
