@@ -1103,6 +1103,21 @@ param_value_ref_int!(usize);
 param_value_ref_float!(f32);
 param_value_ref_float!(f64);
 
+
+#[cfg(feature = "serde")]
+impl From<Value> for serde_json::Value {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Boolean(val) => serde_json::Value::Bool(val),
+            Value::Float(val) => serde_json::Value::Number(serde_json::Number::from_f64(val).unwrap()),
+            Value::Int(val) => serde_json::Value::Number(serde_json::Number::from_i128(val as i128).unwrap()),
+            Value::String(val) => serde_json::Value::String(val),
+            Value::Buffer(val) => serde_json::to_value(&val).unwrap(),
+            Value::Empty => serde_json::Value::Null,
+        }
+    }
+}
+
 pub type AccessionIntCode = u32;
 pub type AccessionByteCode7 = [u8; 7];
 
@@ -1259,6 +1274,16 @@ impl CURIE {
         param.controlled_vocabulary = Some(self.controlled_vocabulary);
         param.accession = Some(self.accession);
         param
+    }
+
+    #[inline(always)]
+    pub fn accession_int(&self) -> u32 {
+        self.accession
+    }
+
+    #[inline(always)]
+    pub fn controlled_vocabulary(&self) -> ControlledVocabulary {
+        self.controlled_vocabulary
     }
 }
 
