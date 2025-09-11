@@ -172,9 +172,9 @@ fn make_description() -> spectrum::SpectrumDescription {
   // This mirrors the [`scanList`](https://peptideatlas.org/tmp/mzML1.1.0.html#scanList) in mzML
   if let Some(scan_event) = desc.acquisition.first_scan_mut() {
     // This spectrum's only scan started at 20.1 minutes from the beginning of the run
-    scan_event.start_time = 20.1
+    scan_event.start_time = 20.1;
     // The injection duration was 15.8 milliseconds
-    scan_event.injection_time = 15.8
+    scan_event.injection_time = 15.8;
     // We can also add m/z windows to a [`ScanEvent]
   }
 
