@@ -189,7 +189,7 @@ where
     }
 }
 
-
+/// A parsed spectrum title which is conventionally parsed for metadata
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct MGFTitle {
     pub identifier: Option<String>,

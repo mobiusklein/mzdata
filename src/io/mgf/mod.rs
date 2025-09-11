@@ -9,7 +9,7 @@ mod writer;
 pub use reader::{
     DefaultTitleIndexing, DefaultTitleParser, MGFError, MGFParserState, MGFReader, MGFReaderType,
     ScansIndexing, TPPTitleParser, TPPTitleParsingNativeIDIndexing,
-    TPPTitleParsingScanNumberIndexing, MGFIndexing,
+    TPPTitleParsingScanNumberIndexing, MGFIndexing, MGFTitle,
 };
 pub use writer::{
     MGFHeaderStyle, MGFWriter, MGFWriterType, MZDataMGFStyle, SimpleMGFStyle, SimpleMGFWriter,
