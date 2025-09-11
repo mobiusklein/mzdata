@@ -8,6 +8,7 @@
 //!   2. mzML & indexedmzML files using [`MzMLReader`] in [`mzdata::io::mzml`](crate::io::mzml)
 //!   3. mzMLb files using [`MzMLbReader`] in [`mzdata::io::mzmlb`](crate::io::mzmlb), if the `mzmlb` feature is enabled
 //!   4. Thermo RAW files using [`ThermoRawReader`](crate::io::thermo::ThermoRawReader) in [`mzdata::io::thermo`](crate::io::thermo), if the `thermo` feature is enabled
+//!   5. Bruker TDF files using [`TDFSpectrumReader`](crate::io::tdf::TDFSpectrumReader) in [`mzdata::io::tdf`](crate::io::tdf), if the `bruker_tdf` feature is enabled
 //!
 //! and writing:
 //!   1. MGF files using [`MGFWriter`] in [`mzdata::io::mgf`](crate::io::mgf)

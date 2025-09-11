@@ -20,6 +20,8 @@ pub trait ChromatogramSource {
     }
 }
 
+/// A facade for a [`ChromatogramSource`] that is an [`Iterator`] over [`Chromatogram`] instances
+/// using [`ChromatogramSource::get_chromatogram_by_index`]
 #[derive(Debug)]
 pub struct ChromatogramIterator<'a, R: ChromatogramSource> {
     source: &'a mut R,

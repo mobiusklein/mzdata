@@ -148,7 +148,7 @@ and after denoising the same region of the spectrum looks like this:
 
 ## Creating spectra in memory
 
-Spectra can carry a lot of metadata across several dimensions. Most of the work is in populating [`SpectrumDescription`] instance and its subsidiary members.
+Spectra can carry a lot of metadata across several dimensions. Most of the work is in populating [`SpectrumDescription`] instance and its subsidiary members. The spectrum data model [`mzdata`](crate) is based upon the mzML schema ([https://peptideatlas.org/tmp/mzML1.1.0.html](https://peptideatlas.org/tmp/mzML1.1.0.html))
 
 ```rust
 use mzdata;
@@ -157,7 +157,9 @@ use mzdata::prelude::*;
 
 fn make_description() -> spectrum::SpectrumDescription {
   let mut desc = spectrum::SpectrumDescription::default();
+  // The nativeId of the spectrum. Depending upon the source, this string takes on different patterns
   desc.id = "scanId=42".to_string();
+  // Most parsers will keep track of the index directly or indirectly.
   desc.index = 10;
   // This is an MS2 spectrum
   desc.ms_level = 2;
@@ -166,10 +168,14 @@ fn make_description() -> spectrum::SpectrumDescription {
   // This is a centroid spectrum
   desc.signal_continuity = spectrum::SignalContinuity::Centroid;
 
-  // Initializes the first scan event automatically
+  // Initializes the first scan event automatically.
+  // This mirrors the [`scanList`](https://peptideatlas.org/tmp/mzML1.1.0.html#scanList) in mzML
   if let Some(scan_event) = desc.acquisition.first_scan_mut() {
-    // This spectrum started at 20.1 minutes from the beginning of the run
+    // This spectrum's only scan started at 20.1 minutes from the beginning of the run
     scan_event.start_time = 20.1
+    // The injection duration was 15.8 milliseconds
+    scan_event.injection_time = 15.8
+    // We can also add m/z windows to a [`ScanEvent]
   }
 
   // Populate the precursor information describing the parent ion
@@ -185,3 +191,5 @@ fn make_description() -> spectrum::SpectrumDescription {
 }
 
 ```
+
+Spectrum signal data comes in a few forms. Data serialized in some binary or mixed formats, often compressed or encoded, is represented in [`DataArray`]s. [`DataArray`] are wrappers around byte buffers, potentially compressed in memory and a bit of metadata declaring what kind of data is stored in them. This depends upon [`bytemuck`] and [`bytemuck::Pod`]-like types. [`DataArray::name`] tells you what kind of data, semantically, is in the array, and [`DataArray::dtype`] tells you what `type` of data is stored in the array. Collections of [`DataArray`]s are stored in a [`BinaryArrayMap`] which stores [`DataArray`] instances by [name](crate::spectrum::ArrayType).

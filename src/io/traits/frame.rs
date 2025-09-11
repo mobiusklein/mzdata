@@ -626,7 +626,7 @@ impl<
     }
 }
 
-/// Common interface for ion mobility frame writing
+/// Common interface for ion mobility frame writing.
 pub trait IonMobilityFrameWriter<
     C: FeatureLike<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -640,7 +640,8 @@ pub trait IonMobilityFrameWriter<
 
     /// Write out a single owned frame.
     ///
-    /// This may produce fewer copies for some implementations.
+    /// This may produce fewer copies for some implementations, but the default implementation
+    /// just delegates to [`IonMobilityFrameWriter::write_frame`]
     fn write_frame_owned<S: IonMobilityFrameLike<C, D> + 'static>(
         &mut self,
         spectrum: S,

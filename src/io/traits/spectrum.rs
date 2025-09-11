@@ -1124,7 +1124,8 @@ pub trait SpectrumWriter<
 
     /// Write out a single owned spectrum.
     ///
-    /// This may produce fewer copies for some implementations.
+    /// This may produce fewer copies for some implementations, but the default implementation
+    /// just delegates to [`SpectrumWriter::write`]
     fn write_owned<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: S) -> io::Result<usize> {
         self.write(&spectrum)
     }
