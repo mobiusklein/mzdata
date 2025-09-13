@@ -1,6 +1,6 @@
 [package]
 name = "mzdata"
-version = "0.58.2"
+version = "0.58.3"
 edition = "2021"
 keywords = ['mass-spectrometry', 'mzml', 'mgf']
 
