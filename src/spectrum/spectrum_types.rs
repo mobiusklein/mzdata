@@ -25,7 +25,7 @@ use crate::spectrum::scan_properties::{
     Acquisition, IonMobilityMeasure, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
 };
 
-use super::bindata::{ArrayRetrievalError, ArraysAvailable, BuildArrayMapFrom, BuildFromArrayMap};
+use super::bindata::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
 #[allow(unused)]
 use super::DataArray;
 use super::HasIonMobility;
@@ -1282,18 +1282,21 @@ where
         }
         if matches!(self.signal_continuity(), SignalContinuity::Centroid) {
             if let Some(arrays) = self.arrays.as_ref() {
-                if let ArraysAvailable::Ok = D::has_arrays_for(arrays) {
-                    let peaks = D::try_from_arrays(arrays)?.into();
-                    self.deconvoluted_peaks = Some(peaks);
-                    return Ok(self.peaks());
+                let peak_data: PeakDataLevel<C, D> = PeakDataLevel::try_from(arrays)?;
+                match peak_data {
+                    PeakDataLevel::Missing => {
+                        return Ok(RefPeakDataLevel::Missing)
+                    },
+                    PeakDataLevel::RawData(_) => panic!("not possible"),
+                    PeakDataLevel::Centroid(peak_set_vec) => {
+                        self.peaks = Some(peak_set_vec);
+                        return Ok(self.peaks())
+                    },
+                    PeakDataLevel::Deconvoluted(peak_set_vec) => {
+                        self.deconvoluted_peaks = Some(peak_set_vec);
+                        return Ok(self.peaks())
+                    },
                 }
-
-                if let ArraysAvailable::Ok = C::has_arrays_for(arrays) {
-                    let peaks = C::try_from_arrays(arrays)?.into();
-                    self.peaks = Some(peaks);
-                    return Ok(self.peaks());
-                }
-                Ok(RefPeakDataLevel::Missing)
             } else {
                 Ok(self.peaks())
             }

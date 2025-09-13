@@ -10,6 +10,8 @@ use mzpeaks::{
 
 use super::bindata::ArrayRetrievalError;
 use super::BinaryArrayMap;
+use crate::prelude::BuildFromArrayMap;
+use crate::spectrum::bindata::ArraysAvailable;
 use crate::utils::mass_charge_ratio;
 
 trait SummaryOps {
@@ -100,9 +102,7 @@ impl SummaryOps for BinaryArrayMap {
     fn fetch_summaries(&self) -> SpectrumSummary {
         let (mzs, intensities) = match (self.mzs(), self.intensities()) {
             (Ok(mzs), Ok(intensities)) => (mzs, intensities),
-            (_, _) => {
-                (Cow::Owned(Vec::new()), Cow::Owned(Vec::new()))
-            }
+            (_, _) => (Cow::Owned(Vec::new()), Cow::Owned(Vec::new())),
         };
 
         let (tic, (bpmz, bpint, bpidx)) = mzs.iter().zip(intensities.iter()).enumerate().fold(
@@ -313,10 +313,43 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
     pub fn iter(&self) -> PeakDataIterDispatch<'_, C, D> {
         match self {
             PeakDataLevel::Missing => PeakDataIterDispatch::PeakData(PeakDataIter::new(self)),
-            PeakDataLevel::RawData(a) => PeakDataIterDispatch::RawData(RawIter::from_binary_array_map(a).unwrap()),
+            PeakDataLevel::RawData(a) => {
+                PeakDataIterDispatch::RawData(RawIter::from_binary_array_map(a).unwrap())
+            }
             PeakDataLevel::Centroid(_) => PeakDataIterDispatch::PeakData(PeakDataIter::new(self)),
-            PeakDataLevel::Deconvoluted(_) => PeakDataIterDispatch::PeakData(PeakDataIter::new(self)),
+            PeakDataLevel::Deconvoluted(_) => {
+                PeakDataIterDispatch::PeakData(PeakDataIter::new(self))
+            }
         }
+    }
+
+    /// Attempt to reconstruct one of the peak levels based upon the available data arrays
+    pub(crate) fn try_build_peaks(arrays: &BinaryArrayMap) -> Result<Self, ArrayRetrievalError>
+    where
+        C: BuildFromArrayMap,
+        D: BuildFromArrayMap,
+    {
+        {
+            if let ArraysAvailable::Ok = D::has_arrays_for(arrays) {
+                let peaks = D::try_from_arrays(arrays)?.into();
+                Ok(Self::Deconvoluted(peaks))
+            } else if let ArraysAvailable::Ok = C::has_arrays_for(arrays) {
+                let peaks = C::try_from_arrays(arrays)?.into();
+                Ok(Self::Centroid(peaks))
+            } else {
+                Ok(Self::Missing)
+            }
+        }
+    }
+}
+
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    TryFrom<&BinaryArrayMap> for PeakDataLevel<C, D>
+{
+    type Error = ArrayRetrievalError;
+
+    fn try_from(value: &BinaryArrayMap) -> Result<Self, Self::Error> {
+        Self::try_build_peaks(value)
     }
 }
 
@@ -350,7 +383,6 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
             Self::Deconvoluted(peaks) => peaks.tic(),
         }
     }
-
 
     /// Iterate over [`MZPoint`](mzpeaks::peak::MZPoint) data encoded in the peak data.
     ///
@@ -403,8 +435,6 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-
-
 }
 
 /// An [`MZPoint`] iterator over paired, potentially borrowed, arrays of m/z and intensity data that may not have been
@@ -426,7 +456,7 @@ impl<'a> RawIter<'a> {
             mz_array,
             intensity_array,
             n,
-            i
+            i,
         }
     }
 
@@ -477,9 +507,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for PeakDataIter<'_,
     }
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike> ExactSizeIterator
-    for PeakDataIter<'_, C, D>
-{
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> ExactSizeIterator for PeakDataIter<'_, C, D> {
     fn len(&self) -> usize {
         self.n
     }
@@ -487,9 +515,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> ExactSizeIterator
 
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> FusedIterator for PeakDataIter<'_, C, D> {}
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike> DoubleEndedIterator
-    for PeakDataIter<'_, C, D>
-{
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> DoubleEndedIterator for PeakDataIter<'_, C, D> {
     fn next_back(&mut self) -> Option<Self::Item> {
         let n = self.n;
         if n < 1 {
@@ -513,7 +539,6 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataIter<'a, C, D> {
     }
 }
 
-
 /// An [`MZPoint`] iterator over peak collections abstracted by source type and ownership status.
 ///
 /// This iterator strategy has a slight amount of overhead on each operation as it dispatches to the
@@ -525,7 +550,6 @@ pub enum PeakDataIterDispatch<'a, C: CentroidLike, D: DeconvolutedCentroidLike> 
     RefPeakData(RefPeakDataIter<'a, C, D>),
 }
 
-
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for PeakDataIterDispatch<'_, C, D> {
     type Item = MZPoint;
 
@@ -533,11 +557,10 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for PeakDataIterDisp
         match self {
             PeakDataIterDispatch::PeakData(a) => a.next(),
             PeakDataIterDispatch::RawData(a) => a.next(),
-            PeakDataIterDispatch::RefPeakData(a) => a.next()
+            PeakDataIterDispatch::RefPeakData(a) => a.next(),
         }
     }
 }
-
 
 #[derive(Debug)]
 /// An variant for dispatching to different strategies of computing
@@ -643,10 +666,18 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'_, C, D> {
     /// to be ordered by m/z.
     pub fn iter(&self) -> PeakDataIterDispatch<'_, C, D> {
         match self {
-            RefPeakDataLevel::Missing => PeakDataIterDispatch::RefPeakData(RefPeakDataIter::new(self)),
-            RefPeakDataLevel::RawData(a) => PeakDataIterDispatch::RawData(RawIter::from_binary_array_map(a).unwrap()),
-            RefPeakDataLevel::Centroid(_) => PeakDataIterDispatch::RefPeakData(RefPeakDataIter::new(self)),
-            RefPeakDataLevel::Deconvoluted(_) => PeakDataIterDispatch::RefPeakData(RefPeakDataIter::new(self)),
+            RefPeakDataLevel::Missing => {
+                PeakDataIterDispatch::RefPeakData(RefPeakDataIter::new(self))
+            }
+            RefPeakDataLevel::RawData(a) => {
+                PeakDataIterDispatch::RawData(RawIter::from_binary_array_map(a).unwrap())
+            }
+            RefPeakDataLevel::Centroid(_) => {
+                PeakDataIterDispatch::RefPeakData(RefPeakDataIter::new(self))
+            }
+            RefPeakDataLevel::Deconvoluted(_) => {
+                PeakDataIterDispatch::RefPeakData(RefPeakDataIter::new(self))
+            }
         }
     }
 
@@ -710,9 +741,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for RefPeakDataIter<
     }
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike> ExactSizeIterator
-    for RefPeakDataIter<'_, C, D>
-{
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> ExactSizeIterator for RefPeakDataIter<'_, C, D> {
     fn len(&self) -> usize {
         self.n
     }
