@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.58.2] - 2025-09-13
+
+### Added
+
+- Add `TryFrom<&BinaryArrayMap>` for `PeakDataLevel`
+
 ## [0.58.1] - 2025-09-12
 
 ### Added
@@ -843,7 +849,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.58.1...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.58.2...HEAD
+[0.58.2]: https://github.com/mobiusklein/mzdata/compare/v0.58.1...v0.58.2
 [0.58.1]: https://github.com/mobiusklein/mzdata/compare/v0.58.0...v0.58.1
 [0.58.0]: https://github.com/mobiusklein/mzdata/compare/v0.57.1...v0.58.0
 [0.57.1]: https://github.com/mobiusklein/mzdata/compare/v0.57.0...v0.57.1
