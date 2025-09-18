@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.59.0] - 2025-09-18
+
+### Changed
+
+- Change `SpectrumDescription::precursor` from `Option<Precursor>` to `Vec<Precursor>`, and same for related types.
+
 ## [0.58.2] - 2025-09-13
 
 ### Added
@@ -849,7 +855,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.58.2...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.59.0...HEAD
+[0.59.0]: https://github.com/mobiusklein/mzdata/compare/v0.58.2...v0.59.0
 [0.58.2]: https://github.com/mobiusklein/mzdata/compare/v0.58.1...v0.58.2
 [0.58.1]: https://github.com/mobiusklein/mzdata/compare/v0.58.0...v0.58.1
 [0.58.0]: https://github.com/mobiusklein/mzdata/compare/v0.57.1...v0.58.0
