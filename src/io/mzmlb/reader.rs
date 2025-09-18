@@ -716,6 +716,14 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
     fn into_chromatogram(self, chromatogram: &mut crate::spectrum::Chromatogram) {
         self.inner.into_chromatogram(chromatogram)
     }
+
+    fn new_precursor_mut(&mut self) -> &mut Precursor {
+        self.inner.new_precursor_mut()
+    }
+
+    fn precursor_mut(&mut self) -> &mut Precursor {
+        self.inner.precursor_mut()
+    }
 }
 
 pub struct MzMLbReaderType<
