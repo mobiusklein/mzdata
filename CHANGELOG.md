@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.59.1] - 2025-09-18
+
+### Added
+
+- Add charge state to all peptides in PROXI queries in tests, some servers appear to require them now
+
+### Fixed
+
+- Fix trait impl for mzMLb
+- Fix PROXI clients for several backends that require HTTPS requests and which serve non-compliant error messages
+
 ## [0.59.0] - 2025-09-18
 
 ### Changed
@@ -855,7 +866,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.59.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.59.1...HEAD
+[0.59.1]: https://github.com/mobiusklein/mzdata/compare/v0.59.0...v0.59.1
 [0.59.0]: https://github.com/mobiusklein/mzdata/compare/v0.58.2...v0.59.0
 [0.58.2]: https://github.com/mobiusklein/mzdata/compare/v0.58.1...v0.58.2
 [0.58.1]: https://github.com/mobiusklein/mzdata/compare/v0.58.0...v0.58.1
