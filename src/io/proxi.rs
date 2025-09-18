@@ -52,11 +52,11 @@ impl std::fmt::Display for PROXIBackend {
 
 impl PROXIBackend {
     const ALL: &[Self] = &[
+        Self::ProteomeXchange,
         Self::PeptideAtlas,
         Self::MassIVE,
         Self::Pride,
         Self::Jpost,
-        Self::ProteomeXchange,
     ];
 
     /// The PROXI server base url which needs concatenating of the USI at the end
@@ -64,9 +64,9 @@ impl PROXIBackend {
         match self {
             Self::PeptideAtlas => format!("http://www.peptideatlas.org/api/proxi/v0.1/spectra?resultType=full&usi={usi}") ,
             Self::MassIVE => format!("http://massive.ucsd.edu/ProteoSAFe/proxi/v0.1/spectra?resultType=full&usi={usi}"),
-            Self::Pride => format!("http://www.ebi.ac.uk/pride/proxi/archive/v0.1/spectra?resultType=full&usi={usi}"),
+            Self::Pride => format!("https://www.ebi.ac.uk/pride/proxi/archive/v0.1/spectra?resultType=full&usi={usi}"),
             Self::Jpost => format!("https://repository.jpostdb.org/proxi/spectra?resultType=full&usi={usi}"),
-            Self::ProteomeXchange => format!("http://proteomecentral.proteomexchange.org/api/proxi/v0.1/spectra?resultType=full&usi={usi}"),
+            Self::ProteomeXchange => format!("https://proteomecentral.proteomexchange.org/api/proxi/v0.1/spectra?resultType=full&usi={usi}"),
             Self::Custom(url) => url.replace("{USI}", usi),
         }
     }
@@ -104,17 +104,39 @@ impl USI {
                 PROXIBackend::ALL
                     .iter()
                     .find_map(|backend| {
-                        transform_response(
-                            backend.clone(),
-                            client
+                        let response = client
                                 .get(backend.proxi_url(&self.to_string()))
-                                .send()
-                                .and_then(reqwest::blocking::Response::json),
-                        )
-                        .map_err(|err| {
-                            last_error = Some(err);
-                        })
-                        .ok()
+                                .send();
+                        match response {
+                            Ok(resp) => {
+                                match resp.text() {
+                                    Ok(text) => {
+                                        match serde_json::from_str(&text) {
+                                            Ok(val) => {
+                                                transform_response(backend.clone(), Ok(val)).map_err(|err| {
+                                                    last_error = Some(err);
+                                                }).ok()
+                                            },
+                                            Err(e) => {
+                                                log::error!("Error: {e} on backend {backend:?} while retrieving {self}");
+                                                log::trace!("PROXI response body: {text}");
+                                                None
+                                            }
+                                        }
+                                    },
+                                    Err(e) => {
+                                        transform_response(backend.clone(), Err(e)).map_err(|err| {
+                                            last_error = Some(err);
+                                        }).ok()
+                                    },
+                                }
+                            },
+                            Err(e) => {
+                                transform_response(backend.clone(), Err(e)).map_err(|err| {
+                                    last_error = Some(err);
+                                }).ok()
+                            },
+                        }
                     })
                     .ok_or(last_error.unwrap_or(PROXIError::NotFound))
             },
@@ -216,7 +238,9 @@ fn transform_response(
             title,
             kind,
         }),
-        Err(err) => Err(PROXIError::IO(backend, err)),
+        Err(err) => {
+            Err(PROXIError::IO(backend, err))
+        },
     }
 }
 
@@ -225,10 +249,12 @@ fn transform_response(
 enum PROXIResponse {
     Spectra(Vec<PROXISpectrum>),
     Error {
+        #[serde(alias = "message", default)]
         detail: String,
+        #[serde(alias = "code")]
         status: usize,
         title: PROXIErrorType,
-        #[serde(rename = "type")]
+        #[serde(rename = "type", default)]
         kind: String,
     },
 }
@@ -1254,7 +1280,7 @@ mod test {
     #[test]
     fn get_pride() {
         let usi: USI =
-            "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV"
+            "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV/2"
                 .parse()
                 .unwrap();
         let (_, response) = usi
@@ -1279,14 +1305,23 @@ mod test {
     fn get_aggregate() {
         for usi in [
             "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555:VLHPLEGAVVIIFK/2",
-            // "mzspec:MSV000078547:120228_nbut_3610_it_it_take2:scan:389",
-            "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV",
+            "mzspec:MSV000078547:120228_nbut_3610_it_it_take2:scan:389",
+            "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV/2",
             "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"] {
             println!("Trying: {usi}");
             let usi: USI = usi.parse().unwrap();
             let (_, response) = usi.download_spectrum_blocking(None, None).unwrap();
             assert!(!response.is_empty());
         }
+    }
+
+    #[test]
+    fn test_proxi_parse() {
+        let spec: PROXISpectrum = serde_json::from_reader(
+            std::fs::File::open("test/data/proxi_test.json").unwrap()
+        ).unwrap();
+        assert!(!spec.mzs.is_empty());
+        assert!(!spec.attributes.is_empty());
     }
 }
 
@@ -1299,7 +1334,7 @@ mod test_async {
     async fn get_aggregate_async() {
         for usi in [
             "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555:VLHPLEGAVVIIFK/2",
-            // "mzspec:MSV000078547:120228_nbut_3610_it_it_take2:scan:389",
+            "mzspec:MSV000078547:120228_nbut_3610_it_it_take2:scan:389",
             "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV",
             "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"] {
             println!("Trying: {usi}");
