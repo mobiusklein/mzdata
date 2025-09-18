@@ -1236,28 +1236,28 @@ macro_rules! curie {
         $crate::params::CURIE::new($crate::params::ControlledVocabulary::MS, $acc)
     };
     (UO:$acc:literal) => {
-        $crate::params::CURIE::new($crate::params::ControlledVocabulary::UO, $acc)
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::UO, accession: $acc }
     };
     (EFO:$acc:literal) => {
-        $crate::params::CURIE::new($crate::params::ControlledVocabulary::EFO, $acc)
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::EFO, accession: $acc }
     };
     (BFO:$acc:literal) => {
-        $crate::params::CURIE::new($crate::params::ControlledVocabulary::BFO, $acc)
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::BFO, accession: $acc }
     };
     (BTO:$acc:literal) => {
-        $crate::params::CURIE::new($crate::params::ControlledVocabulary::BTO, $acc)
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::BTO, accession: $acc }
     };
     (OBI:$acc:literal) => {
-        $crate::params::CURIE::new($crate::params::ControlledVocabulary::OBI, $acc)
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::OBI, accession: $acc }
     };
     (HANCESTRO:$acc:literal) => {
-        $crate::params::CURIE::new($crate::params::ControlledVocabulary::HANCESTRO, $acc)
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::HANCESTRO, accession: $acc }
     };
     (NCIT:$acc:literal) => {
-        $crate::params::CURIE::new($crate::params::ControlledVocabulary::NCIT, $acc)
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::NCIT, accession: $acc }
     };
     (PRIDE:$acc:literal) => {
-        $crate::params::CURIE::new($crate::params::ControlledVocabulary::PRIDE, $acc)
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::PRIDE, accession: $acc }
     };
 }
 
@@ -1286,6 +1286,30 @@ impl CURIE {
         self.controlled_vocabulary
     }
 }
+
+/// A CURIE is a namespace + accession identifier
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct PackedCURIE(u64);
+
+#[allow(unused)]
+impl PackedCURIE {
+    pub fn from_curie(curie: CURIE) -> Self {
+        let cv = curie.controlled_vocabulary();
+        let cv_id = cv as u64;
+        let acc_code = curie.accession_int();
+        let code = acc_code as u64;
+        Self(cv_id << 56 | code)
+    }
+
+    pub fn accession(&self) -> u64 {
+        self.0 & 0x00ffffffffffffff
+    }
+
+    pub fn controlled_vocabulary(&self) -> ControlledVocabulary {
+        ((self.0 & 0xff00000000000000) as u8).try_into().unwrap()
+    }
+}
+
 
 impl Display for CURIE {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1896,9 +1920,10 @@ impl Hash for Param {
 /// Controlled vocabularies used in mass spectrometry data files
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
 pub enum ControlledVocabulary {
     /// The PSI-MS Controlled Vocabulary [https://www.ebi.ac.uk/ols4/ontologies/ms](https://www.ebi.ac.uk/ols4/ontologies/ms)
-    MS,
+    MS = 1,
     /// The Unit Ontology [https://www.ebi.ac.uk/ols4/ontologies/uo](https://www.ebi.ac.uk/ols4/ontologies/uo)
     UO,
     /// The Experimental Factor Ontology <https://www.ebi.ac.uk/ols4/ontologies/efo>
@@ -1937,6 +1962,26 @@ const BFO_CV_BYTES: &[u8] = BFO_CV.as_bytes();
 const BTO_CV_BYTES: &[u8] = BTO_CV.as_bytes();
 const NCIT_CV_BYTES: &[u8] = NCIT_CV.as_bytes();
 const PRIDE_CV_BYTES: &[u8] = PRIDE_CV.as_bytes();
+
+
+impl TryFrom<u8> for ControlledVocabulary {
+    type Error = ControlledVocabularyResolutionError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::MS),
+            2 => Ok(Self::UO),
+            3 => Ok(Self::EFO),
+            4 => Ok(Self::OBI),
+            5 => Ok(Self::HANCESTRO),
+            6 => Ok(Self::BFO),
+            7 => Ok(Self::NCIT),
+            8 => Ok(Self::BTO),
+            9 => Ok(Self::PRIDE),
+            _ => Err(ControlledVocabularyResolutionError::UnknownControlledVocabularyCode(value)),
+        }
+    }
+}
 
 /// Anything that can be converted into an accession code portion of a [`CURIE`]
 #[derive(Debug, Clone)]
@@ -2119,11 +2164,14 @@ impl<'a> ControlledVocabulary {
     }
 }
 
-#[doc(hidden)]
+/// An error describing a failure to map a controlled vocabulary identifier
+/// to a known namespace
 #[derive(Debug, Clone, Error)]
 pub enum ControlledVocabularyResolutionError {
     #[error("Unrecognized controlled vocabulary {0}")]
     UnknownControlledVocabulary(String),
+    #[error("Unrecognized controlled vocabulary code {0}")]
+    UnknownControlledVocabularyCode(u8)
 }
 
 impl FromStr for ControlledVocabulary {

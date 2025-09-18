@@ -525,7 +525,7 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
 
     fn precursor_mut(&mut self) -> &mut Precursor {
         if self.precursor.is_empty() {
-            return self.new_precursor_mut()
+            self.new_precursor_mut()
         } else {
             self.precursor.last_mut().unwrap()
         }

@@ -1285,16 +1285,16 @@ where
                 let peak_data: PeakDataLevel<C, D> = PeakDataLevel::try_from(arrays)?;
                 match peak_data {
                     PeakDataLevel::Missing => {
-                        return Ok(RefPeakDataLevel::Missing)
+                        Ok(RefPeakDataLevel::Missing)
                     },
                     PeakDataLevel::RawData(_) => panic!("not possible"),
                     PeakDataLevel::Centroid(peak_set_vec) => {
                         self.peaks = Some(peak_set_vec);
-                        return Ok(self.peaks())
+                        Ok(self.peaks())
                     },
                     PeakDataLevel::Deconvoluted(peak_set_vec) => {
                         self.deconvoluted_peaks = Some(peak_set_vec);
-                        return Ok(self.peaks())
+                        Ok(self.peaks())
                     },
                 }
             } else {
