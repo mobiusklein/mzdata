@@ -91,15 +91,29 @@ pub trait ChromatogramLike: ParamDescribed {
 
     fn description_mut(&mut self) -> &mut ChromatogramDescription;
 
-    /// Access the precursor information, if it exists.
+    /// Access the (first) precursor information, if it exists.
     #[inline]
     fn precursor(&self) -> Option<&Precursor> {
         let desc = self.description();
-        if let Some(precursor) = &desc.precursor {
-            Some(precursor)
-        } else {
-            None
-        }
+        desc.precursor.first()
+    }
+
+    /// Iterate over all precursors of the spectrum
+    fn precursor_iter(&self) -> impl Iterator<Item = &Precursor> {
+        let desc = self.description();
+        desc.precursor.iter()
+    }
+
+    /// Mutably access the (first) precursor information, if it exists
+    fn precursor_mut(&mut self) -> Option<&mut Precursor> {
+        let desc = self.description_mut();
+        desc.precursor.first_mut()
+    }
+
+    /// Iterate over all precursors of the spectrum mutably
+    fn precursor_iter_mut(&mut self) -> impl Iterator<Item = &mut Precursor> {
+        let desc = self.description_mut();
+        desc.precursor.iter_mut()
     }
 
     #[inline]

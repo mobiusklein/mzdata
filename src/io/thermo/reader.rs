@@ -1089,7 +1089,7 @@ pub(crate) mod sealed {
             if let Some(vprec) = view.precursor() {
                 let mut prec = Precursor::default();
                 self.populate_precursor(vprec, &mut prec);
-                spec.description.precursor = Some(prec);
+                spec.description.precursor.push(prec);
             }
 
             let event = spec.description.acquisition.first_scan_mut().unwrap();

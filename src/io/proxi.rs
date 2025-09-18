@@ -1026,7 +1026,7 @@ impl From<&PROXISpectrum> for SpectrumDescription {
         }
 
         if has_precursor {
-            this.precursor = Some(precursor);
+            this.precursor = vec![precursor];
         }
         this
     }

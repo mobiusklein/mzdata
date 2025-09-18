@@ -481,6 +481,11 @@ impl Precursor {
         }
     }
 
+    /// Check if this precursor selection selected any ions
+    pub fn has_ions(&self) -> bool {
+        self.ions.is_empty()
+    }
+
     /// Given a [`SpectrumSource`] object, look up the product scan in it.
     /// This is rarely needed unless you have manually separated [`Precursor`]
     /// objects from their spectra.
@@ -514,6 +519,11 @@ pub trait PrecursorSelection {
     fn activation(&self) -> &Activation;
 
     fn iter(&self) -> impl Iterator<Item = &SelectedIon>;
+
+    /// Check if this precursor selection selected any ions
+    fn has_ions(&self) -> bool {
+        self.iter().count() > 0
+    }
 
     fn last_ion(&self) -> &SelectedIon {
         self.iter().last().unwrap()
@@ -670,6 +680,43 @@ impl Display for SignalContinuity {
     }
 }
 
+
+/// An adapter type to make it possible to pass an `Option<Precursor>`, `Vec<Precursor>`,
+/// or [`Precursor`] in an argument context.
+#[derive(Debug)]
+pub enum AsPrecursorCollection {
+    Single(Option<Precursor>),
+    Multiple(Vec<Precursor>)
+}
+
+impl From<AsPrecursorCollection> for Vec<Precursor> {
+    fn from(value: AsPrecursorCollection) -> Self {
+        match value {
+            AsPrecursorCollection::Single(precursor) => precursor.map(|v| vec![v]).unwrap_or_default(),
+            AsPrecursorCollection::Multiple(precursors) => precursors,
+        }
+    }
+}
+
+impl From<Precursor> for AsPrecursorCollection {
+    fn from(value: Precursor) -> Self {
+        Self::Single(Some(value))
+    }
+}
+
+impl From<Option<Precursor>> for AsPrecursorCollection {
+    fn from(value: Option<Precursor>) -> Self {
+        Self::Single(value)
+    }
+}
+
+impl From<Vec<Precursor>> for AsPrecursorCollection {
+    fn from(value: Vec<Precursor>) -> Self {
+        Self::Multiple(value)
+    }
+}
+
+
 /**
 The set of descriptive metadata that give context for how a mass spectrum was acquired
 within a particular run. This forms the basis for a large portion of the [`SpectrumLike`]
@@ -698,8 +745,9 @@ pub struct SpectrumDescription {
 
     /// A description of how the spectrum was acquired including time, scan windows, and more
     pub acquisition: Acquisition,
+
     /// The parent ion or ions and their isolation and activation description
-    pub precursor: Option<Precursor>,
+    pub precursor: Vec<Precursor>,
 }
 
 impl SpectrumDescription {
@@ -712,7 +760,7 @@ impl SpectrumDescription {
         signal_continuity: SignalContinuity,
         params: ParamList,
         acquisition: Acquisition,
-        precursor: Option<Precursor>,
+        precursor: impl Into<AsPrecursorCollection>,
     ) -> Self {
         Self {
             id,
@@ -722,7 +770,7 @@ impl SpectrumDescription {
             signal_continuity,
             params,
             acquisition,
-            precursor,
+            precursor: precursor.into().into(),
         }
     }
 
@@ -878,7 +926,7 @@ pub struct ChromatogramDescription {
     pub chromatogram_type: ChromatogramType,
 
     pub params: ParamList,
-    pub precursor: Option<Precursor>,
+    pub precursor: Vec<Precursor>,
 }
 
 impl ChromatogramDescription {

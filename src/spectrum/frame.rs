@@ -85,7 +85,7 @@ pub struct IonMobilityFrameDescription {
     pub acquisition: Acquisition,
 
     /// The parent ion or ions and their isolation and activation description
-    pub precursor: Option<Precursor>,
+    pub precursor: Vec<Precursor>,
 
     /// The unit of the ion mobility dimension
     pub ion_mobility_unit: Unit,
@@ -103,7 +103,7 @@ impl IonMobilityFrameDescription {
         signal_continuity: SignalContinuity,
         params: ParamList,
         acquisition: Acquisition,
-        precursor: Option<Precursor>,
+        precursor: impl Into<super::AsPrecursorCollection>,
         ion_mobility_unit: Unit,
     ) -> Self {
         Self {
@@ -114,7 +114,7 @@ impl IonMobilityFrameDescription {
             signal_continuity,
             params,
             acquisition,
-            precursor,
+            precursor: precursor.into().into(),
             ion_mobility_unit,
         }
     }
@@ -198,7 +198,7 @@ pub trait IonMobilityFrameLike<
     #[inline]
     fn precursor(&self) -> Option<&Precursor> {
         let desc = self.description();
-        if let Some(precursor) = &desc.precursor {
+        if let Some(precursor) = &desc.precursor.first() {
             Some(precursor)
         } else {
             None
@@ -214,7 +214,7 @@ pub trait IonMobilityFrameLike<
     /// Mutably access the precursor information, if it exists
     fn precursor_mut(&mut self) -> Option<&mut Precursor> {
         let desc = self.description_mut();
-        if let Some(precursor) = desc.precursor.as_mut() {
+        if let Some(precursor) = desc.precursor.first_mut() {
             Some(precursor)
         } else {
             None

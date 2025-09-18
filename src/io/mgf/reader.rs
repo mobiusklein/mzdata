@@ -548,7 +548,7 @@ pub(crate) trait MGFLineParsing<
                         Some(c) => self.parse_charge(c),
                         None => builder.precursor_charge,
                     };
-                    builder.description.precursor = Some(Precursor {
+                    builder.description.precursor.push(Precursor {
                         ions: vec![SelectedIon {
                             mz,
                             intensity,
@@ -560,12 +560,13 @@ pub(crate) trait MGFLineParsing<
                 }
                 "CHARGE" => {
                     builder.precursor_charge = self.parse_charge(value);
+                    if builder.description.precursor.is_empty() {
+                        builder.description.precursor.push(Default::default());
+                    }
                     if let Some(ion) = builder
                         .description
-                        .precursor
-                        .get_or_insert_with(Precursor::default)
-                        .iter_mut()
-                        .last()
+                        .precursor.last_mut().and_then(|v| v.iter_mut().last())
+
                     {
                         if ion.charge.is_none() {
                             ion.charge = builder.precursor_charge

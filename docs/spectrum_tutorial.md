@@ -179,7 +179,7 @@ fn make_description() -> spectrum::SpectrumDescription {
   }
 
   // Populate the precursor information describing the parent ion
-  if let Some(precursor) = desc.precursor.as_mut() {
+  if let Some(precursor) = desc.precursor.first_mut() {
     // Create the first selected ion automatically
     let ion = precursor.ion_mut();
     ion.mz = 645.3;

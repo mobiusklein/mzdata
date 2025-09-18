@@ -57,11 +57,11 @@ pub trait SpectrumLike<
         &self.description().acquisition
     }
 
-    /// Access the precursor information, if it exists.
+    /// Access the (first) precursor information, if it exists.
     #[inline]
     fn precursor(&self) -> Option<&Precursor> {
         let desc = self.description();
-        desc.precursor.as_ref()
+        desc.precursor.first()
     }
 
     /// Iterate over all precursors of the spectrum
@@ -70,10 +70,10 @@ pub trait SpectrumLike<
         desc.precursor.iter()
     }
 
-    /// Mutably access the precursor information, if it exists
+    /// Mutably access the (first) precursor information, if it exists
     fn precursor_mut(&mut self) -> Option<&mut Precursor> {
         let desc = self.description_mut();
-        desc.precursor.as_mut()
+        desc.precursor.first_mut()
     }
 
     /// Iterate over all precursors of the spectrum mutably
@@ -529,7 +529,7 @@ impl RawSpectrum {
     #[inline]
     pub fn precursor(&self) -> Option<&Precursor> {
         let desc = self.description();
-        desc.precursor.as_ref()
+        desc.precursor.first()
     }
 
     /// Iterate over all precursors of the spectrum
@@ -538,10 +538,10 @@ impl RawSpectrum {
         desc.precursor.iter()
     }
 
-    /// Mutably access the precursor information, if it exists
+    /// Mutably access the (first) precursor information, if it exists
     pub fn precursor_mut(&mut self) -> Option<&mut Precursor> {
         let desc = self.description_mut();
-        desc.precursor.as_mut()
+        desc.precursor.first_mut()
     }
 
     /// Iterate over all precursors of the spectrum mutably

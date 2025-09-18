@@ -230,7 +230,7 @@ impl<W: io::Write, C: CentroidLike, D: DeconvolutedCentroidLike, Y: MGFHeaderSty
         self.handle
             .write_all((spectrum.start_time() * 60.0).to_string().as_bytes())?;
         self.handle.write_all(b"\n")?;
-        if let Some(precursor) = &desc.precursor {
+        if let Some(precursor) = &desc.precursor.first() {
             self.write_precursor(precursor)?;
         }
 

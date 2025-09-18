@@ -1351,7 +1351,7 @@ fn index_to_precursor(
     index_entry: &IndexExtry,
     metadata: &Metadata,
     parent_entry: &IndexExtry,
-) -> Option<Precursor> {
+) -> Vec<Precursor> {
     if let Some(prec) = index_entry.precursor() {
         let mut ion = SelectedIon {
             mz: prec.mz,
@@ -1396,7 +1396,7 @@ fn index_to_precursor(
         mz_prec.activation = act;
         mz_prec.isolation_window = isolation;
         mz_prec.precursor_id = Some(parent_entry.format_native_id());
-        Some(mz_prec)
+        vec![mz_prec]
     } else if let Some(dia_window) = index_entry.dia_window() {
         let mut ion = SelectedIon {
             mz: dia_window.isolation_mz,
@@ -1437,9 +1437,9 @@ fn index_to_precursor(
         mz_prec.activation = act;
         mz_prec.isolation_window = isolation;
         mz_prec.precursor_id = Some(parent_entry.format_native_id());
-        Some(mz_prec)
+        vec![mz_prec]
     } else {
-        None
+        Vec::new()
     }
 }
 

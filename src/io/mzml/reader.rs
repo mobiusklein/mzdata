@@ -60,6 +60,8 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
     fn scan_window_mut(&mut self) -> &mut ScanWindow;
     fn selected_ion_mut(&mut self) -> &mut SelectedIon;
     fn new_selected_ion(&mut self) -> &mut SelectedIon;
+    fn new_precursor_mut(&mut self) -> &mut Precursor;
+    fn precursor_mut(&mut self) -> &mut Precursor;
     fn current_array_mut(&mut self) -> &mut DataArray;
     /// Move all the data into the provided `spectrum` reference
     fn into_spectrum(self, spectrum: &mut S);
@@ -361,7 +363,7 @@ pub struct MzMLSpectrumBuilder<
 > {
     pub params: ParamList,
     pub acquisition: Acquisition,
-    pub precursor: Precursor,
+    pub precursor: Vec<Precursor>,
 
     pub arrays: BinaryArrayMap,
     pub current_array: DataArray,
@@ -409,7 +411,7 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
     SpectrumBuilding<'inner, C, D, MultiLayerSpectrum<C, D>> for MzMLSpectrumBuilder<'inner, C, D>
 {
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
-        &mut self.precursor.isolation_window
+        &mut self.precursor_mut().isolation_window
     }
 
     fn scan_window_mut(&mut self) -> &mut ScanWindow {
@@ -421,7 +423,7 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
     }
 
     fn selected_ion_mut(&mut self) -> &mut SelectedIon {
-        self.precursor.ion_mut()
+        self.precursor_mut().ion_mut()
     }
 
     fn current_array_mut(&mut self) -> &mut DataArray {
@@ -440,9 +442,7 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
         description.params = self.params;
         description.acquisition = self.acquisition;
         if self.has_precursor {
-            description.precursor = Some(self.precursor);
-        } else {
-            description.precursor = None;
+            description.precursor = self.precursor;
         }
 
         spectrum.arrays = Some(self.arrays);
@@ -480,8 +480,8 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
     }
 
     fn new_selected_ion(&mut self) -> &mut SelectedIon {
-        self.precursor.add_ion(SelectedIon::default());
-        self.precursor.last_ion_mut()
+        let prec = self.precursor_mut();
+        prec.last_ion_mut()
     }
 
     fn into_chromatogram(self, chromatogram: &mut Chromatogram) {
@@ -512,12 +512,23 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
 
         description.params = params;
         if self.has_precursor {
-            description.precursor = Some(self.precursor);
-        } else {
-            description.precursor = None;
+            description.precursor = self.precursor;
         }
 
         chromatogram.arrays = self.arrays;
+    }
+
+    fn new_precursor_mut(&mut self) -> &mut Precursor {
+        self.precursor.push(Default::default());
+        self.precursor.last_mut().unwrap()
+    }
+
+    fn precursor_mut(&mut self) -> &mut Precursor {
+        if self.precursor.is_empty() {
+            return self.new_precursor_mut()
+        } else {
+            self.precursor.last_mut().unwrap()
+        }
     }
 }
 
@@ -556,7 +567,7 @@ impl<
         self.entry_id.clear();
         self.entry_type = EntryType::Spectrum;
 
-        self.precursor = Precursor::default();
+        self.precursor = Vec::new();
         self.index = 0;
         self.has_precursor = false;
         self.signal_continuity = SignalContinuity::Unknown;
@@ -639,17 +650,17 @@ impl<
             }
             MzMLParserState::Activation => {
                 if Activation::is_param_activation(&param)
-                    && self.precursor.activation.method().is_none()
+                    && self.precursor_mut().activation.method().is_none()
                 {
-                    self.precursor.activation.methods_mut().push(param.into());
+                    self.precursor_mut().activation.methods_mut().push(param.into());
                 } else {
                     match param.name.as_ref() {
                         "collision energy" | "activation energy" => {
-                            self.precursor.activation.energy =
+                            self.precursor_mut().activation.energy =
                                 param.to_f32().expect("Failed to parse collision energy");
                         }
                         &_ => {
-                            self.precursor.activation.add_param(param);
+                            self.precursor_mut().activation.add_param(param);
                         }
                     }
                 }
@@ -753,11 +764,12 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
             }
             b"precursor" => {
                 self.has_precursor = true;
+                self.new_precursor_mut();
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"spectrumRef" {
-                                self.precursor.precursor_id = Some(
+                                self.precursor_mut().precursor_id = Some(
                                     attr.unescape_value()
                                         .expect("Error decoding id")
                                         .to_string(),
@@ -902,7 +914,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                             }
                             MzMLParserState::Activation => {
                                 if Activation::is_param_activation(&param) {
-                                    self.precursor.activation.methods_mut().push(param.into());
+                                    self.precursor_mut().activation.methods_mut().push(param.into());
                                 } else {
                                     let dissociation_energy = param.curie().and_then(|c| {
                                         DissociationEnergyTerm::from_curie(&c, param.value().to_f32().unwrap_or_else(|e| {
@@ -913,19 +925,19 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                     match dissociation_energy {
                                         Some(t) => {
                                             if t.is_supplemental() {
-                                                self.precursor.activation.add_param(param.into())
+                                                self.precursor_mut().activation.add_param(param.into())
                                             } else {
-                                                if self.precursor.activation.energy != 0.0 {
+                                                if self.precursor_mut().activation.energy != 0.0 {
                                                     warn!(
                                                         "Multiple dissociation energies detected. Saw {t} after already setting dissociation energy for {}",
                                                         self.warning_context()
                                                     );
                                                 }
-                                                self.precursor.activation.energy = t.energy();
+                                                self.precursor_mut().activation.energy = t.energy();
                                             }
                                         }
                                         None => {
-                                            self.precursor.activation.add_param(param.into());
+                                            self.precursor_mut().activation.add_param(param.into());
                                         }
                                     }
                                 }
