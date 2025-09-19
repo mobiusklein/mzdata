@@ -290,6 +290,9 @@ impl<
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         accumulator.instrument_id_map = Some(&mut self.instrument_id_map);
+        if let Some(val) = self.run.default_data_processing_id.as_ref() {
+            accumulator.set_run_data_processing(Some(val.clone().into()));
+        }
         let mut offset: usize = 0;
         loop {
             let event = reader.read_event_into_async(&mut self.buffer).await;

@@ -52,6 +52,7 @@ pub struct DataArray {
     pub params: Option<Box<ParamList>>,
     pub unit: Unit,
     item_count: Option<usize>,
+    data_processing_reference: Option<Box<str>>,
 }
 
 impl core::fmt::Debug for DataArray {
@@ -63,6 +64,7 @@ impl core::fmt::Debug for DataArray {
             .field("compression", &self.compression)
             .field("params", &self.params)
             .field("unit", &self.unit)
+            .field("data_processing_ref", &self.data_processing_reference)
             .finish()
     }
 }
@@ -890,6 +892,16 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     pub fn raw_len(&self) -> usize {
         self.data.len()
     }
+
+    /// Get the identifier referencing a [`DataProcessing`](crate::meta::DataProcessing)
+    pub fn data_processing_reference(&self) -> Option<&Box<str>> {
+        self.data_processing_reference.as_ref()
+    }
+
+    /// Set the identifier referencing a [`DataProcessing`](crate::meta::DataProcessing)
+    pub fn set_data_processing_reference(&mut self, data_processing_reference: Option<Box<str>>) {
+        self.data_processing_reference = data_processing_reference;
+    }
 }
 
 impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan> for DataArray {
@@ -915,6 +927,10 @@ impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan> for
         self.unit
     }
 
+    fn data_processing_reference(&self) -> Option<&Box<str>> {
+        self.data_processing_reference()
+    }
+
     fn name(&self) -> &ArrayType {
         &self.name
     }
@@ -927,6 +943,10 @@ impl<'transient, 'lifespan: 'transient> ByteArrayViewMut<'transient, 'lifespan> 
 
     fn unit_mut(&mut self) -> &mut Unit {
         &mut self.unit
+    }
+
+    fn set_data_processing_reference(&mut self, data_processing_reference: Option<Box<str>>) {
+        self.set_data_processing_reference(data_processing_reference);
     }
 }
 
@@ -974,6 +994,10 @@ impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan>
 
     fn name(&self) -> &ArrayType {
         self.source.name()
+    }
+
+    fn data_processing_reference(&self) -> Option<&Box<str>> {
+        self.source.data_processing_reference()
     }
 }
 

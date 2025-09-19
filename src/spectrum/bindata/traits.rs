@@ -79,6 +79,11 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
     /// The unit of measurement each data point is in
     fn unit(&self) -> Unit;
 
+    /// Get the identifier referencing a [`DataProcessing`](crate::meta::DataProcessing)
+    fn data_processing_reference(&self) -> Option<&Box<str>> {
+        None
+    }
+
     fn to_f32(&'lifespan self) -> Result<Cow<'transient, [f32]>, ArrayRetrievalError> {
         type D = f32;
         match self.dtype() {
@@ -224,6 +229,10 @@ pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
         let view = self.view_mut()?;
         Self::coerce_from_mut(view)
     }
+
+    #[allow(unused)]
+    /// Set the identifier referencing a [`DataProcessing`](crate::meta::DataProcessing)
+    fn set_data_processing_reference(&mut self, data_processing_reference: Option<Box<str>>) {}
 }
 
 #[derive(Debug)]

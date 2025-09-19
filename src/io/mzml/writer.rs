@@ -1752,6 +1752,13 @@ where
 
         let encoded_len = encoded_array.len().to_string();
         attrib!("encodedLength", encoded_len, outer);
+        if let Some(dp_id) = array.data_processing_reference() {
+            if let Some(dp_global) = self.run.default_data_processing_id.as_deref() {
+                if dp_id.as_ref() != dp_global {
+                    attrib!("dataProcessingRef", dp_id, outer);
+                }
+            }
+        }
         let array_len = array.data_len()?;
         if array_len != default_array_len {
             let array_len = array_len.to_string();

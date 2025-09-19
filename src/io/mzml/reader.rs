@@ -58,23 +58,46 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow;
     /// Get the last scan window being constructed.
     fn scan_window_mut(&mut self) -> &mut ScanWindow;
+
+    /// Get the current [`SelectedIon`] being built.
     fn selected_ion_mut(&mut self) -> &mut SelectedIon;
+
+    /// Add a new [`SelectedIon`] to the stack for the current [`Precursor`].
+    /// This will be the current [`SelectedIon`].
     fn new_selected_ion(&mut self) -> &mut SelectedIon;
+
+    /// Add a new [`Precursor`] to the stack. This will be the current [`Precursor`].
     fn new_precursor_mut(&mut self) -> &mut Precursor;
+
+    /// Get the current [`Precursor`] being built.
     fn precursor_mut(&mut self) -> &mut Precursor;
+
+    /// Get the current [`DataArray`] being built. This may be an empty instance if
+    /// if there is no array being built currently.
     fn current_array_mut(&mut self) -> &mut DataArray;
+
     /// Move all the data into the provided `spectrum` reference
     fn into_spectrum(self, spectrum: &mut S);
 
+    /// Optionally set the global data processing identifier for the run to be used if
+    /// a data processing reference isn't specified locally.
+    ///
+    /// This is a no-op if not explicitly implemented.
+    fn set_run_data_processing(&mut self, _identifier: Option<Box<str>>) {}
+
+    /// Move all the data into the provided `chromatogram` reference
     fn into_chromatogram(self, chromatogram: &mut Chromatogram);
 
+    /// Put a parameter-like instance into the current top-level instance
     fn fill_spectrum<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P);
 
+    /// Set the compression method for the current [`DataArray`]
     fn set_current_compressiion(&mut self, compression: BinaryCompressionType) {
         trace!("Setting current compression method for {:?} to {compression:?}", self.current_array_mut().name());
         self.current_array_mut().compression = compression;
     }
 
+    /// Put a parameter-like instance into the current [`DataArray`]
     fn fill_binary_data_array<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P) {
         if param.is_ms() {
             match param.accession().unwrap() {
@@ -229,6 +252,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
         }
     }
 
+    /// Put a parameter-like instance into the current [`SelectedIon`]
     fn fill_selected_ion(&mut self, param: Param) {
         match param.name.as_ref() {
             "selected ion m/z" => {
@@ -248,6 +272,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
         };
     }
 
+    /// Put a parameter-like instance into the current [`IsolationWindow`]
     fn fill_isolation_window(&mut self, param: Param) {
         let window = self.isolation_window_mut();
         match param.name.as_ref() {
@@ -324,6 +349,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
         }
     }
 
+    /// Put a parameter-like instance into the current [`ScanWindow`]
     fn fill_scan_window(&mut self, param: Param) {
         let window = self.scan_window_mut();
         match param.name.as_ref() {
@@ -355,7 +381,10 @@ macro_rules! xml_error {
 const BUFFER_SIZE: usize = 10000;
 
 /// An accumulator for the attributes of a spectrum as it is read from an
-/// mzML document
+/// mzML document.
+///
+/// While this type is public, it is unnecessary for most users. Instead
+/// just use [`MzMLReaderType::read_next`].
 pub struct MzMLSpectrumBuilder<
     'a,
     C: CentroidLike = CentroidPeak,
@@ -376,6 +405,8 @@ pub struct MzMLSpectrumBuilder<
     pub has_precursor: bool,
     pub detail_level: DetailLevel,
     pub instrument_id_map: Option<&'a mut IncrementingIdMap>,
+    pub run_level_data_processing: Option<Box<str>>,
+    pub spectrum_data_processing_ref: Option<Box<str>>,
     entry_type: EntryType,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
@@ -397,6 +428,8 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> Default for MzMLSpectrumBuild
             has_precursor: Default::default(),
             detail_level: Default::default(),
             instrument_id_map: Default::default(),
+            run_level_data_processing: None,
+            spectrum_data_processing_ref: None,
             entry_type: Default::default(),
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
@@ -410,6 +443,10 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> CVParamParse for MzMLSpectrum
 impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
     SpectrumBuilding<'inner, C, D, MultiLayerSpectrum<C, D>> for MzMLSpectrumBuilder<'inner, C, D>
 {
+    fn set_run_data_processing(&mut self, identifier: Option<Box<str>>) {
+        self.run_level_data_processing = identifier;
+    }
+
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
         &mut self.precursor_mut().isolation_window
     }
@@ -540,6 +577,10 @@ impl<
 {
     pub fn new() -> MzMLSpectrumBuilder<'inner, C, D> {
         Self::with_detail_level(DetailLevel::Full)
+    }
+
+    pub fn set_run_data_processing(&mut self, identifier: Option<Box<str>>) {
+        self.run_level_data_processing = identifier;
     }
 
     pub fn with_detail_level(detail_level: DetailLevel) -> MzMLSpectrumBuilder<'inner, C, D> {
@@ -707,6 +748,10 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                     .expect("Failed to parse index");
                                 trace!("Stored spectrum index = {}", self.index);
                             }
+                            b"dataProcessingRef" => {
+                                let ident: Box<str> = String::from_utf8_lossy(&attr.value).into();
+                                self.spectrum_data_processing_ref = Some(ident);
+                            }
                             _ => {}
                         },
                         Err(msg) => {
@@ -799,6 +844,38 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                 return Ok(MzMLParserState::BinaryDataArrayList);
             }
             b"binaryDataArray" => {
+                let mut dp_set = false;
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            match attr.key.as_ref() {
+                                b"dataProcessingRef" => {
+                                    match attr.unescape_value() {
+                                        Ok(v) => {
+                                            self.current_array.set_data_processing_reference(Some(v.into()));
+                                            dp_set = true;
+                                            break;
+                                        },
+                                        Err(msg) => return Err(self.handle_xml_error(msg.into(), state))
+                                    }
+                                }
+                                _ => {}
+                            }
+                        },
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg.into(), state));
+                        },
+                    }
+                }
+                if !dp_set {
+                    if let Some(dp_ref) = self.spectrum_data_processing_ref.as_ref() {
+                        self.current_array.set_data_processing_reference(Some(dp_ref.clone()));
+                    }
+                    else if let Some(dp_ref) = self.run_level_data_processing.as_ref() {
+                        self.current_array.set_data_processing_reference(Some(dp_ref.clone()));
+                    }
+                }
+
                 return Ok(MzMLParserState::BinaryDataArray);
             }
             b"binary" => {
@@ -1317,6 +1394,7 @@ impl<
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         accumulator = accumulator.borrow_instrument_configuration(&mut self.instrument_id_map);
+        accumulator.set_run_data_processing(self.run.default_data_processing_id.clone().map(|v| v.into_boxed_str()));
         let mut offset: usize = 0;
 
         macro_rules! err_state {
