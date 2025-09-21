@@ -2069,7 +2069,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata"
-version = "0.59.2"
+version = "0.59.3"
 dependencies = [
  "base16ct",
  "base64-simd",
