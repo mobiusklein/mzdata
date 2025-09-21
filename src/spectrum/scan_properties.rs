@@ -175,6 +175,15 @@ pub trait IonMobilityMeasure: ParamDescribed {
     fn has_ion_mobility(&self) -> bool {
         self.ion_mobility().is_some()
     }
+
+    fn ion_mobility_type(&self) -> Option<&Param> {
+        for u in ION_MOBILITY_SCAN_TERMS {
+            if let Some(v) = self.get_param_by_curie(&u) {
+                return Some(v);
+            }
+        }
+        None
+    }
 }
 
 pub(crate) const PRESET_SCAN_CONFIGURATION: CURIE = curie!(MS:1000616);

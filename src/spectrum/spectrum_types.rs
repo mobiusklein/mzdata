@@ -82,6 +82,26 @@ pub trait SpectrumLike<
         desc.precursor.iter_mut()
     }
 
+    /// Add a precursor to the list of precursors for this spectrum.
+    ///
+    /// Precursors beyond the first one correspond to lower exponentiated spectra, e.g. for an MS3 spectrum
+    /// the first precursor is the MS2 product ion that was selected, and the second precursor corresponds
+    /// to the original MS1 ion that was chosen for MS2.
+    ///
+    /// Higher order precursors may be accessed with [`SpectrumLike::precursor_iter`].
+    fn add_precursor(&mut self, precursor: Precursor) {
+        self.description_mut().precursor.push(precursor);
+    }
+
+    /// Remove the precursor entry at `index` in the precursor list.
+    ///
+    /// Care should be taken if you are attempting to re-order precursors.
+    /// It may be simpler to use [`SpectrumLike::precursor_iter_mut`] to
+    /// re-arrange entries.
+    fn remove_precursor(&mut self, index: usize) -> Precursor {
+        self.description_mut().precursor.remove(index)
+    }
+
     /// A shortcut method to retrieve the scan start time of a spectrum
     #[inline]
     fn start_time(&self) -> f64 {

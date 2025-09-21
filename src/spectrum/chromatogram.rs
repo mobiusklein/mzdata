@@ -85,7 +85,7 @@ impl TimeInterval<Time> for Chromatogram {
 /// Analog of [`SpectrumLike`](crate::spectrum::SpectrumLike) for chromatograms or
 /// other measures over time.
 pub trait ChromatogramLike: ParamDescribed {
-    /// The method to access the spectrum description itself, which supplies
+    /// The method to access the chromatogram description itself, which supplies
     /// the data for most other methods on this trait.
     fn description(&self) -> &ChromatogramDescription;
 
@@ -98,7 +98,7 @@ pub trait ChromatogramLike: ParamDescribed {
         desc.precursor.first()
     }
 
-    /// Iterate over all precursors of the spectrum
+    /// Iterate over all precursors of the chromatogram
     fn precursor_iter(&self) -> impl Iterator<Item = &Precursor> {
         let desc = self.description();
         desc.precursor.iter()
@@ -110,10 +110,30 @@ pub trait ChromatogramLike: ParamDescribed {
         desc.precursor.first_mut()
     }
 
-    /// Iterate over all precursors of the spectrum mutably
+    /// Iterate over all precursors of the chromatogram mutably
     fn precursor_iter_mut(&mut self) -> impl Iterator<Item = &mut Precursor> {
         let desc = self.description_mut();
         desc.precursor.iter_mut()
+    }
+
+    /// Add a precursor to the list of precursors for this chromatogram.
+    ///
+    /// Precursors beyond the first one correspond to lower exponentiated spectra, e.g. for an MS3 chromatogram
+    /// the first precursor is the MS2 product ion that was selected, and the second precursor corresponds
+    /// to the original MS1 ion that was chosen for MS2.
+    ///
+    /// Higher order precursors may be accessed with [`ChromatogramLike::precursor_iter`].
+    fn add_precursor(&mut self, precursor: Precursor) {
+        self.description_mut().precursor.push(precursor);
+    }
+
+    /// Remove the precursor entry at `index` in the precursor list.
+    ///
+    /// Care should be taken if you are attempting to re-order precursors.
+    /// It may be simpler to use [`ChromatogramLike::precursor_iter_mut`] to
+    /// re-arrange entries.
+    fn remove_precursor(&mut self, index: usize) -> Precursor {
+        self.description_mut().precursor.remove(index)
     }
 
     #[inline]

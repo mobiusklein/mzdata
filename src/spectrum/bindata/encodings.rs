@@ -994,7 +994,7 @@ impl ArrayType {
             == (Self::NonStandardDataArray {
                 name: "".to_string().into(),
             })
-            .as_param_const()
+            .as_param(None)
             .curie()
             .unwrap()
         {

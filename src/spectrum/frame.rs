@@ -155,7 +155,10 @@ impl From<IonMobilityFrameDescription> for SpectrumDescription {
     }
 }
 
-/// A trait for providing a uniform delegated access to spectrum metadata
+/// A trait for providing a uniform delegated access to ion mobility frame metadata.
+///
+/// This is analogous to [`SpectrumLike`] but adapted for working with different underlying
+/// types.
 pub trait IonMobilityFrameLike<
     C: FeatureLike<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -188,7 +191,7 @@ pub trait IonMobilityFrameLike<
         &mut self.description_mut().ion_mobility_unit
     }
 
-    /// Access the acquisition information for this spectrum.
+    /// Access the acquisition information for this frame.
     #[inline]
     fn acquisition(&self) -> &Acquisition {
         &self.description().acquisition
@@ -205,7 +208,7 @@ pub trait IonMobilityFrameLike<
         }
     }
 
-    /// Iterate over all precursors of the spectrum
+    /// Iterate over all precursors of the frame
     fn precursor_iter(&self) -> impl Iterator<Item = &Precursor> {
         let desc = self.description();
         desc.precursor.iter()
@@ -221,10 +224,31 @@ pub trait IonMobilityFrameLike<
         }
     }
 
-    /// Iterate over all precursors of the spectrum mutably
+    /// Iterate over all precursors of the frame mutably
     fn precursor_iter_mut(&mut self) -> impl Iterator<Item = &mut Precursor> {
         let desc = self.description_mut();
         desc.precursor.iter_mut()
+    }
+
+    /// Add a precursor to the list of precursors for this frame.
+    ///
+    /// Precursors beyond the first one correspond to lower exponentiated spectra, e.g. for an MS3 frame
+    /// the first precursor is the MS2 product ion that was selected, and the second precursor corresponds
+    /// to the original MS1 ion that was chosen for MS2.
+    ///
+    /// Higher order precursors may be accessed with [`IonMobilityFrameLike::precursor_iter`].
+    fn add_precursor(&mut self, precursor: Precursor) {
+        self.description_mut().precursor.push(precursor);
+    }
+
+
+    /// Remove the precursor entry at `index` in the precursor list.
+    ///
+    /// Care should be taken if you are attempting to re-order precursors.
+    /// It may be simpler to use [`IonMobilityFrameLike::precursor_iter_mut`] to
+    /// re-arrange entries.
+    fn remove_precursor(&mut self, index: usize) -> Precursor {
+        self.description_mut().precursor.remove(index)
     }
 
     /// A shortcut method to retrieve the scan start time of a spectrum
