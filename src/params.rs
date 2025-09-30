@@ -2401,9 +2401,10 @@ macro_rules! impl_param_described_deferred {
 }
 
 /// Units that a term's value might have
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Unit {
+    #[default]
     Unknown,
 
     // Mass
@@ -2723,12 +2724,6 @@ impl Unit {
 
     pub const fn is_unknown(&self) -> bool {
         matches!(self, Self::Unknown)
-    }
-}
-
-impl Default for Unit {
-    fn default() -> Self {
-        Self::Unknown
     }
 }
 
