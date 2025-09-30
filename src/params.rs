@@ -1396,13 +1396,13 @@ impl FromStr for CURIE {
             .next()
             .ok_or(CURIEParsingError::MissingNamespaceSeparator)?;
         let accession = tokens.next();
-        if accession.is_none() {
-            Err(CURIEParsingError::MissingNamespaceSeparator)
-        } else {
+        if let Some(accession) = accession {
             let cv: ControlledVocabulary = cv.parse::<ControlledVocabulary>()?;
 
-            let accession = accession.unwrap().parse()?;
+            let accession = accession.parse()?;
             Ok(CURIE::new(cv, accession))
+        } else {
+            Err(CURIEParsingError::MissingNamespaceSeparator)
         }
     }
 }
