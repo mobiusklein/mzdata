@@ -476,15 +476,15 @@ impl<
 {
     /// Start iterating from the spectrum whose native ID matches `id`
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
-        if let Some(scan) = self.get_spectrum_by_id(id) {
+        match self.get_spectrum_by_id(id) { Some(scan) => {
             self.index = scan.index();
             self.back_index = 0;
             Ok(self)
-        } else if self.get_index().contains_key(id) {
+        } _ => if self.get_index().contains_key(id) {
             Err(SpectrumAccessError::IOError(None))
         } else {
             Err(SpectrumAccessError::SpectrumIdNotFound(id.to_string()))
-        }
+        }}
     }
 
     fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
@@ -498,11 +498,11 @@ impl<
     }
 
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
-        if let Some(scan) = self.get_spectrum_by_time(time) {
+        match self.get_spectrum_by_time(time) { Some(scan) => {
             self.index = scan.index();
             self.back_index = 0;
             Ok(self)
-        } else if self
+        } _ => if self
             .get_spectrum_by_index(self.len() - 1)
             .expect("Failed to fetch spectrum for boundary testing")
             .start_time()
@@ -511,7 +511,7 @@ impl<
             Err(SpectrumAccessError::SpectrumNotFound)
         } else {
             Err(SpectrumAccessError::IOError(None))
-        }
+        }}
     }
 }
 
@@ -755,11 +755,11 @@ impl<
     /// Fill the buffer with at most `size` spectra
     pub fn populate_buffer(&mut self, size: usize) {
         for _ in 0..size {
-            if let Some(value) = self.source.next() {
+            match self.source.next() { Some(value) => {
                 self.buffer.push_back(value);
-            } else {
+            } _ => {
                 break;
-            }
+            }}
         }
     }
 }
@@ -1058,12 +1058,12 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D> + Clone
     }
 
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
-        if let Some(scan) = self.get_spectrum_by_time(time) {
+        match self.get_spectrum_by_time(time) { Some(scan) => {
             self.position = scan.index();
             Ok(self)
-        } else {
+        } _ => {
             Err(SpectrumAccessError::SpectrumNotFound)
-        }
+        }}
     }
 }
 

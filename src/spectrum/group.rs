@@ -272,7 +272,7 @@ impl<
     */
     pub fn next_group(&mut self) -> Option<G> {
         loop {
-            if let Some(spectrum) = self.source.next() {
+            match self.source.next() { Some(spectrum) => {
                 let level = spectrum.ms_level();
                 if level > self.highest_ms_level {
                     self.highest_ms_level = level;
@@ -285,7 +285,7 @@ impl<
                 } else if self.add_precursor(spectrum) {
                     return self.deque_group(false);
                 }
-            } else {
+            } _ => {
                 return match self.queue.len() {
                     d if d > 1 => self.deque_group(false),
                     1 => self.deque_group(true),
@@ -297,7 +297,7 @@ impl<
                         }
                     }
                 };
-            }
+            }}
         }
     }
 }
@@ -480,7 +480,7 @@ impl<
     */
     pub fn next_group(&mut self) -> Option<G> {
         loop {
-            if let Some(spectrum) = self.source.next() {
+            match self.source.next() { Some(spectrum) => {
                 let level = spectrum.ms_level();
                 if level > self.highest_ms_level {
                     self.highest_ms_level = level;
@@ -493,7 +493,7 @@ impl<
                 } else if self.add_precursor(spectrum) {
                     return self.deque_group(false);
                 }
-            } else {
+            } _ => {
                 return match self.queue.len() {
                     d if d > 1 => self.deque_group(false),
                     1 => self.deque_group(true),
@@ -505,7 +505,7 @@ impl<
                         }
                     }
                 };
-            }
+            }}
         }
     }
 }

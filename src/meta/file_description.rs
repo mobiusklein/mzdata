@@ -950,7 +950,7 @@ impl From<&SpectrumType> for crate::params::Param {
 }
 
 macro_rules! t {
-    ($t:expr) => {
+    ($t:expr_2021) => {
         ($t, $t.to_param())
     };
 }

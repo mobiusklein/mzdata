@@ -1206,17 +1206,17 @@ macro_rules! accessioncode {
 
 #[macro_export]
 macro_rules! find_param_method {
-    ($meth:ident, $curie:expr) => {
+    ($meth:ident, $curie:expr_2021) => {
         $crate::find_param_method!($meth, $curie, "Find a parameter by its CURIE");
     };
-    ($meth:ident, $curie:expr, $desc:literal) => {
+    ($meth:ident, $curie:expr_2021, $desc:literal) => {
         #[doc=$desc]
         pub fn $meth(&self) -> Option<$crate::params::ValueRef<'_>> {
             self.get_param_by_curie($curie)
                 .map(|p| $crate::params::ParamLike::value(p))
         }
     };
-    ($meth:ident, $curie:expr, $conv:expr, $result:ty) => {
+    ($meth:ident, $curie:expr_2021, $conv:expr_2021, $result:ty) => {
         $crate::find_param_method!(
             $meth,
             $curie,
@@ -1225,7 +1225,7 @@ macro_rules! find_param_method {
             "Find a parameter by its CURIE"
         );
     };
-    ($meth:ident, $curie:expr, $conv:expr, $result:ty, $desc:literal) => {
+    ($meth:ident, $curie:expr_2021, $conv:expr_2021, $result:ty, $desc:literal) => {
         #[doc=$desc]
         pub fn $meth(&self) -> $result {
             self.get_param_by_curie($curie).map($conv)

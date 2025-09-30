@@ -45,7 +45,7 @@ macro_rules! bstart {
 }
 
 macro_rules! attrib {
-    ($name:expr, $value:expr, $elt:ident) => {{
+    ($name:expr_2021, $value:expr_2021, $elt:ident) => {{
         let key = $name.as_bytes();
         let value = $value.as_bytes();
         // Because quick_xml::escape does not escape newlines

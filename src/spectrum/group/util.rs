@@ -74,9 +74,9 @@ impl GenerationTracker {
 
     pub fn older_than(&mut self, generation: usize) -> Vec<String> {
         let mut result = Vec::new();
-        for gen in self.generations.iter() {
-            if *gen < generation {
-                if let Some(members) = self.generation_to_id.remove(gen) {
+        for r#gen in self.generations.iter() {
+            if *r#gen < generation {
+                if let Some(members) = self.generation_to_id.remove(r#gen) {
                     result.extend(members);
                 }
             } else {

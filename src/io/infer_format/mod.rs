@@ -57,7 +57,7 @@ mod test {
     fn infer_open() {
         let path = path::Path::new("./test/data/small.mzML");
         assert!(path.exists());
-        if let Ok(mut reader) = MZReader::open_path(path) {
+        match MZReader::open_path(path) { Ok(mut reader) => {
             assert_eq!(reader.len(), 48);
             assert_eq!(*reader.detail_level(), DetailLevel::Full);
             if let Some(spec) = reader.get_spectrum_by_index(10) {
@@ -87,9 +87,9 @@ mod test {
             } else {
                 panic!("Failed to retrieve spectrum by time")
             }
-        } else {
+        } _ => {
             panic!("Failed to open file")
-        }
+        }}
     }
 
     #[cfg(feature = "thermo")]

@@ -461,7 +461,7 @@ macro_rules! xml_error {
     ($state:ident, $xml_err:ident) => {
         MzMLParserError::XMLError($state, $xml_err)
     };
-    ($state:ident, $xml_err:ident, $ctx:expr) => {
+    ($state:ident, $xml_err:ident, $ctx:expr_2021) => {
         MzMLParserError::XMLErrorContext($state, $xml_err, $ctx)
     };
 }

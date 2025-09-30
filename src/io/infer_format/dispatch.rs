@@ -231,7 +231,7 @@ impl<
 }
 
 macro_rules! msfmt_dispatch {
-    ($d:ident, $r:ident, $e:expr) => {
+    ($d:ident, $r:ident, $e:expr_2021) => {
         match $d {
             #[cfg(feature = "mzml")]
             MZReaderType::MzML($r) => $e,
@@ -771,7 +771,7 @@ impl<
 }
 
 macro_rules! msfmt_dispatch_cap {
-    ($d:ident, $r:ident, $e:expr) => {
+    ($d:ident, $r:ident, $e:expr_2021) => {
         match $d {
             #[cfg(feature = "mzml")]
             MZReaderType::MzML($r) => {
@@ -1351,7 +1351,7 @@ pub enum IMMZReaderType<
 }
 
 macro_rules! immsfmt_dispatch {
-    ($d:ident, $r:ident, $e:expr) => {
+    ($d:ident, $r:ident, $e:expr_2021) => {
         match $d {
             #[cfg(feature = "mzml")]
             IMMZReaderType::MzML($r) => $e,

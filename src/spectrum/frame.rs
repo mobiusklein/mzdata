@@ -678,7 +678,7 @@ mod test {
     use crate::prelude::*;
 
     macro_rules! assert_is_close {
-        ($t1:expr, $t2:expr, $tol:expr, $label:literal) => {
+        ($t1:expr_2021, $t2:expr_2021, $tol:expr_2021, $label:literal) => {
             assert!(
                 ($t1 - $t2).abs() < $tol,
                 "Observed {} {}, expected {}, difference {}",
@@ -688,7 +688,7 @@ mod test {
                 $t1 - $t2,
             );
         };
-        ($t1:expr, $t2:expr, $tol:expr, $label:literal, $obj:ident) => {
+        ($t1:expr_2021, $t2:expr_2021, $tol:expr_2021, $label:literal, $obj:ident) => {
             assert!(
                 ($t1 - $t2).abs() < $tol,
                 "Observed {} {}, expected {}, difference {} from {:?}",
