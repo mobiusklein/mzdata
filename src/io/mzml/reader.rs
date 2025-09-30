@@ -939,18 +939,19 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                 let mut dp_set = false;
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
-                        Ok(attr) => match attr.key.as_ref() {
-                            b"dataProcessingRef" => match attr.unescape_value() {
-                                Ok(v) => {
-                                    self.current_array
-                                        .set_data_processing_reference(Some(v.into()));
-                                    dp_set = true;
-                                    break;
+                        Ok(attr) => {
+                            if attr.key.as_ref() == b"dataProcessingRef" {
+                                match attr.unescape_value() {
+                                    Ok(v) => {
+                                        self.current_array
+                                            .set_data_processing_reference(Some(v.into()));
+                                        dp_set = true;
+                                        break;
+                                    }
+                                    Err(msg) => return Err(self.handle_xml_error(msg, state)),
                                 }
-                                Err(msg) => return Err(self.handle_xml_error(msg, state)),
-                            },
-                            _ => {}
-                        },
+                            }
+                        }
                         Err(msg) => {
                             return Err(self.handle_xml_error(msg.into(), state));
                         }
