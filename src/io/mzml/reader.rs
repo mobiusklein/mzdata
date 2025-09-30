@@ -440,6 +440,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> Default for MzMLSpectrumBuild
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> XMLParseBase for MzMLSpectrumBuilder<'_, C, D> {}
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> CVParamParse for MzMLSpectrumBuilder<'_, C, D> {}
 
+#[doc(hidden)]
 impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
     SpectrumBuilding<'inner, C, D, MultiLayerSpectrum<C, D>> for MzMLSpectrumBuilder<'inner, C, D>
 {
@@ -1086,6 +1087,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
     }
 }
 
+#[doc(hidden)]
 impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> From<MzMLSpectrumBuilder<'a, C, D>>
     for CentroidSpectrumType<C>
 where
@@ -1099,6 +1101,7 @@ where
     }
 }
 
+#[doc(hidden)]
 impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> From<MzMLSpectrumBuilder<'a, C, D>>
     for MultiLayerSpectrum<C, D>
 {
@@ -1109,6 +1112,7 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> From<MzMLSpectrumBuilder<
     }
 }
 
+#[doc(hidden)]
 impl<'a> From<MzMLSpectrumBuilder<'a>> for RawSpectrum {
     fn from(val: MzMLSpectrumBuilder<'a>) -> Self {
         let mut spec = Spectrum::default();

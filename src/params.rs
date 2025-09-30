@@ -1233,7 +1233,7 @@ macro_rules! find_param_method {
 #[macro_export]
 macro_rules! curie {
     (MS:$acc:literal) => {
-        $crate::params::CURIE::new($crate::params::ControlledVocabulary::MS, $acc)
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::MS, accession: $acc }
     };
     (UO:$acc:literal) => {
         $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::UO, accession: $acc }

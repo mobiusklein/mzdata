@@ -160,7 +160,7 @@ pub trait ChromatogramLike: ParamDescribed {
         self.description().ms_level
     }
 
-    /// Access the native ID string for the spectrum
+    /// Access the native ID string for the chromatogram
     #[inline]
     fn id(&self) -> &str {
         &self.description().id
@@ -171,7 +171,7 @@ pub trait ChromatogramLike: ParamDescribed {
         self.description().chromatogram_type
     }
 
-    /// Access the index of the spectrum in the source file
+    /// Access the index of the chromatogram in the source file
     #[inline]
     fn index(&self) -> usize {
         self.description().index

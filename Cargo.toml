@@ -35,6 +35,15 @@ required-features = ["parallelism", "mzsignal", "nalgebra"]
 [[example]]
 name = "random_access_iter"
 required-features = ["nalgebra"]
+doc-scrape-examples = true
+
+[[example]]
+name = "mzinfo"
+doc-scrape-examples = true
+
+[[example]]
+name = "mzconvert"
+doc-scrape-examples = true
 
 [lib]
 name = "mzdata"

@@ -1137,6 +1137,7 @@ where
         }
     }
 
+    /// Construct a [`MultiLayerSpectrum`] with `description` and the provided raw data arrays
     pub fn from_arrays_and_description(
         arrays: BinaryArrayMap,
         description: SpectrumDescription,
@@ -1148,6 +1149,7 @@ where
         }
     }
 
+    /// Construct a [`MultiLayerSpectrum`] with `description` and *no* peak data of any kind
     pub fn from_description(description: SpectrumDescription) -> Self {
         Self {
             description,
@@ -1167,13 +1169,21 @@ where
         }
     }
 
+    /// Converts an arbitrary [`SpectrumLike`] type into a [`MultiLayerSpectrum`] with the same
+    /// peak types.
+    ///
+    /// This is a thin wrapper around [`SpectrumLike::into_peaks_and_description`] and [`MultiLayerSpectrum::from_peaks_data_levels_and_description`]
     pub fn from_spectrum_like<S: SpectrumLike<C, D>>(spectrum: S) -> Self {
         let (peaks, description) = spectrum.into_peaks_and_description();
         Self::from_peaks_data_levels_and_description(peaks, description)
     }
 
-    /// Convert a [`DeconvolutedSpectrumType`] into a [`MultiLayerSpectrum`] over any peak type, but
-    /// recode the peak list as [`DataArray`], potentially losing information.
+    /// Convert a [`MultiLayerSpectrum`] with one set of peak types to another with any peak type, but
+    /// recode the peak list as [`DataArray`] as an intermediary, potentially losing information.
+    ///
+    /// ## Note
+    /// Peak data is not actually reconstructed from the intermediate data arrays. If that is desired,
+    /// call [`MultiLayerSpectrum::try_build_peaks`]
     pub fn reinterpret<C1, D1>(self) -> MultiLayerSpectrum<C1, D1>
     where
         C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
