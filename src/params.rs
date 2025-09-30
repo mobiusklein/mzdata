@@ -1864,7 +1864,7 @@ impl ParamLike for Param {
         &self.name
     }
 
-    fn value(&self) -> ValueRef {
+    fn value(&self) -> ValueRef<'_> {
         self.value.as_ref()
     }
 
@@ -2217,7 +2217,7 @@ pub trait ParamDescribedRead {
     }
 
     /// Iterate over the encapsulated parameter list
-    fn iter_params(&self) -> std::slice::Iter<Param> {
+    fn iter_params(&self) -> std::slice::Iter<'_, Param> {
         self.params().iter()
     }
 }
@@ -2242,7 +2242,7 @@ pub trait ParamDescribedMut {
     }
 
     /// Iterate mutably over the encapsulated parameter list
-    fn iter_params_mut(&mut self) -> std::slice::IterMut<Param> {
+    fn iter_params_mut(&mut self) -> std::slice::IterMut<'_, Param> {
         self.params_mut().iter_mut()
     }
 }

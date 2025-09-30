@@ -194,7 +194,7 @@ impl InstrumentConfiguration {
         self.components.push(value)
     }
 
-    pub fn iter(&self) -> std::slice::Iter<Component> {
+    pub fn iter(&self) -> std::slice::Iter<'_, Component> {
         self.components.iter()
     }
 

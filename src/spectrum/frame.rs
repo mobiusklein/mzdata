@@ -403,7 +403,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         self.arrays.as_ref()
     }
 
-    fn features(&self) -> RefFeatureDataLevel<C, D> {
+    fn features(&self) -> RefFeatureDataLevel<'_, C, D> {
         let state = if let Some(d) = self.deconvoluted_features.as_ref() {
             RefFeatureDataLevel::Deconvoluted(d)
         } else if let Some(c) = self.features.as_ref() {

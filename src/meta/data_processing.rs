@@ -40,7 +40,7 @@ impl DataProcessing {
         self.methods.push(method)
     }
 
-    pub fn iter(&self) -> std::slice::Iter<ProcessingMethod> {
+    pub fn iter(&self) -> std::slice::Iter<'_, ProcessingMethod> {
         self.methods.iter()
     }
 

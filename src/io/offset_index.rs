@@ -73,7 +73,7 @@ impl OffsetIndex {
         self.offsets.is_empty()
     }
 
-    pub fn keys(&self) -> Keys<Box<str>, u64> {
+    pub fn keys(&self) -> Keys<'_, Box<str>, u64> {
         self.offsets.keys()
     }
 

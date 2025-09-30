@@ -202,7 +202,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
     pub fn encode_bytestring(&self, compression: BinaryCompressionType) -> Bytes {
         if self.compression == compression {
-            log::debug!("Fast-path encoding {}:{}", self.name, self.dtype);
+            log::trace!("Fast-path encoding {}:{}", self.name, self.dtype);
             return self.data.clone();
         }
         let bytestring = match self.compression {
