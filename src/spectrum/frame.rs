@@ -293,7 +293,7 @@ pub trait IonMobilityFrameLike<
 
     fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap3D>;
 
-    fn features(&self) -> RefFeatureDataLevel<C, D>;
+    fn features(&self) -> RefFeatureDataLevel<'_, C, D>;
 
     fn into_features_and_parts(self) -> (FeatureDataLevel<C, D>, IonMobilityFrameDescription);
 }

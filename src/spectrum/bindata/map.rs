@@ -45,7 +45,7 @@ impl BinaryArrayMap {
     }
 
     /// Iterate over references to the key-value pairs of this map
-    pub fn iter(&self) -> Iter<ArrayType, DataArray> {
+    pub fn iter(&self) -> Iter<'_, ArrayType, DataArray> {
         self.byte_buffer_map.iter()
     }
 
@@ -55,7 +55,7 @@ impl BinaryArrayMap {
     }
 
     /// Iterate over mutable references to the key-value pairs of this map
-    pub fn iter_mut(&mut self) -> IterMut<ArrayType, DataArray> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, ArrayType, DataArray> {
         self.byte_buffer_map.iter_mut()
     }
 

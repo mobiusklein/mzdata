@@ -82,7 +82,7 @@ impl OffsetIndex {
     }
 
     /// Iterate over the keys and indices
-    pub fn iter(&self) -> Iter<Box<str>, u64> {
+    pub fn iter(&self) -> Iter<'_, Box<str>, u64> {
         self.offsets.iter()
     }
 

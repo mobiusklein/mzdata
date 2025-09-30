@@ -857,7 +857,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                             dp_set = true;
                                             break;
                                         },
-                                        Err(msg) => return Err(self.handle_xml_error(msg.into(), state))
+                                        Err(msg) => return Err(self.handle_xml_error(msg, state))
                                     }
                                 }
                                 _ => {}
@@ -1732,7 +1732,7 @@ impl<
         result.ok()
     }
 
-    pub fn iter_chromatograms(&mut self) -> ChromatogramIter<R, C, D> {
+    pub fn iter_chromatograms(&mut self) -> ChromatogramIter<'_, R, C, D> {
         ChromatogramIter::new(self)
     }
 }

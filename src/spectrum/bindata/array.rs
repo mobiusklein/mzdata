@@ -894,8 +894,8 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     }
 
     /// Get the identifier referencing a [`DataProcessing`](crate::meta::DataProcessing)
-    pub fn data_processing_reference(&self) -> Option<&Box<str>> {
-        self.data_processing_reference.as_ref()
+    pub fn data_processing_reference(&self) -> Option<&str> {
+        self.data_processing_reference.as_deref()
     }
 
     /// Set the identifier referencing a [`DataProcessing`](crate::meta::DataProcessing)
@@ -927,7 +927,7 @@ impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan> for
         self.unit
     }
 
-    fn data_processing_reference(&self) -> Option<&Box<str>> {
+    fn data_processing_reference(&self) -> Option<&str> {
         self.data_processing_reference()
     }
 
@@ -996,7 +996,7 @@ impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan>
         self.source.name()
     }
 
-    fn data_processing_reference(&self) -> Option<&Box<str>> {
+    fn data_processing_reference(&self) -> Option<&str> {
         self.source.data_processing_reference()
     }
 }

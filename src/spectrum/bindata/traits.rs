@@ -80,7 +80,7 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
     fn unit(&self) -> Unit;
 
     /// Get the identifier referencing a [`DataProcessing`](crate::meta::DataProcessing)
-    fn data_processing_reference(&self) -> Option<&Box<str>> {
+    fn data_processing_reference(&self) -> Option<&str> {
         None
     }
 

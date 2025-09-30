@@ -1208,7 +1208,7 @@ macro_rules! find_param_method {
     };
     ($meth:ident, $curie:expr, $desc:literal) => {
         #[doc=$desc]
-        pub fn $meth(&self) -> Option<$crate::params::ValueRef> {
+        pub fn $meth(&self) -> Option<$crate::params::ValueRef<'_>> {
             self.get_param_by_curie($curie)
                 .map(|p| $crate::params::ParamLike::value(p))
         }
@@ -1433,7 +1433,7 @@ pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<Access
 /// Describe a controlled vocabulary parameter or a user-defined parameter
 pub trait ParamLike {
     fn name(&self) -> &str;
-    fn value(&self) -> ValueRef;
+    fn value(&self) -> ValueRef<'_>;
     fn accession(&self) -> Option<AccessionIntCode>;
     fn controlled_vocabulary(&self) -> Option<ControlledVocabulary>;
     fn unit(&self) -> Unit;
@@ -2302,12 +2302,12 @@ pub trait ParamDescribed {
     }
 
     /// Iterate over the encapsulated parameter list
-    fn iter_params(&self) -> std::slice::Iter<Param> {
+    fn iter_params(&self) -> std::slice::Iter<'_, Param> {
         self.params().iter()
     }
 
     /// Iterate mutably over the encapsulated parameter list
-    fn iter_params_mut(&mut self) -> std::slice::IterMut<Param> {
+    fn iter_params_mut(&mut self) -> std::slice::IterMut<'_, Param> {
         self.params_mut().iter_mut()
     }
 }

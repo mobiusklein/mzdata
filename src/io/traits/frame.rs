@@ -138,7 +138,7 @@ pub trait IonMobilityFrameSource<
     }
 
     /// Open a new iterator over this stream
-    fn iter(&mut self) -> IonMobilityFrameIterator<C, D, S, Self>
+    fn iter(&mut self) -> IonMobilityFrameIterator<'_, C, D, S, Self>
     where
         Self: Sized,
     {

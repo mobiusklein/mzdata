@@ -1754,7 +1754,7 @@ where
         attrib!("encodedLength", encoded_len, outer);
         if let Some(dp_id) = array.data_processing_reference() {
             if let Some(dp_global) = self.run.default_data_processing_id.as_deref() {
-                if dp_id.as_ref() != dp_global {
+                if dp_id != dp_global {
                     attrib!("dataProcessingRef", dp_id, outer);
                 }
             }
