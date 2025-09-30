@@ -583,19 +583,14 @@ impl<
 {
     /// Start iterating from the spectrum whose native ID matches `id`
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError> {
-        match self.get_frame_by_id(id) {
-            Some(scan) => {
-                self.index = scan.index();
-                self.back_index = 0;
-                Ok(self)
-            }
-            _ => {
-                if self.get_index().contains_key(id) {
-                    Err(IonMobilityFrameAccessError::IOError(None))
-                } else {
-                    Err(IonMobilityFrameAccessError::FrameIdNotFound(id.to_string()))
-                }
-            }
+        if let Some(scan) = self.get_frame_by_id(id) {
+            self.index = scan.index();
+            self.back_index = 0;
+            Ok(self)
+        } else if self.get_index().contains_key(id) {
+            Err(IonMobilityFrameAccessError::IOError(None))
+        } else {
+            Err(IonMobilityFrameAccessError::FrameIdNotFound(id.to_string()))
         }
     }
 
@@ -610,24 +605,19 @@ impl<
     }
 
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, IonMobilityFrameAccessError> {
-        match self.get_frame_by_time(time) {
-            Some(scan) => {
-                self.index = scan.index();
-                self.back_index = 0;
-                Ok(self)
-            }
-            _ => {
-                if self
-                    .get_frame_by_index(self.len() - 1)
-                    .expect("Failed to fetch spectrum for boundary testing")
-                    .start_time()
-                    < time
-                {
-                    Err(IonMobilityFrameAccessError::FrameNotFound)
-                } else {
-                    Err(IonMobilityFrameAccessError::IOError(None))
-                }
-            }
+        if let Some(scan) = self.get_frame_by_time(time) {
+            self.index = scan.index();
+            self.back_index = 0;
+            Ok(self)
+        } else if self
+            .get_frame_by_index(self.len() - 1)
+            .expect("Failed to fetch spectrum for boundary testing")
+            .start_time()
+            < time
+        {
+            Err(IonMobilityFrameAccessError::FrameNotFound)
+        } else {
+            Err(IonMobilityFrameAccessError::IOError(None))
         }
     }
 }

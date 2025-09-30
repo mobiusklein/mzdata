@@ -478,19 +478,14 @@ impl<
 {
     /// Start iterating from the spectrum whose native ID matches `id`
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
-        match self.get_spectrum_by_id(id) {
-            Some(scan) => {
-                self.index = scan.index();
-                self.back_index = 0;
-                Ok(self)
-            }
-            _ => {
-                if self.get_index().contains_key(id) {
-                    Err(SpectrumAccessError::IOError(None))
-                } else {
-                    Err(SpectrumAccessError::SpectrumIdNotFound(id.to_string()))
-                }
-            }
+        if let Some(scan) = self.get_spectrum_by_id(id) {
+            self.index = scan.index();
+            self.back_index = 0;
+            Ok(self)
+        } else if self.get_index().contains_key(id) {
+            Err(SpectrumAccessError::IOError(None))
+        } else {
+            Err(SpectrumAccessError::SpectrumIdNotFound(id.to_string()))
         }
     }
 
@@ -505,24 +500,19 @@ impl<
     }
 
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
-        match self.get_spectrum_by_time(time) {
-            Some(scan) => {
-                self.index = scan.index();
-                self.back_index = 0;
-                Ok(self)
-            }
-            _ => {
-                if self
-                    .get_spectrum_by_index(self.len() - 1)
-                    .expect("Failed to fetch spectrum for boundary testing")
-                    .start_time()
-                    < time
-                {
-                    Err(SpectrumAccessError::SpectrumNotFound)
-                } else {
-                    Err(SpectrumAccessError::IOError(None))
-                }
-            }
+        if let Some(scan) = self.get_spectrum_by_time(time) {
+            self.index = scan.index();
+            self.back_index = 0;
+            Ok(self)
+        } else if self
+            .get_spectrum_by_index(self.len() - 1)
+            .expect("Failed to fetch spectrum for boundary testing")
+            .start_time()
+            < time
+        {
+            Err(SpectrumAccessError::SpectrumNotFound)
+        } else {
+            Err(SpectrumAccessError::IOError(None))
         }
     }
 }
@@ -755,13 +745,10 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>, I: Ite
     /// Fill the buffer with at most `size` spectra
     pub fn populate_buffer(&mut self, size: usize) {
         for _ in 0..size {
-            match self.source.next() {
-                Some(value) => {
-                    self.buffer.push_back(value);
-                }
-                _ => {
-                    break;
-                }
+            if let Some(value) = self.source.next() {
+                self.buffer.push_back(value);
+            } else {
+                break;
             }
         }
     }
@@ -1053,12 +1040,11 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D> + Clone
     }
 
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
-        match self.get_spectrum_by_time(time) {
-            Some(scan) => {
-                self.position = scan.index();
-                Ok(self)
-            }
-            _ => Err(SpectrumAccessError::SpectrumNotFound),
+        if let Some(scan) = self.get_spectrum_by_time(time) {
+            self.position = scan.index();
+            Ok(self)
+        } else {
+            Err(SpectrumAccessError::SpectrumNotFound)
         }
     }
 }

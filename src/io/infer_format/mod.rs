@@ -57,41 +57,38 @@ mod test {
     fn infer_open() {
         let path = path::Path::new("./test/data/small.mzML");
         assert!(path.exists());
-        match MZReader::open_path(path) {
-            Ok(mut reader) => {
-                assert_eq!(reader.len(), 48);
-                assert_eq!(*reader.detail_level(), DetailLevel::Full);
-                if let Some(spec) = reader.get_spectrum_by_index(10) {
-                    let spec: Spectrum = spec;
-                    assert!(spec.index() == 10);
-                    assert!(spec.id() == "controllerType=0 controllerNumber=1 scan=11");
-                    if let Some(data_arrays) = &spec.arrays {
-                        assert!(data_arrays.has_array(&ArrayType::MZArray));
-                        assert!(data_arrays.has_array(&ArrayType::IntensityArray));
-                        let mzs = data_arrays.mzs().unwrap();
-                        assert!(mzs.len() == 941);
-                    }
-                } else {
-                    panic!("Failed to retrieve spectrum by index")
+        if let Ok(mut reader) = MZReader::open_path(path) {
+            assert_eq!(reader.len(), 48);
+            assert_eq!(*reader.detail_level(), DetailLevel::Full);
+            if let Some(spec) = reader.get_spectrum_by_index(10) {
+                let spec: Spectrum = spec;
+                assert!(spec.index() == 10);
+                assert!(spec.id() == "controllerType=0 controllerNumber=1 scan=11");
+                if let Some(data_arrays) = &spec.arrays {
+                    assert!(data_arrays.has_array(&ArrayType::MZArray));
+                    assert!(data_arrays.has_array(&ArrayType::IntensityArray));
+                    let mzs = data_arrays.mzs().unwrap();
+                    assert!(mzs.len() == 941);
                 }
-
-                assert_eq!(
-                    reader
-                        .get_spectrum_by_id("controllerType=0 controllerNumber=1 scan=11")
-                        .unwrap()
-                        .index(),
-                    10
-                );
-
-                if let Some(spec) = reader.get_spectrum_by_time(0.358558333333) {
-                    assert_eq!(spec.index(), 34);
-                } else {
-                    panic!("Failed to retrieve spectrum by time")
-                }
+            } else {
+                panic!("Failed to retrieve spectrum by index")
             }
-            _ => {
-                panic!("Failed to open file")
+
+            assert_eq!(
+                reader
+                    .get_spectrum_by_id("controllerType=0 controllerNumber=1 scan=11")
+                    .unwrap()
+                    .index(),
+                10
+            );
+
+            if let Some(spec) = reader.get_spectrum_by_time(0.358558333333) {
+                assert_eq!(spec.index(), 34);
+            } else {
+                panic!("Failed to retrieve spectrum by time")
             }
+        } else {
+            panic!("Failed to open file")
         }
     }
 

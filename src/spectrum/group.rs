@@ -272,34 +272,31 @@ impl<
     */
     pub fn next_group(&mut self) -> Option<G> {
         loop {
-            match self.source.next() {
-                Some(spectrum) => {
-                    let level = spectrum.ms_level();
-                    if level > self.highest_ms_level {
-                        self.highest_ms_level = level;
-                    }
-                    if level > 1 {
-                        self.add_product(spectrum);
-                        if self.depth > self.max_ms1_seeking_depth {
-                            return Some(self.deque_group_without_precursor());
-                        }
-                    } else if self.add_precursor(spectrum) {
-                        return self.deque_group(false);
-                    }
+            if let Some(spectrum) = self.source.next() {
+                let level = spectrum.ms_level();
+                if level > self.highest_ms_level {
+                    self.highest_ms_level = level;
                 }
-                _ => {
-                    return match self.queue.len() {
-                        d if d > 1 => self.deque_group(false),
-                        1 => self.deque_group(true),
-                        _ => {
-                            if !self.product_mapping.is_empty() {
-                                Some(self.deque_group_without_precursor())
-                            } else {
-                                None
-                            }
-                        }
-                    };
+                if level > 1 {
+                    self.add_product(spectrum);
+                    if self.depth > self.max_ms1_seeking_depth {
+                        return Some(self.deque_group_without_precursor());
+                    }
+                } else if self.add_precursor(spectrum) {
+                    return self.deque_group(false);
                 }
+            } else {
+                return match self.queue.len() {
+                    d if d > 1 => self.deque_group(false),
+                    1 => self.deque_group(true),
+                    _ => {
+                        if !self.product_mapping.is_empty() {
+                            Some(self.deque_group_without_precursor())
+                        } else {
+                            None
+                        }
+                    }
+                };
             }
         }
     }
@@ -483,34 +480,31 @@ impl<
     */
     pub fn next_group(&mut self) -> Option<G> {
         loop {
-            match self.source.next() {
-                Some(spectrum) => {
-                    let level = spectrum.ms_level();
-                    if level > self.highest_ms_level {
-                        self.highest_ms_level = level;
-                    }
-                    if level > 1 {
-                        self.add_product(spectrum);
-                        if self.depth > self.max_ms1_seeking_depth {
-                            return Some(self.deque_group_without_precursor());
-                        }
-                    } else if self.add_precursor(spectrum) {
-                        return self.deque_group(false);
-                    }
+            if let Some(spectrum) = self.source.next() {
+                let level = spectrum.ms_level();
+                if level > self.highest_ms_level {
+                    self.highest_ms_level = level;
                 }
-                _ => {
-                    return match self.queue.len() {
-                        d if d > 1 => self.deque_group(false),
-                        1 => self.deque_group(true),
-                        _ => {
-                            if !self.product_mapping.is_empty() {
-                                Some(self.deque_group_without_precursor())
-                            } else {
-                                None
-                            }
-                        }
-                    };
+                if level > 1 {
+                    self.add_product(spectrum);
+                    if self.depth > self.max_ms1_seeking_depth {
+                        return Some(self.deque_group_without_precursor());
+                    }
+                } else if self.add_precursor(spectrum) {
+                    return self.deque_group(false);
                 }
+            } else {
+                return match self.queue.len() {
+                    d if d > 1 => self.deque_group(false),
+                    1 => self.deque_group(true),
+                    _ => {
+                        if !self.product_mapping.is_empty() {
+                            Some(self.deque_group_without_precursor())
+                        } else {
+                            None
+                        }
+                    }
+                };
             }
         }
     }
