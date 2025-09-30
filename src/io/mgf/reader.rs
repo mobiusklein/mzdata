@@ -251,24 +251,23 @@ impl MGFTitleParsing for TPPTitleParser {
                                 .fields
                                 .insert("Charge".into(), charge.parse().unwrap());
                         }
-                        if let Some(tail) = after_charge.strip_prefix("File:\"") {
-                            if let Some((head, rest)) = tail.split_once('"') {
+                        if let Some(tail) = after_charge.strip_prefix("File:\"")
+                            && let Some((head, rest)) = tail.split_once('"')
+                        {
+                            if collect_fields {
+                                result
+                                    .fields
+                                    .insert("File".into(), Value::String(head.into()));
+                            }
+                            if let Some(tail) = rest.strip_prefix(", NativeID:\"")
+                                && let Some((head, _rest)) = tail.split_once('"')
+                            {
                                 if collect_fields {
                                     result
                                         .fields
-                                        .insert("File".into(), Value::String(head.into()));
+                                        .insert("NativeID".into(), Value::String(head.into()));
                                 }
-                                if let Some(tail) = rest.strip_prefix(", NativeID:\"") {
-                                    if let Some((head, _rest)) = tail.split_once('"') {
-                                        if collect_fields {
-                                            result.fields.insert(
-                                                "NativeID".into(),
-                                                Value::String(head.into()),
-                                            );
-                                        }
-                                        result.identifier = Some(head.into());
-                                    }
-                                }
+                                result.identifier = Some(head.into());
                             }
                         }
                     } else {
@@ -557,10 +556,9 @@ pub(crate) trait MGFLineParsing<
                         .precursor
                         .last_mut()
                         .and_then(|v| v.iter_mut().last())
+                        && ion.charge.is_none()
                     {
-                        if ion.charge.is_none() {
-                            ion.charge = builder.precursor_charge
-                        }
+                        ion.charge = builder.precursor_charge
                     }
                 }
                 &_ => {
@@ -914,12 +912,12 @@ impl<
             } else if found_start {
                 let string_buffer = String::from_utf8_lossy(&buffer);
                 let indexer = self.indexer();
-                if let Some((key, value)) = string_buffer.split_once('=') {
-                    if indexer.is_index_key(key) {
-                        index.insert(indexer.handle_key(key, value), last_start);
-                        found_start = false;
-                        last_start = 0;
-                    }
+                if let Some((key, value)) = string_buffer.split_once('=')
+                    && indexer.is_index_key(key)
+                {
+                    index.insert(indexer.handle_key(key, value), last_start);
+                    found_start = false;
+                    last_start = 0;
                 }
             }
             offset += b as u64;

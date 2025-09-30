@@ -439,12 +439,11 @@ impl IndexedMzMLIndexExtractor {
         let mut buf = Bytes::new();
         reader.read_to_end(&mut buf)?;
         let pattern = regex::Regex::new("<indexListOffset>(\\d+)</indexListOffset>").unwrap();
-        if let Some(captures) = pattern.captures(&String::from_utf8_lossy(&buf)) {
-            if let Some(offset) = captures.get(1) {
-                if let Ok(offset) = offset.as_str().parse::<u64>() {
-                    return Ok(Some(offset));
-                }
-            }
+        if let Some(captures) = pattern.captures(&String::from_utf8_lossy(&buf))
+            && let Some(offset) = captures.get(1)
+            && let Ok(offset) = offset.as_str().parse::<u64>()
+        {
+            return Ok(Some(offset));
         }
         Ok(None)
     }

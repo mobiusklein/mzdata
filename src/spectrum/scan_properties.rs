@@ -800,10 +800,10 @@ impl SpectrumDescription {
             .collect();
 
         for param in self.params().iter() {
-            if let Some(c) = param.curie() {
-                if let Some(t) = conv_table.get(&c) {
-                    return Some(*t);
-                }
+            if let Some(c) = param.curie()
+                && let Some(t) = conv_table.get(&c)
+            {
+                return Some(*t);
             }
         }
         None
@@ -822,11 +822,11 @@ impl SpectrumDescription {
             .collect();
 
         for param in self.params_mut().iter_mut() {
-            if let Some(c) = param.curie() {
-                if conv_table.contains(&c) {
-                    *param = to_insert.into();
-                    return;
-                }
+            if let Some(c) = param.curie()
+                && conv_table.contains(&c)
+            {
+                *param = to_insert.into();
+                return;
             }
         }
 

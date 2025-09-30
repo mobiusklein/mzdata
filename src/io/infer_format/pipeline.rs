@@ -98,12 +98,12 @@ impl<
     pub fn index_file_name(&self) -> Option<PathBuf> {
         match &self {
             Self::PathLike(path) => {
-                if let Some(stem) = path.file_name() {
-                    if let Some(parent) = path.parent() {
-                        let base = parent.join(stem);
-                        let name = base.with_extension("index.json");
-                        return Some(name);
-                    }
+                if let Some(stem) = path.file_name()
+                    && let Some(parent) = path.parent()
+                {
+                    let base = parent.join(stem);
+                    let name = base.with_extension("index.json");
+                    return Some(name);
                 }
                 None
             }

@@ -647,10 +647,10 @@ impl BuildFromArrayMap3D for Feature<MZ, IonMobility> {
             if arr.is_empty() {
                 continue;
             }
-            if let Some(arr) = arr.get(&key) {
-                if let Some(i) = arr.iter_i32()?.map(|i| i as usize).max() {
-                    n = n.max(i);
-                }
+            if let Some(arr) = arr.get(&key)
+                && let Some(i) = arr.iter_i32()?.map(|i| i as usize).max()
+            {
+                n = n.max(i);
             }
         }
 
@@ -696,10 +696,10 @@ impl BuildFromArrayMap3D for ChargedFeature<Mass, IonMobility> {
             if arr.is_empty() {
                 continue;
             }
-            if let Some(arr) = arr.get(&key) {
-                if let Some(i) = arr.iter_i32()?.map(|i| i as usize).max() {
-                    n = n.max(i);
-                }
+            if let Some(arr) = arr.get(&key)
+                && let Some(i) = arr.iter_i32()?.map(|i| i as usize).max()
+            {
+                n = n.max(i);
             }
         }
 

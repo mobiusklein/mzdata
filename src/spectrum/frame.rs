@@ -185,10 +185,10 @@ pub trait IonMobilityFrameLike<
 
     /// Get a mutable reference to the ion mobility dimension's unit
     fn ion_mobility_unit_mut(&mut self) -> &mut Unit {
-        if self.description().ion_mobility_unit == Unit::Unknown {
-            if let Some(unit) = self.raw_arrays().map(|a| a.ion_mobility_unit) {
-                self.description_mut().ion_mobility_unit = unit;
-            }
+        if self.description().ion_mobility_unit == Unit::Unknown
+            && let Some(unit) = self.raw_arrays().map(|a| a.ion_mobility_unit)
+        {
+            self.description_mut().ion_mobility_unit = unit;
         }
         &mut self.description_mut().ion_mobility_unit
     }
@@ -380,10 +380,10 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             deconvoluted_features,
             description,
         };
-        if this.description.ion_mobility_unit.is_unknown() {
-            if let Some(arrays) = this.raw_arrays() {
-                this.description.ion_mobility_unit = arrays.ion_mobility_unit
-            }
+        if this.description.ion_mobility_unit.is_unknown()
+            && let Some(arrays) = this.raw_arrays()
+        {
+            this.description.ion_mobility_unit = arrays.ion_mobility_unit
         }
         this
     }

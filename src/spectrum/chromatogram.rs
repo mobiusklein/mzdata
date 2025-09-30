@@ -32,12 +32,12 @@ macro_rules! as_feature_view {
 
 #[allow(unused)]
 pub(crate) fn as_simple_feature(chromatogram: &Chromatogram) -> Option<SimpleFeature<MZ, Time>> {
-    if let Ok(t) = chromatogram.time() {
-        if let Ok(i) = chromatogram.intensity() {
-            let mut f = SimpleFeature::<MZ, Time>::empty(0.0);
-            f.extend(t.iter().zip(i.iter()).map(|(y, z)| (0.0f64, *y, *z)));
-            return Some(f);
-        }
+    if let Ok(t) = chromatogram.time()
+        && let Ok(i) = chromatogram.intensity()
+    {
+        let mut f = SimpleFeature::<MZ, Time>::empty(0.0);
+        f.extend(t.iter().zip(i.iter()).map(|(y, z)| (0.0f64, *y, *z)));
+        return Some(f);
     }
     None
 }

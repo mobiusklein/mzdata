@@ -325,10 +325,10 @@ impl Value {
             return Ok(*val);
         } else if let Self::Int(val) = self {
             return Ok(*val as f64);
-        } else if let Self::String(val) = self {
-            if let Ok(v) = val.parse() {
-                return Ok(v);
-            }
+        } else if let Self::String(val) = self
+            && let Ok(v) = val.parse()
+        {
+            return Ok(v);
         }
         Err(ParamValueParseError::FailedToExtractFloat(Some(
             self.to_string(),
@@ -340,10 +340,10 @@ impl Value {
             return Ok(*val);
         } else if let Self::Float(val) = self {
             return Ok(*val as i64);
-        } else if let Self::String(val) = self {
-            if let Ok(v) = val.parse() {
-                return Ok(v);
-            }
+        } else if let Self::String(val) = self
+            && let Ok(v) = val.parse()
+        {
+            return Ok(v);
         }
         Err(ParamValueParseError::FailedToExtractInt(Some(
             self.to_string(),
@@ -824,10 +824,10 @@ impl<'a> ValueRef<'a> {
             return Ok(*val);
         } else if let Self::Int(val) = self {
             return Ok(*val as f64);
-        } else if let Self::String(val) = self {
-            if let Ok(v) = val.parse() {
-                return Ok(v);
-            }
+        } else if let Self::String(val) = self
+            && let Ok(v) = val.parse()
+        {
+            return Ok(v);
         }
         Err(ParamValueParseError::FailedToExtractFloat(Some(
             self.to_string(),
@@ -839,10 +839,10 @@ impl<'a> ValueRef<'a> {
             return Ok(*val);
         } else if let Self::Float(val) = self {
             return Ok(*val as i64);
-        } else if let Self::String(val) = self {
-            if let Ok(v) = val.parse() {
-                return Ok(v);
-            }
+        } else if let Self::String(val) = self
+            && let Ok(v) = val.parse()
+        {
+            return Ok(v);
         }
         Err(ParamValueParseError::FailedToExtractInt(Some(
             self.to_string(),

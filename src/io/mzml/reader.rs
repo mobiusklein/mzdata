@@ -1641,10 +1641,10 @@ impl<
         match self._parse_into(accumulator) {
             Ok((accumulator, sz)) => {
                 accumulator.into_spectrum(spectrum);
-                if self.detail_level == DetailLevel::Full {
-                    if let Err(e) = spectrum.try_build_peaks() {
-                        log::debug!("Failed to eagerly load peaks from centroid spectrum: {e}");
-                    }
+                if self.detail_level == DetailLevel::Full
+                    && let Err(e) = spectrum.try_build_peaks()
+                {
+                    log::debug!("Failed to eagerly load peaks from centroid spectrum: {e}");
                 }
                 Ok(sz)
             }
@@ -2051,17 +2051,17 @@ impl<
             } else {
                 match self.handle.fill_buf() {
                     Ok(buf) => {
-                        if let Some(i) = buf.iter().position(|b| *b == b'\r') {
-                            if let Some(b2) = buf.get(i + 1) {
-                                let has_windows_eol = *b2 == b'\n';
-                                if has_windows_eol {
-                                    warn!(
-                                        "Carriage return line endings detected and offset index is not valid"
-                                    );
-                                    self.seek(SeekFrom::Start(position))
-                                        .map_err(IndexRecoveryOperation::IOFailure)?;
-                                    return Err(IndexRecoveryOperation::EOLMismatchSuspected);
-                                }
+                        if let Some(i) = buf.iter().position(|b| *b == b'\r')
+                            && let Some(b2) = buf.get(i + 1)
+                        {
+                            let has_windows_eol = *b2 == b'\n';
+                            if has_windows_eol {
+                                warn!(
+                                    "Carriage return line endings detected and offset index is not valid"
+                                );
+                                self.seek(SeekFrom::Start(position))
+                                    .map_err(IndexRecoveryOperation::IOFailure)?;
+                                return Err(IndexRecoveryOperation::EOLMismatchSuspected);
                             }
                         }
                     }
@@ -2101,11 +2101,11 @@ impl<
         self.handle.read_to_end(&mut buf)?;
 
         let pattern = regex::Regex::new("<fileChecksum>([0-9a-zA-Z]+)</fileChecksum>").unwrap();
-        if let Some(captures) = pattern.captures(&String::from_utf8_lossy(&buf)) {
-            if let Some(hit) = captures.get(1) {
-                self.handle.seek(SeekFrom::Start(current_position))?;
-                return Ok(Some(hit.as_str().to_string()));
-            }
+        if let Some(captures) = pattern.captures(&String::from_utf8_lossy(&buf))
+            && let Some(hit) = captures.get(1)
+        {
+            self.handle.seek(SeekFrom::Start(current_position))?;
+            return Ok(Some(hit.as_str().to_string()));
         }
 
         self.handle.seek(SeekFrom::Start(current_position))?;

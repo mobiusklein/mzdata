@@ -52,10 +52,10 @@ impl SummaryOps for BinaryArrayMap {
                 .iter()
                 .enumerate()
                 .max_by(|ia, ib| ia.1.total_cmp(ib.1));
-            if let Ok(mzs) = self.mzs() {
-                if let Some((i, inten)) = result {
-                    peak = CentroidPeak::new(mzs[i], *inten, i as IndexType)
-                }
+            if let Ok(mzs) = self.mzs()
+                && let Some((i, inten)) = result
+            {
+                peak = CentroidPeak::new(mzs[i], *inten, i as IndexType)
             }
         }
         peak
