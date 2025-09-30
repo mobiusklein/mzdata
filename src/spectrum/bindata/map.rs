@@ -215,7 +215,7 @@ impl BinaryArrayMap {
             .get(name)
             .ok_or_else(|| ArrayRetrievalError::NotFound(name.clone()))?;
         macro_rules! sort_mask {
-            ($conv:expr_2021, $cmp:expr_2021) => {{
+            ($conv:expr, $cmp:expr) => {{
                 let vals = $conv?;
                 if vals.is_sorted() {
                     return Ok(());
