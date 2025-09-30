@@ -12,7 +12,7 @@ use crate::params::{
     AccessionIntCode, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit,
     CURIE,
 };
-use crate::{curie, impl_param_described, ParamList};
+use crate::ParamList;
 
 /**
 Describe the initialization stage of an isolation window
