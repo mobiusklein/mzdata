@@ -8,8 +8,8 @@ use tokio;
 use super::ThermoRawReaderType as SyncThermoRawReaderType;
 use crate::{
     io::{
-        traits::{AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, SpectrumStream},
         DetailLevel,
+        traits::{AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, SpectrumStream},
     },
     prelude::*,
     spectrum::MultiLayerSpectrum,
@@ -24,9 +24,9 @@ pub struct ThermoRawReaderType<
 
 #[cfg(feature = "async")]
 impl<
-        C: CentroidLike + From<CentroidPeak> + Send + 'static,
-        D: DeconvolutedCentroidLike + Send + 'static,
-    > AsyncMZFileReader<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
+    C: CentroidLike + From<CentroidPeak> + Send + 'static,
+    D: DeconvolutedCentroidLike + Send + 'static,
+> AsyncMZFileReader<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
 {
     async fn construct_index_from_stream(&mut self) -> u64 {
         self.len() as u64
@@ -59,9 +59,9 @@ impl<C: CentroidLike + From<CentroidPeak> + Send, D: DeconvolutedCentroidLike + 
 }
 
 impl<
-        C: CentroidLike + From<CentroidPeak> + Send + 'static,
-        D: DeconvolutedCentroidLike + Send + 'static,
-    > AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
+    C: CentroidLike + From<CentroidPeak> + Send + 'static,
+    D: DeconvolutedCentroidLike + Send + 'static,
+> AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
 {
     fn reset(&mut self) -> impl std::future::Future<Output = ()> {
         self.inner.as_mut().unwrap().reset();
@@ -108,9 +108,9 @@ impl<
 }
 
 impl<
-        C: CentroidLike + From<CentroidPeak> + Send + 'static,
-        D: DeconvolutedCentroidLike + Send + 'static,
-    > ThermoRawReaderType<C, D>
+    C: CentroidLike + From<CentroidPeak> + Send + 'static,
+    D: DeconvolutedCentroidLike + Send + 'static,
+> ThermoRawReaderType<C, D>
 {
     /// Create a new [`ThermoRawReaderType`] from a path.
     /// This may trigger an expensive I/O operation to checksum the file
@@ -243,10 +243,9 @@ impl<
 pub type ThermoRawReader = ThermoRawReaderType<CentroidPeak, DeconvolutedPeak>;
 
 impl<
-        C: CentroidLike + From<CentroidPeak> + Send + Sync + 'static,
-        D: DeconvolutedCentroidLike + Send + Sync + 'static,
-    > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>>
-    for ThermoRawReaderType<C, D>
+    C: CentroidLike + From<CentroidPeak> + Send + Sync + 'static,
+    D: DeconvolutedCentroidLike + Send + Sync + 'static,
+> AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for ThermoRawReaderType<C, D>
 {
     async fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         let mut inner = self.inner.take().unwrap();

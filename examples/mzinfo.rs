@@ -8,12 +8,12 @@ use std::time;
 
 use std::sync::mpsc::sync_channel;
 
+use mzdata::MZReader;
 use mzdata::io::Source;
 use mzdata::prelude::*;
 use mzdata::spectrum::{
     DeconvolutedSpectrum, MultiLayerSpectrum, RefPeakDataLevel, SignalContinuity, SpectrumLike,
 };
-use mzdata::MZReader;
 
 struct MSDataFileSummary {
     pub start_time: f64,

@@ -19,7 +19,7 @@ pub use data_processing::{
     ProcessingMethod,
 };
 pub use software::{
-    custom_software_name, Software, SoftwareTerm, SoftwareType as SoftwareTypeFlags,
+    Software, SoftwareTerm, SoftwareType as SoftwareTypeFlags, custom_software_name,
 };
 
 pub use file_description::{

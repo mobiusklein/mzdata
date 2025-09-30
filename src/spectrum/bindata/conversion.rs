@@ -1,10 +1,10 @@
 use std::{collections::HashSet, convert::TryInto, mem};
 
 use mzpeaks::{
+    CentroidLike, CentroidPeak, CoordinateLike, DeconvolutedPeak, DeconvolutedPeakSet, IonMobility,
+    MZ, MZPeakSetType, Mass, PeakSet,
     feature::{ChargedFeature, Feature},
     prelude::*,
-    CentroidLike, CentroidPeak, CoordinateLike, DeconvolutedPeak, DeconvolutedPeakSet, IonMobility,
-    MZPeakSetType, Mass, PeakSet, MZ,
 };
 
 use crate::{
@@ -13,10 +13,10 @@ use crate::{
 };
 
 use super::{
+    BinaryArrayMap3D, ByteArrayView,
     array::DataArray,
     encodings::{ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType},
     map::BinaryArrayMap,
-    BinaryArrayMap3D, ByteArrayView,
 };
 
 impl From<&PeakSet> for BinaryArrayMap {

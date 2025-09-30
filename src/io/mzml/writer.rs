@@ -8,7 +8,7 @@ use log::warn;
 use mzpeaks::feature::FeatureLike;
 use thiserror::Error;
 
-use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, IonMobility, KnownCharge, Mass, MZ};
+use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, IonMobility, KnownCharge, MZ, Mass};
 use quick_xml::escape;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::{Error as XMLError, Writer};
@@ -29,12 +29,12 @@ use crate::params::{
     ParamLike, ParamValue, Unit, ValueRef,
 };
 use crate::spectrum::bindata::{
-    to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType,
-    BinaryDataArrayType, BuildArrayMap3DFrom, BuildArrayMapFrom, ByteArrayView, DataArray,
+    ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType,
+    BuildArrayMap3DFrom, BuildArrayMapFrom, ByteArrayView, DataArray, to_bytes,
 };
 use crate::spectrum::spectrum_types::SpectrumLike;
-use crate::spectrum::{scan_properties::*, Chromatogram, ChromatogramLike, RefPeakDataLevel};
-use crate::{curie, impl_param_described, RawSpectrum};
+use crate::spectrum::{Chromatogram, ChromatogramLike, RefPeakDataLevel, scan_properties::*};
+use crate::{RawSpectrum, curie, impl_param_described};
 
 const BUFFER_SIZE: usize = 10000;
 
@@ -470,7 +470,9 @@ impl CompressionRegistry {
     fn check(method: BinaryCompressionType) -> BinaryCompressionType {
         match method {
             BinaryCompressionType::Decoded => {
-                warn!("The mzML writer was asked to use the `Decoded` array compression, using `Zlib` instead");
+                warn!(
+                    "The mzML writer was asked to use the `Decoded` array compression, using `Zlib` instead"
+                );
                 BinaryCompressionType::Zlib
             }
             _ => method,
@@ -589,11 +591,8 @@ pub struct MzMLWriterType<
     param_groups: Vec<ParamGroup>,
 }
 
-impl<
-        W: Write,
-        C: CentroidLike + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
-    > SpectrumWriter<C, D> for MzMLWriterType<W, C, D>
+impl<W: Write, C: CentroidLike + BuildArrayMapFrom, D: DeconvolutedCentroidLike + BuildArrayMapFrom>
+    SpectrumWriter<C, D> for MzMLWriterType<W, C, D>
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
         match self.write_spectrum(spectrum) {
@@ -619,12 +618,12 @@ impl<
 }
 
 impl<
-        W: Write,
-        C: CentroidLike + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
-        CF: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
-        DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
-    > IonMobilityFrameWriter<CF, DF> for MzMLWriterType<W, C, D>
+    W: Write,
+    C: CentroidLike + BuildArrayMapFrom,
+    D: DeconvolutedCentroidLike + BuildArrayMapFrom,
+    CF: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
+    DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
+> IonMobilityFrameWriter<CF, DF> for MzMLWriterType<W, C, D>
 {
     fn write_frame<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(
         &mut self,
@@ -669,11 +668,8 @@ impl<
     }
 }
 
-impl<
-        W: Write,
-        C: CentroidLike + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
-    > MSDataFileMetadata for MzMLWriterType<W, C, D>
+impl<W: Write, C: CentroidLike + BuildArrayMapFrom, D: DeconvolutedCentroidLike + BuildArrayMapFrom>
+    MSDataFileMetadata for MzMLWriterType<W, C, D>
 {
     crate::impl_metadata_trait!();
 
@@ -2233,10 +2229,10 @@ where
 }
 
 impl<
-        W: io::Write,
-        C: CentroidLike + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
-    > Drop for MzMLWriterType<W, C, D>
+    W: io::Write,
+    C: CentroidLike + BuildArrayMapFrom,
+    D: DeconvolutedCentroidLike + BuildArrayMapFrom,
+> Drop for MzMLWriterType<W, C, D>
 {
     fn drop(&mut self) {
         MzMLWriterType::close(self).unwrap();

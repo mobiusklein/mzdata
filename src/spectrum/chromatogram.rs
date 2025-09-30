@@ -5,7 +5,7 @@ use crate::params::{Param, ParamDescribed};
 use crate::spectrum::scan_properties::{
     ChromatogramDescription, ChromatogramType, Precursor, ScanPolarity,
 };
-use mzpeaks::coordinate::{Time, MZ};
+use mzpeaks::coordinate::{MZ, Time};
 use mzpeaks::feature::{FeatureView, SimpleFeature, TimeInterval};
 
 #[derive(Debug, Default, Clone)]

@@ -6,13 +6,13 @@ use log::warn;
 use num_traits::Float;
 
 use super::spectrum_types::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
+use crate::ParamList;
 use crate::io::traits::SpectrumSource;
 use crate::meta::DissociationMethodTerm;
 use crate::params::{
-    AccessionIntCode, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit,
-    CURIE,
+    AccessionIntCode, CURIE, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue,
+    Unit,
 };
-use crate::ParamList;
 
 /**
 Describe the initialization stage of an isolation window

@@ -70,11 +70,7 @@ pub trait SpectrumGrouping<
             .products()
             .iter()
             .fold(prec_level, |state, s| state.min(s.ms_level()));
-        if val > 0 {
-            Some(val)
-        } else {
-            None
-        }
+        if val > 0 { Some(val) } else { None }
     }
 
     /// The highest MS level in the group
@@ -87,11 +83,7 @@ pub trait SpectrumGrouping<
             .products()
             .iter()
             .fold(prec_level, |state, s| state.max(s.ms_level()));
-        if val > 0 {
-            Some(val)
-        } else {
-            None
-        }
+        if val > 0 { Some(val) } else { None }
     }
 
     /// Decompose the group into its components, discarding any additional metrics
@@ -167,11 +159,11 @@ pub struct SpectrumGroupIntoIter<
 }
 
 impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D> + Default,
-        G: SpectrumGrouping<C, D, S>,
-    > Iterator for SpectrumGroupIntoIter<C, D, S, G>
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D> + Default,
+    G: SpectrumGrouping<C, D, S>,
+> Iterator for SpectrumGroupIntoIter<C, D, S, G>
 {
     type Item = S;
 
@@ -219,11 +211,11 @@ impl<
 }
 
 impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D> + Default,
-        G: SpectrumGrouping<C, D, S>,
-    > SpectrumGroupIntoIter<C, D, S, G>
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D> + Default,
+    G: SpectrumGrouping<C, D, S>,
+> SpectrumGroupIntoIter<C, D, S, G>
 {
     pub fn new(group: G) -> Self {
         Self {
@@ -256,12 +248,12 @@ pub struct SpectrumGroupIter<
 }
 
 impl<
-        'a,
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D> + 'a,
-        G: SpectrumGrouping<C, D, S>,
-    > Iterator for SpectrumGroupIter<'a, C, D, S, G>
+    'a,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D> + 'a,
+    G: SpectrumGrouping<C, D, S>,
+> Iterator for SpectrumGroupIter<'a, C, D, S, G>
 {
     type Item = &'a S;
 
@@ -309,12 +301,12 @@ impl<
 }
 
 impl<
-        'a,
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        G: SpectrumGrouping<C, D, S>,
-    > SpectrumGroupIter<'a, C, D, S, G>
+    'a,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D>,
+    G: SpectrumGrouping<C, D, S>,
+> SpectrumGroupIter<'a, C, D, S, G>
 {
     pub fn new(group: &'a G) -> Self {
         Self {

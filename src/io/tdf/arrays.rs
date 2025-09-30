@@ -3,16 +3,16 @@ use std::{
     ops::{Range, RangeBounds},
 };
 
-use mzpeaks::{feature::Feature, IonMobility, MZPeakSetType, MZ};
-use timsrust::{converters::ConvertableDomain, Metadata};
+use mzpeaks::{IonMobility, MZ, MZPeakSetType, feature::Feature};
+use timsrust::{Metadata, converters::ConvertableDomain};
 
 use crate::{
     mzpeaks::{CentroidPeak, PeakSet},
     params::Unit,
     prelude::*,
     spectrum::{
-        bindata::{ArrayRetrievalError, BinaryArrayMap3D},
         ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray,
+        bindata::{ArrayRetrievalError, BinaryArrayMap3D},
     },
 };
 

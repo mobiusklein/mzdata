@@ -61,7 +61,9 @@ pub trait SpectrumSource<
     fn get_spectrum_by_time(&mut self, time: f64) -> Option<S> {
         let n = self.len();
         if n == 0 && !self.get_index().init {
-            warn!("Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized.");
+            warn!(
+                "Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized."
+            );
             return None;
         }
         let mut lo: usize = 0;
@@ -191,11 +193,11 @@ pub struct SpectrumIterator<
 }
 
 impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        R: SpectrumSource<C, D, S>,
-        S: SpectrumLike<C, D>,
-    > SpectrumIterator<'_, C, D, S, R>
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    R: SpectrumSource<C, D, S>,
+    S: SpectrumLike<C, D>,
+> SpectrumIterator<'_, C, D, S, R>
 {
     pub fn new(source: &mut R) -> SpectrumIterator<'_, C, D, S, R> {
         SpectrumIterator::<C, D, S, R> {
@@ -210,11 +212,11 @@ impl<
 }
 
 impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        R: SpectrumSource<C, D, S>,
-        S: SpectrumLike<C, D>,
-    > Iterator for SpectrumIterator<'_, C, D, S, R>
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    R: SpectrumSource<C, D, S>,
+    S: SpectrumLike<C, D>,
+> Iterator for SpectrumIterator<'_, C, D, S, R>
 {
     type Item = S;
 
@@ -234,11 +236,11 @@ impl<
 }
 
 impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        R: SpectrumSource<C, D, S>,
-        S: SpectrumLike<C, D>,
-    > ExactSizeIterator for SpectrumIterator<'_, C, D, S, R>
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    R: SpectrumSource<C, D, S>,
+    S: SpectrumLike<C, D>,
+> ExactSizeIterator for SpectrumIterator<'_, C, D, S, R>
 {
     fn len(&self) -> usize {
         self.source.len()
@@ -246,11 +248,11 @@ impl<
 }
 
 impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        R: SpectrumSource<C, D, S>,
-        S: SpectrumLike<C, D>,
-    > DoubleEndedIterator for SpectrumIterator<'_, C, D, S, R>
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    R: SpectrumSource<C, D, S>,
+    S: SpectrumLike<C, D>,
+> DoubleEndedIterator for SpectrumIterator<'_, C, D, S, R>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.index + self.back_index >= self.len() {
@@ -264,11 +266,11 @@ impl<
 }
 
 impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        R: SpectrumSource<C, D, S>,
-    > SpectrumSource<C, D, S> for SpectrumIterator<'_, C, D, S, R>
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D>,
+    R: SpectrumSource<C, D, S>,
+> SpectrumSource<C, D, S> for SpectrumIterator<'_, C, D, S, R>
 {
     fn reset(&mut self) {
         self.index = 0;
@@ -307,11 +309,11 @@ impl<
 /// If the underlying iterator implements [`MSDataFileMetadata`] then [`SpectrumIterator`] will
 /// forward that implementation, assuming it is available.
 impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        R: SpectrumSource<C, D, S>,
-        S: SpectrumLike<C, D>,
-    > MSDataFileMetadata for SpectrumIterator<'_, C, D, S, R>
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    R: SpectrumSource<C, D, S>,
+    S: SpectrumLike<C, D>,
+> MSDataFileMetadata for SpectrumIterator<'_, C, D, S, R>
 where
     R: MSDataFileMetadata,
 {
@@ -468,23 +470,28 @@ pub trait RandomAccessSpectrumIterator<
 }
 
 impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        R: SpectrumSource<C, D, S>,
-    > RandomAccessSpectrumIterator<C, D, S> for SpectrumIterator<'_, C, D, S, R>
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D>,
+    R: SpectrumSource<C, D, S>,
+> RandomAccessSpectrumIterator<C, D, S> for SpectrumIterator<'_, C, D, S, R>
 {
     /// Start iterating from the spectrum whose native ID matches `id`
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
-        match self.get_spectrum_by_id(id) { Some(scan) => {
-            self.index = scan.index();
-            self.back_index = 0;
-            Ok(self)
-        } _ => if self.get_index().contains_key(id) {
-            Err(SpectrumAccessError::IOError(None))
-        } else {
-            Err(SpectrumAccessError::SpectrumIdNotFound(id.to_string()))
-        }}
+        match self.get_spectrum_by_id(id) {
+            Some(scan) => {
+                self.index = scan.index();
+                self.back_index = 0;
+                Ok(self)
+            }
+            _ => {
+                if self.get_index().contains_key(id) {
+                    Err(SpectrumAccessError::IOError(None))
+                } else {
+                    Err(SpectrumAccessError::SpectrumIdNotFound(id.to_string()))
+                }
+            }
+        }
     }
 
     fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
@@ -498,20 +505,25 @@ impl<
     }
 
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
-        match self.get_spectrum_by_time(time) { Some(scan) => {
-            self.index = scan.index();
-            self.back_index = 0;
-            Ok(self)
-        } _ => if self
-            .get_spectrum_by_index(self.len() - 1)
-            .expect("Failed to fetch spectrum for boundary testing")
-            .start_time()
-            < time
-        {
-            Err(SpectrumAccessError::SpectrumNotFound)
-        } else {
-            Err(SpectrumAccessError::IOError(None))
-        }}
+        match self.get_spectrum_by_time(time) {
+            Some(scan) => {
+                self.index = scan.index();
+                self.back_index = 0;
+                Ok(self)
+            }
+            _ => {
+                if self
+                    .get_spectrum_by_index(self.len() - 1)
+                    .expect("Failed to fetch spectrum for boundary testing")
+                    .start_time()
+                    < time
+                {
+                    Err(SpectrumAccessError::SpectrumNotFound)
+                } else {
+                    Err(SpectrumAccessError::IOError(None))
+                }
+            }
+        }
     }
 }
 
@@ -525,11 +537,11 @@ pub trait RandomAccessSpectrumSource<
 }
 
 impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        T: SpectrumSource<C, D, S> + RandomAccessSpectrumIterator<C, D, S>,
-    > RandomAccessSpectrumSource<C, D, S> for T
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D>,
+    T: SpectrumSource<C, D, S> + RandomAccessSpectrumIterator<C, D, S>,
+> RandomAccessSpectrumSource<C, D, S> for T
 {
 }
 
@@ -542,11 +554,11 @@ pub trait SpectrumSourceWithMetadata<
 }
 
 impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        T: SpectrumSource<C, D, S> + MSDataFileMetadata,
-    > SpectrumSourceWithMetadata<C, D, S> for T
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D>,
+    T: SpectrumSource<C, D, S> + MSDataFileMetadata,
+> SpectrumSourceWithMetadata<C, D, S> for T
 {
 }
 
@@ -588,12 +600,8 @@ impl<C: CentroidLike + Send, D: DeconvolutedCentroidLike + Send, S: SpectrumLike
     }
 }
 
-impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        I: Iterator<Item = S>,
-    > SpectrumSource<C, D, S> for StreamingSpectrumIterator<C, D, S, I>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>, I: Iterator<Item = S>>
+    SpectrumSource<C, D, S> for StreamingSpectrumIterator<C, D, S, I>
 {
     fn detail_level(&self) -> &DetailLevel {
         &DetailLevel::Full
@@ -651,12 +659,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        I: Iterator<Item = S>,
-    > Iterator for StreamingSpectrumIterator<C, D, S, I>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>, I: Iterator<Item = S>>
+    Iterator for StreamingSpectrumIterator<C, D, S, I>
 {
     type Item = S;
 
@@ -670,10 +674,10 @@ impl<
 }
 
 impl<
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-        I: Iterator<Item = MultiLayerSpectrum<C, D>>,
-    > super::frame::IntoIonMobilityFrameSource<C, D>
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+    I: Iterator<Item = MultiLayerSpectrum<C, D>>,
+> super::frame::IntoIonMobilityFrameSource<C, D>
     for StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, I>
 {
     type IonMobilityFrameSource<
@@ -710,12 +714,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        I: Iterator<Item = S>,
-    > StreamingSpectrumIterator<C, D, S, I>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>, I: Iterator<Item = S>>
+    StreamingSpectrumIterator<C, D, S, I>
 {
     pub fn new(source: I) -> Self {
         Self {
@@ -755,11 +755,14 @@ impl<
     /// Fill the buffer with at most `size` spectra
     pub fn populate_buffer(&mut self, size: usize) {
         for _ in 0..size {
-            match self.source.next() { Some(value) => {
-                self.buffer.push_back(value);
-            } _ => {
-                break;
-            }}
+            match self.source.next() {
+                Some(value) => {
+                    self.buffer.push_back(value);
+                }
+                _ => {
+                    break;
+                }
+            }
         }
     }
 }
@@ -767,12 +770,8 @@ impl<
 /// [`StreamingSpectrumIterator`] implements [`RandomAccessSpectrumIterator`] in a limited fashion
 /// by reading through successive spectra until the target spectrum is found. This will exhaust the
 /// underlying iterator if the requested coordinate is not found.
-impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        I: Iterator<Item = S>,
-    > RandomAccessSpectrumIterator<C, D, S> for StreamingSpectrumIterator<C, D, S, I>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>, I: Iterator<Item = S>>
+    RandomAccessSpectrumIterator<C, D, S> for StreamingSpectrumIterator<C, D, S, I>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self.get_spectrum_by_id(id) {
@@ -807,12 +806,8 @@ impl<
 
 /// If the underlying iterator implements [`MSDataFileMetadata`] then [`StreamingSpectrumIterator`] will
 /// forward that implementation, assuming it is available.
-impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        I: Iterator<Item = S>,
-    > MSDataFileMetadata for StreamingSpectrumIterator<C, D, S, I>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>, I: Iterator<Item = S>>
+    MSDataFileMetadata for StreamingSpectrumIterator<C, D, S, I>
 where
     I: MSDataFileMetadata,
 {
@@ -1058,12 +1053,13 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D> + Clone
     }
 
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
-        match self.get_spectrum_by_time(time) { Some(scan) => {
-            self.position = scan.index();
-            Ok(self)
-        } _ => {
-            Err(SpectrumAccessError::SpectrumNotFound)
-        }}
+        match self.get_spectrum_by_time(time) {
+            Some(scan) => {
+                self.position = scan.index();
+                Ok(self)
+            }
+            _ => Err(SpectrumAccessError::SpectrumNotFound),
+        }
     }
 }
 
@@ -1198,8 +1194,8 @@ mod async_traits {
     use std::future::Future;
 
     use futures::{
-        stream::{self, FusedStream},
         Stream,
+        stream::{self, FusedStream},
     };
 
     use super::*;
@@ -1231,7 +1227,7 @@ mod async_traits {
 
         /// Retrieve a spectrum by it's integer index
         fn get_spectrum_by_index(&mut self, index: usize)
-            -> impl Future<Output = Option<S>> + Send;
+        -> impl Future<Output = Option<S>> + Send;
 
         /// Retrieve a spectrum by its scan start time
         /// Considerably more complex than seeking by ID or index, this involves
@@ -1242,7 +1238,9 @@ mod async_traits {
             {
                 let n = self.len();
                 if n == 0 && !self.get_index().init {
-                    warn!("Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized.");
+                    warn!(
+                        "Attempting to use `get_spectrum_by_time` when the spectrum index has not been initialized."
+                    );
                     return None;
                 }
                 let mut lo: usize = 0;
@@ -1411,11 +1409,11 @@ mod async_traits {
     }
 
     impl<
-            C: CentroidLike,
-            D: DeconvolutedCentroidLike,
-            S: SpectrumLike<C, D>,
-            T: Stream<Item = S> + FusedStream,
-        > SpectrumStream<C, D, S> for T
+        C: CentroidLike,
+        D: DeconvolutedCentroidLike,
+        S: SpectrumLike<C, D>,
+        T: Stream<Item = S> + FusedStream,
+    > SpectrumStream<C, D, S> for T
     {
     }
 }

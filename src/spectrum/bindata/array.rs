@@ -5,13 +5,13 @@ use std::mem;
 
 use base64_simd;
 use bytemuck::Pod;
-use flate2::write::{ZlibDecoder, ZlibEncoder};
 use flate2::Compression;
+use flate2::write::{ZlibDecoder, ZlibEncoder};
 
 use crate::params::{ParamList, Unit};
 
 use super::encodings::{
-    to_bytes, ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType, Bytes,
+    ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType, Bytes, to_bytes,
 };
 use super::traits::{ByteArrayView, ByteArrayViewMut};
 #[allow(unused)]
@@ -1090,7 +1090,9 @@ mod test {
         da.store_compressed(BinaryCompressionType::DeltaShuffleZstd)
             .unwrap();
         let delta_zstd_len = da.data.len();
-        eprintln!("decoded: {decoded_len};\nzlib: {zlib_len};\nzstd: {zstd_len};\ndelta-zstd: {delta_zstd_len}");
+        eprintln!(
+            "decoded: {decoded_len};\nzlib: {zlib_len};\nzstd: {zstd_len};\ndelta-zstd: {delta_zstd_len}"
+        );
         da.decode_and_store().unwrap();
         let view = da.to_f64().unwrap();
         let err: f64 = points

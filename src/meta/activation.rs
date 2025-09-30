@@ -238,8 +238,8 @@ pub enum DissociationEnergy {
 #[cfg(test)]
 mod test {
     use crate::{
-        params::{ControlledVocabulary, ParamCow, ValueRef},
         Param,
+        params::{ControlledVocabulary, ParamCow, ValueRef},
     };
 
     use super::*;

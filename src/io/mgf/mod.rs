@@ -31,12 +31,12 @@ pub fn is_mgf(buf: &[u8]) -> bool {
 
 #[cfg(test)]
 mod test {
+    use crate::CentroidSpectrum;
+    use crate::io::DetailLevel;
     use crate::io::mgf::reader::{
         TPPTitleParsingNativeIDIndexing, TPPTitleParsingScanNumberIndexing,
     };
-    use crate::io::DetailLevel;
     use crate::spectrum::RefPeakDataLevel;
-    use crate::CentroidSpectrum;
     use crate::{io::RestartableGzDecoder, prelude::*};
     use mzpeaks::{CentroidPeak, DeconvolutedPeak, IndexedCoordinate};
 

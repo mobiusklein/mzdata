@@ -11,6 +11,6 @@ mod reader;
 mod sql;
 
 pub use reader::{
-    is_tdf, TDFFrameReader, TDFFrameReaderType, TDFSpectrumReader, TDFSpectrumReaderType,
+    TDFFrameReader, TDFFrameReaderType, TDFSpectrumReader, TDFSpectrumReaderType, is_tdf,
 };
 pub use sql::{ChromatographyData, SQLTrace};

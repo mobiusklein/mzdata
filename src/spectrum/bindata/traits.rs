@@ -7,8 +7,8 @@ use crate::params::Unit;
 use bytemuck::Pod;
 use num_traits::{AsPrimitive, Num};
 
-use super::encodings::{ArrayRetrievalError, BinaryDataArrayType, Bytes};
 use super::ArrayType;
+use super::encodings::{ArrayRetrievalError, BinaryDataArrayType, Bytes};
 
 pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
     fn view(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError>;

@@ -7,7 +7,7 @@ use crate::meta::{
     MassAnalyzerTerm,
 };
 use crate::params::ParamDescribed;
-use crate::{params::ControlledVocabulary, Param};
+use crate::{Param, params::ControlledVocabulary};
 
 macro_rules! param {
     ($name:expr, $acc:expr) => {

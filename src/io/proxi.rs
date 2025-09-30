@@ -6,12 +6,12 @@ use std::{
 };
 
 use num_traits::AsPrimitive;
-use serde::{de::SeqAccess, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::SeqAccess};
 
 use crate::{
     curie,
     io::usi::USI,
-    params::{ControlledVocabulary, Param, ParamCow, Value, CURIE},
+    params::{CURIE, ControlledVocabulary, Param, ParamCow, Value},
     prelude::*,
     spectrum::{
         ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, IsolationWindowState,
@@ -62,11 +62,21 @@ impl PROXIBackend {
     /// The PROXI server base url which needs concatenating of the USI at the end
     fn proxi_url(&self, usi: &str) -> String {
         match self {
-            Self::PeptideAtlas => format!("http://www.peptideatlas.org/api/proxi/v0.1/spectra?resultType=full&usi={usi}") ,
-            Self::MassIVE => format!("http://massive.ucsd.edu/ProteoSAFe/proxi/v0.1/spectra?resultType=full&usi={usi}"),
-            Self::Pride => format!("https://www.ebi.ac.uk/pride/proxi/archive/v0.1/spectra?resultType=full&usi={usi}"),
-            Self::Jpost => format!("https://repository.jpostdb.org/proxi/spectra?resultType=full&usi={usi}"),
-            Self::ProteomeXchange => format!("https://proteomecentral.proteomexchange.org/api/proxi/v0.1/spectra?resultType=full&usi={usi}"),
+            Self::PeptideAtlas => format!(
+                "http://www.peptideatlas.org/api/proxi/v0.1/spectra?resultType=full&usi={usi}"
+            ),
+            Self::MassIVE => format!(
+                "http://massive.ucsd.edu/ProteoSAFe/proxi/v0.1/spectra?resultType=full&usi={usi}"
+            ),
+            Self::Pride => format!(
+                "https://www.ebi.ac.uk/pride/proxi/archive/v0.1/spectra?resultType=full&usi={usi}"
+            ),
+            Self::Jpost => {
+                format!("https://repository.jpostdb.org/proxi/spectra?resultType=full&usi={usi}")
+            }
+            Self::ProteomeXchange => format!(
+                "https://proteomecentral.proteomexchange.org/api/proxi/v0.1/spectra?resultType=full&usi={usi}"
+            ),
             Self::Custom(url) => url.replace("{USI}", usi),
         }
     }
@@ -1057,9 +1067,9 @@ impl From<&PROXISpectrum> for SpectrumDescription {
 }
 
 impl<
-        C: CentroidLike + BuildFromArrayMap + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap + BuildArrayMapFrom,
-    > From<PROXISpectrum> for MultiLayerSpectrum<C, D>
+    C: CentroidLike + BuildFromArrayMap + BuildArrayMapFrom,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap + BuildArrayMapFrom,
+> From<PROXISpectrum> for MultiLayerSpectrum<C, D>
 {
     fn from(value: PROXISpectrum) -> Self {
         let descr: SpectrumDescription = (&value).into();
@@ -1305,7 +1315,8 @@ mod test {
             "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555:VLHPLEGAVVIIFK/2",
             "mzspec:MSV000078547:120228_nbut_3610_it_it_take2:scan:389",
             "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV/2",
-            "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"] {
+            "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2",
+        ] {
             println!("Trying: {usi}");
             let usi: USI = usi.parse().unwrap();
             let (_, response) = usi.download_spectrum_blocking(None, None).unwrap();
@@ -1334,7 +1345,8 @@ mod test_async {
             "mzspec:PXD000561:Adult_Frontalcortex_bRP_Elite_85_f09:scan:17555:VLHPLEGAVVIIFK/2",
             "mzspec:MSV000078547:120228_nbut_3610_it_it_take2:scan:389",
             "mzspec:PXD043489:20201103_F1_UM5_Peng0013_SA_139H2_InS_Elastase.raw:scan:11809:VSLFPPSSEQLTSNASVV/2",
-            "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2"] {
+            "mzspec:PXD004939:Rice_phos_ABA_3h_20per_F1_R2:scan:2648:DAEKS[UNIMOD:21]PIN[UNIMOD:7]GR/2",
+        ] {
             println!("Trying: {usi}");
             let usi: USI = usi.parse().unwrap();
             let (_, response) = usi.download_spectrum_async(None, None).await.unwrap();

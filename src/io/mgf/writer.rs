@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-use std::io::{self, prelude::*, BufWriter};
+use std::io::{self, BufWriter, prelude::*};
 use std::marker::PhantomData;
 use std::str;
 
 use mzpeaks::{
-    peak::KnownCharge, CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated,
-    PeakCollection,
+    CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated, PeakCollection,
+    peak::KnownCharge,
 };
 
 use crate::prelude::*;
@@ -14,11 +14,11 @@ use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
     MassSpectrometryRun, Sample, Software,
 };
-use crate::params::{ControlledVocabulary, ParamDescribed, ParamLike, ParamValue as _, CURIE};
+use crate::params::{CURIE, ControlledVocabulary, ParamDescribed, ParamLike, ParamValue as _};
 
 use crate::spectrum::{
-    bindata::BinaryArrayMap, IonProperties, Precursor, PrecursorSelection, RefPeakDataLevel,
-    SignalContinuity, SpectrumDescription, SpectrumLike,
+    IonProperties, Precursor, PrecursorSelection, RefPeakDataLevel, SignalContinuity,
+    SpectrumDescription, SpectrumLike, bindata::BinaryArrayMap,
 };
 
 const TITLE_CV: CURIE = ControlledVocabulary::MS.curie(1000796);
@@ -278,7 +278,7 @@ impl<W: io::Write, C: CentroidLike, D: DeconvolutedCentroidLike, Y: MGFHeaderSty
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "MGF spectrum must be centroided",
-                ))
+                ));
             }
         }
         Ok(())

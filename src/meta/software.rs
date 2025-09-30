@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::params::{ControlledVocabulary, ParamList};
-use crate::{impl_param_described, Param};
+use crate::{Param, impl_param_described};
 
 /// A piece of software that was associated with the acquisition, transformation or otherwise
 /// processing of mass spectrometry data.
@@ -1288,9 +1288,11 @@ mod test {
             SoftwareTerm::SCIEXTOFTOFSeriesExplorerSoftware.flags(),
             SoftwareType::Analysis | SoftwareType::Acquisition | SoftwareType::DataProcessing
         );
-        assert!(SoftwareTerm::SCIEXTOFTOFSeriesExplorerSoftware
-            .flags()
-            .is_analysis(),);
+        assert!(
+            SoftwareTerm::SCIEXTOFTOFSeriesExplorerSoftware
+                .flags()
+                .is_analysis(),
+        );
     }
 
     #[test]

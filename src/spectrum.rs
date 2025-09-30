@@ -91,6 +91,6 @@ pub use group::{
 
 #[cfg(feature = "mzsignal")]
 pub use group::{
-    average_spectra, DeferredSpectrumAveragingIterator, SpectrumAveragingIterator,
-    SpectrumGroupAveraging,
+    DeferredSpectrumAveragingIterator, SpectrumAveragingIterator, SpectrumGroupAveraging,
+    average_spectra,
 };

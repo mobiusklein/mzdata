@@ -1,9 +1,9 @@
 use std::borrow::Cow;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::ffi::CString;
 use std::fmt::Display;
-use std::io::{self, prelude::*, Cursor};
+use std::io::{self, Cursor, prelude::*};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
@@ -12,7 +12,7 @@ use bytemuck;
 use hdf5::from_id;
 use hdf5::globals::H5T_C_S1;
 use hdf5::types::{FixedAscii, IntSize, TypeDescriptor};
-use hdf5::{self, filters, Attribute, Dataspace, Extents};
+use hdf5::{self, Attribute, Dataspace, Extents, filters};
 use hdf5::{h5lock, h5try};
 use hdf5_sys;
 use hdf5_sys::h5i::hid_t;
@@ -23,7 +23,7 @@ use ndarray::Array1;
 
 use mzpeaks::{
     CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, IonMobility,
-    KnownCharge, Mass, MZ,
+    KnownCharge, MZ, Mass,
 };
 use quick_xml::events::{BytesStart, Event};
 use thiserror::Error;
@@ -42,8 +42,8 @@ use crate::spectrum::{
     ArrayType, BinaryArrayMap, Chromatogram, ChromatogramLike, RefPeakDataLevel,
 };
 
-use crate::io::mzml::{MzMLWriterError, MzMLWriterState, MzMLWriterType};
 use crate::RawSpectrum;
+use crate::io::mzml::{MzMLWriterError, MzMLWriterState, MzMLWriterType};
 
 macro_rules! bstart {
     ($e:tt) => {
@@ -872,7 +872,7 @@ where
                 return Err(MzMLbWriterError::IOError(io::Error::new(
                     io::ErrorKind::InvalidData,
                     e,
-                )))
+                )));
             }
         };
 
@@ -994,11 +994,11 @@ impl<C: CentroidLike + BuildArrayMapFrom, D: DeconvolutedCentroidLike + BuildArr
 }
 
 impl<
-        C: CentroidLike + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
-        CF: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
-        DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
-    > IonMobilityFrameWriter<CF, DF> for MzMLbWriterType<C, D>
+    C: CentroidLike + BuildArrayMapFrom,
+    D: DeconvolutedCentroidLike + BuildArrayMapFrom,
+    CF: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
+    DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
+> IonMobilityFrameWriter<CF, DF> for MzMLbWriterType<C, D>
 {
     fn write_frame<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(
         &mut self,

@@ -6,8 +6,8 @@ use std::{
 
 #[allow(unused)]
 use mzpeaks::{
+    IonMobility, MZ, Mass,
     feature::{ChargedFeature, Feature},
-    IonMobility, Mass, MZ,
 };
 
 #[allow(unused)]
@@ -17,7 +17,7 @@ use crate::{
 };
 
 #[allow(unused)]
-use super::{infer_format::MZReaderType, Sink, Source, SpectrumSource};
+use super::{Sink, Source, SpectrumSource, infer_format::MZReaderType};
 
 #[doc(hidden)]
 #[cfg(not(feature = "mgf"))]

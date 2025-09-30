@@ -4,9 +4,10 @@ use chrono::DateTime;
 use log::{debug, warn};
 
 use crate::{
+    Param,
     io::{
-        traits::ChromatogramSource, utils::checksum_file, DetailLevel,
-        Generic3DIonMobilityFrameSource, OffsetIndex,
+        DetailLevel, Generic3DIonMobilityFrameSource, OffsetIndex, traits::ChromatogramSource,
+        utils::checksum_file,
     },
     meta::{
         Component, ComponentType, DataProcessing, DetectorTypeTerm, DissociationMethodTerm,
@@ -21,18 +22,17 @@ use crate::{
         MultiLayerSpectrum, Precursor, ScanEvent, ScanPolarity, ScanWindow, SelectedIon,
         SignalContinuity,
     },
-    Param,
 };
 
-use mzpeaks::{peak_set::PeakSetVec, prelude::*, CentroidPeak, DeconvolutedPeak, MZ};
+use mzpeaks::{CentroidPeak, DeconvolutedPeak, MZ, peak_set::PeakSetVec, prelude::*};
 
+#[allow(unused)]
+use super::instruments::{
+    InstrumentModelType, instrument_model_to_detector, parse_instrument_model,
+};
 use super::instruments::{
     create_instrument_configurations, instrument_model_to_ion_sources,
     instrument_model_to_mass_analyzers,
-};
-#[allow(unused)]
-use super::instruments::{
-    instrument_model_to_detector, parse_instrument_model, InstrumentModelType,
 };
 
 macro_rules! param {
@@ -47,7 +47,9 @@ macro_rules! param {
 /// codepoints 1-9.
 pub fn is_thermo_raw_prefix(buffer: &[u8]) -> bool {
     if buffer.len() < 18 {
-        debug!("Attempted to test a byte buffer for the Thermo prefix, buffer was less than 18 bytes long");
+        debug!(
+            "Attempted to test a byte buffer for the Thermo prefix, buffer was less than 18 bytes long"
+        );
         return false;
     }
     let view: &[u16] = unsafe { mem::transmute(&buffer[2..18]) };
@@ -101,11 +103,11 @@ pub(crate) mod sealed {
 
     use super::*;
     use thermorawfilereader::{
+        ExtendedSpectrumData, FileDescription as ThermoFileDescription, IonizationMode,
+        MassAnalyzer, RawFileReader,
         schema::{
             AcquisitionT, DissociationMethod, Polarity, PrecursorT, SpectrumData, SpectrumMode,
         },
-        ExtendedSpectrumData, FileDescription as ThermoFileDescription, IonizationMode,
-        MassAnalyzer, RawFileReader,
     };
 
     /**
@@ -746,7 +748,10 @@ pub(crate) mod sealed {
             // If the whole configurations weren't specified by the instrument model,
             // try to guess them piece-meal.
             if configs.is_empty() {
-                log::debug!("Still no configurations found. Using instrument model {} to infer configurations by parts", model_type);
+                log::debug!(
+                    "Still no configurations found. Using instrument model {} to infer configurations by parts",
+                    model_type
+                );
                 let mass_analyzers = instrument_model_to_mass_analyzers(model_type);
                 let ionization_types = instrument_model_to_ion_sources(model_type);
                 let detectors = instrument_model_to_detector(model_type);
@@ -1531,14 +1536,18 @@ mod test {
             "b43e9286b40e8b5dbc0dfa2e428495769ca96a96"
         );
 
-        assert!(reader
-            .file_description()
-            .get_param_by_accession("MS:1000579")
-            .is_some());
-        assert!(reader
-            .file_description()
-            .get_param_by_accession("MS:1000580")
-            .is_some());
+        assert!(
+            reader
+                .file_description()
+                .get_param_by_accession("MS:1000579")
+                .is_some()
+        );
+        assert!(
+            reader
+                .file_description()
+                .get_param_by_accession("MS:1000580")
+                .is_some()
+        );
 
         let confs = reader.instrument_configurations();
         assert_eq!(confs.len(), 2);

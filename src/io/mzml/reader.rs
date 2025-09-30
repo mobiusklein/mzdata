@@ -11,12 +11,12 @@ use log::{debug, trace, warn};
 
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedPeak};
 use quick_xml::{
-    events::{BytesEnd, BytesStart, BytesText, Event},
     Error as XMLError, Reader,
+    events::{BytesEnd, BytesStart, BytesText, Event},
 };
 
 use crate::{
-    io::{utils::DetailLevel, Generic3DIonMobilityFrameSource, IntoIonMobilityFrameSource},
+    io::{Generic3DIonMobilityFrameSource, IntoIonMobilityFrameSource, utils::DetailLevel},
     meta::{
         DataProcessing, DissociationEnergyTerm, FileDescription, InstrumentConfiguration,
         MSDataFileMetadata, MassSpectrometryRun, Sample, ScanSettings, Software,
@@ -24,6 +24,7 @@ use crate::{
     params::{Param, ParamList, Unit},
     prelude::{ParamLike, *},
     spectrum::{
+        HasIonMobility,
         bindata::{
             ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType,
             BuildArrayMapFrom, BuildFromArrayMap, DataArray,
@@ -31,7 +32,6 @@ use crate::{
         chromatogram::{Chromatogram, ChromatogramLike},
         scan_properties::*,
         spectrum_types::{CentroidSpectrumType, MultiLayerSpectrum, RawSpectrum, Spectrum},
-        HasIonMobility,
     },
 };
 
@@ -658,11 +658,8 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
     }
 }
 
-impl<
-        'inner,
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > MzMLSpectrumBuilder<'inner, C, D>
+impl<'inner, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    MzMLSpectrumBuilder<'inner, C, D>
 {
     pub fn new() -> MzMLSpectrumBuilder<'inner, C, D> {
         Self::with_detail_level(DetailLevel::Full)
@@ -829,7 +826,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                             state,
                                             e,
                                             "Failed to decode spectrum id".into()
-                                        ))
+                                        ));
                                     }
                                 };
                                 trace!("Stored spectrum id = {}", self.entry_id);
@@ -1101,9 +1098,9 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                         } else {
                                             if self.precursor_mut().activation.energy != 0.0 {
                                                 warn!(
-                                                        "Multiple dissociation energies detected. Saw {t} after already setting dissociation energy for {}",
-                                                        self.warning_context()
-                                                    );
+                                                    "Multiple dissociation energies detected. Saw {t} after already setting dissociation energy for {}",
+                                                    self.warning_context()
+                                                );
                                             }
                                             self.precursor_mut().activation.energy = t.energy();
                                         }
@@ -1267,10 +1264,10 @@ pub struct MzMLReaderType<
 }
 
 impl<
-        R: Read + Seek,
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > IntoIonMobilityFrameSource<C, D> for MzMLReaderType<R, C, D>
+    R: Read + Seek,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
+> IntoIonMobilityFrameSource<C, D> for MzMLReaderType<R, C, D>
 {
     type IonMobilityFrameSource<
         CF: FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility>,
@@ -1297,12 +1294,12 @@ impl<
 }
 
 impl<
-        'a,
-        'b: 'a,
-        R: Read,
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > MzMLReaderType<R, C, D>
+    'a,
+    'b: 'a,
+    R: Read,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
+> MzMLReaderType<R, C, D>
 {
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
     /// provided with an [`io::BufReader`] and parses the metadata section of the file.
@@ -1723,10 +1720,10 @@ impl<
 /// When the underlying stream supports random access, this type can read the index at the end of
 /// an `indexedmzML` document and use the offset map to jump to immediately jump to a specific spectrum
 impl<
-        R: SeekRead,
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > MzMLReaderType<R, C, D>
+    R: SeekRead,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
+> MzMLReaderType<R, C, D>
 {
     pub fn check_stream(&mut self, next_tag: &str) -> Result<bool, MzMLParserError> {
         let position = match self.stream_position() {
@@ -1835,10 +1832,10 @@ impl<
 }
 
 impl<
-        R: SeekRead,
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > ChromatogramSource for MzMLReaderType<R, C, D>
+    R: SeekRead,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
+> ChromatogramSource for MzMLReaderType<R, C, D>
 {
     fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
         self.get_chromatogram_by_id(id)
@@ -1851,10 +1848,10 @@ impl<
 
 /// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
 impl<
-        R: io::Read,
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > Iterator for MzMLReaderType<R, C, D>
+    R: io::Read,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
+> Iterator for MzMLReaderType<R, C, D>
 {
     type Item = MultiLayerSpectrum<C, D>;
 
@@ -1866,10 +1863,10 @@ impl<
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
 impl<
-        R: SeekRead,
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+    R: SeekRead,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
+> SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
@@ -1941,10 +1938,10 @@ impl<
 /// The iterator can also be updated to move to a different location in the
 /// stream efficiently.
 impl<
-        R: SeekRead,
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+    R: SeekRead,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
+> RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_id(id) {
@@ -1983,10 +1980,10 @@ enum IndexRecoveryOperation {
 }
 
 impl<
-        R: SeekRead,
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > MzMLReaderType<R, C, D>
+    R: SeekRead,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
+> MzMLReaderType<R, C, D>
 {
     /// Construct a new MzMLReaderType and build an offset index
     /// using [`Self::build_index`]
@@ -2058,7 +2055,9 @@ impl<
                             if let Some(b2) = buf.get(i + 1) {
                                 let has_windows_eol = *b2 == b'\n';
                                 if has_windows_eol {
-                                    warn!("Carriage return line endings detected and offset index is not valid");
+                                    warn!(
+                                        "Carriage return line endings detected and offset index is not valid"
+                                    );
                                     self.seek(SeekFrom::Start(position))
                                         .map_err(IndexRecoveryOperation::IOFailure)?;
                                     return Err(IndexRecoveryOperation::EOLMismatchSuspected);
@@ -2191,7 +2190,9 @@ impl<
             .handle
             .stream_position()
             .expect("Failed to save restore location");
-        trace!("Starting to build offset index by traversing the file, storing last position as {start}");
+        trace!(
+            "Starting to build offset index by traversing the file, storing last position as {start}"
+        );
         self.seek(SeekFrom::Start(0))
             .expect("Failed to reset stream to beginning");
         let mut reader = Reader::from_reader(&mut self.handle);
@@ -2338,11 +2339,11 @@ pub struct ChromatogramIter<
 }
 
 impl<
-        'a,
-        R: SeekRead,
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > ChromatogramIter<'a, R, C, D>
+    'a,
+    R: SeekRead,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
+> ChromatogramIter<'a, R, C, D>
 {
     pub fn new(reader: &'a mut MzMLReaderType<R, C, D>) -> Self {
         Self { reader, index: 0 }
@@ -2350,10 +2351,10 @@ impl<
 }
 
 impl<
-        R: SeekRead,
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > Iterator for ChromatogramIter<'_, R, C, D>
+    R: SeekRead,
+    C: CentroidLike + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + BuildFromArrayMap,
+> Iterator for ChromatogramIter<'_, R, C, D>
 {
     type Item = Chromatogram;
 
@@ -2384,22 +2385,26 @@ mod test {
         assert_eq!(reader.file_description().source_files.len(), 1);
         assert_eq!(reader.file_description().contents.len(), 2);
 
-        assert!(reader
-            .file_description()
-            .get_param_by_accession("MS:1000579")
-            .is_some());
+        assert!(
+            reader
+                .file_description()
+                .get_param_by_accession("MS:1000579")
+                .is_some()
+        );
         assert_eq!(reader.file_description().source_files[0].name, "small.RAW");
 
         assert!(reader.file_description().has_ms1_spectra());
         assert!(reader.file_description().has_msn_spectra());
         assert!(reader.file_description().has_contents());
-        assert!(reader
-            .file_description()
-            .source_files
-            .first()
-            .unwrap()
-            .native_id_format()
-            .is_some());
+        assert!(
+            reader
+                .file_description()
+                .source_files
+                .first()
+                .unwrap()
+                .native_id_format()
+                .is_some()
+        );
 
         let config = reader.instrument_configurations().get(&0).unwrap();
         let comp = config.iter().find_map(|c| c.mass_analyzer()).unwrap();

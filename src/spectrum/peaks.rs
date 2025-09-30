@@ -3,13 +3,13 @@ use std::iter::FusedIterator;
 
 use mzpeaks::prelude::*;
 use mzpeaks::{
+    IndexType, MZPeakSetType, MassPeakSetType,
     peak::{CentroidPeak, DeconvolutedPeak, MZPoint},
     peak_set::PeakSetVec,
-    IndexType, MZPeakSetType, MassPeakSetType,
 };
 
-use super::bindata::ArrayRetrievalError;
 use super::BinaryArrayMap;
+use super::bindata::ArrayRetrievalError;
 use crate::prelude::BuildFromArrayMap;
 use crate::spectrum::bindata::ArraysAvailable;
 use crate::utils::mass_charge_ratio;

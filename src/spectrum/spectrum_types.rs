@@ -5,16 +5,16 @@ use mzpeaks::Mass;
 use thiserror::Error;
 
 use mzpeaks::{
-    peak_set::PeakSetVec, prelude::*, CentroidLike, CentroidPeak, DeconvolutedCentroidLike,
-    DeconvolutedPeak, MZPeakSetType, MassPeakSetType, PeakCollection, PeakSet, MZ,
+    CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, MZ, MZPeakSetType,
+    MassPeakSetType, PeakCollection, PeakSet, peak_set::PeakSetVec, prelude::*,
 };
 
 #[cfg(feature = "mzsignal")]
 use mzsignal::{
-    denoise::{denoise, DenoisingError},
+    FittedPeak,
+    denoise::{DenoisingError, denoise},
     peak_picker::{PeakFitType, PeakPicker, PeakPickerError},
     reprofile::{self, PeakShape, PeakShapeModel},
-    FittedPeak,
 };
 
 use crate::params::{ParamDescribed, Unit, Value};
@@ -25,10 +25,10 @@ use crate::spectrum::scan_properties::{
     Acquisition, IonMobilityMeasure, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
 };
 
-use super::bindata::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
 #[allow(unused)]
 use super::DataArray;
 use super::HasIonMobility;
+use super::bindata::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
 
 /// A blanket trait that ties together all the assumed behaviors of an m/z coordinate centroid peak
 pub trait CentroidPeakAdapting: CentroidLike + From<CentroidPeak> {}
@@ -1598,8 +1598,8 @@ mod test {
     use std::io;
 
     use super::*;
-    use crate::io::mzml::MzMLReader;
     use crate::io::DetailLevel;
+    use crate::io::mzml::MzMLReader;
     use crate::prelude::*;
 
     #[test_log::test]

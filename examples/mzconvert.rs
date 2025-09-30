@@ -3,9 +3,9 @@ use std::fs::File;
 use std::io;
 use std::path::PathBuf;
 use std::sync::{
+    Arc,
     atomic::{AtomicU64, Ordering as AtomicOrdering},
     mpsc::sync_channel,
-    Arc,
 };
 use std::thread;
 use std::time;
@@ -14,19 +14,19 @@ use clap::Parser;
 
 use log::info;
 use mzdata::io::MassSpectrometryFormat;
-use mzdata::io::{checksum_file, MassSpectrometryReadWriteProcess, Sink, Source};
-use mzdata::meta::custom_software_name;
+use mzdata::io::{MassSpectrometryReadWriteProcess, Sink, Source, checksum_file};
 use mzdata::meta::Software;
+use mzdata::meta::custom_software_name;
 use mzdata::meta::{DataProcessing, ProcessingMethod, SourceFile};
 use mzdata::params::ControlledVocabulary;
 use mzdata::prelude::*;
 
-use mzdata::spectrum::bindata::BinaryCompressionType;
+use mzdata::MzMLWriter;
 use mzdata::spectrum::ArrayType;
 use mzdata::spectrum::ArrayType::IntensityArray;
 use mzdata::spectrum::ArrayType::MZArray;
 use mzdata::spectrum::BinaryDataArrayType;
-use mzdata::MzMLWriter;
+use mzdata::spectrum::bindata::BinaryCompressionType;
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 fn compression_parser(compression: &str) -> Result<BinaryCompressionType, String> {

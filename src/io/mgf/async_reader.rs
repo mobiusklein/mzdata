@@ -13,8 +13,8 @@ use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, Deconvoluted
 
 use super::{
     super::{offset_index::OffsetIndex, utils::DetailLevel},
-    reader::{MGFLineParsing, SpectrumBuilder},
     DefaultTitleIndexing, MGFError, MGFIndexing, MGFParserState,
+    reader::{MGFLineParsing, SpectrumBuilder},
 };
 
 use crate::{
@@ -61,9 +61,9 @@ pub struct MGFReaderType<
 
 #[cfg(feature = "async")]
 impl<
-        C: CentroidLike + From<CentroidPeak> + Send + Sync,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
-    > AsyncMZFileReader<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<tokio::fs::File, C, D>
+    C: CentroidLike + From<CentroidPeak> + Send + Sync,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
+> AsyncMZFileReader<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<tokio::fs::File, C, D>
 {
     async fn construct_index_from_stream(&mut self) -> u64 {
         self.build_index().await
@@ -75,10 +75,10 @@ impl<
 }
 
 impl<
-        R: io::AsyncRead,
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MGFLineParsing<C, D> for MGFReaderType<R, C, D>
+    R: io::AsyncRead,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+> MGFLineParsing<C, D> for MGFReaderType<R, C, D>
 {
     fn state(&self) -> &MGFParserState {
         &self.state
@@ -103,10 +103,10 @@ impl<
 }
 
 impl<
-        R: io::AsyncRead + Unpin,
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MGFReaderType<R, C, D>
+    R: io::AsyncRead + Unpin,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+> MGFReaderType<R, C, D>
 {
     async fn read_line(&mut self, buffer: &mut String) -> io::Result<usize> {
         self.handle.read_line(buffer).await
@@ -243,10 +243,10 @@ impl<
 }
 
 impl<
-        R: io::AsyncRead + io::AsyncSeek + Unpin,
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MGFReaderType<R, C, D>
+    R: io::AsyncRead + io::AsyncSeek + Unpin,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+> MGFReaderType<R, C, D>
 {
     pub fn as_stream(&mut self) -> impl SpectrumStream<C, D, MultiLayerSpectrum<C, D>> + '_ {
         Box::pin(stream::unfold(self, |reader| async {
@@ -330,10 +330,10 @@ impl<
 /// The MGF format does not contain any consistent metadata, but additional
 /// information can be included after creation.
 impl<
-        R: io::AsyncRead + Unpin,
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MSDataFileMetadata for MGFReaderType<R, C, D>
+    R: io::AsyncRead + Unpin,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+> MSDataFileMetadata for MGFReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
 
@@ -357,10 +357,10 @@ impl<
 pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
 impl<
-        R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin,
-        C: CentroidLike + From<CentroidPeak> + Send + Sync,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
-    > MGFReaderType<R, C, D>
+    R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin,
+    C: CentroidLike + From<CentroidPeak> + Send + Sync,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
+> MGFReaderType<R, C, D>
 {
     /// Helper method to support seeking to an ID
     fn _offset_of_id(&self, id: &str) -> Option<u64> {
@@ -493,10 +493,10 @@ impl<
 }
 
 impl<
-        R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin + Send,
-        C: CentroidLike + From<CentroidPeak> + Send + Sync,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
-    > AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+    R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin + Send,
+    C: CentroidLike + From<CentroidPeak> + Send + Sync,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
+> AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
     async fn reset(&mut self) {
         self.reset().await;
@@ -532,10 +532,10 @@ impl<
 }
 
 impl<
-        R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin + Send,
-        C: CentroidLike + From<CentroidPeak> + Send + Sync,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
-    > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+    R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin + Send,
+    C: CentroidLike + From<CentroidPeak> + Send + Sync,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
+> AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
     async fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         let idx = match self._offset_of_id(id) {
@@ -543,7 +543,7 @@ impl<
             None => {
                 return Err(crate::io::SpectrumAccessError::SpectrumIdNotFound(
                     id.to_string(),
-                ))
+                ));
             }
         };
 

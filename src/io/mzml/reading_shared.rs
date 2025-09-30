@@ -5,22 +5,22 @@ use std::{io, mem};
 
 use chrono::{DateTime, FixedOffset};
 use log::warn;
-use quick_xml::events::{BytesEnd, BytesStart, BytesText};
 use quick_xml::Error as XMLError;
+use quick_xml::events::{BytesEnd, BytesStart, BytesText};
 
 use thiserror::Error;
 
 use super::reader::Bytes;
-use crate::io::traits::SeekRead;
 use crate::io::OffsetIndex;
+use crate::io::traits::SeekRead;
 use crate::meta::{
     Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration,
     MassSpectrometerFileFormatTerm, NativeSpectrumIdentifierFormatTerm, ProcessingMethod, Sample,
     ScanSettings, Software, SourceFile,
 };
-use crate::params::{curie_to_num, ControlledVocabulary, Param, ParamCow, Unit};
+use crate::params::{ControlledVocabulary, Param, ParamCow, Unit, curie_to_num};
 use crate::prelude::*;
-use crate::spectrum::{bindata::ArrayRetrievalError, ArrayType};
+use crate::spectrum::{ArrayType, bindata::ArrayRetrievalError};
 
 /**
 The different states the [`MzMLReaderType`](crate::io::mzml::MzMLReaderType) can enter while parsing
@@ -676,7 +676,7 @@ impl FileMetadataBuilder<'_> {
                 return Ok(MzMLParserState::ReferenceParamGroup);
             }
             b"instrumentConfigurationList" => {
-                return Ok(MzMLParserState::InstrumentConfigurationList)
+                return Ok(MzMLParserState::InstrumentConfigurationList);
             }
             b"instrumentConfiguration" => {
                 let mut ic = InstrumentConfiguration::default();
@@ -1082,7 +1082,9 @@ impl FileMetadataBuilder<'_> {
                                 let param_group = match self.reference_param_groups.get(&group_id) {
                                     Some(params) => params.clone(),
                                     None => {
-                                        panic!("Encountered a referenceableParamGroupRef without a group definition")
+                                        panic!(
+                                            "Encountered a referenceableParamGroupRef without a group definition"
+                                        )
                                     }
                                 };
 
@@ -1137,7 +1139,7 @@ impl FileMetadataBuilder<'_> {
                 return Ok(MzMLParserState::ReferenceParamGroupList);
             }
             b"instrumentConfigurationList" => {
-                return Ok(MzMLParserState::InstrumentConfigurationList)
+                return Ok(MzMLParserState::InstrumentConfigurationList);
             }
             b"instrumentConfiguration" => return Ok(MzMLParserState::InstrumentConfigurationList),
             b"componentList" => return Ok(MzMLParserState::InstrumentConfiguration),

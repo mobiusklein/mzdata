@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::collections::hash_map::{Iter, IterMut};
 use std::collections::HashMap;
+use std::collections::hash_map::{Iter, IterMut};
 use std::convert::TryFrom;
 
 #[cfg(feature = "parallelism")]
@@ -11,10 +11,10 @@ use mzpeaks::Tolerance;
 
 use crate::params::Unit;
 
+use super::BinaryDataArrayType;
 use super::array::DataArray;
 use super::encodings::{ArrayRetrievalError, ArrayType, BinaryCompressionType};
 use super::traits::{ByteArrayView, ByteArrayViewMut};
-use super::BinaryDataArrayType;
 
 /// A collection of [`DataArray`]s that are identified by name.
 #[derive(Debug, Default, Clone)]
@@ -716,7 +716,8 @@ impl BinaryArrayMap3D {
         debug_assert_eq!(
             n_points_added,
             total_points,
-            "Expected to have unstacked {total_points} from {} arrays, got {n_points_added} instead", mz_axes.len()
+            "Expected to have unstacked {total_points} from {} arrays, got {n_points_added} instead",
+            mz_axes.len()
         );
 
         Ok(destination)
