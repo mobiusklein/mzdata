@@ -170,7 +170,7 @@ impl<
     fn next(&mut self) -> Option<Self::Item> {
         {
             let n = self.n_products();
-            let emission = match self.state {
+            match self.state {
                 GroupIterState::Precursor => match self.group.precursor_mut() {
                     Some(prec) => {
                         if n > 0 {
@@ -204,8 +204,7 @@ impl<
                     }
                 }
                 GroupIterState::Done => None,
-            };
-            emission
+            }
         }
     }
 }
@@ -260,7 +259,7 @@ impl<
     fn next(&mut self) -> Option<Self::Item> {
         {
             let n = self.n_products();
-            let emission = match self.state {
+            match self.state {
                 GroupIterState::Precursor => match self.group.precursor() {
                     Some(prec) => {
                         if n > 0 {
@@ -294,8 +293,7 @@ impl<
                     }
                 }
                 GroupIterState::Done => None,
-            };
-            emission
+            }
         }
     }
 }

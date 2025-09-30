@@ -405,7 +405,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     }
 
     fn features(&self) -> RefFeatureDataLevel<'_, C, D> {
-        let state = if let Some(d) = self.deconvoluted_features.as_ref() {
+        if let Some(d) = self.deconvoluted_features.as_ref() {
             RefFeatureDataLevel::Deconvoluted(d)
         } else if let Some(c) = self.features.as_ref() {
             RefFeatureDataLevel::Centroid(c)
@@ -413,8 +413,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             RefFeatureDataLevel::RawData(arrays)
         } else {
             RefFeatureDataLevel::Missing
-        };
-        state
+        }
     }
 
     fn into_features_and_parts(self) -> (FeatureDataLevel<C, D>, IonMobilityFrameDescription) {
