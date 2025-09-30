@@ -64,16 +64,14 @@ pub mod prelude;
 pub mod spectrum;
 pub mod utils;
 
-pub use crate::io::{MZReader, MZReaderBuilder};
 #[cfg(feature = "mgf")]
 pub use crate::io::mgf::{MGFReader, MGFWriter};
 #[cfg(feature = "mzml")]
 pub use crate::io::mzml::{MzMLReader, MzMLWriter};
+pub use crate::io::{MZReader, MZReaderBuilder};
 
 #[cfg(feature = "mzmlb")]
-pub use crate::io::mzmlb::{
-    MzMLbReader, MzMLbWriter, MzMLbWriterBuilder,
-};
+pub use crate::io::mzmlb::{MzMLbReader, MzMLbWriter, MzMLbWriterBuilder};
 
 #[cfg(feature = "thermo")]
 pub use crate::io::thermo::ThermoRawReader;

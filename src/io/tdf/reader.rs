@@ -1270,7 +1270,10 @@ impl<
     pub fn consolidate_peaks(
         &self,
         spectrum: &mut MultiLayerSpectrum<CP, DP>,
-    ) -> Result<(), ArrayRetrievalError> where CP: From<CentroidPeak> {
+    ) -> Result<(), ArrayRetrievalError>
+    where
+        CP: From<CentroidPeak>,
+    {
         if let Some(arrays) = spectrum.arrays.as_ref() {
             let arrays = BinaryArrayMap3D::stack(arrays)?;
             spectrum.peaks = Some(consolidate_peaks(

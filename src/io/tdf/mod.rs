@@ -5,10 +5,12 @@
 //!
 //! Depends upon the [`timsrust`] library, a cross-platform, pure Rust implementation of the Bruker-specifc
 //! file reading behaviors and [`rusqlite`] for reading the SQLite3 .tdf files.
-mod constants;
 mod arrays;
-mod sql;
+mod constants;
 mod reader;
+mod sql;
 
-pub use reader::{TDFFrameReader, TDFFrameReaderType, TDFSpectrumReader, TDFSpectrumReaderType, is_tdf};
+pub use reader::{
+    is_tdf, TDFFrameReader, TDFFrameReaderType, TDFSpectrumReader, TDFSpectrumReaderType,
+};
 pub use sql::{ChromatographyData, SQLTrace};

@@ -791,10 +791,15 @@ impl<C: CentroidLike> CentroidSpectrumType<C> {
     where
         C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
         D1: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-        C: BuildArrayMapFrom
+        C: BuildArrayMapFrom,
     {
         let arrays = C::as_arrays(self.peaks.as_slice());
-        Ok(MultiLayerSpectrum::new(self.description, Some(arrays), None, None))
+        Ok(MultiLayerSpectrum::new(
+            self.description,
+            Some(arrays),
+            None,
+            None,
+        ))
     }
 }
 
@@ -887,7 +892,7 @@ impl<D: DeconvolutedCentroidLike> DeconvolutedSpectrumType<D> {
     where
         C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
         D1: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-        D: BuildArrayMapFrom
+        D: BuildArrayMapFrom,
     {
         let arrays = D::as_arrays(self.deconvoluted_peaks.as_slice());
         MultiLayerSpectrum::new(self.description, Some(arrays), None, None)
@@ -1189,7 +1194,7 @@ where
         C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
         D1: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
         C: BuildArrayMapFrom,
-        D: BuildArrayMapFrom
+        D: BuildArrayMapFrom,
     {
         let arrays = if let Some(peaks) = self.deconvoluted_peaks {
             D::as_arrays(peaks.as_slice())
@@ -1314,18 +1319,16 @@ where
             if let Some(arrays) = self.arrays.as_ref() {
                 let peak_data: PeakDataLevel<C, D> = PeakDataLevel::try_from(arrays)?;
                 match peak_data {
-                    PeakDataLevel::Missing => {
-                        Ok(RefPeakDataLevel::Missing)
-                    },
+                    PeakDataLevel::Missing => Ok(RefPeakDataLevel::Missing),
                     PeakDataLevel::RawData(_) => panic!("not possible"),
                     PeakDataLevel::Centroid(peak_set_vec) => {
                         self.peaks = Some(peak_set_vec);
                         Ok(self.peaks())
-                    },
+                    }
                     PeakDataLevel::Deconvoluted(peak_set_vec) => {
                         self.deconvoluted_peaks = Some(peak_set_vec);
                         Ok(self.peaks())
-                    },
+                    }
                 }
             } else {
                 Ok(self.peaks())
@@ -1637,7 +1640,10 @@ mod test {
 
     #[allow(unused)]
     fn test_spectrum_behavior<T: SpectrumLike>(spec: &T) {
-        assert_eq!(spec.spectrum_type(), Some(crate::meta::SpectrumType::MS1Spectrum));
+        assert_eq!(
+            spec.spectrum_type(),
+            Some(crate::meta::SpectrumType::MS1Spectrum)
+        );
         behaviors!(spec);
     }
 

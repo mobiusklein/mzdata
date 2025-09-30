@@ -14,7 +14,7 @@ use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, Deconvoluted
 use super::{
     super::{offset_index::OffsetIndex, utils::DetailLevel},
     reader::{MGFLineParsing, SpectrumBuilder},
-    MGFError, MGFParserState, MGFIndexing, DefaultTitleIndexing
+    DefaultTitleIndexing, MGFError, MGFIndexing, MGFParserState,
 };
 
 use crate::{
@@ -69,15 +69,16 @@ impl<
         self.build_index().await
     }
 
-    async fn open_file(
-        source: tokio::fs::File,
-    ) -> std::io::Result<Self> {
+    async fn open_file(source: tokio::fs::File) -> std::io::Result<Self> {
         Ok(Self::new(source).await)
     }
 }
 
-impl<R: io::AsyncRead, C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>> MGFLineParsing<C, D>
-    for MGFReaderType<R, C, D>
+impl<
+        R: io::AsyncRead,
+        C: CentroidLike + From<CentroidPeak>,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+    > MGFLineParsing<C, D> for MGFReaderType<R, C, D>
 {
     fn state(&self) -> &MGFParserState {
         &self.state
@@ -101,8 +102,11 @@ impl<R: io::AsyncRead, C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCent
     }
 }
 
-impl<R: io::AsyncRead + Unpin, C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>>
-    MGFReaderType<R, C, D>
+impl<
+        R: io::AsyncRead + Unpin,
+        C: CentroidLike + From<CentroidPeak>,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+    > MGFReaderType<R, C, D>
 {
     async fn read_line(&mut self, buffer: &mut String) -> io::Result<usize> {
         self.handle.read_line(buffer).await
@@ -303,7 +307,8 @@ impl<
                 let indexer = self.indexer();
                 if let Some((key, value)) = string_buffer.split_once('=') {
                     if indexer.is_index_key(key) {
-                        self.index.insert(indexer.handle_key(key, value), last_start);
+                        self.index
+                            .insert(indexer.handle_key(key, value), last_start);
                         found_start = false;
                         last_start = 0;
                     }
@@ -324,8 +329,11 @@ impl<
 
 /// The MGF format does not contain any consistent metadata, but additional
 /// information can be included after creation.
-impl<R: io::AsyncRead + Unpin, C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>>
-    MSDataFileMetadata for MGFReaderType<R, C, D>
+impl<
+        R: io::AsyncRead + Unpin,
+        C: CentroidLike + From<CentroidPeak>,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+    > MSDataFileMetadata for MGFReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
 
@@ -527,15 +535,22 @@ impl<
         R: io::AsyncRead + io::AsyncSeek + io::AsyncSeekExt + Unpin + Send,
         C: CentroidLike + From<CentroidPeak> + Send + Sync,
         D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + Send + Sync,
-    > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D> {
-
+    > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+{
     async fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         let idx = match self._offset_of_id(id) {
             Some(i) => i,
-            None => return Err(crate::io::SpectrumAccessError::SpectrumIdNotFound(id.to_string())),
+            None => {
+                return Err(crate::io::SpectrumAccessError::SpectrumIdNotFound(
+                    id.to_string(),
+                ))
+            }
         };
 
-        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        self.handle
+            .seek(SeekFrom::Start(idx))
+            .await
+            .map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
         Ok(self)
     }
 
@@ -545,7 +560,10 @@ impl<
             None => return Err(crate::io::SpectrumAccessError::SpectrumIndexNotFound(index)),
         };
 
-        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        self.handle
+            .seek(SeekFrom::Start(idx))
+            .await
+            .map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
         Ok(self)
     }
 
@@ -555,7 +573,10 @@ impl<
             None => return Err(crate::io::SpectrumAccessError::SpectrumNotFound),
         };
 
-        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        self.handle
+            .seek(SeekFrom::Start(idx))
+            .await
+            .map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
         Ok(self)
     }
 }

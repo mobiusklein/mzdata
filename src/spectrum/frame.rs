@@ -175,7 +175,9 @@ pub trait IonMobilityFrameLike<
     fn ion_mobility_unit(&self) -> Unit {
         let unit = self.description().ion_mobility_unit;
         if unit == Unit::Unknown {
-            self.raw_arrays().map(|a| a.ion_mobility_unit).unwrap_or_default()
+            self.raw_arrays()
+                .map(|a| a.ion_mobility_unit)
+                .unwrap_or_default()
         } else {
             unit
         }
@@ -240,7 +242,6 @@ pub trait IonMobilityFrameLike<
     fn add_precursor(&mut self, precursor: Precursor) {
         self.description_mut().precursor.push(precursor);
     }
-
 
     /// Remove the precursor entry at `index` in the precursor list.
     ///

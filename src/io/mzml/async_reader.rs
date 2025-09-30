@@ -27,15 +27,11 @@ use crate::{
     },
     meta::{
         DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
-        MassSpectrometryRun, Sample, Software, ScanSettings,
+        MassSpectrometryRun, Sample, ScanSettings, Software,
     },
     params::Param,
     prelude::*,
-    spectrum::{
-        bindata::BuildFromArrayMap,
-        spectrum_types::MultiLayerSpectrum,
-        Chromatogram,
-    },
+    spectrum::{bindata::BuildFromArrayMap, spectrum_types::MultiLayerSpectrum, Chromatogram},
 };
 
 use super::{

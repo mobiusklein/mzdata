@@ -238,9 +238,7 @@ fn transform_response(
             title,
             kind,
         }),
-        Err(err) => {
-            Err(PROXIError::IO(backend, err))
-        },
+        Err(err) => Err(PROXIError::IO(backend, err)),
     }
 }
 
@@ -1317,9 +1315,9 @@ mod test {
 
     #[test]
     fn test_proxi_parse() {
-        let spec: PROXISpectrum = serde_json::from_reader(
-            std::fs::File::open("test/data/proxi_test.json").unwrap()
-        ).unwrap();
+        let spec: PROXISpectrum =
+            serde_json::from_reader(std::fs::File::open("test/data/proxi_test.json").unwrap())
+                .unwrap();
         assert!(!spec.mzs.is_empty());
         assert!(!spec.attributes.is_empty());
     }

@@ -1,9 +1,7 @@
-
 use std::collections::HashMap;
 use std::io::{self, prelude::*, BufWriter};
 use std::marker::PhantomData;
 use std::str;
-
 
 use mzpeaks::{
     peak::KnownCharge, CentroidPeak, DeconvolutedPeak, IntensityMeasurement, MZLocated,
@@ -16,16 +14,12 @@ use crate::meta::{
     DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
     MassSpectrometryRun, Sample, Software,
 };
-use crate::params::{
-    ControlledVocabulary, ParamDescribed, ParamLike, ParamValue as _, CURIE,
-};
+use crate::params::{ControlledVocabulary, ParamDescribed, ParamLike, ParamValue as _, CURIE};
 
 use crate::spectrum::{
-    bindata::BinaryArrayMap,
-    IonProperties, Precursor, PrecursorSelection, RefPeakDataLevel, SignalContinuity,
-    SpectrumDescription, SpectrumLike,
+    bindata::BinaryArrayMap, IonProperties, Precursor, PrecursorSelection, RefPeakDataLevel,
+    SignalContinuity, SpectrumDescription, SpectrumLike,
 };
-
 
 const TITLE_CV: CURIE = ControlledVocabulary::MS.curie(1000796);
 const MS_LEVEL_CV: CURIE = ControlledVocabulary::MS.curie(1000511);

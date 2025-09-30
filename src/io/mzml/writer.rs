@@ -21,7 +21,8 @@ use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 use crate::io::traits::IonMobilityFrameWriter;
 use crate::meta::{
-    ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, ScanSettings, Software
+    ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
+    MassSpectrometryRun, Sample, ScanSettings, Software,
 };
 use crate::params::{
     AccessionIntCode, ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamDescribedRead,
@@ -453,7 +454,6 @@ impl Default for CompressionRegistry {
     }
 }
 
-
 impl CompressionRegistry {
     pub fn new(
         methods: Vec<((ArrayType, BinaryDataArrayType), BinaryCompressionType)>,
@@ -483,13 +483,15 @@ impl CompressionRegistry {
         dtype: BinaryDataArrayType,
         method: BinaryCompressionType,
     ) {
-        let val = self.methods.iter_mut().find(|(k, _)| {
-            (k.0 == array_type) && (k.1 == dtype)
-        });
+        let val = self
+            .methods
+            .iter_mut()
+            .find(|(k, _)| (k.0 == array_type) && (k.1 == dtype));
         if let Some((_, v)) = val {
             *v = Self::check(method);
         } else {
-            self.methods.push(((array_type, dtype), Self::check(method)))
+            self.methods
+                .push(((array_type, dtype), Self::check(method)))
         }
     }
 
@@ -501,10 +503,15 @@ impl CompressionRegistry {
         self.get_compression_method(&array.name, array.dtype)
     }
 
-    pub fn get_compression_method(&self, array_type: &ArrayType, dtype: BinaryDataArrayType) -> BinaryCompressionType {
-        let val = self.methods.iter().find(|(k, _)| {
-            (k.0 == *array_type) && (k.1 == dtype)
-        });
+    pub fn get_compression_method(
+        &self,
+        array_type: &ArrayType,
+        dtype: BinaryDataArrayType,
+    ) -> BinaryCompressionType {
+        let val = self
+            .methods
+            .iter()
+            .find(|(k, _)| (k.0 == *array_type) && (k.1 == dtype));
         if let Some((_, v)) = val {
             *v
         } else {
@@ -512,7 +519,6 @@ impl CompressionRegistry {
         }
     }
 }
-
 
 impl From<BinaryCompressionType> for CompressionRegistry {
     fn from(value: BinaryCompressionType) -> Self {
@@ -1073,7 +1079,7 @@ where
 
     fn write_scan_settings_list(&mut self) -> WriterResult {
         if self.scan_settings.is_empty() {
-            return Ok(())
+            return Ok(());
         }
         let mut outer = bstart!("scanSettingsList");
         let count = self.samples.len().to_string();
@@ -1094,7 +1100,8 @@ where
                 for sf_ref in settings.source_file_refs.iter() {
                     let sf_ref_tag = bstart!("sourceFileRef");
                     self.handle.write_event(Event::Start(sf_ref_tag.borrow()))?;
-                    self.handle.write_event(Event::Text(BytesText::new(sf_ref)))?;
+                    self.handle
+                        .write_event(Event::Text(BytesText::new(sf_ref)))?;
                     self.handle.write_event(Event::End(sf_ref_tag.to_end()))?;
                 }
                 self.handle.write_event(Event::End(inner.to_end()))?;
@@ -1276,32 +1283,40 @@ where
 
     /// Get the compression method for the specified [`ArrayType`] and [`BinaryDataArrayType`],
     /// or the default compression method if a match is not found.
-    pub fn get_compression_method(&self, array_type: &ArrayType, dtype: BinaryDataArrayType) -> BinaryCompressionType {
-        self.data_array_compression.get_compression_method(array_type, dtype)
+    pub fn get_compression_method(
+        &self,
+        array_type: &ArrayType,
+        dtype: BinaryDataArrayType,
+    ) -> BinaryCompressionType {
+        self.data_array_compression
+            .get_compression_method(array_type, dtype)
     }
 
     /// Get the compression method for the provided [`DataArray`].
     ///
     /// This is a helper method that calls [`Self::get_compression_method`]
     pub fn get_compression_method_for(&self, array: &DataArray) -> BinaryCompressionType {
-        self.data_array_compression.get_compression_method_for(array)
+        self.data_array_compression
+            .get_compression_method_for(array)
     }
 
     /// Set the compression method for the specified [`ArrayType`] and [`BinaryDataArrayType`].
     ///
     /// Has no effect on the default compression method.
     pub fn set_compression_method(
-            &mut self,
-            array_type: ArrayType,
-            dtype: BinaryDataArrayType,
-            method: BinaryCompressionType,
-        ) {
-        self.data_array_compression.set_compression_method(array_type, dtype, method)
+        &mut self,
+        array_type: ArrayType,
+        dtype: BinaryDataArrayType,
+        method: BinaryCompressionType,
+    ) {
+        self.data_array_compression
+            .set_compression_method(array_type, dtype, method)
     }
 
     /// Specify the default compression method used
     pub fn set_default_compression_method(&mut self, method: BinaryCompressionType) {
-        self.data_array_compression.set_default_compression_method(method)
+        self.data_array_compression
+            .set_default_compression_method(method)
     }
 }
 
@@ -1793,7 +1808,8 @@ where
         }
 
         self.handle.write_param(
-            self.data_array_compression.get_compression_method_for(array)
+            self.data_array_compression
+                .get_compression_method_for(array)
                 .clone()
                 .as_param()
                 .as_ref()

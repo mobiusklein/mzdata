@@ -332,7 +332,6 @@ impl<T: io::Seek + io::Write> io::Seek for MD5HashingStream<T> {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;

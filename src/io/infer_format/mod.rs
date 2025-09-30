@@ -1,16 +1,14 @@
-mod inference;
 mod dispatch;
+mod inference;
 mod pipeline;
 
-pub use dispatch::{MZReader, MZReaderType, MZReaderBuilder, IMMZReaderType};
 #[cfg(feature = "async_partial")]
-pub use dispatch::{AsyncMZReaderType, AsyncMZReader, AsyncMZReaderBuilder};
+pub use dispatch::{AsyncMZReader, AsyncMZReaderBuilder, AsyncMZReaderType};
+pub use dispatch::{IMMZReaderType, MZReader, MZReaderBuilder, MZReaderType};
 
+pub use inference::{infer_format, infer_from_path, infer_from_stream, MassSpectrometryFormat};
 
-
-pub use inference::{infer_from_path, infer_from_stream, infer_format, MassSpectrometryFormat};
-
-pub use pipeline::{MassSpectrometryReadWriteProcess, Source, Sink};
+pub use pipeline::{MassSpectrometryReadWriteProcess, Sink, Source};
 
 #[cfg(test)]
 mod test {
@@ -19,9 +17,9 @@ mod test {
     use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
     use crate::{
+        io::DetailLevel,
         prelude::*,
         spectrum::{ArrayType, Spectrum},
-        io::DetailLevel
     };
 
     use super::*;
@@ -76,14 +74,19 @@ mod test {
                 panic!("Failed to retrieve spectrum by index")
             }
 
-            assert_eq!(reader.get_spectrum_by_id("controllerType=0 controllerNumber=1 scan=11").unwrap().index(), 10);
+            assert_eq!(
+                reader
+                    .get_spectrum_by_id("controllerType=0 controllerNumber=1 scan=11")
+                    .unwrap()
+                    .index(),
+                10
+            );
 
             if let Some(spec) = reader.get_spectrum_by_time(0.358558333333) {
                 assert_eq!(spec.index(), 34);
             } else {
                 panic!("Failed to retrieve spectrum by time")
             }
-
         } else {
             panic!("Failed to open file")
         }
@@ -106,14 +109,19 @@ mod test {
                 panic!("Failed to retrieve spectrum by index")
             }
 
-            assert_eq!(reader.get_spectrum_by_id("controllerType=0 controllerNumber=1 scan=11").unwrap().index(), 10);
+            assert_eq!(
+                reader
+                    .get_spectrum_by_id("controllerType=0 controllerNumber=1 scan=11")
+                    .unwrap()
+                    .index(),
+                10
+            );
 
             if let Some(spec) = reader.get_spectrum_by_time(0.358558333333) {
                 assert_eq!(spec.index(), 34);
             } else {
                 panic!("Failed to retrieve spectrum by time")
             }
-
         } else {
             panic!("Failed to open file")
         }
@@ -124,7 +132,8 @@ mod test {
         let s = Source::<CentroidPeak, DeconvolutedPeak>::from("text/path".as_ref());
         assert!(matches!(s, Source::PathLike(_)));
 
-        let fh = Box::new(io::BufReader::new(fs::File::open("./test/data/small.mgf")?)) as Box<dyn SeekRead + Send>;
+        let fh = Box::new(io::BufReader::new(fs::File::open("./test/data/small.mgf")?))
+            as Box<dyn SeekRead + Send>;
         let rs: Source<CentroidPeak, DeconvolutedPeak> = (fh, MassSpectrometryFormat::MGF).into();
         assert!(matches!(rs, Source::Reader(_, _)));
 
@@ -153,7 +162,9 @@ mod test {
         assert_eq!(form, MassSpectrometryFormat::MzML);
         assert!(!gzip);
 
-        mzml_file = fs::File::open("./test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz")?;
+        mzml_file = fs::File::open(
+            "./test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz",
+        )?;
         let (form, gzip) = infer_from_stream(&mut mzml_file)?;
         assert_eq!(form, MassSpectrometryFormat::MzML);
         assert!(gzip);

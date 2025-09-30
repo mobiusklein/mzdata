@@ -756,24 +756,24 @@ impl SpectrumType {
     #[doc = r" Retrieve a term set specific set of flags"]
     pub fn flags(&self) -> i32 {
         match self {
-            Self::MassSpectrum => { 0 },
-            Self::ChargeInversionMassSpectrum => { 0 },
-            Self::ConstantNeutralGainSpectrum => { 0 },
-            Self::ConstantNeutralLossSpectrum => { 0 },
-            Self::E2MassSpectrum => { 0 },
-            Self::PrecursorIonSpectrum => { 0 },
-            Self::ProductIonSpectrum => { 0 },
-            Self::MS1Spectrum => { 0 },
-            Self::MSnSpectrum => { 0 },
-            Self::CRMSpectrum => { 0 },
-            Self::SIMSpectrum => { 0 },
-            Self::SRMSpectrum => { 0 },
-            Self::PDASpectrum => { 0 },
-            Self::EnhancedMultiplyChargedSpectrum => { 0 },
-            Self::TimeDelayedFragmentationSpectrum => { 0 },
-            Self::ElectromagneticRadiationSpectrum => { 0 },
-            Self::EmissionSpectrum => { 0 },
-            Self::AbsorptionSpectrum => { 0 },
+            Self::MassSpectrum => 0,
+            Self::ChargeInversionMassSpectrum => 0,
+            Self::ConstantNeutralGainSpectrum => 0,
+            Self::ConstantNeutralLossSpectrum => 0,
+            Self::E2MassSpectrum => 0,
+            Self::PrecursorIonSpectrum => 0,
+            Self::ProductIonSpectrum => 0,
+            Self::MS1Spectrum => 0,
+            Self::MSnSpectrum => 0,
+            Self::CRMSpectrum => 0,
+            Self::SIMSpectrum => 0,
+            Self::SRMSpectrum => 0,
+            Self::PDASpectrum => 0,
+            Self::EnhancedMultiplyChargedSpectrum => 0,
+            Self::TimeDelayedFragmentationSpectrum => 0,
+            Self::ElectromagneticRadiationSpectrum => 0,
+            Self::EmissionSpectrum => 0,
+            Self::AbsorptionSpectrum => 0,
         }
     }
     #[doc = r" Retrieve the list of zero or more terms in the set which are"]
@@ -987,7 +987,9 @@ impl SpectrumType {
     pub const fn default_main_axis(&self) -> crate::spectrum::ArrayType {
         match self {
             SpectrumType::PDASpectrum => crate::spectrum::ArrayType::WavelengthArray,
-            SpectrumType::ElectromagneticRadiationSpectrum => crate::spectrum::ArrayType::WavelengthArray,
+            SpectrumType::ElectromagneticRadiationSpectrum => {
+                crate::spectrum::ArrayType::WavelengthArray
+            }
             SpectrumType::EmissionSpectrum => crate::spectrum::ArrayType::WavelengthArray,
             SpectrumType::AbsorptionSpectrum => crate::spectrum::ArrayType::WavelengthArray,
             _ => crate::spectrum::ArrayType::MZArray,

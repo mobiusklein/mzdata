@@ -4,7 +4,6 @@ use std::io::prelude::*;
 use indexmap::map::{Iter, Keys};
 use indexmap::IndexMap;
 
-
 /**
 An ordered mapping from entity ID to byte offset into the source
 file it resides in.

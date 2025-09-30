@@ -1,19 +1,22 @@
+use std::any::Any;
 #[allow(unused)]
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender, SyncSender};
-use std::any::Any;
 
 #[allow(unused)]
 use flate2::write::GzEncoder;
-use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 #[cfg(feature = "bruker_tdf")]
-use mzpeaks::{feature::{ChargedFeature, Feature}, IonMobility, Mass, MZ};
+use mzpeaks::{
+    feature::{ChargedFeature, Feature},
+    IonMobility, Mass, MZ,
+};
+use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 
-use crate::io::PreBufferedStream;
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::{MzMLbReaderType, MzMLbWriterBuilder};
+use crate::io::PreBufferedStream;
 
 #[allow(unused)]
 use crate::io::compression::RestartableGzDecoder;
@@ -22,7 +25,9 @@ use crate::io::mgf::{MGFReaderType, MGFWriterType};
 #[cfg(feature = "mzml")]
 use crate::io::mzml::{MzMLReaderType, MzMLWriterType};
 #[allow(unused)]
-use crate::io::traits::{RandomAccessSpectrumIterator, SpectrumSource, SpectrumWriter, MZFileReader};
+use crate::io::traits::{
+    MZFileReader, RandomAccessSpectrumIterator, SpectrumSource, SpectrumWriter,
+};
 use crate::io::SpectrumReceiver;
 use crate::io::StreamingSpectrumIterator;
 use crate::meta::MSDataFileMetadata;
@@ -40,8 +45,6 @@ use super::infer_format;
 use super::infer_from_path;
 use super::infer_from_stream;
 use super::MassSpectrometryFormat;
-
-
 
 /// An abstraction over different ways to get a [`SpectrumSource`] from a file path,
 /// buffer, or pipe.
@@ -73,8 +76,25 @@ pub enum Source<C: CentroidLike
     Reader(Box<dyn SeekRead + Send>, Option<MassSpectrometryFormat>)
 }
 
-impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send, D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> Source<C, D> {
-
+impl<
+        C: CentroidLike
+            + From<CentroidPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + 'static
+            + Sync
+            + Send,
+        D: DeconvolutedCentroidLike
+            + From<DeconvolutedPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + Sync
+            + 'static
+            + Send,
+    > Source<C, D>
+{
     pub fn index_file_name(&self) -> Option<PathBuf> {
         match &self {
             Self::PathLike(path) => {
@@ -87,7 +107,7 @@ impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayM
                 }
                 None
             }
-            _ => None
+            _ => None,
         }
     }
 
@@ -99,46 +119,145 @@ impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayM
     }
 }
 
-impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
-     D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<&Path> for Source<C, D> {
+impl<
+        C: CentroidLike
+            + From<CentroidPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + 'static
+            + Sync
+            + Send,
+        D: DeconvolutedCentroidLike
+            + From<DeconvolutedPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + Sync
+            + 'static
+            + Send,
+    > From<&Path> for Source<C, D>
+{
     fn from(value: &Path) -> Self {
         Self::PathLike(value.into())
     }
 }
 
-
-impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
-     D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<String> for Source<C, D> {
+impl<
+        C: CentroidLike
+            + From<CentroidPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + 'static
+            + Sync
+            + Send,
+        D: DeconvolutedCentroidLike
+            + From<DeconvolutedPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + Sync
+            + 'static
+            + Send,
+    > From<String> for Source<C, D>
+{
     fn from(value: String) -> Self {
         Self::PathLike(value.into())
     }
 }
 
-impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
-     D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<SpectrumReceiver<C, D, MultiLayerSpectrum<C, D>>> for Source<C, D> {
+impl<
+        C: CentroidLike
+            + From<CentroidPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + 'static
+            + Sync
+            + Send,
+        D: DeconvolutedCentroidLike
+            + From<DeconvolutedPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + Sync
+            + 'static
+            + Send,
+    > From<SpectrumReceiver<C, D, MultiLayerSpectrum<C, D>>> for Source<C, D>
+{
     fn from(value: SpectrumReceiver<C, D, MultiLayerSpectrum<C, D>>) -> Self {
         Self::Receiver(Box::new(value))
     }
 }
 
-impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
-     D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<Receiver<MultiLayerSpectrum<C, D>>> for Source<C, D> {
+impl<
+        C: CentroidLike
+            + From<CentroidPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + 'static
+            + Sync
+            + Send,
+        D: DeconvolutedCentroidLike
+            + From<DeconvolutedPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + Sync
+            + 'static
+            + Send,
+    > From<Receiver<MultiLayerSpectrum<C, D>>> for Source<C, D>
+{
     fn from(value: Receiver<MultiLayerSpectrum<C, D>>) -> Self {
         Self::Receiver(Box::new(value.into()))
     }
 }
 
 impl<
-     C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
-     D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<(Box<dyn SeekRead + Send>, MassSpectrometryFormat)> for Source<C, D> {
+        C: CentroidLike
+            + From<CentroidPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + 'static
+            + Sync
+            + Send,
+        D: DeconvolutedCentroidLike
+            + From<DeconvolutedPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + Sync
+            + 'static
+            + Send,
+    > From<(Box<dyn SeekRead + Send>, MassSpectrometryFormat)> for Source<C, D>
+{
     fn from(value: (Box<dyn SeekRead + Send>, MassSpectrometryFormat)) -> Self {
         Self::Reader(value.0, Some(value.1))
     }
 }
 
 impl<
-     C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
-     D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<Box<dyn SeekRead + Send>> for Source<C, D> {
+        C: CentroidLike
+            + From<CentroidPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + 'static
+            + Sync
+            + Send,
+        D: DeconvolutedCentroidLike
+            + From<DeconvolutedPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + Sync
+            + 'static
+            + Send,
+    > From<Box<dyn SeekRead + Send>> for Source<C, D>
+{
     fn from(value: Box<dyn SeekRead + Send>) -> Self {
         Self::Reader(value, None)
     }
@@ -171,42 +290,125 @@ pub enum Sink<C: CentroidLike
     Writer(Box<dyn io::Write + Send>, MassSpectrometryFormat)
 }
 
-impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
-     D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send>
-     From<(Box<dyn io::Write + Send>, MassSpectrometryFormat)> for Sink<C, D> {
+impl<
+        C: CentroidLike
+            + From<CentroidPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + 'static
+            + Sync
+            + Send,
+        D: DeconvolutedCentroidLike
+            + From<DeconvolutedPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + Sync
+            + 'static
+            + Send,
+    > From<(Box<dyn io::Write + Send>, MassSpectrometryFormat)> for Sink<C, D>
+{
     fn from(value: (Box<dyn io::Write + Send>, MassSpectrometryFormat)) -> Self {
         Self::Writer(value.0, value.1)
     }
 }
 
-impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
-     D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<&Path> for Sink<C, D> {
+impl<
+        C: CentroidLike
+            + From<CentroidPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + 'static
+            + Sync
+            + Send,
+        D: DeconvolutedCentroidLike
+            + From<DeconvolutedPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + Sync
+            + 'static
+            + Send,
+    > From<&Path> for Sink<C, D>
+{
     fn from(value: &Path) -> Self {
         Self::PathLike(value.into())
     }
 }
 
-impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
-     D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<String> for Sink<C, D> {
+impl<
+        C: CentroidLike
+            + From<CentroidPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + 'static
+            + Sync
+            + Send,
+        D: DeconvolutedCentroidLike
+            + From<DeconvolutedPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + Sync
+            + 'static
+            + Send,
+    > From<String> for Sink<C, D>
+{
     fn from(value: String) -> Self {
         Self::PathLike(value.into())
     }
 }
 
-impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
-     D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<Sender<MultiLayerSpectrum<C, D>>> for Sink<C, D> {
+impl<
+        C: CentroidLike
+            + From<CentroidPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + 'static
+            + Sync
+            + Send,
+        D: DeconvolutedCentroidLike
+            + From<DeconvolutedPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + Sync
+            + 'static
+            + Send,
+    > From<Sender<MultiLayerSpectrum<C, D>>> for Sink<C, D>
+{
     fn from(value: Sender<MultiLayerSpectrum<C, D>>) -> Self {
         Self::Sender(value)
     }
 }
 
-impl<C: CentroidLike  + From<CentroidPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + 'static + Sync + Send,
-     D: DeconvolutedCentroidLike  + From<DeconvolutedPeak> + BuildArrayMapFrom + BuildFromArrayMap + Clone + Sync + 'static + Send> From<SyncSender<MultiLayerSpectrum<C, D>>> for Sink<C, D> {
+impl<
+        C: CentroidLike
+            + From<CentroidPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + 'static
+            + Sync
+            + Send,
+        D: DeconvolutedCentroidLike
+            + From<DeconvolutedPeak>
+            + BuildArrayMapFrom
+            + BuildFromArrayMap
+            + Clone
+            + Sync
+            + 'static
+            + Send,
+    > From<SyncSender<MultiLayerSpectrum<C, D>>> for Sink<C, D>
+{
     fn from(value: SyncSender<MultiLayerSpectrum<C, D>>) -> Self {
         Self::SyncSender(value)
     }
 }
-
 
 /// Encapsulate the read-transform-write process for mass spectrometry data sources.
 ///
@@ -597,4 +799,3 @@ pub trait MassSpectrometryReadWriteProcess<
         writer: W,
     ) -> Result<(), Self::ErrorType>;
 }
-

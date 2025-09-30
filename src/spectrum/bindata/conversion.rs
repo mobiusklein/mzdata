@@ -1,14 +1,16 @@
 use std::{collections::HashSet, convert::TryInto, mem};
 
 use mzpeaks::{
-    prelude::*,
     feature::{ChargedFeature, Feature},
-    CentroidLike, CentroidPeak, CoordinateLike, DeconvolutedPeak, DeconvolutedPeakSet,
-    IonMobility,MZPeakSetType, Mass, PeakSet,
-    MZ,
+    prelude::*,
+    CentroidLike, CentroidPeak, CoordinateLike, DeconvolutedPeak, DeconvolutedPeakSet, IonMobility,
+    MZPeakSetType, Mass, PeakSet, MZ,
 };
 
-use crate::{params::Unit, utils::{mass_charge_ratio, neutral_mass}};
+use crate::{
+    params::Unit,
+    utils::{mass_charge_ratio, neutral_mass},
+};
 
 use super::{
     array::DataArray,

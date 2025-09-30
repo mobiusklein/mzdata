@@ -6,7 +6,6 @@ use super::super::{MultiLayerSpectrum, SpectrumLike};
 
 use super::util::GroupIterState;
 
-
 /// An abstraction over [`SpectrumGroup`](crate::spectrum::SpectrumGroup)'s interface.
 pub trait SpectrumGrouping<
     C: CentroidLike = CentroidPeak,
@@ -60,7 +59,7 @@ pub trait SpectrumGrouping<
                 } else {
                     Some(c)
                 }
-            },
+            }
         }
     }
 
@@ -141,7 +140,12 @@ where
     S: SpectrumLike<C, D>,
 {
     pub fn new(precursor: Option<S>, products: Vec<S>) -> Self {
-        Self { precursor, products, centroid_type: PhantomData, deconvoluted_type: PhantomData }
+        Self {
+            precursor,
+            products,
+            centroid_type: PhantomData,
+            deconvoluted_type: PhantomData,
+        }
     }
 
     pub fn iter(&'a self) -> SpectrumGroupIter<'a, C, D, S> {
@@ -327,8 +331,8 @@ impl<
     }
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>>
-    Default for SpectrumGroup<C, D, S>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>> Default
+    for SpectrumGroup<C, D, S>
 {
     fn default() -> Self {
         Self {
@@ -377,7 +381,6 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use crate::Spectrum;
@@ -412,10 +415,7 @@ mod test {
             desc3.acquisition.first_scan_mut().unwrap().start_time = 101.5;
         }
 
-        SpectrumGroup::new(Some(spec1), vec![
-            spec2,
-            spec3
-        ])
+        SpectrumGroup::new(Some(spec1), vec![spec2, spec3])
     }
 
     #[test]

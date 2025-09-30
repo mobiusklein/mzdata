@@ -2,7 +2,6 @@ use std::iter::FusedIterator;
 
 use crate::spectrum::Chromatogram;
 
-
 /// A trait that for retrieving [`Chromatogram`]s from a source.
 pub trait ChromatogramSource {
     /// Get a [`Chromatogram`] by its identifier, if it exists.

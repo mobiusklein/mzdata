@@ -1,15 +1,14 @@
-use std::marker::PhantomData;
-use std::slice;
-use std::mem;
 use std::borrow::Cow;
+use std::marker::PhantomData;
+use std::mem;
+use std::slice;
 
+use crate::params::Unit;
 use bytemuck::Pod;
 use num_traits::{AsPrimitive, Num};
-use crate::params::Unit;
 
 use super::encodings::{ArrayRetrievalError, BinaryDataArrayType, Bytes};
 use super::ArrayType;
-
 
 pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
     fn view(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError>;
@@ -19,16 +18,14 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
     ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
         let n = buffer.len();
         if n == 0 {
-            return Ok(Cow::Owned(Vec::new()))
+            return Ok(Cow::Owned(Vec::new()));
         }
         let z = mem::size_of::<T>();
         if n % z != 0 {
             return Err(ArrayRetrievalError::DataTypeSizeMismatch);
         }
         match buffer {
-            Cow::Borrowed(c) => {
-                Ok(Cow::Borrowed(bytemuck::try_cast_slice(c)?))
-            },
+            Cow::Borrowed(c) => Ok(Cow::Borrowed(bytemuck::try_cast_slice(c)?)),
             Cow::Owned(v) => {
                 let size_type = n / z;
                 let mut buf = Vec::with_capacity(size_type);
@@ -37,13 +34,11 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
                     Ok::<(), bytemuck::PodCastError>(())
                 })?;
                 Ok(Cow::Owned(buf))
-            },
+            }
         }
     }
 
-    fn coerce<T: Pod>(
-        &'lifespan self,
-    ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
+    fn coerce<T: Pod>(&'lifespan self) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
         match self.view() {
             Ok(data) => Self::coerce_from(data),
             Err(err) => Err(err),
@@ -55,17 +50,13 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         &'lifespan self,
     ) -> Result<Cow<'transient, [D]>, ArrayRetrievalError> {
         match self.coerce::<S>() {
-            Ok(view) => {
-                match view {
-                    Cow::Borrowed(view) => {
-                        Ok(Cow::Owned(view.iter().map(|a| a.as_()).collect()))
-                    }
-                    Cow::Owned(owned) => {
-                        let res = owned.iter().map(|a| a.as_()).collect();
-                        Ok(Cow::Owned(res))
-                    }
+            Ok(view) => match view {
+                Cow::Borrowed(view) => Ok(Cow::Owned(view.iter().map(|a| a.as_()).collect())),
+                Cow::Owned(owned) => {
+                    let res = owned.iter().map(|a| a.as_()).collect();
+                    Ok(Cow::Owned(res))
                 }
-            }
+            },
             Err(err) => Err(err),
         }
     }
@@ -171,7 +162,9 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         Ok(n / self.dtype().size_of())
     }
 
-    fn iter_type<T: Pod>(&'lifespan self) -> Result<DataSliceIter<'lifespan, T>, ArrayRetrievalError> {
+    fn iter_type<T: Pod>(
+        &'lifespan self,
+    ) -> Result<DataSliceIter<'lifespan, T>, ArrayRetrievalError> {
         Ok(DataSliceIter::new(self.view()?))
     }
 
@@ -199,7 +192,6 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
 pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
     ByteArrayView<'transient, 'lifespan>
 {
-
     /// Specify the unit of the data array
     fn unit_mut(&mut self) -> &mut Unit;
 
@@ -213,7 +205,7 @@ pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
     ) -> Result<&'transient mut [T], ArrayRetrievalError> {
         let n = buffer.len();
         if n == 0 {
-            return Ok(&mut [])
+            return Ok(&mut []);
         }
         let z = mem::size_of::<T>();
         if n % z != 0 {
@@ -239,7 +231,7 @@ pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
 pub struct DataSliceIter<'a, T: Pod> {
     buffer: Cow<'a, [u8]>,
     i: usize,
-    _t: PhantomData<T>
+    _t: PhantomData<T>,
 }
 
 impl<T: Pod> ExactSizeIterator for DataSliceIter<'_, T> {
@@ -251,7 +243,11 @@ impl<T: Pod> ExactSizeIterator for DataSliceIter<'_, T> {
 
 impl<'a, T: Pod> DataSliceIter<'a, T> {
     pub fn new(buffer: Cow<'a, [u8]>) -> Self {
-        Self { buffer, i: 0, _t: PhantomData }
+        Self {
+            buffer,
+            i: 0,
+            _t: PhantomData,
+        }
     }
 
     pub fn next_value(&mut self) -> Option<T> {

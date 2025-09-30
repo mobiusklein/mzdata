@@ -7,16 +7,12 @@ use thiserror::Error;
 
 use mzpeaks::{
     feature::{ChargedFeature, Feature, FeatureLike},
-    DeconvolutedCentroidLike, IonMobility, KnownCharge, Mass, MZ,
-    CentroidLike,
+    CentroidLike, DeconvolutedCentroidLike, IonMobility, KnownCharge, Mass, MZ,
 };
 
 use crate::spectrum::group::IonMobilityFrameGroupingIterator;
 use crate::spectrum::spectrum_types::MultiLayerSpectrum;
-use crate::spectrum::{
-    IonMobilityFrameLike,
-    MultiLayerIonMobilityFrame,
-};
+use crate::spectrum::{IonMobilityFrameLike, MultiLayerIonMobilityFrame};
 use crate::{
     io::{DetailLevel, OffsetIndex},
     prelude::{MSDataFileMetadata, SpectrumLike},
@@ -132,7 +128,7 @@ pub trait IonMobilityFrameSource<
     /// Get the nth [`IonMobilityFrameGroup`] from this source
     fn get_group_by_index(&mut self, index: usize) -> Option<IonMobilityFrameGroup<C, D, S>>
     where
-        Self: Sized
+        Self: Sized,
     {
         self.groups().nth(index)
     }

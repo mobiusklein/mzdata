@@ -25,7 +25,9 @@ use crate::{
     meta::{
         DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
         MassSpectrometryRun, Sample, Software,
-    }, params::Value, prelude::SpectrumLike
+    },
+    params::Value,
+    prelude::SpectrumLike,
 };
 
 use crate::params::{ControlledVocabulary, Param, ParamDescribed};
@@ -224,7 +226,6 @@ impl MGFTitleParsing for DefaultTitleParser {
     }
 }
 
-
 /// A title parser that recognizes the default Trans-Proteomics Pipeline (TPP) title
 /// format: `<RunId>.<ScanNumber1>.<ScanNumber2>.<ChargeState> File:"<^SourcePath>", NativeID:"<^Id>"`
 ///
@@ -296,7 +297,6 @@ impl MGFTitleParsing for TPPTitleParser {
     }
 }
 
-
 /// A strategy for deciding how to index an MGF file.
 pub trait MGFIndexing: Send + Sync {
     /// Check if this scan header is to be indexed
@@ -333,7 +333,6 @@ impl MGFIndexing for ScansIndexing {
     }
 }
 
-
 /// Indexing strategy for an MGF using the `TITLE` scan header, parsed
 /// according to the Trans-Proteomics Pipeline notation's `NativeID`
 /// component.
@@ -362,7 +361,6 @@ impl MGFIndexing for TPPTitleParsingNativeIDIndexing {
     }
 }
 
-
 /// Indexing strategy for an MGF using the `TITLE` scan header, parsed
 /// according to the Trans-Proteomics Pipeline notation's `ScanNumber1`
 /// component.
@@ -390,7 +388,6 @@ impl MGFIndexing for TPPTitleParsingScanNumberIndexing {
         }
     }
 }
-
 
 /// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
 /// The parser produces [`Spectrum`](crate::spectrum::Spectrum) instances. These may be
@@ -565,8 +562,9 @@ pub(crate) trait MGFLineParsing<
                     }
                     if let Some(ion) = builder
                         .description
-                        .precursor.last_mut().and_then(|v| v.iter_mut().last())
-
+                        .precursor
+                        .last_mut()
+                        .and_then(|v| v.iter_mut().last())
                     {
                         if ion.charge.is_none() {
                             ion.charge = builder.precursor_charge
@@ -812,7 +810,6 @@ impl<
         fd
     }
 
-
     /// Get the current indexing strategy implementing [`MGFIndexing`]
     #[allow(clippy::borrowed_box)]
     pub fn indexer(&self) -> &Box<dyn MGFIndexing> {
@@ -877,7 +874,6 @@ impl<
         reader.build_index();
         reader
     }
-
 
     /// Construct a new [`MGFReaderType`] and build an offset index
     /// using [`Self::build_index`] using the specified indexer.

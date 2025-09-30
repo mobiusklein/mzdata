@@ -875,7 +875,9 @@ mod test {
             "test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz",
         )?))?;
 
-        let spec = reader.get_spectrum_by_id("merged=42869 frame=9717 scanStart=1 scanEnd=705").unwrap();
+        let spec = reader
+            .get_spectrum_by_id("merged=42869 frame=9717 scanStart=1 scanEnd=705")
+            .unwrap();
         let mut arrays = spec.arrays.unwrap();
         let mzs = arrays.mzs()?;
         assert!(!mzs.is_sorted());
