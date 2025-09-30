@@ -21,7 +21,7 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
             return Ok(Cow::Owned(Vec::new()));
         }
         let z = mem::size_of::<T>();
-        if n % z != 0 {
+        if !n.is_multiple_of(z) {
             return Err(ArrayRetrievalError::DataTypeSizeMismatch);
         }
         match buffer {
@@ -208,7 +208,7 @@ pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
             return Ok(&mut []);
         }
         let z = mem::size_of::<T>();
-        if n % z != 0 {
+        if !n.is_multiple_of(z) {
             return Err(ArrayRetrievalError::DataTypeSizeMismatch);
         }
         let m = n / z;

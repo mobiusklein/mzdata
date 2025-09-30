@@ -113,7 +113,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     }
 
     pub fn slice(&self, start: usize, end: usize) -> Result<DataArray, ArrayRetrievalError> {
-        if end < start || (end - start) % self.dtype.size_of() != 0 {
+        if end < start || !(end - start).is_multiple_of(self.dtype.size_of()) {
             Err(ArrayRetrievalError::DataTypeSizeMismatch)
         } else {
             let data = self.decode()?;
@@ -128,7 +128,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         start: usize,
         end: usize,
     ) -> Result<Cow<'_, [u8]>, ArrayRetrievalError> {
-        if end < start || (end - start) % self.dtype.size_of() != 0 {
+        if end < start || !(end - start).is_multiple_of(self.dtype.size_of()) {
             Err(ArrayRetrievalError::DataTypeSizeMismatch)
         } else {
             let data = self.decode()?;
@@ -792,7 +792,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         start: usize,
         end: usize,
     ) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError> {
-        if start > end || (end - start) % self.dtype.size_of() != 0 {
+        if start > end || !(end - start).is_multiple_of(self.dtype.size_of()) {
             return Err(ArrayRetrievalError::DataTypeSizeMismatch);
         }
         match self.compression {
