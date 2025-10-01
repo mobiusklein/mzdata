@@ -8,12 +8,12 @@ use std::time;
 
 use std::sync::mpsc::sync_channel;
 
+use mzdata::MZReader;
 use mzdata::io::Source;
 use mzdata::prelude::*;
 use mzdata::spectrum::{
     DeconvolutedSpectrum, MultiLayerSpectrum, RefPeakDataLevel, SignalContinuity, SpectrumLike,
 };
-use mzdata::MZReader;
 
 struct MSDataFileSummary {
     pub start_time: f64,
@@ -22,7 +22,7 @@ struct MSDataFileSummary {
     pub charge_table: HashMap<i32, usize>,
     pub peak_charge_table: HashMap<u8, HashMap<i32, usize>>,
     pub peak_mode_table: HashMap<SignalContinuity, usize>,
-    pub has_ion_mobility: bool
+    pub has_ion_mobility: bool,
 }
 
 impl Default for MSDataFileSummary {
@@ -112,11 +112,10 @@ impl MSDataFileSummary {
         let start = time::Instant::now();
         let (sender, receiver) = sync_channel(2usize.pow(12));
         let read_handle = spawn(move || {
-            reader.into_iter()
+            reader
+                .into_iter()
                 .enumerate()
-                .for_each(|(i, scan)| {
-                    sender.send((i, scan)).unwrap()
-                });
+                .for_each(|(i, scan)| sender.send((i, scan)).unwrap());
         });
         let i = receiver.iter().fold(0, |_, (i, scan)| {
             if i % 10000 == 0 && i > 0 {
@@ -134,7 +133,10 @@ impl MSDataFileSummary {
         read_handle.join().unwrap();
         let end = time::Instant::now();
         let elapsed = end - start;
-        println!("{:0.3} seconds elapsed, handled {i} spectra", elapsed.as_secs_f64());
+        println!(
+            "{:0.3} seconds elapsed, handled {i} spectra",
+            elapsed.as_secs_f64()
+        );
     }
 
     pub fn write_out(&self) {

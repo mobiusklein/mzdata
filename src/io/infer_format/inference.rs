@@ -2,17 +2,17 @@ use std::{
     convert::TryFrom,
     fmt::Display,
     fs,
-    io::{self, prelude::*, BufReader},
+    io::{self, BufReader, prelude::*},
     path,
 };
 
 use flate2::bufread::GzDecoder;
 
 use crate::{
+    Param,
     io::compression::{is_gzipped, is_gzipped_extension},
     meta::FormatConversion,
     params::ControlledVocabulary,
-    Param,
 };
 
 #[cfg(feature = "mgf")]

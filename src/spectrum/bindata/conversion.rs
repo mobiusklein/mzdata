@@ -1,20 +1,22 @@
 use std::{collections::HashSet, convert::TryInto, mem};
 
 use mzpeaks::{
-    prelude::*,
+    CentroidLike, CentroidPeak, CoordinateLike, DeconvolutedPeak, DeconvolutedPeakSet, IonMobility,
+    MZ, MZPeakSetType, Mass, PeakSet,
     feature::{ChargedFeature, Feature},
-    CentroidLike, CentroidPeak, CoordinateLike, DeconvolutedPeak, DeconvolutedPeakSet,
-    IonMobility,MZPeakSetType, Mass, PeakSet,
-    MZ,
+    prelude::*,
 };
 
-use crate::{params::Unit, utils::{mass_charge_ratio, neutral_mass}};
+use crate::{
+    params::Unit,
+    utils::{mass_charge_ratio, neutral_mass},
+};
 
 use super::{
+    BinaryArrayMap3D, ByteArrayView,
     array::DataArray,
     encodings::{ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType},
     map::BinaryArrayMap,
-    BinaryArrayMap3D, ByteArrayView,
 };
 
 impl From<&PeakSet> for BinaryArrayMap {
@@ -645,10 +647,10 @@ impl BuildFromArrayMap3D for Feature<MZ, IonMobility> {
             if arr.is_empty() {
                 continue;
             }
-            if let Some(arr) = arr.get(&key) {
-                if let Some(i) = arr.iter_i32()?.map(|i| i as usize).max() {
-                    n = n.max(i);
-                }
+            if let Some(arr) = arr.get(&key)
+                && let Some(i) = arr.iter_i32()?.map(|i| i as usize).max()
+            {
+                n = n.max(i);
             }
         }
 
@@ -694,10 +696,10 @@ impl BuildFromArrayMap3D for ChargedFeature<Mass, IonMobility> {
             if arr.is_empty() {
                 continue;
             }
-            if let Some(arr) = arr.get(&key) {
-                if let Some(i) = arr.iter_i32()?.map(|i| i as usize).max() {
-                    n = n.max(i);
-                }
+            if let Some(arr) = arr.get(&key)
+                && let Some(i) = arr.iter_i32()?.map(|i| i as usize).max()
+            {
+                n = n.max(i);
             }
         }
 

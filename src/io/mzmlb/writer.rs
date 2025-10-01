@@ -1,9 +1,9 @@
 use std::borrow::Cow;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::ffi::CString;
 use std::fmt::Display;
-use std::io::{self, prelude::*, Cursor};
+use std::io::{self, Cursor, prelude::*};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
@@ -12,7 +12,7 @@ use bytemuck;
 use hdf5::from_id;
 use hdf5::globals::H5T_C_S1;
 use hdf5::types::{FixedAscii, IntSize, TypeDescriptor};
-use hdf5::{self, filters, Attribute, Dataspace, Extents};
+use hdf5::{self, Attribute, Dataspace, Extents, filters};
 use hdf5::{h5lock, h5try};
 use hdf5_sys;
 use hdf5_sys::h5i::hid_t;
@@ -21,7 +21,10 @@ use hdf5_sys::h5t::{H5T_cset_t, H5T_str_t, H5Tcopy, H5Tset_cset, H5Tset_size, H5
 use mzpeaks::feature::FeatureLike;
 use ndarray::Array1;
 
-use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, IonMobility, KnownCharge, Mass, MZ};
+use mzpeaks::{
+    CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, IonMobility,
+    KnownCharge, MZ, Mass,
+};
 use quick_xml::events::{BytesStart, Event};
 use thiserror::Error;
 
@@ -32,12 +35,15 @@ use crate::meta::{
 use crate::params::{ControlledVocabulary, ParamDescribed};
 use crate::prelude::*;
 use crate::spectrum::bindata::{
-    ArrayRetrievalError, BinaryDataArrayType, BuildArrayMap3DFrom, BuildArrayMapFrom, ByteArrayView, DataArray
+    ArrayRetrievalError, BinaryDataArrayType, BuildArrayMap3DFrom, BuildArrayMapFrom,
+    ByteArrayView, DataArray,
 };
-use crate::spectrum::{ArrayType, BinaryArrayMap, Chromatogram, ChromatogramLike, RefPeakDataLevel};
+use crate::spectrum::{
+    ArrayType, BinaryArrayMap, Chromatogram, ChromatogramLike, RefPeakDataLevel,
+};
 
-use crate::io::mzml::{MzMLWriterError, MzMLWriterState, MzMLWriterType};
 use crate::RawSpectrum;
+use crate::io::mzml::{MzMLWriterError, MzMLWriterState, MzMLWriterType};
 
 macro_rules! bstart {
     ($e:tt) => {
@@ -89,8 +95,7 @@ impl From<MzMLbWriterError> for io::Error {
     }
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike> MSDataFileMetadata
-    for MzMLbWriterType<C, D>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> MSDataFileMetadata for MzMLbWriterType<C, D>
 where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
@@ -181,7 +186,7 @@ impl BufferName {
 
 impl Display for BufferName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                let context = match self.context {
+        let context = match self.context {
             BufferContext::Spectrum => "spectrum",
             BufferContext::Chromatogram => "chromatogram",
         };
@@ -200,7 +205,12 @@ impl Display for BufferName {
             ArrayType::NonStandardDataArray { name } => Cow::Owned(name.replace(['/', ' '], "_")),
             ArrayType::BaselineArray => Cow::Borrowed("baseline"),
             ArrayType::ResolutionArray => Cow::Borrowed("resolution"),
-            _ => Cow::Owned(self.array_type.to_string().replace(['/', ' '], "_").to_lowercase())
+            _ => Cow::Owned(
+                self.array_type
+                    .to_string()
+                    .replace(['/', ' '], "_")
+                    .to_lowercase(),
+            ),
         };
         let dtype = match self.dtype {
             BinaryDataArrayType::Unknown => "unknown",
@@ -335,10 +345,7 @@ struct ByteWriter {
 }
 
 impl ByteWriter {
-    fn new(
-        dataset: hdf5::Dataset,
-        chunk_size: usize,
-    ) -> Self {
+    fn new(dataset: hdf5::Dataset, chunk_size: usize) -> Self {
         let offset = 0;
         let buffer = io::Cursor::new(Vec::with_capacity((chunk_size as f64 * 1.25) as usize));
         Self {
@@ -352,7 +359,7 @@ impl ByteWriter {
     fn write_to_dataset(&mut self) -> Result<(), hdf5::Error> {
         let size = self.buffer.position();
         if size == 0 {
-            return Ok(())
+            return Ok(());
         }
         let start = self.offset;
         let chunk = &self.buffer.get_ref()[..size as usize];
@@ -367,8 +374,7 @@ impl ByteWriter {
                 self.offset,
                 self.buffer.position(),
                 self.buffer.get_ref().capacity(),
-                (self.buffer.position() as f64 / self.buffer.get_ref().capacity() as f64)
-                    * 100.0
+                (self.buffer.position() as f64 / self.buffer.get_ref().capacity() as f64) * 100.0
             );
         }
         self.buffer.set_position(0);
@@ -377,17 +383,16 @@ impl ByteWriter {
 
     fn resize_to_fit(&mut self) -> Result<(), hdf5::Error> {
         self.write_to_dataset()?;
-        self.dataset.resize((self.offset, ))
+        self.dataset.resize((self.offset,))
     }
 }
-
 
 impl io::Write for ByteWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let z = self.buffer.write(buf)?;
         if self.buffer.position() > self.chunk_size as u64 {
             if let Err(e) = self.write_to_dataset() {
-                return Err(io::Error::new(io::ErrorKind::Other, e))
+                return Err(io::Error::new(io::ErrorKind::Other, e));
             };
         }
         Ok(z)
@@ -395,17 +400,15 @@ impl io::Write for ByteWriter {
 
     fn flush(&mut self) -> io::Result<()> {
         if let Err(e) = self.write_to_dataset() {
-            return Err(io::Error::new(io::ErrorKind::Other, e))
+            return Err(io::Error::new(io::ErrorKind::Other, e));
         };
         Ok(())
     }
 }
 
-
 pub type WriterResult = Result<(), MzMLbWriterError>;
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike> SpectrumWriter<C, D>
-    for MzMLbWriterType<C, D>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> SpectrumWriter<C, D> for MzMLbWriterType<C, D>
 where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
@@ -432,10 +435,8 @@ where
 }
 
 #[derive(Debug)]
-pub struct MzMLbWriterBuilder<
-    C: CentroidLike + 'static,
-    D: DeconvolutedCentroidLike + 'static,
-> where
+pub struct MzMLbWriterBuilder<C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static>
+where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
 {
@@ -446,7 +447,8 @@ pub struct MzMLbWriterBuilder<
     _d: PhantomData<D>,
 }
 
-impl<C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static> Default for MzMLbWriterBuilder<C, D>
+impl<C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static> Default
+    for MzMLbWriterBuilder<C, D>
 where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
@@ -462,8 +464,7 @@ where
     }
 }
 
-impl<C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static>
-    MzMLbWriterBuilder<C, D>
+impl<C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static> MzMLbWriterBuilder<C, D>
 where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
@@ -514,10 +515,8 @@ where
 }
 
 #[derive(Debug)]
-pub struct MzMLbWriterType<
-    C: CentroidLike + 'static,
-    D: DeconvolutedCentroidLike + 'static,
-> where
+pub struct MzMLbWriterType<C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static>
+where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
 {
@@ -528,8 +527,7 @@ pub struct MzMLbWriterType<
     filters: Vec<filters::Filter>,
 }
 
-impl<C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static>
-    MzMLbWriterType<C, D>
+impl<C: CentroidLike + 'static, D: DeconvolutedCentroidLike + 'static> MzMLbWriterType<C, D>
 where
     C: BuildArrayMapFrom,
     D: BuildArrayMapFrom,
@@ -538,19 +536,19 @@ where
         Self::new_with_chunk_size(path, DEFAULT_CHUNK_SIZE)
     }
 
-    pub fn new_with_chunk_size_and_filters<P: AsRef<Path>>(path: &P, chunk_size: usize, filters: Vec<hdf5::filters::Filter>) -> io::Result<Self> {
+    pub fn new_with_chunk_size_and_filters<P: AsRef<Path>>(
+        path: &P,
+        chunk_size: usize,
+        filters: Vec<hdf5::filters::Filter>,
+    ) -> io::Result<Self> {
         let mut handle = match hdf5::File::create(path) {
             Ok(handle) => handle,
             Err(e) => return Err(MzMLbWriterError::HDF5Error(e).into()),
         };
 
         let buffer = match Self::make_mzml_buffer(&mut handle, chunk_size, &filters) {
-            Ok(buffer) => {
-                ByteWriter::new(buffer, chunk_size)
-            },
-            Err(e) => {
-                return Err(e.into())
-            },
+            Ok(buffer) => ByteWriter::new(buffer, chunk_size),
+            Err(e) => return Err(e.into()),
         };
 
         let mzml_writer: MzMLWriterType<ByteWriter, C, D> =
@@ -635,9 +633,11 @@ where
                 self.mzml_writer.write_param(&array.name.as_param_const())?
             }
             ArrayType::NonStandardDataArray { name } => {
-                let mut p =
-                    self.get_ms_cv()
-                        .param_val("MS:1000786", "non-standard data array", name.as_str());
+                let mut p = self.get_ms_cv().param_val(
+                    "MS:1000786",
+                    "non-standard data array",
+                    name.as_str(),
+                );
                 p = p.with_unit_t(&array.unit);
                 self.mzml_writer.write_param(&p)?;
             }
@@ -733,9 +733,12 @@ where
 
         let mut outer = bstart!("spectrum");
         let summaries = self.mzml_writer.spectrum_has_summaries(spectrum);
-        let default_array_size = self.mzml_writer.start_spectrum(spectrum, &mut outer, &summaries)?;
+        let default_array_size = self
+            .mzml_writer
+            .start_spectrum(spectrum, &mut outer, &summaries)?;
 
-        self.mzml_writer.write_spectrum_descriptors(spectrum, &summaries)?;
+        self.mzml_writer
+            .write_spectrum_descriptors(spectrum, &summaries)?;
 
         self.mzml_writer
             .tic_collector
@@ -843,7 +846,11 @@ where
         &mut self.mzml_writer.chromatogram_count
     }
 
-    fn make_mzml_buffer(handle: &mut hdf5::File, chunk_size: usize, filters: &[hdf5::filters::Filter]) -> Result<hdf5::Dataset, MzMLbWriterError> {
+    fn make_mzml_buffer(
+        handle: &mut hdf5::File,
+        chunk_size: usize,
+        filters: &[hdf5::filters::Filter],
+    ) -> Result<hdf5::Dataset, MzMLbWriterError> {
         let mzml_buffer = handle
             .new_dataset_builder()
             .chunk(chunk_size)
@@ -865,11 +872,12 @@ where
                 return Err(MzMLbWriterError::IOError(io::Error::new(
                     io::ErrorKind::InvalidData,
                     e,
-                )))
+                )));
             }
         };
 
-        let version_attr = create_fixed_length_str_attribute(&mut mzml_buffer.dataset, "version", 10)?;
+        let version_attr =
+            create_fixed_length_str_attribute(&mut mzml_buffer.dataset, "version", 10)?;
         version_attr.write_scalar(&version_str)?;
         Ok(())
     }
@@ -977,10 +985,8 @@ where
     }
 }
 
-impl<
-        C: CentroidLike + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
-    > Drop for MzMLbWriterType<C, D>
+impl<C: CentroidLike + BuildArrayMapFrom, D: DeconvolutedCentroidLike + BuildArrayMapFrom> Drop
+    for MzMLbWriterType<C, D>
 {
     fn drop(&mut self) {
         MzMLbWriterType::close(self).unwrap();
@@ -988,13 +994,16 @@ impl<
 }
 
 impl<
-        C: CentroidLike + BuildArrayMapFrom,
-        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
-        CF: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
-        DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
-    > IonMobilityFrameWriter<CF, DF> for MzMLbWriterType<C, D>
+    C: CentroidLike + BuildArrayMapFrom,
+    D: DeconvolutedCentroidLike + BuildArrayMapFrom,
+    CF: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
+    DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
+> IonMobilityFrameWriter<CF, DF> for MzMLbWriterType<C, D>
 {
-    fn write_frame<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(&mut self, frame: &S) -> io::Result<usize> {
+    fn write_frame<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(
+        &mut self,
+        frame: &S,
+    ) -> io::Result<usize> {
         let state = frame.description().clone().into();
         let peak_data = match frame.features() {
             crate::spectrum::frame::RefFeatureDataLevel::Missing => BinaryArrayMap::default(),
@@ -1006,7 +1015,10 @@ impl<
         self.write_owned(spectrum)
     }
 
-    fn write_frame_owned<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(&mut self, frame: S) -> io::Result<usize> {
+    fn write_frame_owned<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(
+        &mut self,
+        frame: S,
+    ) -> io::Result<usize> {
         let (features, state) = frame.into_features_and_parts();
         let peak_data = match features {
             crate::spectrum::frame::FeatureDataLevel::Missing => BinaryArrayMap::default(),

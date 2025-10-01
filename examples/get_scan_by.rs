@@ -34,8 +34,16 @@ fn main() -> io::Result<()> {
     };
 
     // dbg!(spectrum);
-    println!("ID: {}; Index: {}; Time: {}", spectrum.id(), spectrum.index(), spectrum.start_time());
-    println!("Num data points: {}", spectrum.raw_arrays().unwrap().mzs().unwrap().len());
+    println!(
+        "ID: {}; Index: {}; Time: {}",
+        spectrum.id(),
+        spectrum.index(),
+        spectrum.start_time()
+    );
+    println!(
+        "Num data points: {}",
+        spectrum.raw_arrays().unwrap().mzs().unwrap().len()
+    );
 
     Ok(())
 }

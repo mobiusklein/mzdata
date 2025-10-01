@@ -3,13 +3,13 @@ use std::iter::FusedIterator;
 
 use mzpeaks::prelude::*;
 use mzpeaks::{
+    IndexType, MZPeakSetType, MassPeakSetType,
     peak::{CentroidPeak, DeconvolutedPeak, MZPoint},
     peak_set::PeakSetVec,
-    IndexType, MZPeakSetType, MassPeakSetType,
 };
 
-use super::bindata::ArrayRetrievalError;
 use super::BinaryArrayMap;
+use super::bindata::ArrayRetrievalError;
 use crate::prelude::BuildFromArrayMap;
 use crate::spectrum::bindata::ArraysAvailable;
 use crate::utils::mass_charge_ratio;
@@ -52,10 +52,10 @@ impl SummaryOps for BinaryArrayMap {
                 .iter()
                 .enumerate()
                 .max_by(|ia, ib| ia.1.total_cmp(ib.1));
-            if let Ok(mzs) = self.mzs() {
-                if let Some((i, inten)) = result {
-                    peak = CentroidPeak::new(mzs[i], *inten, i as IndexType)
-                }
+            if let Ok(mzs) = self.mzs()
+                && let Some((i, inten)) = result
+            {
+                peak = CentroidPeak::new(mzs[i], *inten, i as IndexType)
             }
         }
         peak

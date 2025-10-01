@@ -1,5 +1,4 @@
-use std::collections::{hash_map::Entry, HashMap, HashSet, VecDeque};
-
+use std::collections::{HashMap, HashSet, VecDeque, hash_map::Entry};
 
 #[derive(Debug, Default)]
 pub(crate) enum GroupIterState {
@@ -8,8 +7,6 @@ pub(crate) enum GroupIterState {
     Product(usize),
     Done,
 }
-
-
 
 #[derive(Default, Debug)]
 pub(crate) struct GenerationTracker {
@@ -77,9 +74,9 @@ impl GenerationTracker {
 
     pub fn older_than(&mut self, generation: usize) -> Vec<String> {
         let mut result = Vec::new();
-        for gen in self.generations.iter() {
-            if *gen < generation {
-                if let Some(members) = self.generation_to_id.remove(gen) {
+        for this_generation in self.generations.iter() {
+            if *this_generation < generation {
+                if let Some(members) = self.generation_to_id.remove(this_generation) {
                     result.extend(members);
                 }
             } else {

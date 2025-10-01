@@ -1,8 +1,7 @@
 use crate::params::{Param, ParamDescribed};
 
-
 /// Description of the acquisition settings of the instrument prior to the start of the run
-#[derive(Debug, Default, Clone, )]
+#[derive(Debug, Default, Clone)]
 pub struct ScanSettings {
     /// A unique identifier
     pub id: String,
@@ -15,8 +14,18 @@ pub struct ScanSettings {
 }
 
 impl ScanSettings {
-    pub fn new(id: String, params: Vec<Param>, source_file_refs: Vec<String>, targets: Vec<Vec<Param>>) -> Self {
-        Self { id, params, source_file_refs, targets }
+    pub fn new(
+        id: String,
+        params: Vec<Param>,
+        source_file_refs: Vec<String>,
+        targets: Vec<Vec<Param>>,
+    ) -> Self {
+        Self {
+            id,
+            params,
+            source_file_refs,
+            targets,
+        }
     }
 }
 

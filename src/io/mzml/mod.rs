@@ -23,21 +23,20 @@ mod writer;
 mod async_reader;
 
 pub use reading_shared::{
-    CVParamParse, MzMLParserError, MzMLParserState, MzMLSAX, XMLParseBase,
-    FileMetadataBuilder, EntryType
+    CVParamParse, EntryType, FileMetadataBuilder, MzMLParserError, MzMLParserState, MzMLSAX,
+    XMLParseBase,
 };
 
 #[allow(unused)]
 pub(crate) use reading_shared::{IncrementingIdMap, ParserResult};
 
 pub use crate::io::mzml::reader::{
-    MzMLReader, MzMLReaderType, MzMLSpectrumBuilder,
-    SpectrumBuilding,
+    MzMLReader, MzMLReaderType, MzMLSpectrumBuilder, SpectrumBuilding,
 };
 
 pub(crate) use crate::io::mzml::reader::is_mzml;
 
-pub use crate::io::mzml::writer::{MzMLWriter, MzMLWriterState, MzMLWriterType, MzMLWriterError};
+pub use crate::io::mzml::writer::{MzMLWriter, MzMLWriterError, MzMLWriterState, MzMLWriterType};
 
 #[cfg(feature = "async")]
 pub use crate::io::mzml::async_reader::{

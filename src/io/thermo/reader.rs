@@ -4,9 +4,10 @@ use chrono::DateTime;
 use log::{debug, warn};
 
 use crate::{
+    Param,
     io::{
-        traits::ChromatogramSource, utils::checksum_file, DetailLevel,
-        Generic3DIonMobilityFrameSource, OffsetIndex,
+        DetailLevel, Generic3DIonMobilityFrameSource, OffsetIndex, traits::ChromatogramSource,
+        utils::checksum_file,
     },
     meta::{
         Component, ComponentType, DataProcessing, DetectorTypeTerm, DissociationMethodTerm,
@@ -21,18 +22,17 @@ use crate::{
         MultiLayerSpectrum, Precursor, ScanEvent, ScanPolarity, ScanWindow, SelectedIon,
         SignalContinuity,
     },
-    Param,
 };
 
-use mzpeaks::{peak_set::PeakSetVec, prelude::*, CentroidPeak, DeconvolutedPeak, MZ};
+use mzpeaks::{CentroidPeak, DeconvolutedPeak, MZ, peak_set::PeakSetVec, prelude::*};
 
+#[allow(unused)]
+use super::instruments::{
+    InstrumentModelType, instrument_model_to_detector, parse_instrument_model,
+};
 use super::instruments::{
     create_instrument_configurations, instrument_model_to_ion_sources,
     instrument_model_to_mass_analyzers,
-};
-#[allow(unused)]
-use super::instruments::{
-    instrument_model_to_detector, parse_instrument_model, InstrumentModelType,
 };
 
 macro_rules! param {
@@ -47,7 +47,9 @@ macro_rules! param {
 /// codepoints 1-9.
 pub fn is_thermo_raw_prefix(buffer: &[u8]) -> bool {
     if buffer.len() < 18 {
-        debug!("Attempted to test a byte buffer for the Thermo prefix, buffer was less than 18 bytes long");
+        debug!(
+            "Attempted to test a byte buffer for the Thermo prefix, buffer was less than 18 bytes long"
+        );
         return false;
     }
     let view: &[u16] = unsafe { mem::transmute(&buffer[2..18]) };
@@ -91,7 +93,7 @@ fn make_native_id(index: i32) -> String {
     )
 }
 
-const SOURCE_FILE_ID: & str = "RAW1";
+const SOURCE_FILE_ID: &str = "RAW1";
 
 #[cfg(not(feature = "doc-only"))]
 pub(crate) mod sealed {
@@ -101,11 +103,11 @@ pub(crate) mod sealed {
 
     use super::*;
     use thermorawfilereader::{
+        ExtendedSpectrumData, FileDescription as ThermoFileDescription, IonizationMode,
+        MassAnalyzer, RawFileReader,
         schema::{
             AcquisitionT, DissociationMethod, Polarity, PrecursorT, SpectrumData, SpectrumMode,
         },
-        ExtendedSpectrumData, FileDescription as ThermoFileDescription, IonizationMode,
-        MassAnalyzer, RawFileReader,
     };
 
     /**
@@ -133,9 +135,7 @@ pub(crate) mod sealed {
     }
 
     // The public API
-    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
-        ThermoRawReaderType<C, D>
-    {
+    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike> ThermoRawReaderType<C, D> {
         /// Create a new [`ThermoRawReaderType`] from a path.
         /// This may trigger an expensive I/O operation to checksum the file
         pub fn new_with_detail_level_and_centroiding<P: Into<PathBuf>>(
@@ -213,7 +213,12 @@ pub(crate) mod sealed {
         }
 
         /// Directly load binary data arrays for a specific spectrum
-        pub fn get_data_arrays_for(&mut self, index: usize, centroiding: bool, extra_data: bool) -> Option<BinaryArrayMap> {
+        pub fn get_data_arrays_for(
+            &mut self,
+            index: usize,
+            centroiding: bool,
+            extra_data: bool,
+        ) -> Option<BinaryArrayMap> {
             let data = self.handle.get_spectrum_data(index, centroiding)?;
             let mut arrays = BinaryArrayMap::default();
 
@@ -552,9 +557,7 @@ pub(crate) mod sealed {
         }
     }
 
-    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
-        ThermoRawReaderType<C, D>
-    {
+    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike> ThermoRawReaderType<C, D> {
         pub(crate) fn make_ms_run(
             path: &Path,
             thermo_file_description: &ThermoFileDescription,
@@ -563,9 +566,11 @@ pub(crate) mod sealed {
                 default_instrument_id: Some(0),
                 default_source_file_id: Some(SOURCE_FILE_ID.to_string()),
                 id: path
-                .file_name()
-                .map(|s| s.to_string_lossy().split(".").next().unwrap().to_string()),
-                start_time: thermo_file_description.creation_date().map(|s| DateTime::parse_from_rfc3339(s).unwrap()),
+                    .file_name()
+                    .map(|s| s.to_string_lossy().split(".").next().unwrap().to_string()),
+                start_time: thermo_file_description
+                    .creation_date()
+                    .map(|s| DateTime::parse_from_rfc3339(s).unwrap()),
                 ..Default::default()
             };
             run
@@ -658,11 +663,9 @@ pub(crate) mod sealed {
                 })
                 .collect();
 
-            let serial_number_param = descr.serial_number().map(|serial| ControlledVocabulary::MS.param_val(
-                    1000529,
-                    "instrument serial number",
-                    serial,
-                ));
+            let serial_number_param = descr.serial_number().map(|serial| {
+                ControlledVocabulary::MS.param_val(1000529, "instrument serial number", serial)
+            });
 
             // Try to build the instrument configuration from the metadata
             for (i, vconf) in descr.configurations().enumerate() {
@@ -745,12 +748,19 @@ pub(crate) mod sealed {
             // If the whole configurations weren't specified by the instrument model,
             // try to guess them piece-meal.
             if configs.is_empty() {
-                log::debug!("Still no configurations found. Using instrument model {} to infer configurations by parts", model_type);
+                log::debug!(
+                    "Still no configurations found. Using instrument model {} to infer configurations by parts",
+                    model_type
+                );
                 let mass_analyzers = instrument_model_to_mass_analyzers(model_type);
                 let ionization_types = instrument_model_to_ion_sources(model_type);
                 let detectors = instrument_model_to_detector(model_type);
-                log::debug!("Found {} mass analyzers, {} ionization types, {} detectors for model",
-                    mass_analyzers.len(), ionization_types.len(), detectors.len());
+                log::debug!(
+                    "Found {} mass analyzers, {} ionization types, {} detectors for model",
+                    mass_analyzers.len(),
+                    ionization_types.len(),
+                    detectors.len()
+                );
 
                 let mut i = 0;
                 for ionization in ionization_types.iter() {
@@ -781,7 +791,12 @@ pub(crate) mod sealed {
 
                         let vconf_mass_analyzer = translate_mass_analyzer_reverse(mass_analyzer);
                         components_to_instrument_id.insert(vconf_mass_analyzer, i);
-                        log::debug!("Created piece-meal configuration {}: {:?} -> {:?}", i, mass_analyzer, vconf_mass_analyzer);
+                        log::debug!(
+                            "Created piece-meal configuration {}: {:?} -> {:?}",
+                            i,
+                            mass_analyzer,
+                            vconf_mass_analyzer
+                        );
 
                         configs.insert(i, config);
                         i += 1;
@@ -791,7 +806,11 @@ pub(crate) mod sealed {
             if configs.is_empty() {
                 log::warn!("No instrument configurations were found in Thermo RAW file")
             } else {
-                log::debug!("Final result: {} configurations, mapping: {:?}", configs.len(), components_to_instrument_id);
+                log::debug!(
+                    "Final result: {} configurations, mapping: {:?}",
+                    configs.len(),
+                    components_to_instrument_id
+                );
             }
             (sw, configs, components_to_instrument_id)
         }
@@ -807,11 +826,9 @@ pub(crate) mod sealed {
         pub(crate) fn make_sample(
             thermo_file_description: &ThermoFileDescription,
         ) -> Option<Sample> {
-            thermo_file_description.sample_id().map(|name| Sample::new(
-                    name.to_string(),
-                    Some(name.to_string()),
-                    Vec::new(),
-                ))
+            thermo_file_description
+                .sample_id()
+                .map(|name| Sample::new(name.to_string(), Some(name.to_string()), Vec::new()))
         }
 
         pub(crate) fn populate_precursor(&self, vprec: &PrecursorT, precursor: &mut Precursor) {
@@ -864,9 +881,9 @@ pub(crate) mod sealed {
                     activation
                         .methods_mut()
                         .push(DissociationMethodTerm::ElectronTransferDissociation);
-                    activation.methods_mut().push(
-                        DissociationMethodTerm::SupplementalCollisionInducedDissociation,
-                    );
+                    activation
+                        .methods_mut()
+                        .push(DissociationMethodTerm::SupplementalCollisionInducedDissociation);
                 }
                 DissociationMethod::NETD => {
                     activation
@@ -1207,9 +1224,7 @@ pub(crate) mod stub {
     // The public API
     // This is a stub for documentation compilation when the dotnet runtime isn't available.
     // See the the [`sealed`](super::sealed) module for the real implementation.
-    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
-        ThermoRawReaderType<C, D>
-    {
+    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike> ThermoRawReaderType<C, D> {
         /// Get whether or not to load extended spectrum signal information for the spectrum.
         ///
         /// The loaded data isn't incorporated into a peak list, instead access them under
@@ -1399,8 +1414,8 @@ impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
     }
 }
 
-impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
-    MSDataFileMetadata for ThermoRawReaderType<C, D>
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike> MSDataFileMetadata
+    for ThermoRawReaderType<C, D>
 {
     fn data_processings(&self) -> &Vec<DataProcessing> {
         &self.data_processings
@@ -1488,7 +1503,8 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> IntoIonMobilityFrameS
         DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge,
     >(
         mut self,
-    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError> {
+    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError>
+    {
         if let Some(state) = self.has_ion_mobility() {
             if matches!(state, crate::spectrum::HasIonMobility::Dimension) {
                 Ok(Self::IonMobilityFrameSource::new(self))
@@ -1520,14 +1536,18 @@ mod test {
             "b43e9286b40e8b5dbc0dfa2e428495769ca96a96"
         );
 
-        assert!(reader
-            .file_description()
-            .get_param_by_accession("MS:1000579")
-            .is_some());
-        assert!(reader
-            .file_description()
-            .get_param_by_accession("MS:1000580")
-            .is_some());
+        assert!(
+            reader
+                .file_description()
+                .get_param_by_accession("MS:1000579")
+                .is_some()
+        );
+        assert!(
+            reader
+                .file_description()
+                .get_param_by_accession("MS:1000580")
+                .is_some()
+        );
 
         let confs = reader.instrument_configurations();
         assert_eq!(confs.len(), 2);

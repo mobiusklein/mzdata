@@ -6,13 +6,13 @@ use log::warn;
 use num_traits::Float;
 
 use super::spectrum_types::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
+use crate::ParamList;
 use crate::io::traits::SpectrumSource;
 use crate::meta::DissociationMethodTerm;
 use crate::params::{
-    AccessionIntCode, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit,
-    CURIE,
+    AccessionIntCode, CURIE, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue,
+    Unit,
 };
-use crate::{curie, impl_param_described, ParamList};
 
 /**
 Describe the initialization stage of an isolation window
@@ -689,19 +689,20 @@ impl Display for SignalContinuity {
     }
 }
 
-
 /// An adapter type to make it possible to pass an `Option<Precursor>`, `Vec<Precursor>`,
 /// or [`Precursor`] in an argument context.
 #[derive(Debug)]
 pub enum AsPrecursorCollection {
     Single(Option<Precursor>),
-    Multiple(Vec<Precursor>)
+    Multiple(Vec<Precursor>),
 }
 
 impl From<AsPrecursorCollection> for Vec<Precursor> {
     fn from(value: AsPrecursorCollection) -> Self {
         match value {
-            AsPrecursorCollection::Single(precursor) => precursor.map(|v| vec![v]).unwrap_or_default(),
+            AsPrecursorCollection::Single(precursor) => {
+                precursor.map(|v| vec![v]).unwrap_or_default()
+            }
             AsPrecursorCollection::Multiple(precursors) => precursors,
         }
     }
@@ -724,7 +725,6 @@ impl From<Vec<Precursor>> for AsPrecursorCollection {
         Self::Multiple(value)
     }
 }
-
 
 /**
 The set of descriptive metadata that give context for how a mass spectrum was acquired
@@ -791,7 +791,8 @@ impl SpectrumDescription {
     /// to be the case. `mzdata` can handle non-MS spectra, but little of the signal processing
     /// machinery it provides currently supports those other kinds of data.
     pub fn spectrum_type(&self) -> Option<crate::meta::SpectrumType> {
-        const SPECTRUM_TYPES: &[(crate::meta::SpectrumType, crate::params::ParamCow<'static>)] = crate::meta::SpectrumType::all_types();
+        const SPECTRUM_TYPES: &[(crate::meta::SpectrumType, crate::params::ParamCow<'static>)] =
+            crate::meta::SpectrumType::all_types();
 
         let conv_table: HashMap<CURIE, crate::meta::SpectrumType> = SPECTRUM_TYPES
             .iter()
@@ -799,10 +800,10 @@ impl SpectrumDescription {
             .collect();
 
         for param in self.params().iter() {
-            if let Some(c) = param.curie() {
-                if let Some(t) = conv_table.get(&c) {
-                    return Some(*t);
-                }
+            if let Some(c) = param.curie()
+                && let Some(t) = conv_table.get(&c)
+            {
+                return Some(*t);
             }
         }
         None
@@ -810,7 +811,8 @@ impl SpectrumDescription {
 
     /// Set the kind of spectrum represented.
     pub fn set_spectrum_type(&mut self, spectrum_type: crate::meta::SpectrumType) {
-        const SPECTRUM_TYPES: &[(crate::meta::SpectrumType, crate::params::ParamCow<'static>)] = crate::meta::SpectrumType::all_types();
+        const SPECTRUM_TYPES: &[(crate::meta::SpectrumType, crate::params::ParamCow<'static>)] =
+            crate::meta::SpectrumType::all_types();
 
         let to_insert: crate::params::ParamCow<'_> = spectrum_type.to_param();
 
@@ -820,18 +822,16 @@ impl SpectrumDescription {
             .collect();
 
         for param in self.params_mut().iter_mut() {
-            if let Some(c) = param.curie() {
-                if conv_table.contains(&c) {
-                    *param = to_insert.into();
-                    return;
-                }
+            if let Some(c) = param.curie()
+                && conv_table.contains(&c)
+            {
+                *param = to_insert.into();
+                return;
             }
         }
 
         self.add_param(to_insert.into());
     }
-
-
 }
 
 impl_param_described!(Activation, SpectrumDescription);

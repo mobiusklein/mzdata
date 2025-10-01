@@ -5,20 +5,22 @@ use std::{io, mem};
 
 use chrono::{DateTime, FixedOffset};
 use log::warn;
-use quick_xml::events::{BytesEnd, BytesStart, BytesText};
 use quick_xml::Error as XMLError;
+use quick_xml::events::{BytesEnd, BytesStart, BytesText};
 
 use thiserror::Error;
 
 use super::reader::Bytes;
-use crate::io::traits::SeekRead;
 use crate::io::OffsetIndex;
+use crate::io::traits::SeekRead;
 use crate::meta::{
-    Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometerFileFormatTerm, NativeSpectrumIdentifierFormatTerm, ProcessingMethod, Sample, ScanSettings, Software, SourceFile
+    Component, ComponentType, DataProcessing, FileDescription, InstrumentConfiguration,
+    MassSpectrometerFileFormatTerm, NativeSpectrumIdentifierFormatTerm, ProcessingMethod, Sample,
+    ScanSettings, Software, SourceFile,
 };
-use crate::params::{curie_to_num, ControlledVocabulary, Param, ParamCow, Unit};
+use crate::params::{ControlledVocabulary, Param, ParamCow, Unit, curie_to_num};
 use crate::prelude::*;
-use crate::spectrum::{bindata::ArrayRetrievalError, ArrayType};
+use crate::spectrum::{ArrayType, bindata::ArrayRetrievalError};
 
 /**
 The different states the [`MzMLReaderType`](crate::io::mzml::MzMLReaderType) can enter while parsing
@@ -134,7 +136,7 @@ pub enum MzMLParserError {
     #[error("Failed to decode {1}: {2} for {0}")]
     ArrayDecodingError(MzMLParserState, ArrayType, ArrayRetrievalError),
     #[error("Reached the end of the file")]
-    EOF
+    EOF,
 }
 
 impl From<MzMLParserError> for io::Error {
@@ -437,12 +439,11 @@ impl IndexedMzMLIndexExtractor {
         let mut buf = Bytes::new();
         reader.read_to_end(&mut buf)?;
         let pattern = regex::Regex::new("<indexListOffset>(\\d+)</indexListOffset>").unwrap();
-        if let Some(captures) = pattern.captures(&String::from_utf8_lossy(&buf)) {
-            if let Some(offset) = captures.get(1) {
-                if let Ok(offset) = offset.as_str().parse::<u64>() {
-                    return Ok(Some(offset));
-                }
-            }
+        if let Some(captures) = pattern.captures(&String::from_utf8_lossy(&buf))
+            && let Some(offset) = captures.get(1)
+            && let Ok(offset) = offset.as_str().parse::<u64>()
+        {
+            return Ok(Some(offset));
         }
         Ok(None)
     }
@@ -674,7 +675,7 @@ impl FileMetadataBuilder<'_> {
                 return Ok(MzMLParserState::ReferenceParamGroup);
             }
             b"instrumentConfigurationList" => {
-                return Ok(MzMLParserState::InstrumentConfigurationList)
+                return Ok(MzMLParserState::InstrumentConfigurationList);
             }
             b"instrumentConfiguration" => {
                 let mut ic = InstrumentConfiguration::default();
@@ -906,13 +907,15 @@ impl FileMetadataBuilder<'_> {
                 for attr in event.attributes().flatten() {
                     match attr.key.as_ref() {
                         b"count" => {
-                            self.num_spectra = attr.unescape_value()
-                                    .expect("Error decoding spectrum list size")
-                                    .parse()
-                                    .map_err(|e| {
-                                        log::error!("Error parsing spectrum list size: {e}");
-                                        e
-                                    }).ok();
+                            self.num_spectra = attr
+                                .unescape_value()
+                                .expect("Error decoding spectrum list size")
+                                .parse()
+                                .map_err(|e| {
+                                    log::error!("Error parsing spectrum list size: {e}");
+                                    e
+                                })
+                                .ok();
                         }
                         b"defaultDataProcessingRef" => {
                             let value = attr
@@ -925,9 +928,7 @@ impl FileMetadataBuilder<'_> {
                 }
                 return Ok(MzMLParserState::SpectrumList);
             }
-            b"scanSettingsList" => {
-                return Ok(MzMLParserState::ScanSettingsList)
-            }
+            b"scanSettingsList" => return Ok(MzMLParserState::ScanSettingsList),
             b"scanSettings" => {
                 let mut settings = ScanSettings::default();
                 for attr_parsed in event.attributes() {
@@ -946,17 +947,17 @@ impl FileMetadataBuilder<'_> {
                     }
                 }
                 self.scan_settings.push(settings);
-                return Ok(MzMLParserState::ScanSettings)
+                return Ok(MzMLParserState::ScanSettings);
             }
-            b"sourceFileRefList" => {
-                return Ok(MzMLParserState::SourceFileRefList)
-            }
-            b"targetList" => {
-                return Ok(MzMLParserState::TargetList)
-            }
+            b"sourceFileRefList" => return Ok(MzMLParserState::SourceFileRefList),
+            b"targetList" => return Ok(MzMLParserState::TargetList),
             b"target" => {
-                self.scan_settings.last_mut().unwrap().targets.push(Default::default());
-                return Ok(MzMLParserState::Target)
+                self.scan_settings
+                    .last_mut()
+                    .unwrap()
+                    .targets
+                    .push(Default::default());
+                return Ok(MzMLParserState::Target);
             }
             _ => {}
         }
@@ -1020,7 +1021,13 @@ impl FileMetadataBuilder<'_> {
                 self.scan_settings.last_mut().unwrap().add_param(param);
             }
             MzMLParserState::Target => {
-                self.scan_settings.last_mut().unwrap().targets.last_mut().unwrap().add_param(param);
+                self.scan_settings
+                    .last_mut()
+                    .unwrap()
+                    .targets
+                    .last_mut()
+                    .unwrap()
+                    .add_param(param);
             }
             _ => {}
         }
@@ -1074,7 +1081,9 @@ impl FileMetadataBuilder<'_> {
                                 let param_group = match self.reference_param_groups.get(&group_id) {
                                     Some(params) => params.clone(),
                                     None => {
-                                        panic!("Encountered a referenceableParamGroupRef without a group definition")
+                                        panic!(
+                                            "Encountered a referenceableParamGroupRef without a group definition"
+                                        )
                                     }
                                 };
 
@@ -1096,10 +1105,11 @@ impl FileMetadataBuilder<'_> {
                         match attr_parsed {
                             Ok(attr) => {
                                 if attr.key.as_ref() == b"ref" {
-                                    settings.source_file_refs.push(attr
-                                        .unescape_value()
-                                        .expect("Error decoding software reference")
-                                        .to_string());
+                                    settings.source_file_refs.push(
+                                        attr.unescape_value()
+                                            .expect("Error decoding software reference")
+                                            .to_string(),
+                                    );
                                 }
                             }
                             Err(msg) => {
@@ -1128,7 +1138,7 @@ impl FileMetadataBuilder<'_> {
                 return Ok(MzMLParserState::ReferenceParamGroupList);
             }
             b"instrumentConfigurationList" => {
-                return Ok(MzMLParserState::InstrumentConfigurationList)
+                return Ok(MzMLParserState::InstrumentConfigurationList);
             }
             b"instrumentConfiguration" => return Ok(MzMLParserState::InstrumentConfigurationList),
             b"componentList" => return Ok(MzMLParserState::InstrumentConfiguration),

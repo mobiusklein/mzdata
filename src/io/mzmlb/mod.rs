@@ -15,9 +15,9 @@
 //! [`BuildArrayMapFrom`](crate::spectrum::bindata::BuildArrayMapFrom) traits
 //! for reading and writing conversion to [`BinaryArrayMap`](crate::spectrum::bindata::BinaryArrayMap).
 
-mod reader;
 mod common;
+mod reader;
 mod writer;
 
-pub use reader::{MzMLbReader, MzMLbError, MzMLbReaderType, MzMLbSpectrumBuilder};
-pub use writer::{MzMLbWriterType, MzMLbWriterError, MzMLbWriterBuilder, MzMLbWriter};
+pub use reader::{MzMLbError, MzMLbReader, MzMLbReaderType, MzMLbSpectrumBuilder};
+pub use writer::{MzMLbWriter, MzMLbWriterBuilder, MzMLbWriterError, MzMLbWriterType};

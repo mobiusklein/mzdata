@@ -4,8 +4,8 @@ use std::{
 };
 
 use mzpeaks::{
-    feature::FeatureLike, CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak,
-    IonMobility, KnownCharge, Mass, MZ,
+    CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, IonMobility,
+    KnownCharge, MZ, Mass, feature::FeatureLike,
 };
 
 use crate::{
@@ -226,12 +226,12 @@ macro_rules! impl_ms_level_switching {
 }
 
 impl<
-        R: Iterator<Item = S>,
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        G: SpectrumGrouping<C, D, S>,
-    > SpectrumGroupingIterator<R, C, D, S, G>
+    R: Iterator<Item = S>,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D>,
+    G: SpectrumGrouping<C, D, S>,
+> SpectrumGroupingIterator<R, C, D, S, G>
 {
     /// Construct a new [`SpectrumGroupingIterator`] around a [`Iterator`] with a default
     /// buffering level of 3.
@@ -303,12 +303,12 @@ impl<
 }
 
 impl<
-        R: Iterator<Item = S>,
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        G: SpectrumGrouping<C, D, S>,
-    > Iterator for SpectrumGroupingIterator<R, C, D, S, G>
+    R: Iterator<Item = S>,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D>,
+    G: SpectrumGrouping<C, D, S>,
+> Iterator for SpectrumGroupingIterator<R, C, D, S, G>
 {
     type Item = G;
 
@@ -318,12 +318,12 @@ impl<
 }
 
 impl<
-        R: RandomAccessSpectrumIterator<C, D, S>,
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        G: SpectrumGrouping<C, D, S>,
-    > SpectrumGroupingIterator<R, C, D, S, G>
+    R: RandomAccessSpectrumIterator<C, D, S>,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D>,
+    G: SpectrumGrouping<C, D, S>,
+> SpectrumGroupingIterator<R, C, D, S, G>
 {
     pub fn start_from_id(&mut self, id: &str) -> Result<&Self, SpectrumAccessError> {
         match self.source.start_from_id(id) {
@@ -357,12 +357,12 @@ impl<
 }
 
 impl<
-        R: RandomAccessSpectrumIterator<C, D, S>,
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        G: SpectrumGrouping<C, D, S>,
-    > RandomAccessSpectrumGroupingIterator<C, D, S, G> for SpectrumGroupingIterator<R, C, D, S, G>
+    R: RandomAccessSpectrumIterator<C, D, S>,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D>,
+    G: SpectrumGrouping<C, D, S>,
+> RandomAccessSpectrumGroupingIterator<C, D, S, G> for SpectrumGroupingIterator<R, C, D, S, G>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&Self, SpectrumAccessError> {
         self.start_from_id(id)
@@ -382,12 +382,12 @@ impl<
 }
 
 impl<
-        R: Iterator<Item = S>,
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D>,
-        G: SpectrumGrouping<C, D, S>,
-    > MSDataFileMetadata for SpectrumGroupingIterator<R, C, D, S, G>
+    R: Iterator<Item = S>,
+    C: CentroidLike,
+    D: DeconvolutedCentroidLike,
+    S: SpectrumLike<C, D>,
+    G: SpectrumGrouping<C, D, S>,
+> MSDataFileMetadata for SpectrumGroupingIterator<R, C, D, S, G>
 where
     R: MSDataFileMetadata,
 {
@@ -419,12 +419,12 @@ pub struct IonMobilityFrameGroupingIterator<
 }
 
 impl<
-        R: Iterator<Item = S>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        S: IonMobilityFrameLike<C, D>,
-        G: IonMobilityFrameGrouping<C, D, S>,
-    > Iterator for IonMobilityFrameGroupingIterator<R, C, D, S, G>
+    R: Iterator<Item = S>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D>,
+    G: IonMobilityFrameGrouping<C, D, S>,
+> Iterator for IonMobilityFrameGroupingIterator<R, C, D, S, G>
 {
     type Item = G;
 
@@ -434,12 +434,12 @@ impl<
 }
 
 impl<
-        R: Iterator<Item = S>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        S: IonMobilityFrameLike<C, D>,
-        G: IonMobilityFrameGrouping<C, D, S>,
-    > IonMobilityFrameGroupingIterator<R, C, D, S, G>
+    R: Iterator<Item = S>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D>,
+    G: IonMobilityFrameGrouping<C, D, S>,
+> IonMobilityFrameGroupingIterator<R, C, D, S, G>
 {
     /// Construct a new [`IonMobilityFrameGroupingIterator`] around a [`Iterator`] with a default
     /// buffering level of 3.
@@ -511,12 +511,12 @@ impl<
 }
 
 impl<
-        R: Iterator<Item = S>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        S: IonMobilityFrameLike<C, D>,
-        G: IonMobilityFrameGrouping<C, D, S>,
-    > MSDataFileMetadata for IonMobilityFrameGroupingIterator<R, C, D, S, G>
+    R: Iterator<Item = S>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D>,
+    G: IonMobilityFrameGrouping<C, D, S>,
+> MSDataFileMetadata for IonMobilityFrameGroupingIterator<R, C, D, S, G>
 where
     R: MSDataFileMetadata,
 {
@@ -524,12 +524,12 @@ where
 }
 
 impl<
-        R: RandomAccessIonMobilityFrameIterator<C, D, S>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        S: IonMobilityFrameLike<C, D>,
-        G: IonMobilityFrameGrouping<C, D, S>,
-    > RandomAccessIonMobilityFrameGroupingIterator<C, D, S, G>
+    R: RandomAccessIonMobilityFrameIterator<C, D, S>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D>,
+    G: IonMobilityFrameGrouping<C, D, S>,
+> RandomAccessIonMobilityFrameGroupingIterator<C, D, S, G>
     for IonMobilityFrameGroupingIterator<R, C, D, S, G>
 {
     fn start_from_id(
@@ -580,7 +580,7 @@ impl<
 mod mzsignal_impl {
     use std::sync::Arc;
 
-    use crate::spectrum::bindata::{to_bytes, BuildArrayMapFrom, BuildFromArrayMap};
+    use crate::spectrum::bindata::{BuildArrayMapFrom, BuildFromArrayMap, to_bytes};
     use crate::spectrum::{
         ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, RefPeakDataLevel,
         SignalContinuity,
@@ -590,8 +590,8 @@ mod mzsignal_impl {
 
     use log::warn;
     use mzpeaks::{MZLocated, PeakCollection};
-    use mzsignal::average::{average_signal, SignalAverager};
-    use mzsignal::reprofile::{reprofile, PeakSetReprofiler, PeakShape, PeakShapeModel};
+    use mzsignal::average::{SignalAverager, average_signal};
+    use mzsignal::reprofile::{PeakSetReprofiler, PeakShape, PeakShapeModel, reprofile};
     use mzsignal::{ArrayPair, FittedPeak, MZGrid};
 
     const FWHM_DEFAULT: f32 = 0.01;
@@ -760,10 +760,10 @@ mod mzsignal_impl {
     }
 
     impl<
-            C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-        > Default for SpectrumAveragingContext<C, D, G>
+        C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+    > Default for SpectrumAveragingContext<C, D, G>
     {
         fn default() -> Self {
             Self {
@@ -776,10 +776,10 @@ mod mzsignal_impl {
     }
 
     impl<
-            C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-        > SpectrumAveragingContext<C, D, G>
+        C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+    > SpectrumAveragingContext<C, D, G>
     {
         pub fn new(group: G, ms1_context: Vec<ArcArrays>) -> Self {
             Self {
@@ -883,10 +883,10 @@ mod mzsignal_impl {
     }
 
     impl<
-            C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-        > SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>> for SpectrumAveragingContext<C, D, G>
+        C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+    > SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>> for SpectrumAveragingContext<C, D, G>
     {
         fn precursor(&self) -> Option<&MultiLayerSpectrum<C, D>> {
             self.group.precursor()
@@ -938,11 +938,11 @@ mod mzsignal_impl {
     /// If the underlying iterator implements [`MSDataFileMetadata`] then [`DeferredSpectrumAveragingIterator`] will
     /// forward that implementation, assuming it is available.
     impl<
-            C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            R: Iterator<Item = G>,
-            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-        > MSDataFileMetadata for DeferredSpectrumAveragingIterator<C, D, R, G>
+        C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        R: Iterator<Item = G>,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+    > MSDataFileMetadata for DeferredSpectrumAveragingIterator<C, D, R, G>
     where
         R: MSDataFileMetadata,
     {
@@ -950,11 +950,11 @@ mod mzsignal_impl {
     }
 
     impl<
-            C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            R: Iterator<Item = G>,
-            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-        > Iterator for DeferredSpectrumAveragingIterator<C, D, R, G>
+        C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        R: Iterator<Item = G>,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+    > Iterator for DeferredSpectrumAveragingIterator<C, D, R, G>
     {
         type Item = SpectrumAveragingContext<C, D, G>;
 
@@ -964,11 +964,11 @@ mod mzsignal_impl {
     }
 
     impl<
-            C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            R: Iterator<Item = G>,
-            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-        > DeferredSpectrumAveragingIterator<C, D, R, G>
+        C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        R: Iterator<Item = G>,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+    > DeferredSpectrumAveragingIterator<C, D, R, G>
     {
         pub fn new(source: R, averaging_width_index: usize) -> Self {
             let mut inst = Self {
@@ -1128,11 +1128,11 @@ mod mzsignal_impl {
     /// If the underlying iterator implements [`MSDataFileMetadata`] then [`SpectrumAveragingIterator`] will
     /// forward that implementation, assuming it is available.
     impl<
-            C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-            R: Iterator<Item = G>,
-        > MSDataFileMetadata for SpectrumAveragingIterator<'_, C, D, G, R>
+        C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+        R: Iterator<Item = G>,
+    > MSDataFileMetadata for SpectrumAveragingIterator<'_, C, D, G, R>
     where
         R: MSDataFileMetadata,
     {
@@ -1140,11 +1140,11 @@ mod mzsignal_impl {
     }
 
     impl<
-            C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-            R: Iterator<Item = G>,
-        > SpectrumAveragingIterator<'_, C, D, G, R>
+        C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+        R: Iterator<Item = G>,
+    > SpectrumAveragingIterator<'_, C, D, G, R>
     {
         pub fn new(
             source: R,
@@ -1312,11 +1312,11 @@ mod mzsignal_impl {
     }
 
     impl<
-            C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-            R: Iterator<Item = G>,
-        > Iterator for SpectrumAveragingIterator<'_, C, D, G, R>
+        C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+        R: Iterator<Item = G>,
+    > Iterator for SpectrumAveragingIterator<'_, C, D, G, R>
     {
         type Item = G;
 
@@ -1326,11 +1326,11 @@ mod mzsignal_impl {
     }
 
     impl<
-            C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-            R: RandomAccessSpectrumGroupingIterator<C, D, MultiLayerSpectrum<C, D>, G>,
-        > RandomAccessSpectrumGroupingIterator<C, D, MultiLayerSpectrum<C, D>, G>
+        C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+        R: RandomAccessSpectrumGroupingIterator<C, D, MultiLayerSpectrum<C, D>, G>,
+    > RandomAccessSpectrumGroupingIterator<C, D, MultiLayerSpectrum<C, D>, G>
         for SpectrumAveragingIterator<'_, C, D, G, R>
     {
         fn reset_state(&mut self) {
@@ -1370,11 +1370,11 @@ mod mzsignal_impl {
     }
 
     impl<
-            C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            R: RandomAccessSpectrumGroupingIterator<C, D, MultiLayerSpectrum<C, D>, G>,
-            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-        >
+        C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        R: RandomAccessSpectrumGroupingIterator<C, D, MultiLayerSpectrum<C, D>, G>,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+    >
         RandomAccessSpectrumGroupingIterator<
             C,
             D,
@@ -1475,11 +1475,11 @@ mod mzsignal_impl {
     }
 
     impl<
-            T,
-            C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-            G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
-        > SpectrumGroupAveraging<'_, C, D, G> for T
+        T,
+        C: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
+        G: SpectrumGrouping<C, D, MultiLayerSpectrum<C, D>>,
+    > SpectrumGroupAveraging<'_, C, D, G> for T
     where
         T: Iterator<Item = G>,
     {
@@ -1488,8 +1488,8 @@ mod mzsignal_impl {
 
 #[cfg(feature = "mzsignal")]
 pub use mzsignal_impl::{
-    average_spectra, DeferredSpectrumAveragingIterator, SpectrumAveragingIterator,
-    SpectrumGroupAveraging,
+    DeferredSpectrumAveragingIterator, SpectrumAveragingIterator, SpectrumGroupAveraging,
+    average_spectra,
 };
 
 #[cfg(feature = "mzml")]
@@ -1497,7 +1497,7 @@ pub use mzsignal_impl::{
 mod test {
     use super::*;
     #[allow(unused)]
-    use crate::{prelude::*, spectrum::SignalContinuity, MzMLReader, RawSpectrum};
+    use crate::{MzMLReader, RawSpectrum, prelude::*, spectrum::SignalContinuity};
 
     #[test]
     fn test_group_iter() {

@@ -2,9 +2,12 @@
 //! Thank you ProteoWizard for building all of these look up tables.
 use std::fmt::Display;
 
-use crate::meta::{Component, ComponentType, DetectorTypeTerm, InstrumentConfiguration, IonizationTypeTerm, MassAnalyzerTerm};
+use crate::meta::{
+    Component, ComponentType, DetectorTypeTerm, InstrumentConfiguration, IonizationTypeTerm,
+    MassAnalyzerTerm,
+};
 use crate::params::ParamDescribed;
-use crate::{params::ControlledVocabulary, Param};
+use crate::{Param, params::ControlledVocabulary};
 
 macro_rules! param {
     ($name:expr, $acc:expr) => {
@@ -193,7 +196,9 @@ impl InstrumentModelType {
             InstrumentModelType::Orbitrap_Exploris_120 => param!("Orbitrap Exploris 120", 1003095),
             InstrumentModelType::Orbitrap_Exploris_240 => param!("Orbitrap Exploris 240", 1003094),
             InstrumentModelType::Orbitrap_Exploris_480 => param!("Orbitrap Exploris 480", 1003028),
-            InstrumentModelType::Orbitrap_Exploris_GC_240 => param!("Orbitrap Exploris GC 240", 1003423),
+            InstrumentModelType::Orbitrap_Exploris_GC_240 => {
+                param!("Orbitrap Exploris GC 240", 1003423)
+            }
             InstrumentModelType::Orbitrap_Fusion => param!("Orbitrap Fusion", 1002416),
             InstrumentModelType::Orbitrap_Fusion_ETD => param!("Orbitrap Fusion ETD", 1002417),
             InstrumentModelType::Orbitrap_Fusion_Lumos => param!("Orbitrap Fusion Lumos", 1002732),
@@ -616,9 +621,13 @@ static INSTRUMENT_MODEL_TYPE_MATCH: [(&str, InstrumentModelType, MatchType); 90]
 pub fn parse_instrument_model(instrument_model: &str) -> InstrumentModelType {
     let model_type = instrument_model.to_uppercase();
     let model_type_no_spaces = model_type.replace(" ", "");
-    log::debug!("Parsing instrument model: '{}' -> '{}' (no spaces: '{}')",
-        instrument_model, model_type, model_type_no_spaces);
-    
+    log::debug!(
+        "Parsing instrument model: '{}' -> '{}' (no spaces: '{}')",
+        instrument_model,
+        model_type,
+        model_type_no_spaces
+    );
+
     for (key, model_enum, match_type) in INSTRUMENT_MODEL_TYPE_MATCH.iter() {
         let hit = match match_type {
             MatchType::Exact => **key == model_type,
@@ -628,15 +637,22 @@ pub fn parse_instrument_model(instrument_model: &str) -> InstrumentModelType {
             MatchType::ExactNoSpaces => **key == model_type_no_spaces,
         };
         if hit {
-            log::debug!("Matched instrument model '{}' with pattern '{}' ({:?}) -> {:?}",
-                instrument_model, key, match_type, model_enum);
+            log::debug!(
+                "Matched instrument model '{}' with pattern '{}' ({:?}) -> {:?}",
+                instrument_model,
+                key,
+                match_type,
+                model_enum
+            );
             return *model_enum;
         }
     }
-    log::warn!("Failed to infer instrument model from name string '{}' - will use Unknown", instrument_model);
+    log::warn!(
+        "Failed to infer instrument model from name string '{}' - will use Unknown",
+        instrument_model
+    );
     InstrumentModelType::Unknown
 }
-
 
 pub fn instrument_model_to_mass_analyzers(model: InstrumentModelType) -> Vec<MassAnalyzerTerm> {
     match model {
@@ -961,12 +977,14 @@ pub fn instrument_model_to_ion_sources(model: InstrumentModelType) -> Vec<Ioniza
             vec![IonizationTypeTerm::MatrixAssistedLaserDesorptionIonization]
         }
         InstrumentModelType::ISQ_7000 => {
-            vec![IonizationTypeTerm::ElectronIonization, IonizationTypeTerm::ChemicalIonization]
+            vec![
+                IonizationTypeTerm::ElectronIonization,
+                IonizationTypeTerm::ChemicalIonization,
+            ]
         }
         _ => Vec::default(),
     }
 }
-
 
 macro_rules! comp {
     ($config:ident, $comptype:expr, $term:expr) => {
@@ -986,7 +1004,7 @@ macro_rules! analyzer {
     };
     ($config:ident radial) => {
         analyzer!($config, MassAnalyzerTerm::RadialEjectionLinearIonTrap)
-    }
+    };
 }
 
 macro_rules! detector {
@@ -998,63 +1016,97 @@ macro_rules! detector {
     };
     ($config:ident electron) => {
         detector!($config, DetectorTypeTerm::ElectronMultiplier)
-    }
+    };
 }
 
-
-pub fn create_instrument_configurations(model: InstrumentModelType, source: Component) -> Vec<InstrumentConfiguration> {
+pub fn create_instrument_configurations(
+    model: InstrumentModelType,
+    source: Component,
+) -> Vec<InstrumentConfiguration> {
     let mut configs = Vec::new();
 
     match model {
-        InstrumentModelType::Q_Exactive |
-        InstrumentModelType::Q_Exactive_Plus |
-        InstrumentModelType::Q_Exactive_HF |
-        InstrumentModelType::Q_Exactive_HF_X |
-        InstrumentModelType::Q_Exactive_UHMR |
-        InstrumentModelType::Orbitrap_Exploris_120 |
-        InstrumentModelType::Orbitrap_Exploris_240 |
-        InstrumentModelType::Orbitrap_Exploris_480 |
-        InstrumentModelType::Orbitrap_Exploris_GC_240|
-		InstrumentModelType::Orbitrap_GC  => {
+        InstrumentModelType::Q_Exactive
+        | InstrumentModelType::Q_Exactive_Plus
+        | InstrumentModelType::Q_Exactive_HF
+        | InstrumentModelType::Q_Exactive_HF_X
+        | InstrumentModelType::Q_Exactive_UHMR
+        | InstrumentModelType::Orbitrap_Exploris_120
+        | InstrumentModelType::Orbitrap_Exploris_240
+        | InstrumentModelType::Orbitrap_Exploris_480
+        | InstrumentModelType::Orbitrap_Exploris_GC_240
+        | InstrumentModelType::Orbitrap_GC => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
-            comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::Quadrupole);
+            comp!(
+                config,
+                ComponentType::Analyzer,
+                MassAnalyzerTerm::Quadrupole
+            );
             comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::Orbitrap);
-            comp!(config, ComponentType::Detector, DetectorTypeTerm::InductiveDetector);
-        },
+            comp!(
+                config,
+                ComponentType::Detector,
+                DetectorTypeTerm::InductiveDetector
+            );
+        }
 
-        InstrumentModelType::Exactive |
-        InstrumentModelType::Exactive_Plus => {
+        InstrumentModelType::Exactive | InstrumentModelType::Exactive_Plus => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
             comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::Orbitrap);
-            comp!(config, ComponentType::Detector, DetectorTypeTerm::InductiveDetector);
-
+            comp!(
+                config,
+                ComponentType::Detector,
+                DetectorTypeTerm::InductiveDetector
+            );
         }
 
         InstrumentModelType::Orbitrap_Astral => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
-            comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::Quadrupole);
+            comp!(
+                config,
+                ComponentType::Analyzer,
+                MassAnalyzerTerm::Quadrupole
+            );
             comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::Orbitrap);
-            comp!(config, ComponentType::Detector, DetectorTypeTerm::InductiveDetector);
+            comp!(
+                config,
+                ComponentType::Detector,
+                DetectorTypeTerm::InductiveDetector
+            );
 
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
-            comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::Quadrupole);
-            comp!(config, ComponentType::Analyzer, MassAnalyzerTerm::AsymmetricTrackLosslessTimeOfFlightAnalyzer);
-            comp!(config, ComponentType::Detector, DetectorTypeTerm::InductiveDetector);
+            comp!(
+                config,
+                ComponentType::Analyzer,
+                MassAnalyzerTerm::Quadrupole
+            );
+            comp!(
+                config,
+                ComponentType::Analyzer,
+                MassAnalyzerTerm::AsymmetricTrackLosslessTimeOfFlightAnalyzer
+            );
+            comp!(
+                config,
+                ComponentType::Detector,
+                DetectorTypeTerm::InductiveDetector
+            );
         }
-        InstrumentModelType::LTQ_FT |
-        InstrumentModelType::LTQ_FT_Ultra => {
+        InstrumentModelType::LTQ_FT | InstrumentModelType::LTQ_FT_Ultra => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
-            analyzer!(config, MassAnalyzerTerm::FourierTransformIonCyclotronResonanceMassSpectrometer);
+            analyzer!(
+                config,
+                MassAnalyzerTerm::FourierTransformIonCyclotronResonanceMassSpectrometer
+            );
             detector!(config, DetectorTypeTerm::InductiveDetector);
 
             configs.push(InstrumentConfiguration::default());
@@ -1062,13 +1114,13 @@ pub fn create_instrument_configurations(model: InstrumentModelType, source: Comp
             config.push(source.clone());
             analyzer!(config, MassAnalyzerTerm::RadialEjectionLinearIonTrap);
             detector!(config, DetectorTypeTerm::ElectronMultiplier);
-        },
-        InstrumentModelType::Orbitrap_Fusion |
-        InstrumentModelType::Orbitrap_Fusion_Lumos |
-        InstrumentModelType::Orbitrap_Fusion_ETD |
-        InstrumentModelType::Orbitrap_Ascend |
-        InstrumentModelType::Orbitrap_ID_X |
-        InstrumentModelType::Orbitrap_Eclipse => {
+        }
+        InstrumentModelType::Orbitrap_Fusion
+        | InstrumentModelType::Orbitrap_Fusion_Lumos
+        | InstrumentModelType::Orbitrap_Fusion_ETD
+        | InstrumentModelType::Orbitrap_Ascend
+        | InstrumentModelType::Orbitrap_ID_X
+        | InstrumentModelType::Orbitrap_Eclipse => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
@@ -1084,18 +1136,17 @@ pub fn create_instrument_configurations(model: InstrumentModelType, source: Comp
             analyzer!(config quadrupole);
             analyzer!(config radial);
             detector!(config electron);
-
         }
 
-        InstrumentModelType::LTQ_Orbitrap |
-        InstrumentModelType::LTQ_Orbitrap_Classic |
-        InstrumentModelType::LTQ_Orbitrap_Discovery |
-        InstrumentModelType::LTQ_Orbitrap_XL |
-        InstrumentModelType::LTQ_Orbitrap_XL_ETD |
-        InstrumentModelType::MALDI_LTQ_Orbitrap |
-        InstrumentModelType::LTQ_Orbitrap_Velos |
-        InstrumentModelType::LTQ_Orbitrap_Velos_Pro |
-        InstrumentModelType::LTQ_Orbitrap_Elite => {
+        InstrumentModelType::LTQ_Orbitrap
+        | InstrumentModelType::LTQ_Orbitrap_Classic
+        | InstrumentModelType::LTQ_Orbitrap_Discovery
+        | InstrumentModelType::LTQ_Orbitrap_XL
+        | InstrumentModelType::LTQ_Orbitrap_XL_ETD
+        | InstrumentModelType::MALDI_LTQ_Orbitrap
+        | InstrumentModelType::LTQ_Orbitrap_Velos
+        | InstrumentModelType::LTQ_Orbitrap_Velos_Pro
+        | InstrumentModelType::LTQ_Orbitrap_Elite => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
@@ -1109,70 +1160,68 @@ pub fn create_instrument_configurations(model: InstrumentModelType, source: Comp
 
             analyzer!(config radial);
             detector!(config electron);
-        },
-        InstrumentModelType::LCQ_Advantage |
-        InstrumentModelType::LCQ_Classic |
-        InstrumentModelType::LCQ_Deca |
-        InstrumentModelType::LCQ_Deca_XP_Plus |
-        InstrumentModelType::LCQ_Fleet |
-        InstrumentModelType::PolarisQ |
-        InstrumentModelType::ITQ_700 |
-        InstrumentModelType::ITQ_900 => {
+        }
+        InstrumentModelType::LCQ_Advantage
+        | InstrumentModelType::LCQ_Classic
+        | InstrumentModelType::LCQ_Deca
+        | InstrumentModelType::LCQ_Deca_XP_Plus
+        | InstrumentModelType::LCQ_Fleet
+        | InstrumentModelType::PolarisQ
+        | InstrumentModelType::ITQ_700
+        | InstrumentModelType::ITQ_900 => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
 
             analyzer!(config, MassAnalyzerTerm::QuadrupoleIonTrap);
             detector!(config electron);
-        },
+        }
 
-
-        InstrumentModelType::LTQ |
-        InstrumentModelType::LXQ |
-        InstrumentModelType::LTQ_XL |
-        InstrumentModelType::LTQ_XL_ETD |
-        InstrumentModelType::ITQ_1100 |
-        InstrumentModelType::MALDI_LTQ_XL |
-        InstrumentModelType::LTQ_Velos |
-        InstrumentModelType::LTQ_Velos_ETD |
-        InstrumentModelType::LTQ_Velos_Plus => {
+        InstrumentModelType::LTQ
+        | InstrumentModelType::LXQ
+        | InstrumentModelType::LTQ_XL
+        | InstrumentModelType::LTQ_XL_ETD
+        | InstrumentModelType::ITQ_1100
+        | InstrumentModelType::MALDI_LTQ_XL
+        | InstrumentModelType::LTQ_Velos
+        | InstrumentModelType::LTQ_Velos_ETD
+        | InstrumentModelType::LTQ_Velos_Plus => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
 
             analyzer!(config radial);
             detector!(config electron);
-        },
-        InstrumentModelType::SSQ_7000 |
-        InstrumentModelType::Surveyor_MSQ |
-        InstrumentModelType::DSQ |
-        InstrumentModelType::DSQ_II |
-        InstrumentModelType::ISQ |
-        InstrumentModelType::ISQ_7000 |
-        InstrumentModelType::Trace_DSQ |
-        InstrumentModelType::GC_IsoLink => {
+        }
+        InstrumentModelType::SSQ_7000
+        | InstrumentModelType::Surveyor_MSQ
+        | InstrumentModelType::DSQ
+        | InstrumentModelType::DSQ_II
+        | InstrumentModelType::ISQ
+        | InstrumentModelType::ISQ_7000
+        | InstrumentModelType::Trace_DSQ
+        | InstrumentModelType::GC_IsoLink => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
 
             analyzer!(config quadrupole);
             detector!(config electron);
-
-        },
-        InstrumentModelType::TSQ_7000 |
-        InstrumentModelType::TSQ_8000_Evo |
-        InstrumentModelType::TSQ_9000 |
-        InstrumentModelType::TSQ |
-        InstrumentModelType::TSQ_Quantum |
-        InstrumentModelType::TSQ_Quantum_Access |
-        InstrumentModelType::TSQ_Quantum_Ultra |
-        InstrumentModelType::TSQ_Quantum_Ultra_AM |
-        InstrumentModelType::GC_Quantum |
-        InstrumentModelType::TSQ_Quantiva |
-        InstrumentModelType::TSQ_Endura |
-        InstrumentModelType::TSQ_Altis |
-        InstrumentModelType::TSQ_Altis_Plus |
-        InstrumentModelType::TSQ_Quantis => {
+        }
+        InstrumentModelType::TSQ_7000
+        | InstrumentModelType::TSQ_8000_Evo
+        | InstrumentModelType::TSQ_9000
+        | InstrumentModelType::TSQ
+        | InstrumentModelType::TSQ_Quantum
+        | InstrumentModelType::TSQ_Quantum_Access
+        | InstrumentModelType::TSQ_Quantum_Ultra
+        | InstrumentModelType::TSQ_Quantum_Ultra_AM
+        | InstrumentModelType::GC_Quantum
+        | InstrumentModelType::TSQ_Quantiva
+        | InstrumentModelType::TSQ_Endura
+        | InstrumentModelType::TSQ_Altis
+        | InstrumentModelType::TSQ_Altis_Plus
+        | InstrumentModelType::TSQ_Quantis => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
@@ -1180,20 +1229,20 @@ pub fn create_instrument_configurations(model: InstrumentModelType, source: Comp
             analyzer!(config quadrupole);
             analyzer!(config quadrupole);
             detector!(config electron);
-        },
-        InstrumentModelType::DFS |
-        InstrumentModelType::MAT253 |
-        InstrumentModelType::MAT900XP |
-        InstrumentModelType::MAT900XP_Trap |
-        InstrumentModelType::MAT95XP |
-        InstrumentModelType::MAT95XP_Trap => {
+        }
+        InstrumentModelType::DFS
+        | InstrumentModelType::MAT253
+        | InstrumentModelType::MAT900XP
+        | InstrumentModelType::MAT900XP_Trap
+        | InstrumentModelType::MAT95XP
+        | InstrumentModelType::MAT95XP_Trap => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
 
             analyzer!(config, MassAnalyzerTerm::MagneticSector);
             detector!(config, DetectorTypeTerm::ElectronMultiplier);
-        },
+        }
         _ => {}
     }
 

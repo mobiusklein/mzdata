@@ -6,17 +6,13 @@ use log::warn;
 use thiserror::Error;
 
 use mzpeaks::{
+    CentroidLike, DeconvolutedCentroidLike, IonMobility, KnownCharge, MZ, Mass,
     feature::{ChargedFeature, Feature, FeatureLike},
-    DeconvolutedCentroidLike, IonMobility, KnownCharge, Mass, MZ,
-    CentroidLike,
 };
 
 use crate::spectrum::group::IonMobilityFrameGroupingIterator;
 use crate::spectrum::spectrum_types::MultiLayerSpectrum;
-use crate::spectrum::{
-    IonMobilityFrameLike,
-    MultiLayerIonMobilityFrame,
-};
+use crate::spectrum::{IonMobilityFrameLike, MultiLayerIonMobilityFrame};
 use crate::{
     io::{DetailLevel, OffsetIndex},
     prelude::{MSDataFileMetadata, SpectrumLike},
@@ -132,7 +128,7 @@ pub trait IonMobilityFrameSource<
     /// Get the nth [`IonMobilityFrameGroup`] from this source
     fn get_group_by_index(&mut self, index: usize) -> Option<IonMobilityFrameGroup<C, D, S>>
     where
-        Self: Sized
+        Self: Sized,
     {
         self.groups().nth(index)
     }
@@ -184,13 +180,13 @@ pub struct IonMobilityFrameIterator<
 }
 
 impl<
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        S: IonMobilityFrameLike<C, D>,
-        R: IonMobilityFrameSource<C, D, S>,
-    > IonMobilityFrameIterator<'_, C, D, S, R>
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D>,
+    R: IonMobilityFrameSource<C, D, S>,
+> IonMobilityFrameIterator<'_, C, D, S, R>
 {
-    pub fn new(source: &mut R) -> IonMobilityFrameIterator<C, D, S, R> {
+    pub fn new(source: &mut R) -> IonMobilityFrameIterator<'_, C, D, S, R> {
         IonMobilityFrameIterator::<C, D, S, R> {
             source,
             index: 0,
@@ -203,11 +199,11 @@ impl<
 }
 
 impl<
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        S: IonMobilityFrameLike<C, D>,
-        R: IonMobilityFrameSource<C, D, S>,
-    > Iterator for IonMobilityFrameIterator<'_, C, D, S, R>
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D>,
+    R: IonMobilityFrameSource<C, D, S>,
+> Iterator for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     type Item = S;
 
@@ -227,11 +223,11 @@ impl<
 }
 
 impl<
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        S: IonMobilityFrameLike<C, D>,
-        R: IonMobilityFrameSource<C, D, S>,
-    > ExactSizeIterator for IonMobilityFrameIterator<'_, C, D, S, R>
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D>,
+    R: IonMobilityFrameSource<C, D, S>,
+> ExactSizeIterator for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     fn len(&self) -> usize {
         self.source.len()
@@ -239,11 +235,11 @@ impl<
 }
 
 impl<
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        S: IonMobilityFrameLike<C, D>,
-        R: IonMobilityFrameSource<C, D, S>,
-    > DoubleEndedIterator for IonMobilityFrameIterator<'_, C, D, S, R>
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D>,
+    R: IonMobilityFrameSource<C, D, S>,
+> DoubleEndedIterator for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.index + self.back_index >= self.len() {
@@ -257,11 +253,11 @@ impl<
 }
 
 impl<
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        S: IonMobilityFrameLike<C, D>,
-        R: IonMobilityFrameSource<C, D, S>,
-    > IonMobilityFrameSource<C, D, S> for IonMobilityFrameIterator<'_, C, D, S, R>
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D>,
+    R: IonMobilityFrameSource<C, D, S>,
+> IonMobilityFrameSource<C, D, S> for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     fn reset(&mut self) {
         self.index = 0;
@@ -300,11 +296,11 @@ impl<
 /// If the underlying iterator implements [`MSDataFileMetadata`] then [`IonMobilityFrameIterator`] will
 /// forward that implementation, assuming it is available.
 impl<
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        S: IonMobilityFrameLike<C, D>,
-        R: IonMobilityFrameSource<C, D, S>,
-    > MSDataFileMetadata for IonMobilityFrameIterator<'_, C, D, S, R>
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D>,
+    R: IonMobilityFrameSource<C, D, S>,
+> MSDataFileMetadata for IonMobilityFrameIterator<'_, C, D, S, R>
 where
     R: MSDataFileMetadata,
 {
@@ -329,12 +325,12 @@ pub struct Generic3DIonMobilityFrameSource<
 }
 
 impl<
-        CP: CentroidLike,
-        DP: DeconvolutedCentroidLike,
-        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > MSDataFileMetadata for Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
+    CP: CentroidLike,
+    DP: DeconvolutedCentroidLike,
+    R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+> MSDataFileMetadata for Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
 where
     R: MSDataFileMetadata,
 {
@@ -342,12 +338,12 @@ where
 }
 
 impl<
-        CP: CentroidLike,
-        DP: DeconvolutedCentroidLike,
-        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>>
+    CP: CentroidLike,
+    DP: DeconvolutedCentroidLike,
+    R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+> IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>>
     for Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
 {
     fn detail_level(&self) -> &DetailLevel {
@@ -408,12 +404,12 @@ impl<
 }
 
 impl<
-        CP: CentroidLike,
-        DP: DeconvolutedCentroidLike,
-        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > Iterator for Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
+    CP: CentroidLike,
+    DP: DeconvolutedCentroidLike,
+    R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+> Iterator for Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
 {
     type Item = MultiLayerIonMobilityFrame<C, D>;
 
@@ -426,12 +422,12 @@ impl<
 }
 
 impl<
-        CP: CentroidLike,
-        DP: DeconvolutedCentroidLike,
-        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
+    CP: CentroidLike,
+    DP: DeconvolutedCentroidLike,
+    R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+> Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
 {
     pub fn new(source: R) -> Self {
         Self {
@@ -546,12 +542,12 @@ pub trait RandomAccessIonMobilityFrameIterator<
 }
 
 impl<
-        CP: CentroidLike,
-        DP: DeconvolutedCentroidLike,
-        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > RandomAccessIonMobilityFrameIterator<C, D, MultiLayerIonMobilityFrame<C, D>>
+    CP: CentroidLike,
+    DP: DeconvolutedCentroidLike,
+    R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+> RandomAccessIonMobilityFrameIterator<C, D, MultiLayerIonMobilityFrame<C, D>>
     for Generic3DIonMobilityFrameSource<CP, DP, R, C, D>
 where
     R: RandomAccessSpectrumIterator<CP, DP, MultiLayerSpectrum<CP, DP>>,
@@ -579,11 +575,11 @@ where
 }
 
 impl<
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-        S: IonMobilityFrameLike<C, D>,
-        R: IonMobilityFrameSource<C, D, S>,
-    > RandomAccessIonMobilityFrameIterator<C, D, S> for IonMobilityFrameIterator<'_, C, D, S, R>
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+    S: IonMobilityFrameLike<C, D>,
+    R: IonMobilityFrameSource<C, D, S>,
+> RandomAccessIonMobilityFrameIterator<C, D, S> for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     /// Start iterating from the spectrum whose native ID matches `id`
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, IonMobilityFrameAccessError> {
@@ -772,12 +768,12 @@ pub struct BorrowedGeneric3DIonMobilityFrameSource<
 }
 
 impl<
-        CP: CentroidLike,
-        DP: DeconvolutedCentroidLike,
-        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > MSDataFileMetadata for BorrowedGeneric3DIonMobilityFrameSource<'_, CP, DP, R, C, D>
+    CP: CentroidLike,
+    DP: DeconvolutedCentroidLike,
+    R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+> MSDataFileMetadata for BorrowedGeneric3DIonMobilityFrameSource<'_, CP, DP, R, C, D>
 where
     R: MSDataFileMetadata,
 {
@@ -785,12 +781,12 @@ where
 }
 
 impl<
-        CP: CentroidLike,
-        DP: DeconvolutedCentroidLike,
-        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>>
+    CP: CentroidLike,
+    DP: DeconvolutedCentroidLike,
+    R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+> IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>>
     for BorrowedGeneric3DIonMobilityFrameSource<'_, CP, DP, R, C, D>
 {
     fn detail_level(&self) -> &DetailLevel {
@@ -851,12 +847,12 @@ impl<
 }
 
 impl<
-        CP: CentroidLike,
-        DP: DeconvolutedCentroidLike,
-        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > Iterator for BorrowedGeneric3DIonMobilityFrameSource<'_, CP, DP, R, C, D>
+    CP: CentroidLike,
+    DP: DeconvolutedCentroidLike,
+    R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+> Iterator for BorrowedGeneric3DIonMobilityFrameSource<'_, CP, DP, R, C, D>
 {
     type Item = MultiLayerIonMobilityFrame<C, D>;
 
@@ -869,13 +865,13 @@ impl<
 }
 
 impl<
-        'a,
-        CP: CentroidLike,
-        DP: DeconvolutedCentroidLike,
-        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > BorrowedGeneric3DIonMobilityFrameSource<'a, CP, DP, R, C, D>
+    'a,
+    CP: CentroidLike,
+    DP: DeconvolutedCentroidLike,
+    R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+> BorrowedGeneric3DIonMobilityFrameSource<'a, CP, DP, R, C, D>
 {
     #[allow(unused)]
     pub fn new(source: &'a mut R) -> Self {
@@ -890,12 +886,12 @@ impl<
 }
 
 impl<
-        CP: CentroidLike,
-        DP: DeconvolutedCentroidLike,
-        R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
-        C: FeatureLike<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > RandomAccessIonMobilityFrameIterator<C, D, MultiLayerIonMobilityFrame<C, D>>
+    CP: CentroidLike,
+    DP: DeconvolutedCentroidLike,
+    R: SpectrumSource<CP, DP, MultiLayerSpectrum<CP, DP>>,
+    C: FeatureLike<MZ, IonMobility>,
+    D: FeatureLike<Mass, IonMobility> + KnownCharge,
+> RandomAccessIonMobilityFrameIterator<C, D, MultiLayerIonMobilityFrame<C, D>>
     for BorrowedGeneric3DIonMobilityFrameSource<'_, CP, DP, R, C, D>
 where
     R: RandomAccessSpectrumIterator<CP, DP, MultiLayerSpectrum<CP, DP>>,

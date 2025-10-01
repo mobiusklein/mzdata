@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     convert::TryInto,
     fs,
-    io::{self, prelude::*, SeekFrom},
+    io::{self, SeekFrom, prelude::*},
     marker::PhantomData,
     str,
 };
@@ -25,16 +25,18 @@ use crate::{
     meta::{
         DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
         MassSpectrometryRun, Sample, Software,
-    }, params::Value, prelude::SpectrumLike
+    },
+    params::Value,
+    prelude::SpectrumLike,
 };
 
 use crate::params::{ControlledVocabulary, Param, ParamDescribed};
 
 use crate::spectrum::{
-    bindata::{BuildArrayMapFrom, BuildFromArrayMap},
-    spectrum_types::{CentroidSpectrumType, MultiLayerSpectrum},
     Chromatogram, Precursor, PrecursorSelection, SelectedIon, SignalContinuity,
     SpectrumDescription,
+    bindata::{BuildArrayMapFrom, BuildFromArrayMap},
+    spectrum_types::{CentroidSpectrumType, MultiLayerSpectrum},
 };
 use crate::utils::neutral_mass;
 
@@ -84,20 +86,16 @@ pub(crate) struct SpectrumBuilder<
     deconvoluted_type: PhantomData<D>,
 }
 
-impl<
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > SpectrumBuilder<C, D>
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>>
+    SpectrumBuilder<C, D>
 {
     pub fn is_empty(&self) -> bool {
         self.empty_metadata && self.mz_array.is_empty()
     }
 }
 
-impl<
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > Default for SpectrumBuilder<C, D>
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>>
+    Default for SpectrumBuilder<C, D>
 {
     fn default() -> Self {
         let description = SpectrumDescription {
@@ -120,10 +118,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > SpectrumBuilder<C, D>
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>>
+    SpectrumBuilder<C, D>
 {
     pub fn into_spectrum(self, spectrum: &mut MultiLayerSpectrum<C, D>) {
         if self.has_charge > 0 {
@@ -163,10 +159,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > From<SpectrumBuilder<C, D>> for MultiLayerSpectrum<C, D>
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>>
+    From<SpectrumBuilder<C, D>> for MultiLayerSpectrum<C, D>
 {
     fn from(builder: SpectrumBuilder<C, D>) -> MultiLayerSpectrum<C, D> {
         let mut spec = MultiLayerSpectrum::default();
@@ -175,10 +169,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > From<SpectrumBuilder<C, D>> for CentroidSpectrumType<C>
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>>
+    From<SpectrumBuilder<C, D>> for CentroidSpectrumType<C>
 where
     C: BuildFromArrayMap + BuildArrayMapFrom,
     D: BuildFromArrayMap + BuildArrayMapFrom,
@@ -224,7 +216,6 @@ impl MGFTitleParsing for DefaultTitleParser {
     }
 }
 
-
 /// A title parser that recognizes the default Trans-Proteomics Pipeline (TPP) title
 /// format: `<RunId>.<ScanNumber1>.<ScanNumber2>.<ChargeState> File:"<^SourcePath>", NativeID:"<^Id>"`
 ///
@@ -260,34 +251,39 @@ impl MGFTitleParsing for TPPTitleParser {
                                 .fields
                                 .insert("Charge".into(), charge.parse().unwrap());
                         }
-                        if let Some(tail) = after_charge.strip_prefix("File:\"") {
-                            if let Some((head, rest)) = tail.split_once('"') {
+                        if let Some(tail) = after_charge.strip_prefix("File:\"")
+                            && let Some((head, rest)) = tail.split_once('"')
+                        {
+                            if collect_fields {
+                                result
+                                    .fields
+                                    .insert("File".into(), Value::String(head.into()));
+                            }
+                            if let Some(tail) = rest.strip_prefix(", NativeID:\"")
+                                && let Some((head, _rest)) = tail.split_once('"')
+                            {
                                 if collect_fields {
                                     result
                                         .fields
-                                        .insert("File".into(), Value::String(head.into()));
+                                        .insert("NativeID".into(), Value::String(head.into()));
                                 }
-                                if let Some(tail) = rest.strip_prefix(", NativeID:\"") {
-                                    if let Some((head, _rest)) = tail.split_once('"') {
-                                        if collect_fields {
-                                            result.fields.insert(
-                                                "NativeID".into(),
-                                                Value::String(head.into()),
-                                            );
-                                        }
-                                        result.identifier = Some(head.into());
-                                    }
-                                }
+                                result.identifier = Some(head.into());
                             }
                         }
                     } else {
-                        warn!("Title {title} does not conform to TPPTitleParser pattern: Charge not found")
+                        warn!(
+                            "Title {title} does not conform to TPPTitleParser pattern: Charge not found"
+                        )
                     }
                 } else {
-                    warn!("Title {title} does not conform to TPPTitleParser pattern: ScanNumber2 not found")
+                    warn!(
+                        "Title {title} does not conform to TPPTitleParser pattern: ScanNumber2 not found"
+                    )
                 }
             } else {
-                warn!("Title {title} does not conform to TPPTitleParser pattern: ScanNumber1 not found")
+                warn!(
+                    "Title {title} does not conform to TPPTitleParser pattern: ScanNumber1 not found"
+                )
             }
         } else {
             warn!("Title {title} does not conform to TPPTitleParser pattern: RunId not found")
@@ -295,7 +291,6 @@ impl MGFTitleParsing for TPPTitleParser {
         Some(result)
     }
 }
-
 
 /// A strategy for deciding how to index an MGF file.
 pub trait MGFIndexing: Send + Sync {
@@ -333,7 +328,6 @@ impl MGFIndexing for ScansIndexing {
     }
 }
 
-
 /// Indexing strategy for an MGF using the `TITLE` scan header, parsed
 /// according to the Trans-Proteomics Pipeline notation's `NativeID`
 /// component.
@@ -362,7 +356,6 @@ impl MGFIndexing for TPPTitleParsingNativeIDIndexing {
     }
 }
 
-
 /// Indexing strategy for an MGF using the `TITLE` scan header, parsed
 /// according to the Trans-Proteomics Pipeline notation's `ScanNumber1`
 /// component.
@@ -390,7 +383,6 @@ impl MGFIndexing for TPPTitleParsingScanNumberIndexing {
         }
     }
 }
-
 
 /// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
 /// The parser produces [`Spectrum`](crate::spectrum::Spectrum) instances. These may be
@@ -449,11 +441,7 @@ pub(crate) trait MGFLineParsing<
             let nparts = if let Some(i) = it.next() {
                 intensity_token = i;
                 charge_token_opt = it.next();
-                if charge_token_opt.is_some() {
-                    3
-                } else {
-                    2
-                }
+                if charge_token_opt.is_some() { 3 } else { 2 }
             } else {
                 1
             };
@@ -565,12 +553,12 @@ pub(crate) trait MGFLineParsing<
                     }
                     if let Some(ion) = builder
                         .description
-                        .precursor.last_mut().and_then(|v| v.iter_mut().last())
-
+                        .precursor
+                        .last_mut()
+                        .and_then(|v| v.iter_mut().last())
+                        && ion.charge.is_none()
                     {
-                        if ion.charge.is_none() {
-                            ion.charge = builder.precursor_charge
-                        }
+                        ion.charge = builder.precursor_charge
                     }
                 }
                 &_ => {
@@ -664,10 +652,10 @@ pub(crate) trait MGFLineParsing<
 }
 
 impl<
-        R: io::Read,
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MGFLineParsing<C, D> for MGFReaderType<R, C, D>
+    R: io::Read,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+> MGFLineParsing<C, D> for MGFReaderType<R, C, D>
 {
     fn state(&self) -> &MGFParserState {
         &self.state
@@ -693,10 +681,10 @@ impl<
 }
 
 impl<
-        R: io::Read,
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MGFReaderType<R, C, D>
+    R: io::Read,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+> MGFReaderType<R, C, D>
 {
     fn read_line(&mut self, buffer: &mut String) -> io::Result<usize> {
         self.handle.read_line(buffer)
@@ -812,7 +800,6 @@ impl<
         fd
     }
 
-
     /// Get the current indexing strategy implementing [`MGFIndexing`]
     #[allow(clippy::borrowed_box)]
     pub fn indexer(&self) -> &Box<dyn MGFIndexing> {
@@ -851,10 +838,10 @@ impl<
 }
 
 impl<
-        R: io::Read,
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > Iterator for MGFReaderType<R, C, D>
+    R: io::Read,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+> Iterator for MGFReaderType<R, C, D>
 {
     type Item = MultiLayerSpectrum<C, D>;
 
@@ -865,10 +852,10 @@ impl<
 }
 
 impl<
-        R: SeekRead,
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MGFReaderType<R, C, D>
+    R: SeekRead,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+> MGFReaderType<R, C, D>
 {
     /// Construct a new MGFReaderType and build an offset index
     /// using [`Self::build_index`]
@@ -877,7 +864,6 @@ impl<
         reader.build_index();
         reader
     }
-
 
     /// Construct a new [`MGFReaderType`] and build an offset index
     /// using [`Self::build_index`] using the specified indexer.
@@ -926,12 +912,12 @@ impl<
             } else if found_start {
                 let string_buffer = String::from_utf8_lossy(&buffer);
                 let indexer = self.indexer();
-                if let Some((key, value)) = string_buffer.split_once('=') {
-                    if indexer.is_index_key(key) {
-                        index.insert(indexer.handle_key(key, value), last_start);
-                        found_start = false;
-                        last_start = 0;
-                    }
+                if let Some((key, value)) = string_buffer.split_once('=')
+                    && indexer.is_index_key(key)
+                {
+                    index.insert(indexer.handle_key(key, value), last_start);
+                    found_start = false;
+                    last_start = 0;
                 }
             }
             offset += b as u64;
@@ -948,10 +934,10 @@ impl<
 }
 
 impl<
-        R: SeekRead,
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+    R: SeekRead,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+> SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
     fn detail_level(&self) -> &DetailLevel {
         &self.detail_level
@@ -1017,10 +1003,10 @@ impl<
 }
 
 impl<
-        R: SeekRead,
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+    R: SeekRead,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+> RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_id(id) {
@@ -1067,10 +1053,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<fs::File, C, D>
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike + From<DeconvolutedPeak>>
+    MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<fs::File, C, D>
 {
     fn open_file(source: fs::File) -> io::Result<Self> {
         Ok(Self::new(source))
@@ -1084,10 +1068,10 @@ impl<
 /// The MGF format does not contain any consistent metadata, but additional
 /// information can be included after creation.
 impl<
-        R: io::Read,
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MSDataFileMetadata for MGFReaderType<R, C, D>
+    R: io::Read,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+> MSDataFileMetadata for MGFReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
 
@@ -1109,10 +1093,10 @@ impl<
 }
 
 impl<
-        R: Read,
-        C: CentroidLike + From<CentroidPeak>,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > ChromatogramSource for MGFReaderType<R, C, D>
+    R: Read,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+> ChromatogramSource for MGFReaderType<R, C, D>
 {
     fn get_chromatogram_by_id(&mut self, _: &str) -> Option<Chromatogram> {
         None

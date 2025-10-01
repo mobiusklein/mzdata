@@ -5,7 +5,7 @@ use crate::params::{Param, ParamDescribed};
 use crate::spectrum::scan_properties::{
     ChromatogramDescription, ChromatogramType, Precursor, ScanPolarity,
 };
-use mzpeaks::coordinate::{Time, MZ};
+use mzpeaks::coordinate::{MZ, Time};
 use mzpeaks::feature::{FeatureView, SimpleFeature, TimeInterval};
 
 #[derive(Debug, Default, Clone)]
@@ -32,12 +32,12 @@ macro_rules! as_feature_view {
 
 #[allow(unused)]
 pub(crate) fn as_simple_feature(chromatogram: &Chromatogram) -> Option<SimpleFeature<MZ, Time>> {
-    if let Ok(t) = chromatogram.time() {
-        if let Ok(i) = chromatogram.intensity() {
-            let mut f = SimpleFeature::<MZ, Time>::empty(0.0);
-            f.extend(t.iter().zip(i.iter()).map(|(y, z)| (0.0f64, *y, *z)));
-            return Some(f);
-        }
+    if let Ok(t) = chromatogram.time()
+        && let Ok(i) = chromatogram.intensity()
+    {
+        let mut f = SimpleFeature::<MZ, Time>::empty(0.0);
+        f.extend(t.iter().zip(i.iter()).map(|(y, z)| (0.0f64, *y, *z)));
+        return Some(f);
     }
     None
 }
@@ -80,7 +80,6 @@ impl TimeInterval<Time> for Chromatogram {
             .flatten()
     }
 }
-
 
 /// Analog of [`SpectrumLike`](crate::spectrum::SpectrumLike) for chromatograms or
 /// other measures over time.
