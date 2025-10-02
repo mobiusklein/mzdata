@@ -331,149 +331,153 @@ macro_rules! mz_read {
     };
     ($source:expr, $reader:ident => $impl:tt, $C:ty, $D:ty) => {{
         let source = $crate::io::Source::<_, _>::from($source);
-        match source {
-            $crate::io::Source::PathLike(read_path) => {
-                let (format, is_gzipped) = $crate::io::infer_format(&read_path)?;
-                match format {
-                    $crate::io::MassSpectrometryFormat::MGF if $crate::io::_impl::mgf_support() => {
-                        let handle = std::fs::File::open(read_path)?;
-                        if is_gzipped {
-                            let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new($crate::io::_impl::mgf_new::<_, $C, $D>(fh));
-                            Ok($impl)
-                        } else {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::_impl::MGFReaderType<_, $C, $D> = $crate::io::_impl::mgf_new_indexed(handle);
-                            Ok($impl)
+        #[allow(unused_mut)]
+        let mut expr = || -> io::Result<_> {
+            match source {
+                $crate::io::Source::PathLike(read_path) => {
+                    let (format, is_gzipped) = $crate::io::infer_format(&read_path)?;
+                    match format {
+                        $crate::io::MassSpectrometryFormat::MGF if $crate::io::_impl::mgf_support() => {
+                            let handle = std::fs::File::open(read_path)?;
+                            if is_gzipped {
+                                let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
+                                #[allow(unused_mut)]
+                                let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new($crate::io::_impl::mgf_new::<_, $C, $D>(fh));
+                                Ok($impl)
+                            } else {
+                                #[allow(unused_mut)]
+                                let mut $reader: $crate::io::_impl::MGFReaderType<_, $C, $D> = $crate::io::_impl::mgf_new_indexed(handle);
+                                Ok($impl)
+                            }
                         }
-                    }
-                    $crate::io::MassSpectrometryFormat::MzML if $crate::io::_impl::mzml_support() => {
-                        let handle = std::fs::File::open(read_path)?;
+                        $crate::io::MassSpectrometryFormat::MzML if $crate::io::_impl::mzml_support() => {
+                            let handle = std::fs::File::open(read_path)?;
 
-                        if is_gzipped {
-                            let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
+                            if is_gzipped {
+                                let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
+                                #[allow(unused_mut)]
+                                let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new($crate::io::_impl::mzml_new::<_, $C, $D>(fh));
+                                Ok($impl)
+                            } else {
+                                #[allow(unused_mut)]
+                                let mut $reader: $crate::io::mzml::MzMLReaderType<_, $C, $D> = $crate::io::_impl::mzml_new_indexed::<_, $C, $D>(handle);
+                                Ok($impl)
+                            }
+                        }
+                        $crate::io::MassSpectrometryFormat::MzMLb if $crate::io::_impl::mzmlb_support() => {
                             #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new($crate::io::_impl::mzml_new::<_, $C, $D>(fh));
+                            let mut $reader: $crate::io::_impl::MzMLbReaderType<$C, $D> = $crate::io::_impl::mzmlb_new(&read_path)?;
                             Ok($impl)
-                        } else {
+                        },
+                        $crate::io::MassSpectrometryFormat::ThermoRaw if $crate::io::_impl::thermo_support() => {
                             #[allow(unused_mut)]
-                            let mut $reader: $crate::io::mzml::MzMLReaderType<_, $C, $D> = $crate::io::_impl::mzml_new_indexed::<_, $C, $D>(handle);
+                            let mut $reader: $crate::io::_impl::ThermoRawReaderType<$C, $D> = $crate::io::_impl::thermo_new::<_, $C, $D>(&read_path)?;
+                            Ok($impl)
+                        },
+                        $crate::io::MassSpectrometryFormat::BrukerTDF if $crate::io::_impl::bruker_tdf_support() => {
+                            #[allow(unused_mut)]
+                            let mut $reader: $crate::io::_impl::TDFSpectrumReaderType<$C, $D> = $crate::io::_impl::bruker_tdf_new(read_path)?;
                             Ok($impl)
                         }
-                    }
-                    $crate::io::MassSpectrometryFormat::MzMLb if $crate::io::_impl::mzmlb_support() => {
-                        #[allow(unused_mut)]
-                        let mut $reader: $crate::io::_impl::MzMLbReaderType<$C, $D> = $crate::io::_impl::mzmlb_new(&read_path)?;
-                        Ok($impl)
-                    },
-                    $crate::io::MassSpectrometryFormat::ThermoRaw if $crate::io::_impl::thermo_support() => {
-                        #[allow(unused_mut)]
-                        let mut $reader: $crate::io::_impl::ThermoRawReaderType<$C, $D> = $crate::io::_impl::thermo_new::<_, $C, $D>(&read_path)?;
-                        Ok($impl)
-                    },
-                    $crate::io::MassSpectrometryFormat::BrukerTDF if $crate::io::_impl::bruker_tdf_support() => {
-                        #[allow(unused_mut)]
-                        let mut $reader: $crate::io::_impl::TDFSpectrumReaderType<$C, $D> = $crate::io::_impl::bruker_tdf_new(read_path)?;
-                        Ok($impl)
-                    }
-                    _ => Err(std::io::Error::new(
-                        std::io::ErrorKind::Unsupported,
-                        format!(
-                            "Input file format for {} not supported",
-                            read_path.display()
-                        ),
-                    )),
-                }
-            },
-            $crate::io::Source::Reader(mut handle, format) => {
-                let (format, is_gzipped) = if let Some(format) = format { (format, false) } else { $crate::io::infer_from_stream(&mut handle)? };
-                match format {
-                    $crate::io::MassSpectrometryFormat::MGF if $crate::io::_impl::mgf_support() => {
-                        let handle = std::io::BufReader::new(handle);
-                        #[allow(unused_mut)]
-                        if is_gzipped {
-                            let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new($crate::io::_impl::mgf_new::<_, $C, $D>(fh));
-                            Ok($impl)
-                        } else {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::_impl::MGFReaderType<_, $C, $D> = $crate::io::_impl::mgf_new_indexed(handle);
-                            Ok($impl)
-                        }
-                    },
-                    $crate::io::MassSpectrometryFormat::MzML if $crate::io::_impl::mzml_support() => {
-                        let handle = std::io::BufReader::new(handle);
-                        #[allow(unused_mut)]
-                        if is_gzipped {
-                            let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new($crate::io::_impl::mzml_new::<_, $C, $D>(fh));
-                            Ok($impl)
-                        } else {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::mzml::MzMLReaderType<_, $C, $D> = $crate::io::_impl::mzml_new_indexed::<_, $C, $D>(handle);
-                            Ok($impl)
-                        }
-                    },
-                    _ => Err(std::io::Error::new(
-                        std::io::ErrorKind::Unsupported,
-                        format!(
-                            "Input file format for {:?} not supported from an io::Read",
-                            format
-                        ),
-                    )),
-                }
-            },
-            $crate::io::Source::Receiver(receiver) => {
-                #[allow(unused_mut)]
-                let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(receiver);
-                Ok($impl)
-            },
-            $crate::io::Source::Stdin => {
-                let mut buffered =
-                    $crate::io::PreBufferedStream::new_with_buffer_size(std::io::stdin(), 2usize.pow(20))?;
-                let (ms_format, compressed) = $crate::io::infer_from_stream(&mut buffered)?;
-                match ms_format {
-                    $crate::io::MassSpectrometryFormat::MGF if $crate::io::_impl::mgf_support() => {
-                        if compressed {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(
-                                $crate::io::_impl::mgf_new(
-                                    $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(buffered)),
-                            ));
-                            Ok($impl)
-                        } else {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(
-                                $crate::io::_impl::mgf_new(buffered));
-                            Ok($impl)
-                        }
-                    }
-                    $crate::io::MassSpectrometryFormat::MzML if $crate::io::_impl::mzml_support() => {
-                        if compressed {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(
-                                $crate::io::_impl::mzml_new($crate::io::RestartableGzDecoder::new(std::io::BufReader::new(buffered)),
-                            ));
-                            Ok($impl)
-                        } else {
-                            #[allow(unused_mut)]
-                            let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(
-                                $crate::io::_impl::mzml_new(buffered));
-                            Ok($impl)
-                        }
-                    }
-                    _ => {
-                        return Err(std::io::Error::new(
+                        _ => Err(std::io::Error::new(
                             std::io::ErrorKind::Unsupported,
-                            "{ms_format:?} format is not supported over Stdin",
-                        ).into())
+                            format!(
+                                "Input file format for {} not supported",
+                                read_path.display()
+                            ),
+                        )),
                     }
-                }
-            },
-        }
+                },
+                $crate::io::Source::Reader(mut handle, format) => {
+                    let (format, is_gzipped) = if let Some(format) = format { (format, false) } else { $crate::io::infer_from_stream(&mut handle)? };
+                    match format {
+                        $crate::io::MassSpectrometryFormat::MGF if $crate::io::_impl::mgf_support() => {
+                            let handle = std::io::BufReader::new(handle);
+                            #[allow(unused_mut)]
+                            if is_gzipped {
+                                let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
+                                #[allow(unused_mut)]
+                                let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new($crate::io::_impl::mgf_new::<_, $C, $D>(fh));
+                                Ok($impl)
+                            } else {
+                                #[allow(unused_mut)]
+                                let mut $reader: $crate::io::_impl::MGFReaderType<_, $C, $D> = $crate::io::_impl::mgf_new_indexed(handle);
+                                Ok($impl)
+                            }
+                        },
+                        $crate::io::MassSpectrometryFormat::MzML if $crate::io::_impl::mzml_support() => {
+                            let handle = std::io::BufReader::new(handle);
+                            #[allow(unused_mut)]
+                            if is_gzipped {
+                                let fh = $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(handle));
+                                #[allow(unused_mut)]
+                                let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new($crate::io::_impl::mzml_new::<_, $C, $D>(fh));
+                                Ok($impl)
+                            } else {
+                                #[allow(unused_mut)]
+                                let mut $reader: $crate::io::mzml::MzMLReaderType<_, $C, $D> = $crate::io::_impl::mzml_new_indexed::<_, $C, $D>(handle);
+                                Ok($impl)
+                            }
+                        },
+                        _ => Err(std::io::Error::new(
+                            std::io::ErrorKind::Unsupported,
+                            format!(
+                                "Input file format for {:?} not supported from an io::Read",
+                                format
+                            ),
+                        )),
+                    }
+                },
+                $crate::io::Source::Receiver(receiver) => {
+                    #[allow(unused_mut)]
+                    let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(receiver);
+                    Ok($impl)
+                },
+                $crate::io::Source::Stdin => {
+                    let mut buffered =
+                        $crate::io::PreBufferedStream::new_with_buffer_size(std::io::stdin(), 2usize.pow(20))?;
+                    let (ms_format, compressed) = $crate::io::infer_from_stream(&mut buffered)?;
+                    match ms_format {
+                        $crate::io::MassSpectrometryFormat::MGF if $crate::io::_impl::mgf_support() => {
+                            if compressed {
+                                #[allow(unused_mut)]
+                                let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(
+                                    $crate::io::_impl::mgf_new(
+                                        $crate::io::RestartableGzDecoder::new(std::io::BufReader::new(buffered)),
+                                ));
+                                Ok($impl)
+                            } else {
+                                #[allow(unused_mut)]
+                                let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(
+                                    $crate::io::_impl::mgf_new(buffered));
+                                Ok($impl)
+                            }
+                        }
+                        $crate::io::MassSpectrometryFormat::MzML if $crate::io::_impl::mzml_support() => {
+                            if compressed {
+                                #[allow(unused_mut)]
+                                let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(
+                                    $crate::io::_impl::mzml_new($crate::io::RestartableGzDecoder::new(std::io::BufReader::new(buffered)),
+                                ));
+                                Ok($impl)
+                            } else {
+                                #[allow(unused_mut)]
+                                let mut $reader: $crate::io::StreamingSpectrumIterator<$C, $D, _, _> = $crate::io::StreamingSpectrumIterator::new(
+                                    $crate::io::_impl::mzml_new(buffered));
+                                Ok($impl)
+                            }
+                        }
+                        _ => {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::Unsupported,
+                                "{ms_format:?} format is not supported over Stdin",
+                            ).into())
+                        }
+                    }
+                },
+            }
+        };
+        expr()
     }};
 }
 
@@ -514,87 +518,90 @@ macro_rules! mz_write {
     };
     ($sink:expr, $writer:ident => $impl:tt, $C:ty, $D:ty) => {{
         let sink = $crate::io::Sink::<$C, $D>::from($sink);
-        match sink {
-           $crate::io:: Sink::Sender(_) | $crate::io::Sink::SyncSender(_) =>  {
-                Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "Sender writers aren't supported by `mz_write`"))
-            }
-            $crate::io::Sink::PathLike(write_path) => {
-                let (writer_format, is_gzip) = $crate::io::infer_from_path(&write_path);
-                match writer_format {
-                    $crate::io::MassSpectrometryFormat::MGF if $crate::io::_impl::mgf_support() => {
-                        let handle = std::io::BufWriter::new(std::fs::File::create(&write_path)?);
-                        if is_gzip {
-                            let handle = flate2::write::GzEncoder::new(handle, flate2::Compression::best());
+        let mut expr = ||  -> io::Result<_> {
+            match sink {
+               $crate::io:: Sink::Sender(_) | $crate::io::Sink::SyncSender(_) =>  {
+                    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "Sender writers aren't supported by `mz_write`"))
+                }
+                $crate::io::Sink::PathLike(write_path) => {
+                    let (writer_format, is_gzip) = $crate::io::infer_from_path(&write_path);
+                    match writer_format {
+                        $crate::io::MassSpectrometryFormat::MGF if $crate::io::_impl::mgf_support() => {
+                            let handle = std::io::BufWriter::new(std::fs::File::create(&write_path)?);
+                            if is_gzip {
+                                let handle = flate2::write::GzEncoder::new(handle, flate2::Compression::best());
+                                let mut $writer: $crate::io::_impl::MGFWriterType<_, $C, $D> = $crate::io::_impl::MGFWriterType::new(
+                                    handle,
+                                );
+                                Ok($impl)
+                            } else {
+                                let mut $writer: $crate::io::_impl::MGFWriterType<_, $C, $D> = $crate::io::_impl::MGFWriterType::new(
+                                    handle,
+                                );
+                                Ok($impl)
+
+                            }
+                        }
+                        $crate::io::MassSpectrometryFormat::MzML if $crate::io::_impl::mzml_support() => {
+                            let handle = std::io::BufWriter::new(std::fs::File::create(&write_path)?);
+                            if is_gzip {
+                                let handle = flate2::write::GzEncoder::new(handle, flate2::Compression::best());
+                                let mut $writer: $crate::io::_impl::MzMLWriterType<_, $C, $D> = $crate::io::_impl::MzMLWriterType::new(
+                                    handle,
+                                );
+                                Ok($impl)
+                            } else {
+                                let mut $writer: $crate::io::_impl::MzMLWriterType<_, $C, $D> = $crate::io::_impl::MzMLWriterType::new(
+                                    handle,
+                                );
+                                Ok($impl)
+                            }
+                        }
+
+                        $crate::io::MassSpectrometryFormat::MzMLb if $crate::io::_impl::mzmlb_support() => {
+                            let mut $writer = $crate::io::_impl::MzMLbWriterType::<$C, $D>::new(&write_path)?;
+                            Ok($impl)
+                        }
+                        _ => Err(std::io::Error::new(
+                            std::io::ErrorKind::Unsupported,
+                            format!(
+                                "Output file format {:?} for {} not supported",
+                                writer_format,
+                                write_path.display()
+                            ),
+                        )),
+                    }
+                },
+                $crate::io::Sink::Writer(handle, writer_format) => {
+                    match writer_format {
+                        $crate::io::MassSpectrometryFormat::MGF if $crate::io::_impl::mgf_support() => {
+                            let handle = std::io::BufWriter::new(handle);
                             let mut $writer: $crate::io::_impl::MGFWriterType<_, $C, $D> = $crate::io::_impl::MGFWriterType::new(
                                 handle,
                             );
                             Ok($impl)
-                        } else {
-                            let mut $writer: $crate::io::_impl::MGFWriterType<_, $C, $D> = $crate::io::_impl::MGFWriterType::new(
-                                handle,
-                            );
-                            Ok($impl)
-
                         }
-                    }
-                    $crate::io::MassSpectrometryFormat::MzML if $crate::io::_impl::mzml_support() => {
-                        let handle = std::io::BufWriter::new(std::fs::File::create(&write_path)?);
-                        if is_gzip {
-                            let handle = flate2::write::GzEncoder::new(handle, flate2::Compression::best());
-                            let mut $writer: $crate::io::_impl::MzMLWriterType<_, $C, $D> = $crate::io::_impl::MzMLWriterType::new(
-                                handle,
-                            );
-                            Ok($impl)
-                        } else {
+                        $crate::io::MassSpectrometryFormat::MzML if $crate::io::_impl::mzml_support() => {
+                            let handle = std::io::BufWriter::new(handle);
                             let mut $writer: $crate::io::_impl::MzMLWriterType<_, $C, $D> = $crate::io::_impl::MzMLWriterType::new(
                                 handle,
                             );
                             Ok($impl)
                         }
-                    }
-
-                    $crate::io::MassSpectrometryFormat::MzMLb if $crate::io::_impl::mzmlb_support() => {
-                        let mut $writer = $crate::io::_impl::MzMLbWriterType::<$C, $D>::new(&write_path)?;
-                        Ok($impl)
-                    }
-                    _ => Err(std::io::Error::new(
-                        std::io::ErrorKind::Unsupported,
-                        format!(
-                            "Output file format {:?} for {} not supported",
-                            writer_format,
-                            write_path.display()
-                        ),
-                    )),
-                }
-            },
-            $crate::io::Sink::Writer(handle, writer_format) => {
-                match writer_format {
-                    $crate::io::MassSpectrometryFormat::MGF if $crate::io::_impl::mgf_support() => {
-                        let handle = std::io::BufWriter::new(handle);
-                        let mut $writer: $crate::io::_impl::MGFWriterType<_, $C, $D> = $crate::io::_impl::MGFWriterType::new(
-                            handle,
-                        );
-                        Ok($impl)
-                    }
-                    $crate::io::MassSpectrometryFormat::MzML if $crate::io::_impl::mzml_support() => {
-                        let handle = std::io::BufWriter::new(handle);
-                        let mut $writer: $crate::io::_impl::MzMLWriterType<_, $C, $D> = $crate::io::_impl::MzMLWriterType::new(
-                            handle,
-                        );
-                        Ok($impl)
-                    }
-                    _ => {
-                        Err(std::io::Error::new(
-                                std::io::ErrorKind::Unsupported,
-                                format!(
-                                    "Output file format for {:?} not supported",
-                                    writer_format
-                                ),
-                            ))
+                        _ => {
+                            Err(std::io::Error::new(
+                                    std::io::ErrorKind::Unsupported,
+                                    format!(
+                                        "Output file format for {:?} not supported",
+                                        writer_format
+                                    ),
+                                ))
+                        }
                     }
                 }
             }
-        }
+        };
+        expr()
     }};
 }
 

@@ -190,7 +190,7 @@ impl<
         R: IonMobilityFrameSource<C, D, S>,
     > IonMobilityFrameIterator<'_, C, D, S, R>
 {
-    pub fn new(source: &mut R) -> IonMobilityFrameIterator<C, D, S, R> {
+    pub fn new(source: &mut R) -> IonMobilityFrameIterator<'_, C, D, S, R> {
         IonMobilityFrameIterator::<C, D, S, R> {
             source,
             index: 0,
