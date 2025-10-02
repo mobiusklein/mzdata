@@ -42,7 +42,7 @@ use crate::spectrum::bindata::vec_as_bytes;
 use numpress::numpress_decompress;
 
 use crate::spectrum::spectrum_types::MultiLayerSpectrum;
-use crate::spectrum::{Chromatogram, HasIonMobility, IsolationWindow, ScanWindow, SelectedIon, Precursor};
+use crate::spectrum::{Chromatogram, HasIonMobility, IsolationWindow, ScanWindow, SelectedIon};
 
 #[derive(Debug, Error)]
 pub enum MzMLbError {
@@ -266,6 +266,9 @@ impl ExternalDataRegistry {
     fn handle_encoding(data: &mut DataArray) -> Result<(), ArrayRetrievalError> {
         match data.compression {
             BinaryCompressionType::NoCompression => Ok(()),
+            BinaryCompressionType::Zlib => Err(ArrayRetrievalError::DecompressionError(
+                data.compression.unsupported_msg(None),
+            )),
             #[cfg(feature = "numpress")]
             BinaryCompressionType::NumpressLinear => {
                 match data.dtype {
@@ -287,6 +290,25 @@ impl ExternalDataRegistry {
                     data.compression.unsupported_msg(None),
                 ))
             }
+            #[cfg(not(feature = "numpress"))]
+            BinaryCompressionType::NumpressLinear => Err(ArrayRetrievalError::DecompressionError(
+                data.compression.unsupported_msg(None),
+            )),
+            BinaryCompressionType::NumpressSLOF => Err(ArrayRetrievalError::DecompressionError(
+                data.compression.unsupported_msg(None),
+            )),
+            BinaryCompressionType::NumpressPIC => Err(ArrayRetrievalError::DecompressionError(
+                data.compression.unsupported_msg(None),
+            )),
+            BinaryCompressionType::NumpressLinearZlib => Err(
+                ArrayRetrievalError::DecompressionError(data.compression.unsupported_msg(None)),
+            ),
+            BinaryCompressionType::NumpressSLOFZlib => Err(
+                ArrayRetrievalError::DecompressionError(data.compression.unsupported_msg(None)),
+            ),
+            BinaryCompressionType::NumpressPICZlib => Err(ArrayRetrievalError::DecompressionError(
+                data.compression.unsupported_msg(None),
+            )),
             BinaryCompressionType::LinearPrediction => {
                 match data.dtype {
                     BinaryDataArrayType::Float64 => {
@@ -332,9 +354,6 @@ impl ExternalDataRegistry {
                 Ok(())
             }
             BinaryCompressionType::Decoded => Ok(()),
-            _ => Err(ArrayRetrievalError::DecompressionError(
-                data.compression.unsupported_msg(None),
-            ))
         }
     }
 
