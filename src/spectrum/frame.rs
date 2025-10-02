@@ -2,25 +2,25 @@
 use std::{borrow::Cow, convert::TryFrom, marker::PhantomData, mem, ops::Deref};
 
 use mzpeaks::{
-    coordinate::{IonMobility, MZ, Mass},
+    coordinate::{IonMobility, Mass, MZ},
     feature::{ChargedFeature, Feature, FeatureLike},
     feature_map::FeatureMap,
 };
 
 use super::{
-    Acquisition, ArrayType, BinaryArrayMap, CentroidPeakAdapting, DeconvolutedPeakAdapting,
-    Precursor, ScanPolarity, SignalContinuity, SpectrumConversionError, SpectrumDescription,
     bindata::{
         ArrayRetrievalError, ArraysAvailable, BinaryArrayMap3D, BinaryCompressionType,
         BinaryDataArrayType, BuildArrayMap3DFrom, BuildFromArrayMap3D,
     },
+    Acquisition, ArrayType, BinaryArrayMap, CentroidPeakAdapting, DeconvolutedPeakAdapting,
+    Precursor, ScanPolarity, SignalContinuity, SpectrumConversionError, SpectrumDescription,
 };
-use super::{MultiLayerSpectrum, scan_properties::SCAN_TITLE};
-use crate::{RawSpectrum, prelude::*};
+use super::{scan_properties::SCAN_TITLE, MultiLayerSpectrum};
 use crate::{
     io::IonMobilityFrameGrouping,
     params::{ParamDescribed, ParamList, Unit},
 };
+use crate::{prelude::*, RawSpectrum};
 
 /// Represent an owned representation of one the kinds of feature data that a [`IonMobilityFrameLike`](crate::spectrum::IonMobilityFrameLike) instance
 /// might otherwise carry.
@@ -175,9 +175,7 @@ pub trait IonMobilityFrameLike<
     fn ion_mobility_unit(&self) -> Unit {
         let unit = self.description().ion_mobility_unit;
         if unit == Unit::Unknown {
-            self.raw_arrays()
-                .map(|a| a.ion_mobility_unit)
-                .unwrap_or_default()
+            self.raw_arrays().map(|a| a.ion_mobility_unit).unwrap_or_default()
         } else {
             unit
         }
@@ -185,10 +183,10 @@ pub trait IonMobilityFrameLike<
 
     /// Get a mutable reference to the ion mobility dimension's unit
     fn ion_mobility_unit_mut(&mut self) -> &mut Unit {
-        if self.description().ion_mobility_unit == Unit::Unknown
-            && let Some(unit) = self.raw_arrays().map(|a| a.ion_mobility_unit)
-        {
-            self.description_mut().ion_mobility_unit = unit;
+        if self.description().ion_mobility_unit == Unit::Unknown {
+            if let Some(unit) = self.raw_arrays().map(|a| a.ion_mobility_unit) {
+                self.description_mut().ion_mobility_unit = unit;
+            }
         }
         &mut self.description_mut().ion_mobility_unit
     }
@@ -242,6 +240,7 @@ pub trait IonMobilityFrameLike<
     fn add_precursor(&mut self, precursor: Precursor) {
         self.description_mut().precursor.push(precursor);
     }
+
 
     /// Remove the precursor entry at `index` in the precursor list.
     ///
@@ -323,9 +322,9 @@ pub struct MultiLayerIonMobilityFrame<
 }
 
 impl<
-    C: FeatureLike<MZ, IonMobility> + BuildFromArrayMap3D,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge + BuildFromArrayMap3D,
-> MultiLayerIonMobilityFrame<C, D>
+        C: FeatureLike<MZ, IonMobility> + BuildFromArrayMap3D,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge + BuildFromArrayMap3D,
+    > MultiLayerIonMobilityFrame<C, D>
 {
     pub fn try_build_features(
         &mut self,
@@ -380,10 +379,10 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             deconvoluted_features,
             description,
         };
-        if this.description.ion_mobility_unit.is_unknown()
-            && let Some(arrays) = this.raw_arrays()
-        {
-            this.description.ion_mobility_unit = arrays.ion_mobility_unit
+        if this.description.ion_mobility_unit.is_unknown() {
+            if let Some(arrays) = this.raw_arrays() {
+                this.description.ion_mobility_unit = arrays.ion_mobility_unit
+            }
         }
         this
     }
@@ -405,7 +404,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     }
 
     fn features(&self) -> RefFeatureDataLevel<'_, C, D> {
-        if let Some(d) = self.deconvoluted_features.as_ref() {
+        let state = if let Some(d) = self.deconvoluted_features.as_ref() {
             RefFeatureDataLevel::Deconvoluted(d)
         } else if let Some(c) = self.features.as_ref() {
             RefFeatureDataLevel::Centroid(c)
@@ -413,7 +412,8 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             RefFeatureDataLevel::RawData(arrays)
         } else {
             RefFeatureDataLevel::Missing
-        }
+        };
+        state
     }
 
     fn into_features_and_parts(self) -> (FeatureDataLevel<C, D>, IonMobilityFrameDescription) {
@@ -450,11 +450,11 @@ impl<CFeat: FeatureLike<MZ, IonMobility>, DFeat: FeatureLike<Mass, IonMobility> 
 }
 
 impl<
-    CFeat: FeatureLike<MZ, IonMobility>,
-    DFeat: FeatureLike<Mass, IonMobility> + KnownCharge,
-    CPeak: CentroidLike,
-    DPeak: DeconvolutedCentroidLike,
-> TryFrom<MultiLayerSpectrum<CPeak, DPeak>> for MultiLayerIonMobilityFrame<CFeat, DFeat>
+        CFeat: FeatureLike<MZ, IonMobility>,
+        DFeat: FeatureLike<Mass, IonMobility> + KnownCharge,
+        CPeak: CentroidLike,
+        DPeak: DeconvolutedCentroidLike,
+    > TryFrom<MultiLayerSpectrum<CPeak, DPeak>> for MultiLayerIonMobilityFrame<CFeat, DFeat>
 {
     type Error = ArrayRetrievalError;
 
@@ -476,9 +476,9 @@ impl<
 }
 
 impl<
-    C: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
-> From<MultiLayerIonMobilityFrame<C, D>> for RawSpectrum
+        C: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
+    > From<MultiLayerIonMobilityFrame<C, D>> for RawSpectrum
 {
     fn from(value: MultiLayerIonMobilityFrame<C, D>) -> Self {
         let im_unit = value.ion_mobility_unit();
@@ -505,11 +505,11 @@ impl<
 }
 
 impl<
-    CFeat: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
-    DFeat: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
-    CPeak: CentroidLike + BuildFromArrayMap,
-    DPeak: DeconvolutedCentroidLike + BuildFromArrayMap,
-> From<MultiLayerIonMobilityFrame<CFeat, DFeat>> for MultiLayerSpectrum<CPeak, DPeak>
+        CFeat: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
+        DFeat: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
+        CPeak: CentroidLike + BuildFromArrayMap,
+        DPeak: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > From<MultiLayerIonMobilityFrame<CFeat, DFeat>> for MultiLayerSpectrum<CPeak, DPeak>
 {
     fn from(value: MultiLayerIonMobilityFrame<CFeat, DFeat>) -> Self {
         let raw: RawSpectrum = value.into();
@@ -521,19 +521,19 @@ impl<
 mod mzsignal_impl {
     use super::*;
 
-    use mzpeaks::{CentroidPeak, Tolerance, feature::Feature, peak_set::PeakSetVec};
+    use mzpeaks::{feature::Feature, peak_set::PeakSetVec, CentroidPeak, Tolerance};
     use mzsignal::{
-        FittedPeak, PeakFitType,
         feature_mapping::{FeatureExtracterType, FeatureGraphBuilder, MapState, PeakMapState},
         peak_picker::PeakPicker,
+        FittedPeak, PeakFitType,
     };
 
     /// When [`mzsignal`] is available, [`MultiLayerIonMobilityFrame`] supports performing feature extraction
     /// to construct ion mobility-distributed traces in the m/z dimension similar to [`MultiLayerSpectrum::pick_peaks`].
     impl<
-        C: FeatureLike<MZ, IonMobility> + FeatureLikeMut<MZ, IonMobility>,
-        D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > MultiLayerIonMobilityFrame<C, D>
+            C: FeatureLike<MZ, IonMobility> + FeatureLikeMut<MZ, IonMobility>,
+            D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        > MultiLayerIonMobilityFrame<C, D>
     {
         /// Extract features using the provided [`MapState`] type to build the `C`-type features
         /// directly.

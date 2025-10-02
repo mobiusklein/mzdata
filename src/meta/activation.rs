@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+
+
 crate::cvmap! {
     #[flag_type=i32]
     #[allow(unused)]
@@ -88,28 +90,23 @@ crate::cvmap! {
 }
 
 impl DissociationMethodTerm {
+
     pub fn is_electronic(&self) -> bool {
-        matches!(
-            self,
-            Self::ElectronActivatedDissociation
-                | Self::ElectronCaptureDissociation
-                | Self::ElectronTransferDissociation
-                | Self::NegativeElectronTransferDissociation
-        )
+        matches!(self, Self::ElectronActivatedDissociation
+            | Self::ElectronCaptureDissociation
+            | Self::ElectronTransferDissociation
+            | Self::NegativeElectronTransferDissociation)
     }
 
     pub fn is_collisional(&self) -> bool {
-        matches!(
-            self,
-            Self::CollisionInducedDissociation
-                | Self::LowEnergyCollisionInducedDissociation
-                | Self::BeamTypeCollisionInducedDissociation
-                | Self::TrapTypeCollisionInducedDissociation
-                | Self::InSourceCollisionInducedDissociation
-                | Self::SupplementalBeamTypeCollisionInducedDissociation
-                | Self::SupplementalCollisionInducedDissociation
-                | Self::HigherEnergyBeamTypeCollisionInducedDissociation
-        )
+        matches!(self, Self::CollisionInducedDissociation
+            | Self::LowEnergyCollisionInducedDissociation
+            | Self::BeamTypeCollisionInducedDissociation
+            | Self::TrapTypeCollisionInducedDissociation
+            | Self::InSourceCollisionInducedDissociation
+            | Self::SupplementalBeamTypeCollisionInducedDissociation
+            | Self::SupplementalCollisionInducedDissociation
+            | Self::HigherEnergyBeamTypeCollisionInducedDissociation)
     }
 }
 
@@ -166,17 +163,11 @@ impl DissociationEnergyTerm {
     }
 
     pub const fn is_ramp_start(&self) -> bool {
-        matches!(
-            self,
-            Self::CollisionEnergyRampStart(_) | Self::PercentCollisionEnergyRampStart(_)
-        )
+        matches!(self, Self::CollisionEnergyRampStart(_) | Self::PercentCollisionEnergyRampStart(_))
     }
 
     pub const fn is_ramp_end(&self) -> bool {
-        matches!(
-            self,
-            Self::CollisionEnergyRampEnd(_) | Self::PercentCollisionEnergyRampEnd(_)
-        )
+        matches!(self, Self::CollisionEnergyRampEnd(_) | Self::PercentCollisionEnergyRampEnd(_))
     }
 
     pub const fn energy(&self) -> f32 {
@@ -225,22 +216,13 @@ impl AsRef<f32> for DissociationEnergyTerm {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum DissociationEnergy {
     Energy(DissociationEnergyTerm),
-    Ramp {
-        start: DissociationEnergyTerm,
-        end: DissociationEnergyTerm,
-    },
-    Combined {
-        primary: DissociationEnergyTerm,
-        supplementary: DissociationEnergyTerm,
-    },
+    Ramp { start: DissociationEnergyTerm, end: DissociationEnergyTerm },
+    Combined { primary: DissociationEnergyTerm, supplementary: DissociationEnergyTerm}
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        Param,
-        params::{ControlledVocabulary, ParamCow, ValueRef},
-    };
+    use crate::{params::{ControlledVocabulary, ParamCow, ValueRef}, Param};
 
     use super::*;
 
@@ -252,10 +234,7 @@ mod test {
         assert!(!DissociationMethodTerm::ElectronTransferDissociation.is_collisional());
         assert!(DissociationMethodTerm::ElectronTransferDissociation.is_electronic());
 
-        assert_eq!(
-            DissociationEnergyTerm::CollisionEnergy(30.0).to_string(),
-            "CollisionEnergy(30.0)"
-        );
+        assert_eq!(DissociationEnergyTerm::CollisionEnergy(30.0).to_string(), "CollisionEnergy(30.0)");
 
         assert!(!DissociationEnergyTerm::CollisionEnergy(30.0).is_ramp_end());
         assert!(!DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).is_ramp_start());
@@ -304,16 +283,28 @@ mod test {
 
         let p: Param = DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).into();
         param.value = ValueRef::Empty;
-        assert_eq!(p, param);
+        assert_eq!(
+            p,
+            param
+        );
 
         let p: Param = (&DissociationEnergyTerm::NormalizedCollisionEnergy(30.0)).into();
-        assert_eq!(p, param);
+        assert_eq!(
+            p,
+            param
+        );
 
         let p: ParamCow = DissociationEnergyTerm::NormalizedCollisionEnergy(30.0).into();
-        assert_eq!(p, param);
+        assert_eq!(
+            p,
+            param
+        );
 
         let p: ParamCow = (&DissociationEnergyTerm::NormalizedCollisionEnergy(30.0)).into();
-        assert_eq!(p, param);
+        assert_eq!(
+            p,
+            param
+        );
 
         param.value = 30.0.into();
         let term: DissociationEnergyTerm = Param::from(param.clone()).into();
@@ -349,9 +340,7 @@ mod test {
 
         assert_eq!(
             DissociationEnergyTerm::from_name("normalized collision energy"),
-            Some(DissociationEnergyTerm::NormalizedCollisionEnergy(
-                Default::default()
-            ))
+            Some(DissociationEnergyTerm::NormalizedCollisionEnergy(Default::default()))
         );
     }
 }

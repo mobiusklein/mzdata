@@ -11,8 +11,8 @@ use tokio::{self, io};
 use log::{debug, warn};
 
 use quick_xml::{
-    Error as XMLError, Reader,
     events::{BytesEnd, BytesStart, BytesText, Event},
+    Error as XMLError, Reader,
 };
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
@@ -27,11 +27,15 @@ use crate::{
     },
     meta::{
         DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
-        MassSpectrometryRun, Sample, ScanSettings, Software,
+        MassSpectrometryRun, Sample, Software, ScanSettings,
     },
     params::Param,
     prelude::*,
-    spectrum::{Chromatogram, bindata::BuildFromArrayMap, spectrum_types::MultiLayerSpectrum},
+    spectrum::{
+        bindata::BuildFromArrayMap,
+        spectrum_types::MultiLayerSpectrum,
+        Chromatogram,
+    },
 };
 
 use super::{
@@ -102,11 +106,11 @@ pub struct MzMLReaderType<
 }
 
 impl<
-    'a,
-    R: AsyncReadType + Unpin,
-    C: CentroidLike + Send + Sync + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
-> MzMLReaderType<R, C, D>
+        'a,
+        R: AsyncReadType + Unpin,
+        C: CentroidLike + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
+    > MzMLReaderType<R, C, D>
 {
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`tokio::io::AsyncRead`] handle
     /// provided with an `[io::BufReader`] and parses the metadata section of the file.
@@ -501,10 +505,10 @@ impl<
 }
 
 impl<
-    R: AsyncReadType + Unpin,
-    C: CentroidLike + Send + Sync,
-    D: DeconvolutedCentroidLike + Send + Sync,
-> MSDataFileMetadata for MzMLReaderType<R, C, D>
+        R: AsyncReadType + Unpin,
+        C: CentroidLike + Send + Sync,
+        D: DeconvolutedCentroidLike + Send + Sync,
+    > MSDataFileMetadata for MzMLReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
 
@@ -608,7 +612,7 @@ impl IndexedMzMLIndexExtractor {
                                 match index_name.as_ref() {
                                     "spectrum" => return Ok(IndexParserState::SpectrumIndexList),
                                     "chromatogram" => {
-                                        return Ok(IndexParserState::ChromatogramIndexList);
+                                        return Ok(IndexParserState::ChromatogramIndexList)
                                     }
                                     _ => {}
                                 }
@@ -687,10 +691,10 @@ impl IndexedMzMLIndexExtractor {
 /// in the library, this also re-creates the [`SpectrumSource`](crate::io::traits::SpectrumSource) API with
 /// asynchronous execution.
 impl<
-    R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin,
-    C: CentroidLike + Send + Sync + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
-> MzMLReaderType<R, C, D>
+        R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin,
+        C: CentroidLike + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
+    > MzMLReaderType<R, C, D>
 {
     pub async fn new_indexed(file: R) -> MzMLReaderType<R, C, D> {
         let mut this = Self::new(file).await;
@@ -969,10 +973,10 @@ impl<
 }
 
 impl<
-    R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Send,
-    C: CentroidLike + Send + Sync + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
-> AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+        R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Send,
+        C: CentroidLike + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
+    > AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     async fn reset(&mut self) {
         self.reset().await;
@@ -1009,18 +1013,15 @@ impl<
 
 #[cfg(feature = "async")]
 impl<
-    C: CentroidLike + Send + Sync + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
-> AsyncMZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<tokio::fs::File, C, D>
+        C: CentroidLike + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
+    > AsyncMZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<tokio::fs::File, C, D>
 {
     async fn construct_index_from_stream(&mut self) -> u64 {
         match self.read_index_from_end().await {
             Ok(val) => val,
             Err(e) => {
-                panic!(
-                    "Building an index from byte stream not yet implemented. Failed to parse index: {}",
-                    e
-                )
+                panic!("Building an index from byte stream not yet implemented. Failed to parse index: {}", e)
             }
         }
     }
@@ -1031,10 +1032,11 @@ impl<
 }
 
 impl<
-    R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Send,
-    C: CentroidLike + Send + Sync + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
-> AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+        R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Send,
+        C: CentroidLike + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
+    > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>>
+    for MzMLReaderType<R, C, D>
 {
     async fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         let idx = match self._offset_of_id(id) {
@@ -1042,7 +1044,7 @@ impl<
             None => {
                 return Err(crate::io::SpectrumAccessError::SpectrumIdNotFound(
                     id.to_string(),
-                ));
+                ))
             }
         };
 

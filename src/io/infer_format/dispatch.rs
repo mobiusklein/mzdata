@@ -1,35 +1,20 @@
 #![allow(clippy::type_complexity, clippy::large_enum_variant)]
-use std::{
-    fmt::Debug,
-    fs, io,
-    marker::PhantomData,
-    path::{self, Path},
-};
+use std::{fmt::Debug, fs, io, marker::PhantomData, path::{self, Path}};
 
 use flate2::read::GzDecoder;
-use mzpeaks::{
-    CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, KnownCharge,
-    prelude::FeatureLike,
-};
-use mzpeaks::{
-    IonMobility, MZ, Mass,
-    feature::{ChargedFeature, Feature},
-};
+use mzpeaks::{prelude::FeatureLike, CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, KnownCharge};
+use mzpeaks::{feature::{ChargedFeature, Feature}, IonMobility, Mass, MZ};
 
+#[allow(unused)]
+use crate::{io::{Generic3DIonMobilityFrameSource,
+    IonMobilityFrameSource,
+    IntoIonMobilityFrameSource,
+    PreBufferedStream,
+    RandomAccessIonMobilityFrameIterator},
+    spectrum::MultiLayerIonMobilityFrame};
+use crate::io::{traits::{MZFileReader, RandomAccessSpectrumIterator, SpectrumSource}, RestartableGzDecoder};
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::MzMLbReaderType;
-use crate::io::{
-    RestartableGzDecoder,
-    traits::{MZFileReader, RandomAccessSpectrumIterator, SpectrumSource},
-};
-#[allow(unused)]
-use crate::{
-    io::{
-        Generic3DIonMobilityFrameSource, IntoIonMobilityFrameSource, IonMobilityFrameSource,
-        PreBufferedStream, RandomAccessIonMobilityFrameIterator,
-    },
-    spectrum::MultiLayerIonMobilityFrame,
-};
 
 #[cfg(feature = "mgf")]
 use crate::io::mgf::MGFReaderType;
@@ -37,19 +22,20 @@ use crate::io::mgf::MGFReaderType;
 use crate::io::mzml::MzMLReaderType;
 
 use crate::meta::MSDataFileMetadata;
-use crate::spectrum::MultiLayerSpectrum;
 use crate::spectrum::bindata::BuildFromArrayMap;
+use crate::spectrum::MultiLayerSpectrum;
 
 #[cfg(feature = "thermo")]
 use crate::io::thermo::ThermoRawReaderType;
 
 #[cfg(feature = "bruker_tdf")]
-use crate::io::tdf::{TDFFrameReaderType, TDFSpectrumReaderType};
+use crate::io::tdf::{TDFSpectrumReaderType, TDFFrameReaderType};
 
 use crate::io::traits::{ChromatogramSource, StreamingSpectrumIterator};
 use crate::io::{DetailLevel, SpectrumSourceWithMetadata};
 
-use super::{MassSpectrometryFormat, infer_format, infer_from_stream};
+use super::{infer_format, infer_from_stream, MassSpectrometryFormat};
+
 
 /// An explicit file format dispatching ADT that provides the complete [`SpectrumSource`],
 /// [`RandomAccessSpectrumIterator`], [`MZFileReader`] and [`MSDataFileMetadata`] APIs.
@@ -66,10 +52,9 @@ use super::{MassSpectrometryFormat, infer_format, infer_from_stream};
 /// unknown size at compile time.
 #[non_exhaustive]
 pub enum MZReaderType<
-    R: io::Read + io::Seek,
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap = CentroidPeak,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap = DeconvolutedPeak,
-> {
+        R: io::Read + io::Seek,
+        C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap=CentroidPeak,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap=DeconvolutedPeak> {
     #[cfg(feature = "mzml")]
     MzML(MzMLReaderType<R, C, D>),
     #[cfg(feature = "mgf")]
@@ -79,91 +64,56 @@ pub enum MZReaderType<
     #[cfg(feature = "mzmlb")]
     MzMLb(Box<MzMLbReaderType<C, D>>),
     #[cfg(feature = "bruker_tdf")]
-    BrukerTDF(
-        TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D>,
-    ),
-    Unknown(
-        Box<dyn SpectrumSourceWithMetadata<C, D, MultiLayerSpectrum<C, D>> + Send + Sync>,
-        PhantomData<R>,
-    ),
+    BrukerTDF(TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D>),
+    Unknown(Box<dyn SpectrumSourceWithMetadata<C, D, MultiLayerSpectrum<C, D>> + Send + Sync>, PhantomData<R>),
 }
 
 impl<
-    R: io::Read + io::Seek,
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-> Debug for MZReaderType<R, C, D>
-{
+        R: io::Read + io::Seek,
+        C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> Debug for MZReaderType<R, C, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
         match self {
             #[cfg(feature = "mzml")]
-            Self::MzML(arg0) => f
-                .debug_tuple("MzML")
-                .field(&arg0.source_file_name())
-                .finish(),
+            Self::MzML(arg0) => f.debug_tuple("MzML").field(&arg0.source_file_name()).finish(),
             #[cfg(feature = "mgf")]
-            Self::MGF(arg0) => f
-                .debug_tuple("MGF")
-                .field(&arg0.source_file_name())
-                .finish(),
+            Self::MGF(arg0) => f.debug_tuple("MGF").field(&arg0.source_file_name()).finish(),
             #[cfg(feature = "thermo")]
-            Self::ThermoRaw(arg0) => f
-                .debug_tuple("ThermoRaw")
-                .field(&arg0.source_file_name())
-                .finish(),
+            Self::ThermoRaw(arg0) => f.debug_tuple("ThermoRaw").field(&arg0.source_file_name()).finish(),
             #[cfg(feature = "mzmlb")]
-            Self::MzMLb(arg0) => f
-                .debug_tuple("MzMLb")
-                .field(&arg0.source_file_name())
-                .finish(),
+            Self::MzMLb(arg0) => f.debug_tuple("MzMLb").field(&arg0.source_file_name()).finish(),
             #[cfg(feature = "bruker_tdf")]
-            Self::BrukerTDF(arg0) => f
-                .debug_tuple("BrukerTDF")
-                .field(&arg0.source_file_name())
-                .finish(),
-            Self::Unknown(arg0, _) => f
-                .debug_tuple("Unknown")
-                .field(&arg0.source_file_name())
-                .finish(),
+            Self::BrukerTDF(arg0) => f.debug_tuple("BrukerTDF").field(&arg0.source_file_name()).finish(),
+            Self::Unknown(arg0, _) => f.debug_tuple("Unknown").field(&arg0.source_file_name()).finish(),
         }
     }
 }
+
+
 
 /// A builder type for [`MZReaderType`].
 ///
 /// To create an instance, see [`MZReaderType::builder`]
 #[derive(Debug)]
 pub struct MZReaderBuilder<
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap = CentroidPeak,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap = DeconvolutedPeak,
-> {
+        C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap=CentroidPeak,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap=DeconvolutedPeak> {
     buffer_size: Option<usize>,
     detail_level: DetailLevel,
     _c: PhantomData<C>,
     _d: PhantomData<D>,
 }
 
-impl<
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-> Default for MZReaderBuilder<C, D>
-{
+impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap, D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> Default for MZReaderBuilder<C, D> {
     fn default() -> Self {
-        Self {
-            buffer_size: None,
-            detail_level: Default::default(),
-            _c: Default::default(),
-            _d: Default::default(),
-        }
+        Self { buffer_size: None, detail_level: Default::default(), _c: Default::default(), _d: Default::default() }
     }
 }
 
 #[allow(unused)]
-impl<
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-> MZReaderBuilder<C, D>
-{
+impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap, D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> MZReaderBuilder<C, D> {
+
     /// Set the buffer capacity for a streaming reader.
     pub fn buffer_size(mut self, capacity: usize) -> Self {
         self.buffer_size = Some(capacity);
@@ -190,10 +140,7 @@ impl<
     /// # Note
     /// Not all formats can be read from an `io` type, these will
     /// fail to open and an error will be returned
-    pub fn from_read_seek<R: io::Read + io::Seek>(
-        self,
-        source: R,
-    ) -> io::Result<MZReaderType<R, C, D>> {
+    pub fn from_read_seek<R: io::Read + io::Seek>(self, source: R) -> io::Result<MZReaderType<R, C, D>> {
         let mut reader = MZReaderType::open_read_seek(source)?;
         reader.set_detail_level(self.detail_level);
         Ok(reader)
@@ -209,17 +156,7 @@ impl<
     /// # Note
     /// Not all formats can be read from an `io` type, these will
     /// fail to open and an error will be returned
-    pub fn from_read<R: io::Read>(
-        self,
-        source: R,
-    ) -> io::Result<
-        StreamingSpectrumIterator<
-            C,
-            D,
-            MultiLayerSpectrum<C, D>,
-            MZReaderType<PreBufferedStream<R>, C, D>,
-        >,
-    > {
+    pub fn from_read<R: io::Read>(self, source: R) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, MZReaderType<PreBufferedStream<R>, C, D>>> {
         let mut reader = if let Some(buffer_size) = self.buffer_size {
             MZReaderType::open_read_with_buffer_size(source, buffer_size)
         } else {
@@ -229,6 +166,8 @@ impl<
         Ok(reader)
     }
 }
+
+
 
 macro_rules! msfmt_dispatch {
     ($d:ident, $r:ident, $e:expr) => {
@@ -248,12 +187,11 @@ macro_rules! msfmt_dispatch {
     };
 }
 
-impl<
-    R: io::Read + io::Seek,
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-> MZReaderType<R, C, D>
-{
+
+impl<R: io::Read + io::Seek,
+     C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> MZReaderType<R, C, D> {
+
     /// Create a [`MZReaderBuilder`] which can be used to configure the
     /// created reader, setting [`DetailLevel`] and buffer capacity
     /// The builder can create a reader from any type that the
@@ -275,13 +213,15 @@ impl<
             MZReaderType::MzMLb(_) => MassSpectrometryFormat::MzMLb,
             #[cfg(feature = "bruker_tdf")]
             MZReaderType::BrukerTDF(_) => MassSpectrometryFormat::BrukerTDF,
-            _ => MassSpectrometryFormat::Unknown,
+            _ => MassSpectrometryFormat::Unknown
         }
     }
 
     /// Get the [`DetailLevel`] the reader currently uses
     pub fn detail_level(&self) -> &DetailLevel {
-        msfmt_dispatch!(self, reader, { &reader.detail_level() })
+        msfmt_dispatch!(self, reader, {
+            &reader.detail_level()
+        })
     }
 
     /// Set the [`DetailLevel`] for the reader, changing
@@ -307,20 +247,16 @@ impl<
     pub fn open_read_seek(mut stream: R) -> io::Result<Self> {
         let (fmt, gzipped) = infer_from_stream(&mut stream)?;
         if gzipped {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "This method does not support gzipped streams",
-            ));
+            return Err(io::Error::new(io::ErrorKind::Unsupported, "This method does not support gzipped streams"))
         }
         match fmt {
             #[cfg(feature = "mgf")]
             MassSpectrometryFormat::MGF => Ok(Self::MGF(MGFReaderType::new_indexed(stream))),
             #[cfg(feature = "mzml")]
             MassSpectrometryFormat::MzML => Ok(Self::MzML(MzMLReaderType::new_indexed(stream))),
-            _ => Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                format!("This method does not support {fmt}"),
-            )),
+            _ => {
+                Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
+            }
         }
     }
 
@@ -332,41 +268,29 @@ impl<
     ///
     /// Not all formats can be read from an `io` type, these will
     /// fail to open and an error will be returned
-    pub fn open_gzipped_read_seek(
-        mut stream: R,
-    ) -> io::Result<MZReaderType<RestartableGzDecoder<io::BufReader<R>>, C, D>> {
+    pub fn open_gzipped_read_seek(mut stream: R) -> io::Result<MZReaderType<RestartableGzDecoder<io::BufReader<R>>, C, D>> {
         let (fmt, gzipped) = infer_from_stream(&mut stream)?;
         if !gzipped {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "This method does not support non-gzipped streams",
-            ));
+            return Err(io::Error::new(io::ErrorKind::Unsupported, "This method does not support non-gzipped streams"))
         }
         let stream = RestartableGzDecoder::new(io::BufReader::new(stream));
         match fmt {
             #[cfg(feature = "mgf")]
-            MassSpectrometryFormat::MGF => {
-                Ok(MZReaderType::MGF(MGFReaderType::new_indexed(stream)))
-            }
+            MassSpectrometryFormat::MGF => Ok(MZReaderType::MGF(MGFReaderType::new_indexed(stream))),
             #[cfg(feature = "mzml")]
-            MassSpectrometryFormat::MzML => {
-                Ok(MZReaderType::MzML(MzMLReaderType::new_indexed(stream)))
+            MassSpectrometryFormat::MzML => Ok(MZReaderType::MzML(MzMLReaderType::new_indexed(stream))),
+            _ => {
+                Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
             }
-            _ => Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                format!("This method does not support {fmt}"),
-            )),
         }
     }
 }
 
 #[allow(unused)]
-impl<
-    R: io::Read + io::Seek,
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-> ChromatogramSource for MZReaderType<R, C, D>
-{
+impl<R: io::Read + io::Seek,
+     C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> ChromatogramSource for MZReaderType<R, C, D> {
+
     fn get_chromatogram_by_id(&mut self, id: &str) -> Option<crate::spectrum::Chromatogram> {
         match self {
             #[cfg(feature = "mzml")]
@@ -379,7 +303,7 @@ impl<
             MZReaderType::MzMLb(r) => r.get_chromatogram_by_id(id),
             #[cfg(feature = "bruker_tdf")]
             MZReaderType::BrukerTDF(r) => r.get_chromatogram_by_id(id),
-            _ => None,
+            _ => None
         }
     }
 
@@ -395,18 +319,16 @@ impl<
             MZReaderType::MzMLb(r) => r.get_chromatogram_by_index(index),
             #[cfg(feature = "bruker_tdf")]
             MZReaderType::BrukerTDF(r) => r.get_chromatogram_by_index(index),
-            _ => None,
+            _ => None
         }
     }
 }
 
 #[allow(unused)]
-impl<
-    R: io::Read,
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-> MZReaderType<PreBufferedStream<R>, C, D>
-{
+impl<R: io::Read,
+     C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> MZReaderType<PreBufferedStream<R>, C, D> {
+
     /// Create a reader from a type that supports [`io::Read`].
     ///
     /// This will internally wrap the file in a [`PreBufferedStream`] for metadata
@@ -417,24 +339,12 @@ impl<
     /// # Note
     /// Not all formats can be read from an `io` type, these will
     /// fail to open and an error will be returned
-    pub fn open_read(
-        stream: R,
-    ) -> io::Result<
-        StreamingSpectrumIterator<
-            C,
-            D,
-            MultiLayerSpectrum<C, D>,
-            MZReaderType<PreBufferedStream<R>, C, D>,
-        >,
-    > {
+    pub fn open_read(stream: R) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, MZReaderType<PreBufferedStream<R>, C, D>>> {
         let mut stream = PreBufferedStream::new(stream)?;
         let (fmt, gzipped) = infer_from_stream(&mut stream)?;
 
         if gzipped {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "This method does not support gzipped streams",
-            ));
+            return Err(io::Error::new(io::ErrorKind::Unsupported, "This method does not support gzipped streams"))
         }
 
         let reader = match fmt {
@@ -443,10 +353,7 @@ impl<
             #[cfg(feature = "mzml")]
             MassSpectrometryFormat::MzML => Self::MzML(MzMLReaderType::new(stream)),
             _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    format!("This method does not support {fmt}"),
-                ));
+                return Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
             }
         };
         Ok(StreamingSpectrumIterator::new(reader))
@@ -464,24 +371,12 @@ impl<
     ///
     /// Not all formats can be read from an `io` type, these will
     /// fail to open and an error will be returned
-    pub fn open_gzipped_read(
-        stream: R,
-    ) -> io::Result<
-        StreamingSpectrumIterator<
-            C,
-            D,
-            MultiLayerSpectrum<C, D>,
-            MZReaderType<PreBufferedStream<GzDecoder<PreBufferedStream<R>>>, C, D>,
-        >,
-    > {
+    pub fn open_gzipped_read(stream: R) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, MZReaderType<PreBufferedStream<GzDecoder<PreBufferedStream<R>>>, C, D>>> {
         let mut stream = PreBufferedStream::new(stream)?;
         let (fmt, gzipped) = infer_from_stream(&mut stream)?;
 
         if !gzipped {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "This method only supports gzipped streams",
-            ));
+            return Err(io::Error::new(io::ErrorKind::Unsupported, "This method only supports gzipped streams"))
         }
         let mut stream = PreBufferedStream::new(GzDecoder::new(stream))?;
 
@@ -491,10 +386,7 @@ impl<
             #[cfg(feature = "mzml")]
             MassSpectrometryFormat::MzML => MZReaderType::MzML(MzMLReaderType::new(stream)),
             _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    format!("This method does not support {fmt}"),
-                ));
+                return Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
             }
         };
         Ok(StreamingSpectrumIterator::new(reader))
@@ -505,18 +397,12 @@ impl<
     /// This function lets the caller specify the prebuffering size for files with large
     /// headers that exceed the default buffer size.
     #[allow(unreachable_code)]
-    pub fn open_read_with_buffer_size(
-        stream: R,
-        buffer_size: usize,
-    ) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, Self>> {
+    pub fn open_read_with_buffer_size(stream: R, buffer_size: usize) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, Self>> {
         let mut stream = PreBufferedStream::new_with_buffer_size(stream, buffer_size)?;
         let (fmt, gzipped) = infer_from_stream(&mut stream)?;
 
         if gzipped {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "This method does not support gzipped streams",
-            ));
+            return Err(io::Error::new(io::ErrorKind::Unsupported, "This method does not support gzipped streams"))
         }
 
         let reader = match fmt {
@@ -525,10 +411,7 @@ impl<
             #[cfg(feature = "mzml")]
             MassSpectrometryFormat::MzML => Self::MzML(MzMLReaderType::new(stream)),
             _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    format!("This method does not support {fmt}"),
-                ));
+                return Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
             }
         };
         Ok(StreamingSpectrumIterator::new(reader))
@@ -539,11 +422,9 @@ impl<
 /// of creating an instance is using the [`MZReader::open_path`] function.
 pub type MZReader<R> = MZReaderType<R, CentroidPeak, DeconvolutedPeak>;
 
-impl<
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-> MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MZReaderType<fs::File, C, D>
-{
+impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MZReaderType<fs::File, C, D> {
+
     fn construct_index_from_stream(&mut self) -> u64 {
         match self {
             #[cfg(feature = "mzml")]
@@ -561,15 +442,14 @@ impl<
     }
 
     fn open_path<P>(path: P) -> io::Result<Self>
-    where
-        P: Into<path::PathBuf> + Clone,
-    {
+        where
+            P: Into<path::PathBuf> + Clone, {
         let (format, is_gzipped) = infer_format(path.clone())?;
         if is_gzipped {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "Gzipped files are not supported with this method. See `MZReaderType::open_gzipped_read_seek`.",
-            ));
+            ))
         }
         match format {
             #[cfg(feature = "mgf")]
@@ -594,8 +474,9 @@ impl<
             }
             #[cfg(feature = "bruker_tdf")]
             MassSpectrometryFormat::BrukerTDF => {
-                let reader = TDFSpectrumReaderType::new(path.clone().into())
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                let reader = TDFSpectrumReaderType::new(path.clone().into()).map_err(|e| {
+                    io::Error::new(io::ErrorKind::Other, e)
+                })?;
                 Ok(Self::BrukerTDF(reader))
             }
             _ => Err(io::Error::new(
@@ -603,6 +484,7 @@ impl<
                 "File format not supported",
             )),
         }
+
     }
 
     fn open_file(mut source: fs::File) -> io::Result<Self> {
@@ -612,7 +494,7 @@ impl<
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "Gzipped files are not supported",
-            ));
+            ))
         }
         match format {
             #[cfg(feature = "mgf")]
@@ -643,12 +525,10 @@ impl<
     }
 }
 
-impl<
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-    R: io::Read + io::Seek,
-> Iterator for MZReaderType<R, C, D>
-{
+impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
+     R: io::Read + io::Seek> Iterator for MZReaderType<R, C, D> {
+
     type Item = MultiLayerSpectrum<C, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -656,12 +536,10 @@ impl<
     }
 }
 
-impl<
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-    R: io::Read + io::Seek,
-> SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MZReaderType<R, C, D>
-{
+impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
+     R: io::Read + io::Seek> SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MZReaderType<R, C, D> {
+
     fn reset(&mut self) {
         msfmt_dispatch!(self, reader, reader.reset())
     }
@@ -707,19 +585,15 @@ impl<
     }
 }
 
-impl<
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-    R: io::Read + io::Seek,
-> MSDataFileMetadata for MZReaderType<R, C, D>
-{
+impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
+     R: io::Read + io::Seek> MSDataFileMetadata for MZReaderType<R, C, D> {
+
     fn data_processings(&self) -> &Vec<crate::meta::DataProcessing> {
         msfmt_dispatch!(self, reader, reader.data_processings())
     }
 
-    fn instrument_configurations(
-        &self,
-    ) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+    fn instrument_configurations(&self) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
         msfmt_dispatch!(self, reader, reader.instrument_configurations())
     }
 
@@ -739,9 +613,7 @@ impl<
         msfmt_dispatch!(self, reader, reader.data_processings_mut())
     }
 
-    fn instrument_configurations_mut(
-        &mut self,
-    ) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+    fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
         msfmt_dispatch!(self, reader, reader.instrument_configurations_mut())
     }
 
@@ -776,49 +648,40 @@ macro_rules! msfmt_dispatch_cap {
             #[cfg(feature = "mzml")]
             MZReaderType::MzML($r) => {
                 $e?;
-            }
+            },
             #[cfg(feature = "mgf")]
             MZReaderType::MGF($r) => {
                 $e?;
-            }
+            },
             #[cfg(feature = "thermo")]
             MZReaderType::ThermoRaw($r) => {
                 $e?;
-            }
+            },
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb($r) => {
                 $e?;
-            }
+            },
             #[cfg(feature = "bruker_tdf")]
             MZReaderType::BrukerTDF($r) => {
                 $e?;
             }
-            MZReaderType::Unknown(_, _) => Err(crate::io::SpectrumAccessError::IOError(Some(
-                io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "Dynamic adaptor doesn't know how to do random access iterators",
-                ),
-            )))?,
+            MZReaderType::Unknown(_, _) => {
+                Err(crate::io::SpectrumAccessError::IOError(Some(io::Error::new(io::ErrorKind::Unsupported, "Dynamic adaptor doesn't know how to do random access iterators"))))?
+            }
         };
     };
 }
 
 #[allow(unused)]
-impl<
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-    R: io::Read + io::Seek,
-> RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MZReaderType<R, C, D>
-{
+impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
+     R: io::Read + io::Seek> RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MZReaderType<R, C, D> {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, crate::io::SpectrumAccessError> {
         msfmt_dispatch_cap!(self, reader, reader.start_from_id(id));
         Ok(self)
     }
 
-    fn start_from_index(
-        &mut self,
-        index: usize,
-    ) -> Result<&mut Self, crate::io::SpectrumAccessError> {
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, crate::io::SpectrumAccessError> {
         msfmt_dispatch_cap!(self, reader, reader.start_from_index(index));
         Ok(self)
     }
@@ -830,43 +693,26 @@ impl<
 }
 
 #[allow(unused)]
-impl<
-    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-    R: io::Read + io::Seek,
-> IntoIonMobilityFrameSource<C, D> for MZReaderType<R, C, D>
-{
-    type IonMobilityFrameSource<
-        CF: FeatureLike<MZ, IonMobility>,
-        DF: FeatureLike<Mass, IonMobility> + KnownCharge,
-    > = IMMZReaderType<R, CF, DF, C, D>;
+impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
+     D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
+     R: io::Read + io::Seek> IntoIonMobilityFrameSource<C, D> for MZReaderType<R, C, D> {
 
-    fn try_into_frame_source<
-        CF: FeatureLike<MZ, IonMobility>,
-        DF: FeatureLike<Mass, IonMobility> + KnownCharge,
-    >(
-        self,
-    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError>
-    {
+    type IonMobilityFrameSource<CF: FeatureLike<MZ, IonMobility>, DF: FeatureLike<Mass, IonMobility> + KnownCharge> = IMMZReaderType<R, CF, DF, C, D>;
+
+    fn try_into_frame_source<CF: FeatureLike<MZ, IonMobility>, DF: FeatureLike<Mass, IonMobility> + KnownCharge>(self) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError> {
         let view = match self {
             #[cfg(feature = "mzml")]
             MZReaderType::MzML(reader) => IMMZReaderType::MzML(reader.try_into_frame_source()?),
             #[cfg(feature = "mgf")]
-            MZReaderType::MGF(_) => {
-                return Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound);
-            }
-            #[cfg(feature = "thermo")]
-            MZReaderType::ThermoRaw(_) => {
-                return Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound);
-            }
-            #[cfg(feature = "mzmlb")]
-            MZReaderType::MzMLb(reader) => {
-                IMMZReaderType::MzMLb(Box::new(reader.try_into_frame_source()?))
-            }
-            #[cfg(feature = "bruker_tdf")]
+            MZReaderType::MGF(_) => return Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound),
+            #[cfg(feature="thermo")]
+            MZReaderType::ThermoRaw(_) => return Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound),
+            #[cfg(feature="mzmlb")]
+            MZReaderType::MzMLb(reader) => IMMZReaderType::MzMLb(Box::new(reader.try_into_frame_source()?)),
+            #[cfg(feature="bruker_tdf")]
             MZReaderType::BrukerTDF(reader) => {
                 IMMZReaderType::BrukerTDF(reader.try_into_frame_source()?, PhantomData)
-            }
+            },
             MZReaderType::Unknown(_, _) => todo!(),
         };
         Ok(view)
@@ -877,15 +723,13 @@ impl<
 mod async_impl {
     use super::*;
     use io::SeekFrom;
-    use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt};
+    use tokio::io::{AsyncRead, AsyncSeek, AsyncSeekExt, AsyncReadExt};
 
     #[cfg(feature = "mgf")]
     use crate::io::mgf::AsyncMGFReaderType;
     #[cfg(feature = "mzml")]
     use crate::io::mzml::AsyncMzMLReaderType;
-    use crate::io::traits::{
-        AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource,
-    };
+    use crate::io::traits::{AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource};
 
     #[cfg(feature = "thermo")]
     use crate::io::thermo::AsyncThermoRawReaderType;
@@ -904,12 +748,10 @@ mod async_impl {
         ThermoRaw(AsyncThermoRawReaderType<C, D>),
     }
 
-    impl<
-        R: AsyncRead + AsyncSeek + Unpin + Send,
-        C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync,
-        D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap + Send + Sync,
-    > AsyncMZReaderType<R, C, D>
-    {
+    impl<R: AsyncRead + AsyncSeek + Unpin + Send,
+         C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync,
+         D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap + Send + Sync> AsyncMZReaderType<R, C, D> {
+
         pub fn builder() -> AsyncMZReaderBuilder<C, D> {
             AsyncMZReaderBuilder::default()
         }
@@ -923,27 +765,22 @@ mod async_impl {
             let (ms_format, gzipped) = infer_from_stream(&mut stream)?;
 
             if gzipped {
-                return Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "Cannot read compressed streams with this interface",
-                ));
+                return Err(io::Error::new(io::ErrorKind::Unsupported, "Cannot read compressed streams with this interface"))
             }
 
             match ms_format {
                 #[cfg(feature = "mgf")]
                 MassSpectrometryFormat::MGF => {
                     Ok(Self::MGF(AsyncMGFReaderType::new_indexed(source).await))
-                }
+                },
                 #[cfg(feature = "mzml")]
                 MassSpectrometryFormat::MzML => {
                     Ok(Self::MzML(AsyncMzMLReaderType::new_indexed(source).await))
-                }
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    format!("Cannot read {ms_format} files from streams"),
-                )),
+                },
+                _ => Err(io::Error::new(io::ErrorKind::Unsupported, format!("Cannot read {ms_format} files from streams")))
             }
         }
+
     }
 
     pub type AsyncMZReader<R> = AsyncMZReaderType<R, CentroidPeak, DeconvolutedPeak>;
@@ -961,24 +798,15 @@ mod async_impl {
         };
     }
 
-    impl<
-        R: AsyncRead + AsyncSeek + Unpin + Send,
-        C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
-        D: DeconvolutedCentroidLike
-            + From<DeconvolutedPeak>
-            + BuildFromArrayMap
-            + Send
-            + Sync
-            + 'static,
-    > MSDataFileMetadata for AsyncMZReaderType<R, C, D>
-    {
+    impl<R: AsyncRead + AsyncSeek + Unpin + Send,
+         C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
+         D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap + Send + Sync + 'static> MSDataFileMetadata for AsyncMZReaderType<R, C, D> {
+
         fn data_processings(&self) -> &Vec<crate::meta::DataProcessing> {
             amsfmt_dispatch!(self, reader, reader.data_processings())
         }
 
-        fn instrument_configurations(
-            &self,
-        ) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+        fn instrument_configurations(&self) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
             amsfmt_dispatch!(self, reader, reader.instrument_configurations())
         }
 
@@ -998,9 +826,7 @@ mod async_impl {
             amsfmt_dispatch!(self, reader, reader.data_processings_mut())
         }
 
-        fn instrument_configurations_mut(
-            &mut self,
-        ) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+        fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
             amsfmt_dispatch!(self, reader, reader.instrument_configurations_mut())
         }
 
@@ -1029,17 +855,10 @@ mod async_impl {
         }
     }
 
-    impl<
-        R: AsyncRead + AsyncSeek + Unpin + Send,
-        C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
-        D: DeconvolutedCentroidLike
-            + From<DeconvolutedPeak>
-            + BuildFromArrayMap
-            + Send
-            + Sync
-            + 'static,
-    > AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for AsyncMZReaderType<R, C, D>
-    {
+
+    impl<R: AsyncRead + AsyncSeek + Unpin + Send,
+         C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
+         D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap + Send + Sync + 'static> AsyncSpectrumSource<C, D, MultiLayerSpectrum<C, D>> for AsyncMZReaderType<R, C, D> {
         async fn reset(&mut self) {
             amsfmt_dispatch!(self, reader, reader.reset().await)
         }
@@ -1056,10 +875,7 @@ mod async_impl {
             amsfmt_dispatch!(self, reader, reader.get_spectrum_by_id(id).await)
         }
 
-        async fn get_spectrum_by_index(
-            &mut self,
-            index: usize,
-        ) -> Option<MultiLayerSpectrum<C, D>> {
+        async fn get_spectrum_by_index(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
             amsfmt_dispatch!(self, reader, reader.get_spectrum_by_index(index).await)
         }
 
@@ -1080,113 +896,62 @@ mod async_impl {
         }
     }
 
-    impl<
-        R: AsyncRead + AsyncSeek + Unpin + Send,
-        C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
-        D: DeconvolutedCentroidLike
-            + From<DeconvolutedPeak>
-            + BuildFromArrayMap
-            + Send
-            + Sync
-            + 'static,
-    > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>>
-        for AsyncMZReaderType<R, C, D>
-    {
-        async fn start_from_id(
-            &mut self,
-            id: &str,
-        ) -> Result<&mut Self, crate::prelude::SpectrumAccessError> {
-            amsfmt_dispatch!(self, reader, {
-                reader.start_from_id(id).await?;
-            });
+    impl<R: AsyncRead + AsyncSeek + Unpin + Send,
+         C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
+         D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap + Send + Sync + 'static> AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for AsyncMZReaderType<R, C, D> {
+
+        async fn start_from_id(&mut self, id: &str) -> Result<&mut Self, crate::prelude::SpectrumAccessError> {
+            amsfmt_dispatch!(self, reader,{ reader.start_from_id(id).await?;});
             Ok(self)
         }
 
-        async fn start_from_index(
-            &mut self,
-            index: usize,
-        ) -> Result<&mut Self, crate::prelude::SpectrumAccessError> {
-            amsfmt_dispatch!(self, reader, {
-                reader.start_from_index(index).await?;
-            });
+        async fn start_from_index(&mut self, index: usize) -> Result<&mut Self, crate::prelude::SpectrumAccessError> {
+            amsfmt_dispatch!(self, reader,{ reader.start_from_index(index).await?;});
             Ok(self)
         }
 
-        async fn start_from_time(
-            &mut self,
-            time: f64,
-        ) -> Result<&mut Self, crate::prelude::SpectrumAccessError> {
-            amsfmt_dispatch!(self, reader, {
-                reader.start_from_time(time).await?;
-            });
+        async fn start_from_time(&mut self, time: f64) -> Result<&mut Self, crate::prelude::SpectrumAccessError> {
+            amsfmt_dispatch!(self, reader,{ reader.start_from_time(time).await?;});
             Ok(self)
         }
     }
 
     #[cfg(feature = "async")]
-    impl<
-        C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
-        D: DeconvolutedCentroidLike
-            + From<DeconvolutedPeak>
-            + BuildFromArrayMap
-            + Send
-            + Sync
-            + 'static,
-    > AsyncMZFileReader<C, D, MultiLayerSpectrum<C, D>>
-        for AsyncMZReaderType<tokio::fs::File, C, D>
-    {
+    impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
+         D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap + Send + Sync + 'static> AsyncMZFileReader<C, D, MultiLayerSpectrum<C,D>> for AsyncMZReaderType<tokio::fs::File, C, D> {
+
         async fn construct_index_from_stream(&mut self) -> u64 {
             amsfmt_dispatch!(self, reader, reader.construct_index_from_stream().await)
         }
 
         async fn open_path<P>(path: P) -> io::Result<Self>
-        where
-            P: Into<path::PathBuf>,
-        {
+                where
+                    P: Into<path::PathBuf>, {
             let path: path::PathBuf = path.into();
             let (ms_format, gzipped) = infer_format(path.clone())?;
             if gzipped {
-                return Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "Compressed files are not supported",
-                ));
+                return Err(io::Error::new(io::ErrorKind::Unsupported, "Compressed files are not supported"))
             }
             match ms_format {
                 #[cfg(feature = "mgf")]
                 MassSpectrometryFormat::MGF => {
                     Ok(Self::MGF(AsyncMGFReaderType::open_path(path).await?))
-                }
+                },
                 #[cfg(feature = "mzml")]
                 MassSpectrometryFormat::MzML => {
                     Ok(Self::MzML(AsyncMzMLReaderType::open_path(path).await?))
-                }
-                MassSpectrometryFormat::MzMLb => Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "MzMLb files are not supported in async mode",
-                )),
+                },
+                MassSpectrometryFormat::MzMLb => {
+                    Err(io::Error::new(io::ErrorKind::Unsupported, "MzMLb files are not supported in async mode"))
+                },
                 MassSpectrometryFormat::ThermoRaw => {
                     #[cfg(feature = "thermo")]
-                    {
-                        Ok(Self::ThermoRaw(
-                            AsyncThermoRawReaderType::open_path(path).await?,
-                        ))
-                    }
+                    {Ok(Self::ThermoRaw(AsyncThermoRawReaderType::open_path(path).await?))}
                     #[cfg(not(feature = "thermo"))]
-                    {
-                        Err(io::Error::new(
-                            io::ErrorKind::Unsupported,
-                            "Thermo RAW files are not supported. Enable the 'thermo' feature",
-                        ))
-                    }
-                }
-                MassSpectrometryFormat::BrukerTDF => Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "Bruker TDF files are not supported in async mode",
-                )),
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "Unknown file format unsupported",
-                )),
+                    {Err(io::Error::new(io::ErrorKind::Unsupported, "Thermo RAW files are not supported. Enable the 'thermo' feature"))}
+                },
+                MassSpectrometryFormat::BrukerTDF => Err(io::Error::new(io::ErrorKind::Unsupported, "Bruker TDF files are not supported in async mode")),
+                _ => Err(io::Error::new(io::ErrorKind::Unsupported, "Unknown file format unsupported")),
             }
         }
 
@@ -1194,79 +959,51 @@ mod async_impl {
             let mut sync_source = source.into_std().await;
             let (ms_format, compressed) = infer_from_stream(&mut sync_source)?;
             if compressed {
-                return Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "Compressed files are not supported",
-                ));
+                return Err(io::Error::new(io::ErrorKind::Unsupported, "Compressed files are not supported"))
             }
             source = tokio::fs::File::from_std(sync_source);
             match ms_format {
                 #[cfg(feature = "mgf")]
                 MassSpectrometryFormat::MGF => {
                     Ok(Self::MGF(AsyncMGFReaderType::open_file(source).await?))
-                }
+                },
                 #[cfg(feature = "mzml")]
                 MassSpectrometryFormat::MzML => {
                     Ok(Self::MzML(AsyncMzMLReaderType::open_file(source).await?))
-                }
+                },
                 _ => Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "File format not supported",
+                io::ErrorKind::Unsupported,
+                "File format not supported",
                 )),
             }
         }
     }
+
 
     /// A builder type for [`AsyncMZReaderType`].
     ///
     /// To create an instance, see [`AsyncMZReaderType::builder`]
     #[derive(Debug)]
     pub struct AsyncMZReaderBuilder<
-        C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
-        D: DeconvolutedCentroidLike
-            + From<DeconvolutedPeak>
-            + BuildFromArrayMap
-            + Send
-            + Sync
-            + 'static,
-    > {
+            C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
+            D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap + Send + Sync + 'static> {
         buffer_size: Option<usize>,
         detail_level: DetailLevel,
         _c: PhantomData<C>,
         _d: PhantomData<D>,
     }
 
-    impl<
-        C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
-        D: DeconvolutedCentroidLike
-            + From<DeconvolutedPeak>
-            + BuildFromArrayMap
-            + Send
-            + Sync
-            + 'static,
-    > Default for AsyncMZReaderBuilder<C, D>
-    {
+    impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
+         D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap + Send + Sync + 'static> Default for AsyncMZReaderBuilder<C, D> {
         fn default() -> Self {
-            Self {
-                buffer_size: None,
-                detail_level: Default::default(),
-                _c: Default::default(),
-                _d: Default::default(),
-            }
+            Self { buffer_size: None, detail_level: Default::default(), _c: Default::default(), _d: Default::default() }
         }
     }
 
     #[allow(unused)]
-    impl<
-        C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
-        D: DeconvolutedCentroidLike
-            + From<DeconvolutedPeak>
-            + BuildFromArrayMap
-            + Send
-            + Sync
-            + 'static,
-    > AsyncMZReaderBuilder<C, D>
-    {
+    impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
+         D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap + Send + Sync + 'static> AsyncMZReaderBuilder<C, D> {
+
         /// Set the buffer capacity for a streaming reader.
         pub fn buffer_size(mut self, capacity: usize) -> Self {
             self.buffer_size = Some(capacity);
@@ -1282,12 +1019,8 @@ mod async_impl {
 
         #[cfg(feature = "async")]
         /// Create a reader from a file on the local file system denoted by `path`.
-        pub async fn from_path<P: AsRef<Path>>(
-            self,
-            path: P,
-        ) -> io::Result<AsyncMZReaderType<tokio::fs::File, C, D>> {
-            let mut reader =
-                AsyncMZReaderType::open_path(path::PathBuf::from(path.as_ref())).await?;
+        pub async fn from_path<P: AsRef<Path>>(self, path: P) -> io::Result<AsyncMZReaderType<tokio::fs::File, C, D>> {
+            let mut reader = AsyncMZReaderType::open_path(path::PathBuf::from(path.as_ref())).await?;
             reader.set_detail_level(self.detail_level);
             Ok(reader)
         }
@@ -1298,12 +1031,7 @@ mod async_impl {
         /// # Note
         /// Not all formats can be read from an `io` type, these will
         /// fail to open and an error will be returned
-        pub async fn from_read_seek<
-            R: tokio::io::AsyncRead + tokio::io::AsyncSeek + Unpin + Send,
-        >(
-            self,
-            source: R,
-        ) -> io::Result<AsyncMZReaderType<R, C, D>> {
+        pub async fn from_read_seek<R: tokio::io::AsyncRead + tokio::io::AsyncSeek + Unpin + Send>(self, source: R) -> io::Result<AsyncMZReaderType<R, C, D>> {
             let mut reader = AsyncMZReaderType::open_read_seek(source).await?;
             reader.set_detail_level(self.detail_level);
             Ok(reader)
@@ -1329,26 +1057,29 @@ mod async_impl {
         //     Ok(reader)
         // }
     }
+
+
 }
 
 #[cfg(feature = "async_partial")]
-pub use async_impl::{AsyncMZReader, AsyncMZReaderBuilder, AsyncMZReaderType};
+pub use async_impl::{AsyncMZReaderType, AsyncMZReader, AsyncMZReaderBuilder};
 
 pub enum IMMZReaderType<
-    R: io::Read + io::Seek,
-    C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
-    CP: CentroidLike + From<CentroidPeak> + BuildFromArrayMap = CentroidPeak,
-    DP: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap = DeconvolutedPeak,
-> {
+        R: io::Read + io::Seek,
+        C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
+        CP: CentroidLike + From<CentroidPeak> + BuildFromArrayMap=CentroidPeak,
+        DP: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap=DeconvolutedPeak,
+    > {
     #[cfg(feature = "mzml")]
     MzML(Generic3DIonMobilityFrameSource<CP, DP, MzMLReaderType<R, CP, DP>, C, D>),
     #[cfg(feature = "mzmlb")]
     MzMLb(Box<Generic3DIonMobilityFrameSource<CP, DP, MzMLbReaderType<CP, DP>, C, D>>),
     #[cfg(feature = "bruker_tdf")]
     BrukerTDF(TDFFrameReaderType<C, D>, PhantomData<(R, CP, DP)>),
-    Unknown(PhantomData<(R, C, D, CP, DP)>),
+    Unknown(PhantomData<(R, C, D, CP, DP)>)
 }
+
 
 macro_rules! immsfmt_dispatch {
     ($d:ident, $r:ident, $e:expr) => {
@@ -1359,26 +1090,18 @@ macro_rules! immsfmt_dispatch {
             IMMZReaderType::MzMLb($r) => $e,
             #[cfg(feature = "bruker_tdf")]
             IMMZReaderType::BrukerTDF($r, _) => $e,
-            IMMZReaderType::Unknown(_) => todo!(),
+            IMMZReaderType::Unknown(_) => todo!()
         }
     };
 }
 
-impl<
-    R: io::Read + io::Seek,
-    C: FeatureLike<MZ, IonMobility>,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    CP: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    DP: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-> MSDataFileMetadata for IMMZReaderType<R, C, D, CP, DP>
-{
+
+impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge, CP: CentroidLike + From<CentroidPeak> + BuildFromArrayMap, DP: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> MSDataFileMetadata for IMMZReaderType<R, C, D, CP, DP> {
     fn data_processings(&self) -> &Vec<crate::meta::DataProcessing> {
         immsfmt_dispatch!(self, reader, reader.data_processings())
     }
 
-    fn instrument_configurations(
-        &self,
-    ) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+    fn instrument_configurations(&self) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
         immsfmt_dispatch!(self, reader, reader.instrument_configurations())
     }
 
@@ -1398,9 +1121,7 @@ impl<
         immsfmt_dispatch!(self, reader, reader.data_processings_mut())
     }
 
-    fn instrument_configurations_mut(
-        &mut self,
-    ) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+    fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
         immsfmt_dispatch!(self, reader, reader.instrument_configurations_mut())
     }
 
@@ -1429,14 +1150,7 @@ impl<
     }
 }
 
-impl<
-    R: io::Read + io::Seek,
-    C: FeatureLike<MZ, IonMobility>,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    CP: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    DP: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-> Iterator for IMMZReaderType<R, C, D, CP, DP>
-{
+impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge, CP: CentroidLike + From<CentroidPeak> + BuildFromArrayMap, DP: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> Iterator for IMMZReaderType<R, C, D, CP, DP> {
     type Item = MultiLayerIonMobilityFrame<C, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1445,15 +1159,7 @@ impl<
 }
 
 #[allow(unused)]
-impl<
-    R: io::Read + io::Seek,
-    C: FeatureLike<MZ, IonMobility>,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    CP: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    DP: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-> IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>>
-    for IMMZReaderType<R, C, D, CP, DP>
-{
+impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge, CP: CentroidLike + From<CentroidPeak> + BuildFromArrayMap, DP: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> IonMobilityFrameSource<C, D, MultiLayerIonMobilityFrame<C, D>> for IMMZReaderType<R, C, D, CP, DP> {
     fn reset(&mut self) {
         immsfmt_dispatch!(self, reader, reader.reset())
     }
@@ -1484,42 +1190,19 @@ impl<
 }
 
 #[allow(unused)]
-impl<
-    R: io::Read + io::Seek,
-    C: FeatureLike<MZ, IonMobility>,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    CP: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
-    DP: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap,
-> RandomAccessIonMobilityFrameIterator<C, D, MultiLayerIonMobilityFrame<C, D>>
-    for IMMZReaderType<R, C, D, CP, DP>
-{
-    fn start_from_id(
-        &mut self,
-        id: &str,
-    ) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
-        immsfmt_dispatch!(self, reader, {
-            reader.start_from_id(id)?;
-        });
+impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge, CP: CentroidLike + From<CentroidPeak> + BuildFromArrayMap, DP: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> RandomAccessIonMobilityFrameIterator<C, D, MultiLayerIonMobilityFrame<C, D>> for IMMZReaderType<R, C, D, CP, DP> {
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
+        immsfmt_dispatch!(self, reader, {reader.start_from_id(id)?;});
         Ok(self)
     }
 
-    fn start_from_index(
-        &mut self,
-        index: usize,
-    ) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
-        immsfmt_dispatch!(self, reader, {
-            reader.start_from_index(index)?;
-        });
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
+        immsfmt_dispatch!(self, reader, {reader.start_from_index(index)?;});
         Ok(self)
     }
 
-    fn start_from_time(
-        &mut self,
-        time: f64,
-    ) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
-        immsfmt_dispatch!(self, reader, {
-            reader.start_from_time(time)?;
-        });
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, crate::io::IonMobilityFrameAccessError> {
+        immsfmt_dispatch!(self, reader, {reader.start_from_time(time)?;});
         Ok(self)
     }
 }

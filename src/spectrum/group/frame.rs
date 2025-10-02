@@ -1,9 +1,9 @@
 use std::{marker::PhantomData, mem};
 
 use mzpeaks::{
-    KnownCharge,
-    coordinate::{IonMobility, MZ, Mass},
+    coordinate::{IonMobility, Mass, MZ},
     feature::FeatureLike,
+    KnownCharge,
 };
 
 use crate::spectrum::{IonMobilityFrameLike, MultiLayerIonMobilityFrame};
@@ -74,7 +74,11 @@ pub trait IonMobilityFrameGrouping<
             .products()
             .iter()
             .fold(prec_level, |state, s| state.min(s.ms_level()));
-        if val > 0 { Some(val) } else { None }
+        if val > 0 {
+            Some(val)
+        } else {
+            None
+        }
     }
 
     /// The highest MS level in the group
@@ -87,7 +91,11 @@ pub trait IonMobilityFrameGrouping<
             .products()
             .iter()
             .fold(prec_level, |state, s| state.max(s.ms_level()));
-        if val > 0 { Some(val) } else { None }
+        if val > 0 {
+            Some(val)
+        } else {
+            None
+        }
     }
 
     /// Decompose the group into its components, discarding any additional metrics
@@ -181,18 +189,18 @@ pub struct IonMobilityFrameGroupIntoIter<
 }
 
 impl<
-    C: FeatureLike<MZ, IonMobility>,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    S: IonMobilityFrameLike<C, D> + Default,
-    G: IonMobilityFrameGrouping<C, D, S>,
-> Iterator for IonMobilityFrameGroupIntoIter<C, D, S, G>
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D> + Default,
+        G: IonMobilityFrameGrouping<C, D, S>,
+    > Iterator for IonMobilityFrameGroupIntoIter<C, D, S, G>
 {
     type Item = S;
 
     fn next(&mut self) -> Option<Self::Item> {
         {
             let n = self.n_products();
-            match self.state {
+            let emission = match self.state {
                 GroupIterState::Precursor => match self.group.precursor_mut() {
                     Some(prec) => {
                         if n > 0 {
@@ -226,17 +234,18 @@ impl<
                     }
                 }
                 GroupIterState::Done => None,
-            }
+            };
+            emission
         }
     }
 }
 
 impl<
-    C: FeatureLike<MZ, IonMobility>,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    S: IonMobilityFrameLike<C, D> + Default,
-    G: IonMobilityFrameGrouping<C, D, S>,
-> IonMobilityFrameGroupIntoIter<C, D, S, G>
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D> + Default,
+        G: IonMobilityFrameGrouping<C, D, S>,
+    > IonMobilityFrameGroupIntoIter<C, D, S, G>
 {
     pub fn new(group: G) -> Self {
         Self {
@@ -269,19 +278,19 @@ pub struct IonMobilityFrameGroupIter<
 }
 
 impl<
-    'a,
-    C: FeatureLike<MZ, IonMobility>,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    S: IonMobilityFrameLike<C, D> + 'a + Default,
-    G: IonMobilityFrameGrouping<C, D, S>,
-> Iterator for IonMobilityFrameGroupIter<'a, C, D, S, G>
+        'a,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D> + 'a + Default,
+        G: IonMobilityFrameGrouping<C, D, S>,
+    > Iterator for IonMobilityFrameGroupIter<'a, C, D, S, G>
 {
     type Item = &'a S;
 
     fn next(&mut self) -> Option<Self::Item> {
         {
             let n = self.n_products();
-            match self.state {
+            let emission = match self.state {
                 GroupIterState::Precursor => match self.group.precursor() {
                     Some(prec) => {
                         if n > 0 {
@@ -315,18 +324,19 @@ impl<
                     }
                 }
                 GroupIterState::Done => None,
-            }
+            };
+            emission
         }
     }
 }
 
 impl<
-    'a,
-    C: FeatureLike<MZ, IonMobility>,
-    D: FeatureLike<Mass, IonMobility> + KnownCharge,
-    S: IonMobilityFrameLike<C, D> + Default,
-    G: IonMobilityFrameGrouping<C, D, S>,
-> IonMobilityFrameGroupIter<'a, C, D, S, G>
+        'a,
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D> + Default,
+        G: IonMobilityFrameGrouping<C, D, S>,
+    > IonMobilityFrameGroupIter<'a, C, D, S, G>
 {
     pub fn new(group: &'a G) -> Self {
         Self {

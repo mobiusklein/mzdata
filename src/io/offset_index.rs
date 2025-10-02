@@ -1,8 +1,9 @@
 #[allow(unused)]
 use std::io::prelude::*;
 
-use indexmap::IndexMap;
 use indexmap::map::{Iter, Keys};
+use indexmap::IndexMap;
+
 
 /**
 An ordered mapping from entity ID to byte offset into the source

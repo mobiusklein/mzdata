@@ -6,7 +6,7 @@ use std::env;
 use std::io;
 use std::process::exit;
 
-use mzdata::io::{PreBufferedStream, infer_format, infer_from_stream};
+use mzdata::io::{infer_format, infer_from_stream, PreBufferedStream};
 
 fn main() -> io::Result<()> {
     let input = env::args().nth(1).unwrap_or_else(|| {

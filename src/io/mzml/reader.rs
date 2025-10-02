@@ -11,20 +11,18 @@ use log::{debug, trace, warn};
 
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedPeak};
 use quick_xml::{
-    Error as XMLError, Reader,
     events::{BytesEnd, BytesStart, BytesText, Event},
+    Error as XMLError, Reader,
 };
 
 use crate::{
-    io::{Generic3DIonMobilityFrameSource, IntoIonMobilityFrameSource, utils::DetailLevel},
+    io::{utils::DetailLevel, Generic3DIonMobilityFrameSource, IntoIonMobilityFrameSource},
     meta::{
-        DataProcessing, DissociationEnergyTerm, FileDescription, InstrumentConfiguration,
-        MSDataFileMetadata, MassSpectrometryRun, Sample, ScanSettings, Software,
+        DataProcessing, DissociationEnergyTerm, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, ScanSettings, Software
     },
     params::{Param, ParamList, Unit},
     prelude::{ParamLike, *},
     spectrum::{
-        HasIonMobility,
         bindata::{
             ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType,
             BuildArrayMapFrom, BuildFromArrayMap, DataArray,
@@ -32,6 +30,7 @@ use crate::{
         chromatogram::{Chromatogram, ChromatogramLike},
         scan_properties::*,
         spectrum_types::{CentroidSpectrumType, MultiLayerSpectrum, RawSpectrum, Spectrum},
+        HasIonMobility,
     },
 };
 
@@ -94,10 +93,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
 
     /// Set the compression method for the current [`DataArray`]
     fn set_current_compressiion(&mut self, compression: BinaryCompressionType) {
-        trace!(
-            "Setting current compression method for {:?} to {compression:?}",
-            self.current_array_mut().name()
-        );
+        trace!("Setting current compression method for {:?} to {compression:?}", self.current_array_mut().name());
         self.current_array_mut().compression = compression;
     }
 
@@ -109,133 +105,49 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                 x if x == unsafe { BinaryCompressionType::Zlib.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::Zlib);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::NoCompression
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::NoCompression.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::NoCompression);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::NumpressLinear
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::NumpressLinear.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::NumpressLinear);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::NumpressPIC
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::NumpressPIC.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::NumpressPIC);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::NumpressSLOF
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::NumpressSLOF.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::NumpressSLOF);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::NumpressLinearZlib
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::NumpressLinearZlib.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::NumpressLinearZlib);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::NumpressPICZlib
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::NumpressPICZlib.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::NumpressPICZlib);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::NumpressSLOFZlib
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::NumpressSLOFZlib.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::NumpressSLOFZlib);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::DeltaPrediction
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::DeltaPrediction.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::DeltaPrediction);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::LinearPrediction
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::LinearPrediction.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::LinearPrediction);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::ShuffleZstd
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::ShuffleZstd.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::ShuffleZstd);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::DeltaShuffleZstd
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::DeltaShuffleZstd.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::DeltaShuffleZstd);
                 }
                 x if x == unsafe { BinaryCompressionType::Zstd.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::Zstd);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::ZstdDict
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::ZstdDict.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::ZstdDict);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::NumpressLinearZstd
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::NumpressLinearZstd.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::NumpressLinearZstd);
                 }
-                x if x
-                    == unsafe {
-                        BinaryCompressionType::NumpressSLOFZstd
-                            .accession()
-                            .unwrap_unchecked()
-                    } =>
-                {
+                x if x == unsafe { BinaryCompressionType::NumpressSLOFZstd.accession().unwrap_unchecked() } => {
                     self.set_current_compressiion(BinaryCompressionType::NumpressSLOFZstd);
                 }
                 // Array data types
@@ -259,19 +171,19 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                 1000514 => {
                     self.current_array_mut().name = ArrayType::MZArray;
                     *self.current_array_mut().unit_mut() = param.unit();
-                }
+                },
                 1000515 => {
                     self.current_array_mut().name = ArrayType::IntensityArray;
                     *self.current_array_mut().unit_mut() = param.unit();
-                }
+                },
                 1000516 => {
                     self.current_array_mut().name = ArrayType::ChargeArray;
                     *self.current_array_mut().unit_mut() = param.unit();
-                }
+                },
                 1000517 => {
                     self.current_array_mut().name = ArrayType::SignalToNoiseArray;
                     *self.current_array_mut().unit_mut() = param.unit();
-                }
+                },
                 1000595 => {
                     self.current_array_mut().name = ArrayType::TimeArray;
                     let unit = param.unit();
@@ -283,17 +195,17 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                             warn!("Invalid unit {} found for time array", unit)
                         }
                     }
-                }
+                },
                 1000617 => {
                     self.current_array_mut().name = ArrayType::WavelengthArray;
                     self.current_array_mut().unit = param.unit();
-                }
+                },
                 1000786 => {
                     self.current_array_mut().name = ArrayType::NonStandardDataArray {
                         name: Box::new(param.value().to_string()),
                     };
                     *self.current_array_mut().unit_mut() = param.unit();
-                }
+                },
                 1002477 => {
                     self.current_array_mut().name = ArrayType::MeanDriftTimeArray;
                     self.current_array_mut().unit = param.unit();
@@ -658,8 +570,11 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
     }
 }
 
-impl<'inner, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
-    MzMLSpectrumBuilder<'inner, C, D>
+impl<
+        'inner,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > MzMLSpectrumBuilder<'inner, C, D>
 {
     pub fn new() -> MzMLSpectrumBuilder<'inner, C, D> {
         Self::with_detail_level(DetailLevel::Full)
@@ -779,10 +694,7 @@ impl<'inner, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + 
                 if Activation::is_param_activation(&param)
                     && self.precursor_mut().activation.method().is_none()
                 {
-                    self.precursor_mut()
-                        .activation
-                        .methods_mut()
-                        .push(param.into());
+                    self.precursor_mut().activation.methods_mut().push(param.into());
                 } else {
                     match param.name.as_ref() {
                         "collision energy" | "activation energy" => {
@@ -826,7 +738,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                             state,
                                             e,
                                             "Failed to decode spectrum id".into()
-                                        ));
+                                        ))
                                     }
                                 };
                                 trace!("Stored spectrum id = {}", self.entry_id);
@@ -937,30 +849,31 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            if attr.key.as_ref() == b"dataProcessingRef" {
-                                match attr.unescape_value() {
-                                    Ok(v) => {
-                                        self.current_array
-                                            .set_data_processing_reference(Some(v.into()));
-                                        dp_set = true;
-                                        break;
+                            match attr.key.as_ref() {
+                                b"dataProcessingRef" => {
+                                    match attr.unescape_value() {
+                                        Ok(v) => {
+                                            self.current_array.set_data_processing_reference(Some(v.into()));
+                                            dp_set = true;
+                                            break;
+                                        },
+                                        Err(msg) => return Err(self.handle_xml_error(msg, state))
                                     }
-                                    Err(msg) => return Err(self.handle_xml_error(msg, state)),
                                 }
+                                _ => {}
                             }
-                        }
+                        },
                         Err(msg) => {
                             return Err(self.handle_xml_error(msg.into(), state));
-                        }
+                        },
                     }
                 }
                 if !dp_set {
                     if let Some(dp_ref) = self.spectrum_data_processing_ref.as_ref() {
-                        self.current_array
-                            .set_data_processing_reference(Some(dp_ref.clone()));
-                    } else if let Some(dp_ref) = self.run_level_data_processing.as_ref() {
-                        self.current_array
-                            .set_data_processing_reference(Some(dp_ref.clone()));
+                        self.current_array.set_data_processing_reference(Some(dp_ref.clone()));
+                    }
+                    else if let Some(dp_ref) = self.run_level_data_processing.as_ref() {
+                        self.current_array.set_data_processing_reference(Some(dp_ref.clone()));
                     }
                 }
 
@@ -1013,26 +926,26 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
             // Inline the `fill_param_into` to avoid excessive copies.
             b"cvParam" | b"userParam" => {
                 match Self::handle_param_borrowed(event, reader_position, state) {
-                    Ok(param) => match state {
-                        MzMLParserState::Spectrum | MzMLParserState::Chromatogram => {
-                            self.fill_spectrum(param)
-                        }
-                        MzMLParserState::ScanList => {
-                            if param.is_controlled() {
-                                if let Some(comb) = ScanCombination::from_accession(
-                                    param.controlled_vocabulary.unwrap(),
-                                    param.accession.unwrap(),
-                                ) {
-                                    self.acquisition.combination = comb
+                    Ok(param) => {
+                        match state {
+                            MzMLParserState::Spectrum | MzMLParserState::Chromatogram => {
+                                self.fill_spectrum(param)
+                            }
+                            MzMLParserState::ScanList => {
+                                if param.is_controlled() {
+                                    if let Some(comb) = ScanCombination::from_accession(
+                                        param.controlled_vocabulary.unwrap(),
+                                        param.accession.unwrap(),
+                                    ) {
+                                        self.acquisition.combination = comb
+                                    } else {
+                                        self.acquisition.add_param(param.into())
+                                    }
                                 } else {
                                     self.acquisition.add_param(param.into())
                                 }
-                            } else {
-                                self.acquisition.add_param(param.into())
                             }
-                        }
-                        MzMLParserState::Scan => {
-                            match param.name.as_bytes() {
+                            MzMLParserState::Scan => match param.name.as_bytes() {
                                 b"scan start time" => {
                                     let value: f64 = param
                                     .to_f64()
@@ -1062,64 +975,61 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                     .last_scan_mut()
                                     .unwrap()
                                     .add_param(param.into()),
+                            },
+                            MzMLParserState::ScanWindowList => self
+                                .acquisition
+                                .last_scan_mut()
+                                .unwrap()
+                                .add_param(param.into()),
+                            MzMLParserState::ScanWindow => {
+                                self.fill_scan_window(param.into());
                             }
-                        }
-                        MzMLParserState::ScanWindowList => self
-                            .acquisition
-                            .last_scan_mut()
-                            .unwrap()
-                            .add_param(param.into()),
-                        MzMLParserState::ScanWindow => {
-                            self.fill_scan_window(param.into());
-                        }
-                        MzMLParserState::IsolationWindow => {
-                            self.fill_isolation_window(param.into());
-                        }
-                        MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
-                            self.fill_selected_ion(param.into());
-                        }
-                        MzMLParserState::Activation => {
-                            if Activation::is_param_activation(&param) {
-                                self.precursor_mut()
-                                    .activation
-                                    .methods_mut()
-                                    .push(param.into());
-                            } else {
-                                let dissociation_energy = param.curie().and_then(|c| {
+                            MzMLParserState::IsolationWindow => {
+                                self.fill_isolation_window(param.into());
+                            }
+                            MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
+                                self.fill_selected_ion(param.into());
+                            }
+                            MzMLParserState::Activation => {
+                                if Activation::is_param_activation(&param) {
+                                    self.precursor_mut().activation.methods_mut().push(param.into());
+                                } else {
+                                    let dissociation_energy = param.curie().and_then(|c| {
                                         DissociationEnergyTerm::from_curie(&c, param.value().to_f32().unwrap_or_else(|e| {
                                             warn!("Failed to convert dissociation energy: {e} for {} for {}", param.name(), self.warning_context());
                                             0.0
                                         }))
                                     });
-                                match dissociation_energy {
-                                    Some(t) => {
-                                        if t.is_supplemental() {
-                                            self.precursor_mut().activation.add_param(param.into())
-                                        } else {
-                                            if self.precursor_mut().activation.energy != 0.0 {
-                                                warn!(
-                                                    "Multiple dissociation energies detected. Saw {t} after already setting dissociation energy for {}",
-                                                    self.warning_context()
-                                                );
+                                    match dissociation_energy {
+                                        Some(t) => {
+                                            if t.is_supplemental() {
+                                                self.precursor_mut().activation.add_param(param.into())
+                                            } else {
+                                                if self.precursor_mut().activation.energy != 0.0 {
+                                                    warn!(
+                                                        "Multiple dissociation energies detected. Saw {t} after already setting dissociation energy for {}",
+                                                        self.warning_context()
+                                                    );
+                                                }
+                                                self.precursor_mut().activation.energy = t.energy();
                                             }
-                                            self.precursor_mut().activation.energy = t.energy();
                                         }
-                                    }
-                                    None => {
-                                        self.precursor_mut().activation.add_param(param.into());
+                                        None => {
+                                            self.precursor_mut().activation.add_param(param.into());
+                                        }
                                     }
                                 }
                             }
+                            MzMLParserState::BinaryDataArrayList => {}
+                            MzMLParserState::BinaryDataArray => {
+                                self.fill_binary_data_array(param);
+                            }
+                            MzMLParserState::Precursor | MzMLParserState::PrecursorList => {
+                                warn!("cvParam found for {:?} where none are allowed", &state);
+                            }
+                            _ => {}
                         }
-                        MzMLParserState::BinaryDataArrayList => {}
-                        MzMLParserState::BinaryDataArray => {
-                            self.fill_binary_data_array(param);
-                        }
-                        MzMLParserState::Precursor | MzMLParserState::PrecursorList => {
-                            warn!("cvParam found for {:?} where none are allowed", &state);
-                        }
-                        _ => {}
-                    },
+                    }
                     Err(err) => return Err(err),
                 }
             }
@@ -1150,8 +1060,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                 let mut array = mem::take(&mut self.current_array);
                 if self.detail_level == DetailLevel::Full {
                     array.decode_and_store().map_err(|e| {
-                        let new_err =
-                            MzMLParserError::ArrayDecodingError(state, array.name.clone(), e);
+                        let new_err = MzMLParserError::ArrayDecodingError(state, array.name.clone(), e);
                         log::error!("Failed to decode mzML array: {new_err}");
                         new_err
                     })?;
@@ -1264,10 +1173,10 @@ pub struct MzMLReaderType<
 }
 
 impl<
-    R: Read + Seek,
-    C: CentroidLike + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + BuildFromArrayMap,
-> IntoIonMobilityFrameSource<C, D> for MzMLReaderType<R, C, D>
+        R: Read + Seek,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > IntoIonMobilityFrameSource<C, D> for MzMLReaderType<R, C, D>
 {
     type IonMobilityFrameSource<
         CF: FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility>,
@@ -1294,12 +1203,12 @@ impl<
 }
 
 impl<
-    'a,
-    'b: 'a,
-    R: Read,
-    C: CentroidLike + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + BuildFromArrayMap,
-> MzMLReaderType<R, C, D>
+        'a,
+        'b: 'a,
+        R: Read,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > MzMLReaderType<R, C, D>
 {
     /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
     /// provided with an [`io::BufReader`] and parses the metadata section of the file.
@@ -1489,12 +1398,7 @@ impl<
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
         accumulator = accumulator.borrow_instrument_configuration(&mut self.instrument_id_map);
-        accumulator.set_run_data_processing(
-            self.run
-                .default_data_processing_id
-                .clone()
-                .map(|v| v.into_boxed_str()),
-        );
+        accumulator.set_run_data_processing(self.run.default_data_processing_id.clone().map(|v| v.into_boxed_str()));
         let mut offset: usize = 0;
 
         macro_rules! err_state {
@@ -1610,7 +1514,9 @@ impl<
                 );
                 Ok((accumulator, offset))
             }
-            MzMLParserState::EOF => Err(MzMLParserError::EOF),
+            MzMLParserState::EOF => {
+                Err(MzMLParserError::EOF)
+            }
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
@@ -1641,20 +1547,20 @@ impl<
         match self._parse_into(accumulator) {
             Ok((accumulator, sz)) => {
                 accumulator.into_spectrum(spectrum);
-                if self.detail_level == DetailLevel::Full
-                    && let Err(e) = spectrum.try_build_peaks()
-                {
-                    log::debug!("Failed to eagerly load peaks from centroid spectrum: {e}");
+                if self.detail_level == DetailLevel::Full {
+                    if let Err(e) = spectrum.try_build_peaks() {
+                        log::debug!("Failed to eagerly load peaks from centroid spectrum: {e}");
+                    }
                 }
                 Ok(sz)
             }
             Err(err) => {
                 match &err {
-                    MzMLParserError::EOF => {}
-                    err => log::error!("Error while reading mzML spectrum: {err}"),
+                    MzMLParserError::EOF => {},
+                    err => log::error!("Error while reading mzML spectrum: {err}")
                 };
                 Err(err)
-            }
+            },
         }
     }
 
@@ -1668,7 +1574,7 @@ impl<
             Ok(_sz) => Some(spectrum),
             Err(err) => {
                 match err {
-                    MzMLParserError::EOF => {}
+                    MzMLParserError::EOF => {},
                     err => {
                         trace!("Failed to read next spectrum: {err}");
                     }
@@ -1712,7 +1618,7 @@ impl<
             Err(err) => {
                 log::error!("Error while reading mzML chromatogram: {err}");
                 Err(err)
-            }
+            },
         }
     }
 }
@@ -1720,10 +1626,10 @@ impl<
 /// When the underlying stream supports random access, this type can read the index at the end of
 /// an `indexedmzML` document and use the offset map to jump to immediately jump to a specific spectrum
 impl<
-    R: SeekRead,
-    C: CentroidLike + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + BuildFromArrayMap,
-> MzMLReaderType<R, C, D>
+        R: SeekRead,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > MzMLReaderType<R, C, D>
 {
     pub fn check_stream(&mut self, next_tag: &str) -> Result<bool, MzMLParserError> {
         let position = match self.stream_position() {
@@ -1832,10 +1738,10 @@ impl<
 }
 
 impl<
-    R: SeekRead,
-    C: CentroidLike + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + BuildFromArrayMap,
-> ChromatogramSource for MzMLReaderType<R, C, D>
+        R: SeekRead,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > ChromatogramSource for MzMLReaderType<R, C, D>
 {
     fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
         self.get_chromatogram_by_id(id)
@@ -1848,10 +1754,10 @@ impl<
 
 /// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
 impl<
-    R: io::Read,
-    C: CentroidLike + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + BuildFromArrayMap,
-> Iterator for MzMLReaderType<R, C, D>
+        R: io::Read,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > Iterator for MzMLReaderType<R, C, D>
 {
     type Item = MultiLayerSpectrum<C, D>;
 
@@ -1863,10 +1769,10 @@ impl<
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
 impl<
-    R: SeekRead,
-    C: CentroidLike + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + BuildFromArrayMap,
-> SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+        R: SeekRead,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
@@ -1938,10 +1844,10 @@ impl<
 /// The iterator can also be updated to move to a different location in the
 /// stream efficiently.
 impl<
-    R: SeekRead,
-    C: CentroidLike + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + BuildFromArrayMap,
-> RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+        R: SeekRead,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_id(id) {
@@ -1980,10 +1886,10 @@ enum IndexRecoveryOperation {
 }
 
 impl<
-    R: SeekRead,
-    C: CentroidLike + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + BuildFromArrayMap,
-> MzMLReaderType<R, C, D>
+        R: SeekRead,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > MzMLReaderType<R, C, D>
 {
     /// Construct a new MzMLReaderType and build an offset index
     /// using [`Self::build_index`]
@@ -2018,7 +1924,7 @@ impl<
                         panic!("An IO error occurred while trying to recover the index: {e}")
                     });
                     self.build_index();
-                }
+                },
                 IndexRecoveryOperation::IOFailure(err) => {
                     panic!("An IO error occurred while validating the index: {err}")
                 }
@@ -2029,10 +1935,7 @@ impl<
     fn verify_index(&mut self) -> Result<(), IndexRecoveryOperation> {
         let n = self.spectrum_index.len();
         trace!("Verifying offset index of length {n}");
-        let position = self
-            .handle
-            .stream_position()
-            .map_err(IndexRecoveryOperation::IOFailure)?;
+        let position = self.handle.stream_position().map_err(IndexRecoveryOperation::IOFailure)?;
         if n > 0 {
             // Try to pick a spectrum that's close to the beginning of the file to avoid large
             // amounts of wasted scanning for non-linear files, but pick one far enough in it would
@@ -2045,32 +1948,29 @@ impl<
             self.set_detail_level(dl);
             let s_found = s.is_some_and(|s| s.index() == center);
             if s_found {
-                self.seek(SeekFrom::Start(position))
-                    .map_err(IndexRecoveryOperation::IOFailure)?;
+                self.seek(SeekFrom::Start(position)).map_err(IndexRecoveryOperation::IOFailure)?;
                 return Ok(());
             } else {
                 match self.handle.fill_buf() {
                     Ok(buf) => {
-                        if let Some(i) = buf.iter().position(|b| *b == b'\r')
-                            && let Some(b2) = buf.get(i + 1)
-                        {
-                            let has_windows_eol = *b2 == b'\n';
-                            if has_windows_eol {
-                                warn!(
-                                    "Carriage return line endings detected and offset index is not valid"
-                                );
-                                self.seek(SeekFrom::Start(position))
-                                    .map_err(IndexRecoveryOperation::IOFailure)?;
-                                return Err(IndexRecoveryOperation::EOLMismatchSuspected);
+                        if let Some(i) = buf.iter().position(|b| *b == b'\r') {
+                            if let Some(b2) = buf.get(i + 1) {
+                                let has_windows_eol = *b2 == b'\n';
+                                if has_windows_eol {
+                                    warn!("Carriage return line endings detected and offset index is not valid");
+                                    self.seek(SeekFrom::Start(position)).map_err(IndexRecoveryOperation::IOFailure)?;
+                                    return Err(IndexRecoveryOperation::EOLMismatchSuspected);
+                                }
                             }
                         }
                     }
-                    Err(e) => return Err(IndexRecoveryOperation::IOFailure(e)),
+                    Err(e) => {
+                        return Err(IndexRecoveryOperation::IOFailure(e))
+                    },
                 }
             }
         }
-        self.seek(SeekFrom::Start(position))
-            .map_err(IndexRecoveryOperation::IOFailure)?;
+        self.seek(SeekFrom::Start(position)).map_err(IndexRecoveryOperation::IOFailure)?;
         Ok(())
     }
 
@@ -2101,11 +2001,11 @@ impl<
         self.handle.read_to_end(&mut buf)?;
 
         let pattern = regex::Regex::new("<fileChecksum>([0-9a-zA-Z]+)</fileChecksum>").unwrap();
-        if let Some(captures) = pattern.captures(&String::from_utf8_lossy(&buf))
-            && let Some(hit) = captures.get(1)
-        {
-            self.handle.seek(SeekFrom::Start(current_position))?;
-            return Ok(Some(hit.as_str().to_string()));
+        if let Some(captures) = pattern.captures(&String::from_utf8_lossy(&buf)) {
+            if let Some(hit) = captures.get(1) {
+                self.handle.seek(SeekFrom::Start(current_position))?;
+                return Ok(Some(hit.as_str().to_string()));
+            }
         }
 
         self.handle.seek(SeekFrom::Start(current_position))?;
@@ -2190,9 +2090,7 @@ impl<
             .handle
             .stream_position()
             .expect("Failed to save restore location");
-        trace!(
-            "Starting to build offset index by traversing the file, storing last position as {start}"
-        );
+        trace!("Starting to build offset index by traversing the file, storing last position as {start}");
         self.seek(SeekFrom::Start(0))
             .expect("Failed to reset stream to beginning");
         let mut reader = Reader::from_reader(&mut self.handle);
@@ -2339,11 +2237,11 @@ pub struct ChromatogramIter<
 }
 
 impl<
-    'a,
-    R: SeekRead,
-    C: CentroidLike + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + BuildFromArrayMap,
-> ChromatogramIter<'a, R, C, D>
+        'a,
+        R: SeekRead,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > ChromatogramIter<'a, R, C, D>
 {
     pub fn new(reader: &'a mut MzMLReaderType<R, C, D>) -> Self {
         Self { reader, index: 0 }
@@ -2351,10 +2249,10 @@ impl<
 }
 
 impl<
-    R: SeekRead,
-    C: CentroidLike + BuildFromArrayMap,
-    D: DeconvolutedCentroidLike + BuildFromArrayMap,
-> Iterator for ChromatogramIter<'_, R, C, D>
+        R: SeekRead,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > Iterator for ChromatogramIter<'_, R, C, D>
 {
     type Item = Chromatogram;
 
@@ -2385,26 +2283,22 @@ mod test {
         assert_eq!(reader.file_description().source_files.len(), 1);
         assert_eq!(reader.file_description().contents.len(), 2);
 
-        assert!(
-            reader
-                .file_description()
-                .get_param_by_accession("MS:1000579")
-                .is_some()
-        );
+        assert!(reader
+            .file_description()
+            .get_param_by_accession("MS:1000579")
+            .is_some());
         assert_eq!(reader.file_description().source_files[0].name, "small.RAW");
 
         assert!(reader.file_description().has_ms1_spectra());
         assert!(reader.file_description().has_msn_spectra());
         assert!(reader.file_description().has_contents());
-        assert!(
-            reader
-                .file_description()
-                .source_files
-                .first()
-                .unwrap()
-                .native_id_format()
-                .is_some()
-        );
+        assert!(reader
+            .file_description()
+            .source_files
+            .first()
+            .unwrap()
+            .native_id_format()
+            .is_some());
 
         let config = reader.instrument_configurations().get(&0).unwrap();
         let comp = config.iter().find_map(|c| c.mass_analyzer()).unwrap();
@@ -3039,6 +2933,7 @@ mod test {
 
         Ok(())
     }
+
 
     #[test_log::test]
     fn test_iterator_specialization() -> io::Result<()> {

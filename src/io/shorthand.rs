@@ -1,30 +1,20 @@
-use std::{
-    io,
-    marker::PhantomData,
-    path::{Path, PathBuf},
-};
+use std::{io, marker::PhantomData, path::{Path, PathBuf}};
 
 #[allow(unused)]
-use mzpeaks::{
-    IonMobility, MZ, Mass,
-    feature::{ChargedFeature, Feature},
-};
+use mzpeaks::{feature::{ChargedFeature, Feature}, IonMobility, Mass, MZ};
 
 #[allow(unused)]
-use crate::{
-    prelude::*,
-    spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting},
-};
+use crate::{prelude::*, spectrum::{CentroidPeakAdapting, DeconvolutedPeakAdapting}};
 
 #[allow(unused)]
 use super::{Sink, Source, SpectrumSource, infer_format::MZReaderType};
 
 #[doc(hidden)]
-#[cfg(not(feature = "mgf"))]
-pub use super::infer_format::MZReaderType as MGFReaderType;
-#[doc(hidden)]
 #[cfg(feature = "mgf")]
 pub use super::mgf::{MGFReaderType, MGFWriterType};
+#[doc(hidden)]
+#[cfg(not(feature = "mgf"))]
+pub use super::infer_format::MZReaderType as MGFReaderType;
 
 #[doc(hidden)]
 #[cfg(not(feature = "mgf"))]
@@ -67,12 +57,12 @@ use super::tdf::TDFSpectrumReaderType as _TDFSpectrumReaderType;
 
 #[doc(hidden)]
 #[cfg(feature = "bruker_tdf")]
-pub type TDFSpectrumReaderType<C, D> =
-    _TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D>;
+pub type TDFSpectrumReaderType<C, D> = _TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D>;
 
 #[doc(hidden)]
 #[cfg(not(feature = "bruker_tdf"))]
 pub type TDFSpectrumReaderType<C, D> = MZReaderType<std::fs::File, C, D>;
+
 
 pub const fn mzml_support() -> bool {
     #[cfg(feature = "mzml")]
@@ -81,12 +71,14 @@ pub const fn mzml_support() -> bool {
     return false;
 }
 
+
 pub const fn mgf_support() -> bool {
     #[cfg(feature = "mgf")]
     return true;
     #[cfg(not(feature = "mgf"))]
     return false;
 }
+
 
 pub const fn mzmlb_support() -> bool {
     #[cfg(feature = "mzmlb")]
@@ -95,12 +87,14 @@ pub const fn mzmlb_support() -> bool {
     return false;
 }
 
+
 pub const fn thermo_support() -> bool {
     #[cfg(feature = "thermo")]
     return true;
     #[cfg(not(feature = "thermo"))]
     return false;
 }
+
 
 pub const fn bruker_tdf_support() -> bool {
     #[cfg(feature = "bruker_tdf")]
@@ -111,13 +105,7 @@ pub const fn bruker_tdf_support() -> bool {
 
 #[doc(hidden)]
 #[allow(unused)]
-pub fn mgf_new<
-    R: io::Read + io::Seek,
-    C: CentroidPeakAdapting + BuildFromArrayMap,
-    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
->(
-    handle: R,
-) -> MGFReaderType<R, C, D> {
+pub fn mgf_new<R: io::Read + io::Seek, C: CentroidPeakAdapting  + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>(handle: R) -> MGFReaderType<R, C, D> {
     #[cfg(feature = "mgf")]
     return MGFReaderType::new(handle);
     #[cfg(not(feature = "mgf"))]
@@ -126,13 +114,7 @@ pub fn mgf_new<
 
 #[doc(hidden)]
 #[allow(unused)]
-pub fn mgf_new_indexed<
-    R: io::Read + io::Seek,
-    C: CentroidPeakAdapting + BuildFromArrayMap,
-    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
->(
-    handle: R,
-) -> MGFReaderType<R, C, D> {
+pub fn mgf_new_indexed<R: io::Read + io::Seek, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>(handle: R) -> MGFReaderType<R, C, D> {
     #[cfg(not(feature = "mgf"))]
     panic!("MGF reading is not enabled");
     #[cfg(feature = "mgf")]
@@ -141,13 +123,7 @@ pub fn mgf_new_indexed<
 
 #[doc(hidden)]
 #[allow(unused)]
-pub fn mzml_new<
-    R: io::Read + io::Seek,
-    C: CentroidPeakAdapting + BuildFromArrayMap,
-    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
->(
-    handle: R,
-) -> MzMLReaderType<R, C, D> {
+pub fn mzml_new<R: io::Read + io::Seek, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>(handle: R) -> MzMLReaderType<R, C, D> {
     #[cfg(feature = "mzml")]
     return MzMLReaderType::new(handle);
     #[cfg(not(feature = "mzml"))]
@@ -156,13 +132,7 @@ pub fn mzml_new<
 
 #[doc(hidden)]
 #[allow(unused)]
-pub fn mzml_new_indexed<
-    R: io::Read + io::Seek,
-    C: CentroidPeakAdapting + BuildFromArrayMap,
-    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
->(
-    handle: R,
-) -> MzMLReaderType<R, C, D> {
+pub fn mzml_new_indexed<R: io::Read + io::Seek, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>(handle: R) -> MzMLReaderType<R, C, D> {
     #[cfg(feature = "mzml")]
     return MzMLReaderType::new_indexed(handle);
     #[cfg(not(feature = "mzml"))]
@@ -171,13 +141,7 @@ pub fn mzml_new_indexed<
 
 #[doc(hidden)]
 #[allow(unused)]
-pub fn thermo_new<
-    R: Into<PathBuf>,
-    C: CentroidPeakAdapting + BuildFromArrayMap,
-    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
->(
-    handle: R,
-) -> io::Result<ThermoRawReaderType<C, D>> {
+pub fn thermo_new<R: Into<PathBuf>, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>(handle: R) -> io::Result<ThermoRawReaderType<C ,D>> {
     #[cfg(feature = "thermo")]
     return ThermoRawReaderType::new(handle);
     #[cfg(not(feature = "thermo"))]
@@ -186,13 +150,7 @@ pub fn thermo_new<
 
 #[doc(hidden)]
 #[allow(unused)]
-pub fn mzmlb_new<
-    R: AsRef<Path>,
-    C: CentroidPeakAdapting + BuildFromArrayMap,
-    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
->(
-    handle: R,
-) -> io::Result<MzMLbReaderType<C, D>> {
+pub fn mzmlb_new<R: AsRef<Path>, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>(handle: R) -> io::Result<MzMLbReaderType<C ,D>> {
     #[cfg(feature = "mzmlb")]
     return MzMLbReaderType::new(&handle);
     #[cfg(not(feature = "mzmlb"))]
@@ -201,34 +159,23 @@ pub fn mzmlb_new<
 
 #[doc(hidden)]
 #[allow(unused)]
-pub fn bruker_tdf_new<
-    R: AsRef<Path>,
-    C: CentroidPeakAdapting + BuildFromArrayMap,
-    D: DeconvolutedPeakAdapting + BuildFromArrayMap,
->(
-    handle: R,
-) -> io::Result<TDFSpectrumReaderType<C, D>> {
+pub fn bruker_tdf_new<R: AsRef<Path>, C: CentroidPeakAdapting + BuildFromArrayMap, D: DeconvolutedPeakAdapting + BuildFromArrayMap>(handle: R) -> io::Result<TDFSpectrumReaderType<C ,D>> {
     #[cfg(feature = "bruker_tdf")]
-    return TDFSpectrumReaderType::new(handle).map_err(|e| io::Error::new(io::ErrorKind::Other, e));
+    return TDFSpectrumReaderType::new(handle).map_err(|e| io::Error::new( io::ErrorKind::Other, e));
     #[cfg(not(feature = "bruker_tdf"))]
     panic!("Bruker TDF file reading not enabled")
 }
 
 #[doc(hidden)]
-pub struct DummyWriter<W, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>(
-    PhantomData<(W, C, D)>,
-);
+pub struct DummyWriter<W, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>(PhantomData<(W, C, D)>);
 
-impl<W, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
-    for DummyWriter<W, C, D>
-{
+
+impl<W, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata for DummyWriter<W, C, D> {
     fn data_processings(&self) -> &Vec<crate::meta::DataProcessing> {
         panic!("stub");
     }
 
-    fn instrument_configurations(
-        &self,
-    ) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+    fn instrument_configurations(&self) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
         panic!("stub");
     }
 
@@ -248,9 +195,7 @@ impl<W, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
         panic!("stub");
     }
 
-    fn instrument_configurations_mut(
-        &mut self,
-    ) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+    fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
         panic!("stub");
     }
 
@@ -273,9 +218,7 @@ impl<W, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> DummyWriter<W, C, 
     }
 }
 
-impl<W, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> SpectrumWriter<C, D>
-    for DummyWriter<W, C, D>
-{
+impl<W, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> SpectrumWriter<C, D> for DummyWriter<W, C, D> {
     #[allow(unused)]
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
         Err(io::Error::new(io::ErrorKind::Unsupported, "Dummy Writer"))
@@ -293,16 +236,12 @@ impl<W, C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> SpectrumWriter<C, 
 #[doc(hidden)]
 pub struct DummyWriter2<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting>(PhantomData<(C, D)>);
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
-    for DummyWriter2<C, D>
-{
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata for DummyWriter2<C, D> {
     fn data_processings(&self) -> &Vec<crate::meta::DataProcessing> {
         todo!()
     }
 
-    fn instrument_configurations(
-        &self,
-    ) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+    fn instrument_configurations(&self) -> &std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
         todo!()
     }
 
@@ -322,9 +261,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> MSDataFileMetadata
         todo!()
     }
 
-    fn instrument_configurations_mut(
-        &mut self,
-    ) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
+    fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, crate::meta::InstrumentConfiguration> {
         todo!()
     }
 
@@ -348,9 +285,7 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> DummyWriter2<C, D> {
     }
 }
 
-impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> SpectrumWriter<C, D>
-    for DummyWriter2<C, D>
-{
+impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> SpectrumWriter<C, D> for DummyWriter2<C, D> {
     #[allow(unused)]
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
         Err(io::Error::new(io::ErrorKind::Unsupported, "Dummy Writer"))

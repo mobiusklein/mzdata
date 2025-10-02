@@ -11,8 +11,8 @@ use num_traits::Num;
 use numpress;
 
 use crate::{
+    params::{ControlledVocabulary, ParamCow, Unit, CURIE},
     Param,
-    params::{CURIE, ControlledVocabulary, ParamCow, Unit},
 };
 
 pub type Bytes = Vec<u8>;
@@ -1312,7 +1312,7 @@ impl BinaryCompressionType {
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
-                ));
+                ))
             }
             BinaryCompressionType::NumpressLinearZstd => {
                 return Some(ParamCow::const_new(
@@ -1321,7 +1321,7 @@ impl BinaryCompressionType {
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
-                ));
+                ))
             }
             BinaryCompressionType::ZstdDict => {
                 return Some(ParamCow::const_new(
@@ -1330,7 +1330,7 @@ impl BinaryCompressionType {
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
-                ));
+                ))
             }
             BinaryCompressionType::Zstd => {
                 return Some(ParamCow::const_new(
@@ -1339,7 +1339,7 @@ impl BinaryCompressionType {
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
-                ));
+                ))
             }
             BinaryCompressionType::ShuffleZstd => {
                 return Some(ParamCow::const_new(
@@ -1348,7 +1348,7 @@ impl BinaryCompressionType {
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
-                ));
+                ))
             }
             BinaryCompressionType::DeltaShuffleZstd => {
                 return Some(ParamCow::const_new(
@@ -1357,7 +1357,7 @@ impl BinaryCompressionType {
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
-                ));
+                ))
             }
         };
         Some(

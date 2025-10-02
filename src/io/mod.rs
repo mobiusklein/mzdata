@@ -18,9 +18,8 @@ mod utils;
 pub(crate) mod compression;
 
 pub use crate::io::infer_format::{
-    IMMZReaderType, MZReader, MZReaderBuilder, MZReaderType, MassSpectrometryFormat,
-    MassSpectrometryReadWriteProcess, Sink, Source, infer_format, infer_from_path,
-    infer_from_stream,
+    infer_format, infer_from_path, infer_from_stream, IMMZReaderType, MZReader, MZReaderBuilder,
+    MZReaderType, MassSpectrometryFormat, MassSpectrometryReadWriteProcess, Sink, Source,
 };
 
 #[cfg(feature = "mgf")]
@@ -48,9 +47,7 @@ pub use crate::io::traits::{
 };
 
 #[cfg(feature = "async_partial")]
-pub use crate::io::traits::{
-    AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource, SpectrumStream,
-};
+pub use crate::io::traits::{AsyncSpectrumSource, AsyncRandomAccessSpectrumIterator, SpectrumStream};
 
 #[cfg(feature = "async")]
 pub use crate::io::traits::AsyncMZFileReader;
@@ -82,9 +79,11 @@ pub mod tdf;
 
 pub mod usi;
 
+
 // A location to re-export the symbols needed to make mz_read and
 // mz_write macros behave properly in other crates.
 #[doc(hidden)]
 pub mod _impl {
     pub use super::shorthand::*;
+
 }

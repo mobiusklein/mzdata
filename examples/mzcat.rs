@@ -2,7 +2,7 @@ use std::time;
 use std::{env, io, path};
 
 use mzdata::spectrum::MultiLayerSpectrum;
-use mzdata::{MZReader, prelude::*};
+use mzdata::{prelude::*, MZReader};
 use rayon::prelude::*;
 
 fn scan_file<R: MZFileReader + Iterator<Item = MultiLayerSpectrum> + Send>(reader: &mut R) {

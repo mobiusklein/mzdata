@@ -1,28 +1,28 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::io::{self, SeekFrom, prelude::*};
+use std::io::{self, prelude::*, SeekFrom};
 use std::path::Path;
 use std::{fs, mem};
 
 #[cfg(feature = "filename")]
 use filename;
 use hdf5::types::{FixedAscii, FixedUnicode, VarLenAscii, VarLenUnicode};
-use hdf5::{self, Dataset, Selection, filters};
+use hdf5::{self, filters, Dataset, Selection};
 use log::{debug, warn};
 use ndarray::Ix1;
 use thiserror::Error;
 
-use mzpeaks::{CentroidPeak, DeconvolutedPeak, prelude::*};
+use mzpeaks::{prelude::*, CentroidPeak, DeconvolutedPeak};
 
 use crate::io::{
-    Generic3DIonMobilityFrameSource, OffsetIndex, RandomAccessSpectrumIterator,
-    SpectrumAccessError, SpectrumSource,
     mzml::{
         CVParamParse, EntryType, IncrementingIdMap, MzMLParserError, MzMLParserState,
         MzMLReaderType, MzMLSAX, MzMLSpectrumBuilder, ParserResult, SpectrumBuilding,
     },
     traits::{ChromatogramSource, MZFileReader},
     utils::DetailLevel,
+    Generic3DIonMobilityFrameSource, OffsetIndex, RandomAccessSpectrumIterator,
+    SpectrumAccessError, SpectrumSource,
 };
 use crate::prelude::*;
 
@@ -31,9 +31,9 @@ use crate::meta::{
 };
 use crate::params::{ControlledVocabulary, Param, ParamValue};
 use crate::spectrum::bindata::{
-    ArrayRetrievalError, BinaryCompressionType, BinaryDataArrayType, BuildFromArrayMap,
-    ByteArrayView, ByteArrayViewMut, DataArray, as_bytes, delta_decoding,
-    linear_prediction_decoding,
+    as_bytes, delta_decoding, linear_prediction_decoding, ArrayRetrievalError,
+    BinaryCompressionType, BinaryDataArrayType, BuildFromArrayMap, ByteArrayView, ByteArrayViewMut,
+    DataArray,
 };
 
 #[cfg(feature = "numpress")]
@@ -283,7 +283,7 @@ impl ExternalDataRegistry {
                             data.compression.unsupported_msg(Some(
                                 format!("Not compatible with {:?}", data.dtype).as_str(),
                             )),
-                        ));
+                        ))
                     }
                 }
                 Err(ArrayRetrievalError::DecompressionError(
@@ -326,7 +326,7 @@ impl ExternalDataRegistry {
                             data.compression.unsupported_msg(Some(
                                 format!("Not compatible with {:?}", data.dtype).as_str(),
                             )),
-                        ));
+                        ))
                     }
                 }
                 Ok(())
@@ -348,7 +348,7 @@ impl ExternalDataRegistry {
                             data.compression.unsupported_msg(Some(
                                 format!("Not compatible with {:?}", data.dtype).as_str(),
                             )),
-                        ));
+                        ))
                     }
                 }
                 Ok(())
@@ -1323,7 +1323,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
 
 #[cfg(test)]
 mod test {
-    use crate::{MzMLReader, prelude::*};
+    use crate::{prelude::*, MzMLReader};
 
     use super::*;
 

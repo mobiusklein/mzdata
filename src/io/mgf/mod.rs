@@ -7,9 +7,9 @@ mod reader;
 mod writer;
 
 pub use reader::{
-    DefaultTitleIndexing, DefaultTitleParser, MGFError, MGFIndexing, MGFParserState, MGFReader,
-    MGFReaderType, MGFTitle, ScansIndexing, TPPTitleParser, TPPTitleParsingNativeIDIndexing,
-    TPPTitleParsingScanNumberIndexing,
+    DefaultTitleIndexing, DefaultTitleParser, MGFError, MGFParserState, MGFReader, MGFReaderType,
+    ScansIndexing, TPPTitleParser, TPPTitleParsingNativeIDIndexing,
+    TPPTitleParsingScanNumberIndexing, MGFIndexing, MGFTitle,
 };
 pub use writer::{
     MGFHeaderStyle, MGFWriter, MGFWriterType, MZDataMGFStyle, SimpleMGFStyle, SimpleMGFWriter,
@@ -31,12 +31,12 @@ pub fn is_mgf(buf: &[u8]) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::CentroidSpectrum;
-    use crate::io::DetailLevel;
     use crate::io::mgf::reader::{
         TPPTitleParsingNativeIDIndexing, TPPTitleParsingScanNumberIndexing,
     };
+    use crate::io::DetailLevel;
     use crate::spectrum::RefPeakDataLevel;
+    use crate::CentroidSpectrum;
     use crate::{io::RestartableGzDecoder, prelude::*};
     use mzpeaks::{CentroidPeak, DeconvolutedPeak, IndexedCoordinate};
 

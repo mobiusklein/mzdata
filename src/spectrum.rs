@@ -80,17 +80,17 @@ pub use utils::HasIonMobility;
 
 pub use frame::{
     FeatureDataLevel, IonMobilityFrameDescription, IonMobilityFrameLike,
-    MultiLayerIonMobilityFrame, RefFeatureDataLevel,
+    MultiLayerIonMobilityFrame, RefFeatureDataLevel
 };
 
 pub use group::{
     IonMobilityFrameGroup, IonMobilityFrameGroupIntoIter, IonMobilityFrameGroupIter,
-    IonMobilityFrameGrouping, IonMobilityFrameGroupingIterator, SpectrumGroup,
-    SpectrumGroupIntoIter, SpectrumGroupIter, SpectrumGrouping, SpectrumGroupingIterator,
+    IonMobilityFrameGroupingIterator, SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter,
+    SpectrumGroupingIterator, SpectrumGrouping, IonMobilityFrameGrouping,
 };
 
 #[cfg(feature = "mzsignal")]
 pub use group::{
-    DeferredSpectrumAveragingIterator, SpectrumAveragingIterator, SpectrumGroupAveraging,
-    average_spectra,
+    average_spectra, DeferredSpectrumAveragingIterator, SpectrumAveragingIterator,
+    SpectrumGroupAveraging,
 };

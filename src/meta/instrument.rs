@@ -87,21 +87,25 @@ impl Component {
             ComponentType::Analyzer => it
                 .flat_map(|p| {
                     p.accession
-                        .and_then(MassAnalyzerTerm::from_accession)
+                        .and_then(|u| {
+                            MassAnalyzerTerm::from_accession(u)
+                        })
                         .map(|u| u.name())
                 })
                 .next(),
             ComponentType::IonSource => it
                 .flat_map(|p| {
-                    p.accession
-                        .and_then(IonizationTypeTerm::from_accession)
+                    p.accession.and_then(|u| {
+                            IonizationTypeTerm::from_accession(u)
+                        })
                         .map(|u| u.name())
                 })
                 .next(),
             ComponentType::Detector => it
                 .flat_map(|p| {
-                    p.accession
-                        .and_then(DetectorTypeTerm::from_accession)
+                    p.accession.and_then(|u| {
+                            DetectorTypeTerm::from_accession(u)
+                        })
                         .map(|u| u.name())
                 })
                 .next(),

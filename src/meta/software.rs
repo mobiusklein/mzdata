@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::params::{ControlledVocabulary, ParamList};
-use crate::{Param, impl_param_described};
+use crate::{impl_param_described, Param};
 
 /// A piece of software that was associated with the acquisition, transformation or otherwise
 /// processing of mass spectrometry data.
@@ -78,23 +78,17 @@ impl Software {
 
     /// Is this software for analysis?
     pub fn is_analysis(&self) -> bool {
-        self.find_software_term()
-            .map(|s| s.flags().is_analysis())
-            .unwrap_or(false)
+        self.find_software_term().map(|s| s.flags().is_analysis()).unwrap_or(false)
     }
 
     /// Is this software for data processing?
     pub fn is_data_processing(&self) -> bool {
-        self.find_software_term()
-            .map(|s| s.flags().is_data_processing())
-            .unwrap_or(false)
+        self.find_software_term().map(|s| s.flags().is_data_processing()).unwrap_or(false)
     }
 
     /// Is this software for data acquisition?
     pub fn is_acquisition(&self) -> bool {
-        self.find_software_term()
-            .map(|s| s.flags().is_acquisition())
-            .unwrap_or(false)
+        self.find_software_term().map(|s| s.flags().is_acquisition()).unwrap_or(false)
     }
 
     /// Find a unique identifier from an iterator over software IDs
@@ -1289,19 +1283,13 @@ mod test {
             SoftwareType::Analysis | SoftwareType::Acquisition | SoftwareType::DataProcessing
         );
         assert!(
-            SoftwareTerm::SCIEXTOFTOFSeriesExplorerSoftware
-                .flags()
-                .is_analysis(),
+            SoftwareTerm::SCIEXTOFTOFSeriesExplorerSoftware.flags().is_analysis(),
         );
     }
 
     #[test]
     fn sw_test() {
-        let mut sw = Software::new(
-            "foo".into(),
-            "v0.1.0".into(),
-            vec![custom_software_name("foo")],
-        );
+        let mut sw = Software::new("foo".into(), "v0.1.0".into(), vec![custom_software_name("foo")]);
         assert_eq!(sw.id, "foo");
         assert_eq!(sw.version, "v0.1.0");
         assert!(sw.find_software_term().is_some());
@@ -1310,6 +1298,7 @@ mod test {
         sw.params_mut().reverse();
         assert!(sw.is_analysis());
         assert!(sw.find_software_term().is_some());
+
 
         let id = Software::find_unique_id("foo", [sw].iter());
         assert_eq!(id, "foo_0");

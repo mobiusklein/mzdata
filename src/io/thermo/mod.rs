@@ -27,7 +27,7 @@
 mod instruments;
 mod reader;
 
-pub use reader::{ThermoRawReader, ThermoRawReaderType, is_thermo_raw_prefix};
+pub use reader::{is_thermo_raw_prefix, ThermoRawReader, ThermoRawReaderType};
 
 #[cfg(feature = "async")]
 mod async_reader;

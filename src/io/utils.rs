@@ -72,12 +72,12 @@ impl<T: io::Read> FileSource<T> {
             FileWrapper::Empty => None,
             FileWrapper::Stream(_stream) => None,
             FileWrapper::FileSystem(path) => {
-                if let Some(stem) = path.file_name()
-                    && let Some(parent) = path.parent()
-                {
-                    let base = parent.join(stem);
-                    let name = base.with_extension("index.json");
-                    return Some(name);
+                if let Some(stem) = path.file_name() {
+                    if let Some(parent) = path.parent() {
+                        let base = parent.join(stem);
+                        let name = base.with_extension("index.json");
+                        return Some(name);
+                    }
                 }
                 None
             }
@@ -331,6 +331,7 @@ impl<T: io::Seek + io::Write> io::Seek for MD5HashingStream<T> {
         self.stream.seek(pos)
     }
 }
+
 
 #[cfg(test)]
 mod test {

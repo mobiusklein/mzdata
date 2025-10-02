@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::collections::hash_map::{Iter, IterMut};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 
 #[cfg(feature = "parallelism")]
@@ -11,10 +11,10 @@ use mzpeaks::Tolerance;
 
 use crate::params::Unit;
 
-use super::BinaryDataArrayType;
 use super::array::DataArray;
 use super::encodings::{ArrayRetrievalError, ArrayType, BinaryCompressionType};
 use super::traits::{ByteArrayView, ByteArrayViewMut};
+use super::BinaryDataArrayType;
 
 /// A collection of [`DataArray`]s that are identified by name.
 #[derive(Debug, Default, Clone)]
@@ -656,57 +656,57 @@ impl BinaryArrayMap3D {
         while current_mz <= max_mz {
             let mut next_mz = f64::INFINITY;
             for (bin_i, (im, layer)) in self.iter().enumerate() {
-                if let Some(i) = indices.get(bin_i).copied()
-                    && let Some(mz) = mz_axes[bin_i].get(i).copied()
-                {
-                    if (mz - current_mz).abs() < 1e-12 {
-                        n_points_added += 1;
-                        destination
-                            .get_mut(&ArrayType::MZArray)
-                            .as_mut()
-                            .unwrap()
-                            .push(mz)?;
-                        destination
-                            .get_mut(&self.ion_mobility_type)
-                            .as_mut()
-                            .unwrap()
-                            .push(im)?;
-                        for (key, array) in layer.iter() {
-                            if *key == ArrayType::MZArray {
-                                continue;
+                if let Some(i) = indices.get(bin_i).copied() {
+                    if let Some(mz) = mz_axes[bin_i].get(i).copied() {
+                        if (mz - current_mz).abs() < 1e-12 {
+                            n_points_added += 1;
+                            destination
+                                .get_mut(&ArrayType::MZArray)
+                                .as_mut()
+                                .unwrap()
+                                .push(mz)?;
+                            destination
+                                .get_mut(&self.ion_mobility_type)
+                                .as_mut()
+                                .unwrap()
+                                .push(im)?;
+                            for (key, array) in layer.iter() {
+                                if *key == ArrayType::MZArray {
+                                    continue;
+                                }
+                                match array.dtype() {
+                                    BinaryDataArrayType::Unknown => panic!(
+                                        "Cannot re-sort opaque or unknown dimension data types"
+                                    ),
+                                    BinaryDataArrayType::ASCII => {
+                                        let val = array.decode()?[i];
+                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
+                                    }
+                                    BinaryDataArrayType::Float64 => {
+                                        let val = array.to_f64()?[i];
+                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
+                                    }
+                                    BinaryDataArrayType::Float32 => {
+                                        let val = array.to_f32()?[i];
+                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
+                                    }
+                                    BinaryDataArrayType::Int64 => {
+                                        let val = array.to_i64()?[i];
+                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
+                                    }
+                                    BinaryDataArrayType::Int32 => {
+                                        let val = array.to_i32()?[i];
+                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
+                                    }
+                                }
                             }
-                            match array.dtype() {
-                                BinaryDataArrayType::Unknown => {
-                                    panic!("Cannot re-sort opaque or unknown dimension data types")
-                                }
-                                BinaryDataArrayType::ASCII => {
-                                    let val = array.decode()?[i];
-                                    destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                }
-                                BinaryDataArrayType::Float64 => {
-                                    let val = array.to_f64()?[i];
-                                    destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                }
-                                BinaryDataArrayType::Float32 => {
-                                    let val = array.to_f32()?[i];
-                                    destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                }
-                                BinaryDataArrayType::Int64 => {
-                                    let val = array.to_i64()?[i];
-                                    destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                }
-                                BinaryDataArrayType::Int32 => {
-                                    let val = array.to_i32()?[i];
-                                    destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                }
+                            indices[bin_i] += 1;
+                            if let Some(mz) = mz_axes[bin_i].get(i + 1).copied() {
+                                next_mz = mz.min(next_mz);
                             }
-                        }
-                        indices[bin_i] += 1;
-                        if let Some(mz) = mz_axes[bin_i].get(i + 1).copied() {
+                        } else if mz > current_mz {
                             next_mz = mz.min(next_mz);
                         }
-                    } else if mz > current_mz {
-                        next_mz = mz.min(next_mz);
                     }
                 }
             }
@@ -716,8 +716,7 @@ impl BinaryArrayMap3D {
         debug_assert_eq!(
             n_points_added,
             total_points,
-            "Expected to have unstacked {total_points} from {} arrays, got {n_points_added} instead",
-            mz_axes.len()
+            "Expected to have unstacked {total_points} from {} arrays, got {n_points_added} instead", mz_axes.len()
         );
 
         Ok(destination)
@@ -876,9 +875,7 @@ mod test {
             "test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz",
         )?))?;
 
-        let spec = reader
-            .get_spectrum_by_id("merged=42869 frame=9717 scanStart=1 scanEnd=705")
-            .unwrap();
+        let spec = reader.get_spectrum_by_id("merged=42869 frame=9717 scanStart=1 scanEnd=705").unwrap();
         let mut arrays = spec.arrays.unwrap();
         let mzs = arrays.mzs()?;
         assert!(!mzs.is_sorted());

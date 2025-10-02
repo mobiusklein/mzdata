@@ -5,16 +5,16 @@ use mzpeaks::Mass;
 use thiserror::Error;
 
 use mzpeaks::{
-    CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, MZ, MZPeakSetType,
-    MassPeakSetType, PeakCollection, PeakSet, peak_set::PeakSetVec, prelude::*,
+    peak_set::PeakSetVec, prelude::*, CentroidLike, CentroidPeak, DeconvolutedCentroidLike,
+    DeconvolutedPeak, MZPeakSetType, MassPeakSetType, PeakCollection, PeakSet, MZ,
 };
 
 #[cfg(feature = "mzsignal")]
 use mzsignal::{
-    FittedPeak,
-    denoise::{DenoisingError, denoise},
+    denoise::{denoise, DenoisingError},
     peak_picker::{PeakFitType, PeakPicker, PeakPickerError},
     reprofile::{self, PeakShape, PeakShapeModel},
+    FittedPeak,
 };
 
 use crate::params::{ParamDescribed, Unit, Value};
@@ -25,10 +25,10 @@ use crate::spectrum::scan_properties::{
     Acquisition, IonMobilityMeasure, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
 };
 
+use super::bindata::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
 #[allow(unused)]
 use super::DataArray;
 use super::HasIonMobility;
-use super::bindata::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
 
 /// A blanket trait that ties together all the assumed behaviors of an m/z coordinate centroid peak
 pub trait CentroidPeakAdapting: CentroidLike + From<CentroidPeak> {}
@@ -791,15 +791,10 @@ impl<C: CentroidLike> CentroidSpectrumType<C> {
     where
         C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
         D1: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-        C: BuildArrayMapFrom,
+        C: BuildArrayMapFrom
     {
         let arrays = C::as_arrays(self.peaks.as_slice());
-        Ok(MultiLayerSpectrum::new(
-            self.description,
-            Some(arrays),
-            None,
-            None,
-        ))
+        Ok(MultiLayerSpectrum::new(self.description, Some(arrays), None, None))
     }
 }
 
@@ -892,7 +887,7 @@ impl<D: DeconvolutedCentroidLike> DeconvolutedSpectrumType<D> {
     where
         C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
         D1: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-        D: BuildArrayMapFrom,
+        D: BuildArrayMapFrom
     {
         let arrays = D::as_arrays(self.deconvoluted_peaks.as_slice());
         MultiLayerSpectrum::new(self.description, Some(arrays), None, None)
@@ -1194,7 +1189,7 @@ where
         C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
         D1: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
         C: BuildArrayMapFrom,
-        D: BuildArrayMapFrom,
+        D: BuildArrayMapFrom
     {
         let arrays = if let Some(peaks) = self.deconvoluted_peaks {
             D::as_arrays(peaks.as_slice())
@@ -1319,16 +1314,18 @@ where
             if let Some(arrays) = self.arrays.as_ref() {
                 let peak_data: PeakDataLevel<C, D> = PeakDataLevel::try_from(arrays)?;
                 match peak_data {
-                    PeakDataLevel::Missing => Ok(RefPeakDataLevel::Missing),
+                    PeakDataLevel::Missing => {
+                        Ok(RefPeakDataLevel::Missing)
+                    },
                     PeakDataLevel::RawData(_) => panic!("not possible"),
                     PeakDataLevel::Centroid(peak_set_vec) => {
                         self.peaks = Some(peak_set_vec);
                         Ok(self.peaks())
-                    }
+                    },
                     PeakDataLevel::Deconvoluted(peak_set_vec) => {
                         self.deconvoluted_peaks = Some(peak_set_vec);
                         Ok(self.peaks())
-                    }
+                    },
                 }
             } else {
                 Ok(self.peaks())
@@ -1598,8 +1595,8 @@ mod test {
     use std::io;
 
     use super::*;
-    use crate::io::DetailLevel;
     use crate::io::mzml::MzMLReader;
+    use crate::io::DetailLevel;
     use crate::prelude::*;
 
     #[test_log::test]
@@ -1640,10 +1637,7 @@ mod test {
 
     #[allow(unused)]
     fn test_spectrum_behavior<T: SpectrumLike>(spec: &T) {
-        assert_eq!(
-            spec.spectrum_type(),
-            Some(crate::meta::SpectrumType::MS1Spectrum)
-        );
+        assert_eq!(spec.spectrum_type(), Some(crate::meta::SpectrumType::MS1Spectrum));
         behaviors!(spec);
     }
 

@@ -5,8 +5,8 @@ use std::io::{self, Seek};
 use std::time::Instant;
 
 use mzdata::io::{
-    MassSpectrometryFormat, PreBufferedStream, RestartableGzDecoder, SpectrumSource,
-    infer_from_stream,
+    infer_from_stream, MassSpectrometryFormat, PreBufferedStream, RestartableGzDecoder,
+    SpectrumSource,
 };
 use mzdata::{MGFReader, MzMLReader};
 

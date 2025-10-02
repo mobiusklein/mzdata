@@ -65,7 +65,7 @@ impl FromStr for USI {
                     return Err(USIParseError::UnknownProtocol(
                         protocol.to_string(),
                         s.to_string(),
-                    ));
+                    ))
                 }
             };
 
@@ -86,7 +86,7 @@ impl FromStr for USI {
                                         ident_value.to_string(),
                                         e.to_string(),
                                         s.to_string(),
-                                    ));
+                                    ))
                                 }
                             },
                             "index" => match ident_value.parse() {
@@ -98,7 +98,7 @@ impl FromStr for USI {
                                         ident_value.to_string(),
                                         e.to_string(),
                                         s.to_string(),
-                                    ));
+                                    ))
                                 }
                             },
                             "nativeId" => {
@@ -113,7 +113,7 @@ impl FromStr for USI {
                                             ident_value.to_string(),
                                             e.to_string(),
                                             s.to_string(),
-                                        ));
+                                        ))
                                     }
                                 }
                             }
@@ -121,7 +121,7 @@ impl FromStr for USI {
                                 return Err(USIParseError::UnknownIndexType(
                                     ident_type.to_string(),
                                     s.to_string(),
-                                ));
+                                ))
                             }
                         };
 

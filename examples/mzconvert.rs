@@ -2,11 +2,7 @@ use std::any::Any;
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
-use std::sync::{
-    Arc,
-    atomic::{AtomicU64, Ordering as AtomicOrdering},
-    mpsc::sync_channel,
-};
+use std::sync::{mpsc::sync_channel, Arc, atomic::{AtomicU64, Ordering as AtomicOrdering}};
 use std::thread;
 use std::time;
 
@@ -14,19 +10,19 @@ use clap::Parser;
 
 use log::info;
 use mzdata::io::MassSpectrometryFormat;
-use mzdata::io::{MassSpectrometryReadWriteProcess, Sink, Source, checksum_file};
-use mzdata::meta::Software;
+use mzdata::io::{checksum_file, MassSpectrometryReadWriteProcess, Sink, Source};
 use mzdata::meta::custom_software_name;
+use mzdata::meta::Software;
 use mzdata::meta::{DataProcessing, ProcessingMethod, SourceFile};
 use mzdata::params::ControlledVocabulary;
 use mzdata::prelude::*;
 
-use mzdata::MzMLWriter;
+use mzdata::spectrum::bindata::BinaryCompressionType;
 use mzdata::spectrum::ArrayType;
 use mzdata::spectrum::ArrayType::IntensityArray;
 use mzdata::spectrum::ArrayType::MZArray;
 use mzdata::spectrum::BinaryDataArrayType;
-use mzdata::spectrum::bindata::BinaryCompressionType;
+use mzdata::MzMLWriter;
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 fn compression_parser(compression: &str) -> Result<BinaryCompressionType, String> {
@@ -36,11 +32,9 @@ fn compression_parser(compression: &str) -> Result<BinaryCompressionType, String
         compression.to_string()
     };
 
-    BinaryCompressionType::COMPRESSION_METHODS
-        .iter()
-        .find(|x| x.as_param().unwrap().name() == compression)
-        .copied()
-        .ok_or_else(|| compression.to_string())
+    BinaryCompressionType::COMPRESSION_METHODS.iter().find(|x| {
+        x.as_param().unwrap().name() == compression
+    }).copied().ok_or_else(|| compression.to_string())
 }
 
 #[derive(Debug, Clone, Parser)]
@@ -50,7 +44,7 @@ pub struct MZConvert {
     #[arg()]
     pub outpath: String,
 
-    #[arg(short = 'b', long, default_value_t = 8192)]
+    #[arg(short='b', long, default_value_t=8192)]
     pub buffer_size: usize,
 
     #[arg(long, value_parser=compression_parser, default_value="zlib compression")]
@@ -97,7 +91,7 @@ impl MZConvert {
         mut writer: W,
     ) -> io::Result<()> {
         let (send, recv) = sync_channel(self.buffer_size);
-        let buffered = Arc::new(AtomicU64::default());
+        let buffered= Arc::new(AtomicU64::default());
         let buffered_w = Arc::clone(&buffered);
         let reader_handle = thread::spawn(move || {
             reader.enumerate().for_each(|(i, s)| {
@@ -117,10 +111,9 @@ impl MZConvert {
             for s in recv.iter() {
                 let i = s.index();
                 buffered_w.fetch_sub(1, AtomicOrdering::SeqCst);
-                writer
-                    .write_owned(s)
-                    .inspect_err(|e| log::error!("Failed to write spectrum {i}: {e}"))
-                    .unwrap();
+                writer.write_owned(s).inspect_err(|e| {
+                    log::error!("Failed to write spectrum {i}: {e}")
+                }).unwrap();
             }
             writer.close().unwrap();
         });
@@ -197,6 +190,7 @@ impl MZConvert {
                     self.ion_mobility_compression,
                 );
             }
+
         }
     }
 }
@@ -257,7 +251,7 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
                 Default::default()
             } else {
                 info!("Computing checksum for {}", pb.display());
-
+                
                 checksum_file(&pb)?
             };
             let has_already = reader

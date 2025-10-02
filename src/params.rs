@@ -325,10 +325,10 @@ impl Value {
             return Ok(*val);
         } else if let Self::Int(val) = self {
             return Ok(*val as f64);
-        } else if let Self::String(val) = self
-            && let Ok(v) = val.parse()
-        {
-            return Ok(v);
+        } else if let Self::String(val) = self {
+            if let Ok(v) = val.parse() {
+                return Ok(v);
+            }
         }
         Err(ParamValueParseError::FailedToExtractFloat(Some(
             self.to_string(),
@@ -340,10 +340,10 @@ impl Value {
             return Ok(*val);
         } else if let Self::Float(val) = self {
             return Ok(*val as i64);
-        } else if let Self::String(val) = self
-            && let Ok(v) = val.parse()
-        {
-            return Ok(v);
+        } else if let Self::String(val) = self {
+            if let Ok(v) = val.parse() {
+                return Ok(v);
+            }
         }
         Err(ParamValueParseError::FailedToExtractInt(Some(
             self.to_string(),
@@ -824,10 +824,10 @@ impl<'a> ValueRef<'a> {
             return Ok(*val);
         } else if let Self::Int(val) = self {
             return Ok(*val as f64);
-        } else if let Self::String(val) = self
-            && let Ok(v) = val.parse()
-        {
-            return Ok(v);
+        } else if let Self::String(val) = self {
+            if let Ok(v) = val.parse() {
+                return Ok(v);
+            }
         }
         Err(ParamValueParseError::FailedToExtractFloat(Some(
             self.to_string(),
@@ -839,10 +839,10 @@ impl<'a> ValueRef<'a> {
             return Ok(*val);
         } else if let Self::Float(val) = self {
             return Ok(*val as i64);
-        } else if let Self::String(val) = self
-            && let Ok(v) = val.parse()
-        {
-            return Ok(v);
+        } else if let Self::String(val) = self {
+            if let Ok(v) = val.parse() {
+                return Ok(v);
+            }
         }
         Err(ParamValueParseError::FailedToExtractInt(Some(
             self.to_string(),
@@ -1103,17 +1103,14 @@ param_value_ref_int!(usize);
 param_value_ref_float!(f32);
 param_value_ref_float!(f64);
 
+
 #[cfg(feature = "serde")]
 impl From<Value> for serde_json::Value {
     fn from(value: Value) -> Self {
         match value {
             Value::Boolean(val) => serde_json::Value::Bool(val),
-            Value::Float(val) => {
-                serde_json::Value::Number(serde_json::Number::from_f64(val).unwrap())
-            }
-            Value::Int(val) => {
-                serde_json::Value::Number(serde_json::Number::from_i128(val as i128).unwrap())
-            }
+            Value::Float(val) => serde_json::Value::Number(serde_json::Number::from_f64(val).unwrap()),
+            Value::Int(val) => serde_json::Value::Number(serde_json::Number::from_i128(val as i128).unwrap()),
             Value::String(val) => serde_json::Value::String(val),
             Value::Buffer(val) => serde_json::to_value(&val).unwrap(),
             Value::Empty => serde_json::Value::Null,
@@ -1236,58 +1233,31 @@ macro_rules! find_param_method {
 #[macro_export]
 macro_rules! curie {
     (MS:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::MS,
-            accession: $acc,
-        }
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::MS, accession: $acc }
     };
     (UO:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::UO,
-            accession: $acc,
-        }
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::UO, accession: $acc }
     };
     (EFO:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::EFO,
-            accession: $acc,
-        }
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::EFO, accession: $acc }
     };
     (BFO:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::BFO,
-            accession: $acc,
-        }
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::BFO, accession: $acc }
     };
     (BTO:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::BTO,
-            accession: $acc,
-        }
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::BTO, accession: $acc }
     };
     (OBI:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::OBI,
-            accession: $acc,
-        }
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::OBI, accession: $acc }
     };
     (HANCESTRO:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::HANCESTRO,
-            accession: $acc,
-        }
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::HANCESTRO, accession: $acc }
     };
     (NCIT:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::NCIT,
-            accession: $acc,
-        }
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::NCIT, accession: $acc }
     };
     (PRIDE:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::PRIDE,
-            accession: $acc,
-        }
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::PRIDE, accession: $acc }
     };
 }
 
@@ -1339,6 +1309,7 @@ impl PackedCURIE {
         ((self.0 & 0xff00000000000000) as u8).try_into().unwrap()
     }
 }
+
 
 impl Display for CURIE {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1396,13 +1367,13 @@ impl FromStr for CURIE {
             .next()
             .ok_or(CURIEParsingError::MissingNamespaceSeparator)?;
         let accession = tokens.next();
-        if let Some(accession) = accession {
+        if accession.is_none() {
+            Err(CURIEParsingError::MissingNamespaceSeparator)
+        } else {
             let cv: ControlledVocabulary = cv.parse::<ControlledVocabulary>()?;
 
-            let accession = accession.parse()?;
+            let accession = accession.unwrap().parse()?;
             Ok(CURIE::new(cv, accession))
-        } else {
-            Err(CURIEParsingError::MissingNamespaceSeparator)
         }
     }
 }
@@ -1992,6 +1963,7 @@ const BTO_CV_BYTES: &[u8] = BTO_CV.as_bytes();
 const NCIT_CV_BYTES: &[u8] = NCIT_CV.as_bytes();
 const PRIDE_CV_BYTES: &[u8] = PRIDE_CV.as_bytes();
 
+
 impl TryFrom<u8> for ControlledVocabulary {
     type Error = ControlledVocabularyResolutionError;
 
@@ -2199,7 +2171,7 @@ pub enum ControlledVocabularyResolutionError {
     #[error("Unrecognized controlled vocabulary {0}")]
     UnknownControlledVocabulary(String),
     #[error("Unrecognized controlled vocabulary code {0}")]
-    UnknownControlledVocabularyCode(u8),
+    UnknownControlledVocabularyCode(u8)
 }
 
 impl FromStr for ControlledVocabulary {
@@ -2401,10 +2373,9 @@ macro_rules! impl_param_described_deferred {
 }
 
 /// Units that a term's value might have
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Unit {
-    #[default]
     Unknown,
 
     // Mass
@@ -2724,6 +2695,12 @@ impl Unit {
 
     pub const fn is_unknown(&self) -> bool {
         matches!(self, Self::Unknown)
+    }
+}
+
+impl Default for Unit {
+    fn default() -> Self {
+        Self::Unknown
     }
 }
 

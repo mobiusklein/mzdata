@@ -6,24 +6,26 @@ mod util;
 pub use spectrum::{
     MZFileReader, MemorySpectrumSource, RandomAccessSpectrumGroupingIterator,
     RandomAccessSpectrumIterator, RandomAccessSpectrumSource, SpectrumAccessError,
-    SpectrumIterator, SpectrumReceiver, SpectrumSource, SpectrumSourceWithMetadata, SpectrumWriter,
-    StreamingSpectrumIterator,
+    SpectrumIterator, SpectrumReceiver, SpectrumSource,
+    SpectrumSourceWithMetadata, SpectrumWriter, StreamingSpectrumIterator,
 };
 pub use util::SeekRead;
 
 pub use frame::{
     BorrowedGeneric3DIonMobilityFrameSource, Generic3DIonMobilityFrameSource,
-    IntoIonMobilityFrameSource, IntoIonMobilityFrameSourceError, IonMobilityFrameAccessError,
-    IonMobilityFrameIterator, IonMobilityFrameSource, IonMobilityFrameWriter,
-    RandomAccessIonMobilityFrameGroupingIterator, RandomAccessIonMobilityFrameIterator,
+    IonMobilityFrameAccessError, IonMobilityFrameIterator,
+    IonMobilityFrameSource, IonMobilityFrameWriter, RandomAccessIonMobilityFrameIterator,
+    RandomAccessIonMobilityFrameGroupingIterator,
+    IntoIonMobilityFrameSourceError,
+    IntoIonMobilityFrameSource
 };
 
 pub use chromatogram::{ChromatogramIterator, ChromatogramSource};
 
-pub use crate::spectrum::group::{IonMobilityFrameGrouping, SpectrumGrouping};
+pub use crate::spectrum::group::{SpectrumGrouping, IonMobilityFrameGrouping};
 
 #[cfg(feature = "async_partial")]
-pub use spectrum::{AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource, SpectrumStream};
+pub use spectrum::{AsyncSpectrumSource, AsyncRandomAccessSpectrumIterator, SpectrumStream};
 
 #[cfg(feature = "async")]
 pub use spectrum::AsyncMZFileReader;

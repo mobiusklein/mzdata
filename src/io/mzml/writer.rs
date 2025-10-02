@@ -8,7 +8,7 @@ use log::warn;
 use mzpeaks::feature::FeatureLike;
 use thiserror::Error;
 
-use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, IonMobility, KnownCharge, MZ, Mass};
+use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, IonMobility, KnownCharge, Mass, MZ};
 use quick_xml::escape;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::{Error as XMLError, Writer};
@@ -21,20 +21,19 @@ use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
 use crate::io::traits::IonMobilityFrameWriter;
 use crate::meta::{
-    ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
-    MassSpectrometryRun, Sample, ScanSettings, Software,
+    ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, ScanSettings, Software
 };
 use crate::params::{
     AccessionIntCode, ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamDescribedRead,
     ParamLike, ParamValue, Unit, ValueRef,
 };
 use crate::spectrum::bindata::{
-    ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType,
-    BuildArrayMap3DFrom, BuildArrayMapFrom, ByteArrayView, DataArray, to_bytes,
+    to_bytes, ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryCompressionType,
+    BinaryDataArrayType, BuildArrayMap3DFrom, BuildArrayMapFrom, ByteArrayView, DataArray,
 };
 use crate::spectrum::spectrum_types::SpectrumLike;
-use crate::spectrum::{Chromatogram, ChromatogramLike, RefPeakDataLevel, scan_properties::*};
-use crate::{RawSpectrum, curie, impl_param_described};
+use crate::spectrum::{scan_properties::*, Chromatogram, ChromatogramLike, RefPeakDataLevel};
+use crate::{curie, impl_param_described, RawSpectrum};
 
 const BUFFER_SIZE: usize = 10000;
 
@@ -454,6 +453,7 @@ impl Default for CompressionRegistry {
     }
 }
 
+
 impl CompressionRegistry {
     pub fn new(
         methods: Vec<((ArrayType, BinaryDataArrayType), BinaryCompressionType)>,
@@ -470,9 +470,7 @@ impl CompressionRegistry {
     fn check(method: BinaryCompressionType) -> BinaryCompressionType {
         match method {
             BinaryCompressionType::Decoded => {
-                warn!(
-                    "The mzML writer was asked to use the `Decoded` array compression, using `Zlib` instead"
-                );
+                warn!("The mzML writer was asked to use the `Decoded` array compression, using `Zlib` instead");
                 BinaryCompressionType::Zlib
             }
             _ => method,
@@ -485,15 +483,13 @@ impl CompressionRegistry {
         dtype: BinaryDataArrayType,
         method: BinaryCompressionType,
     ) {
-        let val = self
-            .methods
-            .iter_mut()
-            .find(|(k, _)| (k.0 == array_type) && (k.1 == dtype));
+        let val = self.methods.iter_mut().find(|(k, _)| {
+            (k.0 == array_type) && (k.1 == dtype)
+        });
         if let Some((_, v)) = val {
             *v = Self::check(method);
         } else {
-            self.methods
-                .push(((array_type, dtype), Self::check(method)))
+            self.methods.push(((array_type, dtype), Self::check(method)))
         }
     }
 
@@ -505,15 +501,10 @@ impl CompressionRegistry {
         self.get_compression_method(&array.name, array.dtype)
     }
 
-    pub fn get_compression_method(
-        &self,
-        array_type: &ArrayType,
-        dtype: BinaryDataArrayType,
-    ) -> BinaryCompressionType {
-        let val = self
-            .methods
-            .iter()
-            .find(|(k, _)| (k.0 == *array_type) && (k.1 == dtype));
+    pub fn get_compression_method(&self, array_type: &ArrayType, dtype: BinaryDataArrayType) -> BinaryCompressionType {
+        let val = self.methods.iter().find(|(k, _)| {
+            (k.0 == *array_type) && (k.1 == dtype)
+        });
         if let Some((_, v)) = val {
             *v
         } else {
@@ -521,6 +512,7 @@ impl CompressionRegistry {
         }
     }
 }
+
 
 impl From<BinaryCompressionType> for CompressionRegistry {
     fn from(value: BinaryCompressionType) -> Self {
@@ -591,8 +583,11 @@ pub struct MzMLWriterType<
     param_groups: Vec<ParamGroup>,
 }
 
-impl<W: Write, C: CentroidLike + BuildArrayMapFrom, D: DeconvolutedCentroidLike + BuildArrayMapFrom>
-    SpectrumWriter<C, D> for MzMLWriterType<W, C, D>
+impl<
+        W: Write,
+        C: CentroidLike + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
+    > SpectrumWriter<C, D> for MzMLWriterType<W, C, D>
 {
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> io::Result<usize> {
         match self.write_spectrum(spectrum) {
@@ -618,12 +613,12 @@ impl<W: Write, C: CentroidLike + BuildArrayMapFrom, D: DeconvolutedCentroidLike 
 }
 
 impl<
-    W: Write,
-    C: CentroidLike + BuildArrayMapFrom,
-    D: DeconvolutedCentroidLike + BuildArrayMapFrom,
-    CF: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
-    DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
-> IonMobilityFrameWriter<CF, DF> for MzMLWriterType<W, C, D>
+        W: Write,
+        C: CentroidLike + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
+        CF: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
+        DF: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
+    > IonMobilityFrameWriter<CF, DF> for MzMLWriterType<W, C, D>
 {
     fn write_frame<S: crate::spectrum::IonMobilityFrameLike<CF, DF> + 'static>(
         &mut self,
@@ -668,8 +663,11 @@ impl<
     }
 }
 
-impl<W: Write, C: CentroidLike + BuildArrayMapFrom, D: DeconvolutedCentroidLike + BuildArrayMapFrom>
-    MSDataFileMetadata for MzMLWriterType<W, C, D>
+impl<
+        W: Write,
+        C: CentroidLike + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
+    > MSDataFileMetadata for MzMLWriterType<W, C, D>
 {
     crate::impl_metadata_trait!();
 
@@ -1075,7 +1073,7 @@ where
 
     fn write_scan_settings_list(&mut self) -> WriterResult {
         if self.scan_settings.is_empty() {
-            return Ok(());
+            return Ok(())
         }
         let mut outer = bstart!("scanSettingsList");
         let count = self.samples.len().to_string();
@@ -1096,8 +1094,7 @@ where
                 for sf_ref in settings.source_file_refs.iter() {
                     let sf_ref_tag = bstart!("sourceFileRef");
                     self.handle.write_event(Event::Start(sf_ref_tag.borrow()))?;
-                    self.handle
-                        .write_event(Event::Text(BytesText::new(sf_ref)))?;
+                    self.handle.write_event(Event::Text(BytesText::new(sf_ref)))?;
                     self.handle.write_event(Event::End(sf_ref_tag.to_end()))?;
                 }
                 self.handle.write_event(Event::End(inner.to_end()))?;
@@ -1279,40 +1276,32 @@ where
 
     /// Get the compression method for the specified [`ArrayType`] and [`BinaryDataArrayType`],
     /// or the default compression method if a match is not found.
-    pub fn get_compression_method(
-        &self,
-        array_type: &ArrayType,
-        dtype: BinaryDataArrayType,
-    ) -> BinaryCompressionType {
-        self.data_array_compression
-            .get_compression_method(array_type, dtype)
+    pub fn get_compression_method(&self, array_type: &ArrayType, dtype: BinaryDataArrayType) -> BinaryCompressionType {
+        self.data_array_compression.get_compression_method(array_type, dtype)
     }
 
     /// Get the compression method for the provided [`DataArray`].
     ///
     /// This is a helper method that calls [`Self::get_compression_method`]
     pub fn get_compression_method_for(&self, array: &DataArray) -> BinaryCompressionType {
-        self.data_array_compression
-            .get_compression_method_for(array)
+        self.data_array_compression.get_compression_method_for(array)
     }
 
     /// Set the compression method for the specified [`ArrayType`] and [`BinaryDataArrayType`].
     ///
     /// Has no effect on the default compression method.
     pub fn set_compression_method(
-        &mut self,
-        array_type: ArrayType,
-        dtype: BinaryDataArrayType,
-        method: BinaryCompressionType,
-    ) {
-        self.data_array_compression
-            .set_compression_method(array_type, dtype, method)
+            &mut self,
+            array_type: ArrayType,
+            dtype: BinaryDataArrayType,
+            method: BinaryCompressionType,
+        ) {
+        self.data_array_compression.set_compression_method(array_type, dtype, method)
     }
 
     /// Specify the default compression method used
     pub fn set_default_compression_method(&mut self, method: BinaryCompressionType) {
-        self.data_array_compression
-            .set_default_compression_method(method)
+        self.data_array_compression.set_default_compression_method(method)
     }
 }
 
@@ -1763,11 +1752,12 @@ where
 
         let encoded_len = encoded_array.len().to_string();
         attrib!("encodedLength", encoded_len, outer);
-        if let Some(dp_id) = array.data_processing_reference()
-            && let Some(dp_global) = self.run.default_data_processing_id.as_deref()
-            && dp_id != dp_global
-        {
-            attrib!("dataProcessingRef", dp_id, outer);
+        if let Some(dp_id) = array.data_processing_reference() {
+            if let Some(dp_global) = self.run.default_data_processing_id.as_deref() {
+                if dp_id != dp_global {
+                    attrib!("dataProcessingRef", dp_id, outer);
+                }
+            }
         }
         let array_len = array.data_len()?;
         if array_len != default_array_len {
@@ -1803,8 +1793,7 @@ where
         }
 
         self.handle.write_param(
-            self.data_array_compression
-                .get_compression_method_for(array)
+            self.data_array_compression.get_compression_method_for(array)
                 .clone()
                 .as_param()
                 .as_ref()
@@ -2228,10 +2217,10 @@ where
 }
 
 impl<
-    W: io::Write,
-    C: CentroidLike + BuildArrayMapFrom,
-    D: DeconvolutedCentroidLike + BuildArrayMapFrom,
-> Drop for MzMLWriterType<W, C, D>
+        W: io::Write,
+        C: CentroidLike + BuildArrayMapFrom,
+        D: DeconvolutedCentroidLike + BuildArrayMapFrom,
+    > Drop for MzMLWriterType<W, C, D>
 {
     fn drop(&mut self) {
         MzMLWriterType::close(self).unwrap();

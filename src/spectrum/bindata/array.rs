@@ -5,13 +5,14 @@ use std::mem;
 
 use base64_simd;
 use bytemuck::Pod;
-use flate2::Compression;
 use flate2::write::{ZlibDecoder, ZlibEncoder};
+use flate2::Compression;
 
 use crate::params::{ParamList, Unit};
 
 use super::encodings::{
-    ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType, Bytes, to_bytes,
+    to_bytes, ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType,
+    Bytes,
 };
 use super::traits::{ByteArrayView, ByteArrayViewMut};
 #[allow(unused)]
@@ -113,7 +114,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     }
 
     pub fn slice(&self, start: usize, end: usize) -> Result<DataArray, ArrayRetrievalError> {
-        if end < start || !(end - start).is_multiple_of(self.dtype.size_of()) {
+        if end < start || (end - start) % self.dtype.size_of() != 0 {
             Err(ArrayRetrievalError::DataTypeSizeMismatch)
         } else {
             let data = self.decode()?;
@@ -128,7 +129,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         start: usize,
         end: usize,
     ) -> Result<Cow<'_, [u8]>, ArrayRetrievalError> {
-        if end < start || !(end - start).is_multiple_of(self.dtype.size_of()) {
+        if end < start || (end - start) % self.dtype.size_of() != 0 {
             Err(ArrayRetrievalError::DataTypeSizeMismatch)
         } else {
             let data = self.decode()?;
@@ -223,7 +224,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                     panic!("Cannot Numpress non-float64 data!");
                 }
                 if bytestring.is_empty() {
-                    return base64_simd::STANDARD.encode_type::<Bytes>(&bytestring);
+                    return base64_simd::STANDARD.encode_type::<Bytes>(&bytestring)
                 }
                 let compressed =
                     Self::compress_numpress_linear(bytemuck::cast_slice(&bytestring)).unwrap();
@@ -233,13 +234,11 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             BinaryCompressionType::NumpressSLOF => {
                 let compressed = match self.dtype {
                     BinaryDataArrayType::Float32 => {
-                        Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f32>(&bytestring))
-                            .unwrap()
-                    }
+                        Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f32>(&bytestring)).unwrap()
+                    },
                     BinaryDataArrayType::Float64 => {
-                        Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f64>(&bytestring))
-                            .unwrap()
-                    }
+                        Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f64>(&bytestring)).unwrap()
+                    },
                     _ => {
                         panic!("Cannot Numpress non-float data!");
                     }
@@ -253,7 +252,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                 }
                 if bytestring.is_empty() {
                     let compressed = Self::compress_zlib(&bytestring);
-                    return base64_simd::STANDARD.encode_type::<Bytes>(&compressed);
+                    return base64_simd::STANDARD.encode_type::<Bytes>(&compressed)
                 }
                 let compressed = Self::compress_numpress_linear(bytemuck::cast_slice(&bytestring))
                     .inspect_err(|e| {
@@ -269,34 +268,30 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                     panic!("Cannot Numpress non-float64 data!");
                 }
                 if bytestring.is_empty() {
-                    let compressed =
-                        Self::compress_zstd(&bytestring, BinaryDataArrayType::Unknown, false);
-                    return base64_simd::STANDARD.encode_type::<Bytes>(&compressed);
+                    let compressed = Self::compress_zstd(&bytestring, BinaryDataArrayType::Unknown, false);
+                    return base64_simd::STANDARD.encode_type::<Bytes>(&compressed)
                 }
                 let compressed = Self::compress_numpress_linear(bytemuck::cast_slice(&bytestring))
                     .inspect_err(|e| {
                         log::error!("Failed to compress buffer with numpress: {e}");
                     })
                     .unwrap();
-                let compressed =
-                    Self::compress_zstd(&compressed, BinaryDataArrayType::Unknown, false);
+                let compressed = Self::compress_zstd(&compressed, BinaryDataArrayType::Unknown, false);
                 base64_simd::STANDARD.encode_type::<Bytes>(&compressed)
             }
             #[cfg(feature = "numpress")]
             BinaryCompressionType::NumpressSLOFZlib => {
                 if bytestring.is_empty() {
                     let bytestring = Self::compress_zlib(&bytestring);
-                    return base64_simd::STANDARD.encode_type::<Bytes>(&bytestring);
+                    return base64_simd::STANDARD.encode_type::<Bytes>(&bytestring)
                 }
                 let compressed = match self.dtype {
                     BinaryDataArrayType::Float32 => {
-                        Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f32>(&bytestring))
-                            .unwrap()
-                    }
+                        Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f32>(&bytestring)).unwrap()
+                    },
                     BinaryDataArrayType::Float64 => {
-                        Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f64>(&bytestring))
-                            .unwrap()
-                    }
+                        Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f64>(&bytestring)).unwrap()
+                    },
                     _ => {
                         panic!("Cannot Numpress non-float data!");
                     }
@@ -307,25 +302,21 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             #[cfg(all(feature = "numpress", feature = "zstd"))]
             BinaryCompressionType::NumpressSLOFZstd => {
                 if bytestring.is_empty() {
-                    let bytestring =
-                        Self::compress_zstd(&bytestring, BinaryDataArrayType::Unknown, false);
-                    return base64_simd::STANDARD.encode_type::<Bytes>(&bytestring);
+                    let bytestring = Self::compress_zstd(&bytestring, BinaryDataArrayType::Unknown, false);
+                    return base64_simd::STANDARD.encode_type::<Bytes>(&bytestring)
                 }
                 let compressed = match self.dtype {
                     BinaryDataArrayType::Float32 => {
-                        Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f32>(&bytestring))
-                            .unwrap()
-                    }
+                        Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f32>(&bytestring)).unwrap()
+                    },
                     BinaryDataArrayType::Float64 => {
-                        Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f64>(&bytestring))
-                            .unwrap()
-                    }
+                        Self::compress_numpress_slof(bytemuck::cast_slice::<u8, f64>(&bytestring)).unwrap()
+                    },
                     _ => {
                         panic!("Cannot Numpress non-float data!");
                     }
                 };
-                let bytestring =
-                    Self::compress_zstd(&compressed, BinaryDataArrayType::Unknown, false);
+                let bytestring = Self::compress_zstd(&compressed, BinaryDataArrayType::Unknown, false);
                 base64_simd::STANDARD.encode_type::<Bytes>(&bytestring)
             }
             #[cfg(feature = "zstd")]
@@ -385,9 +376,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     }
 
     #[cfg(feature = "numpress")]
-    pub fn compress_numpress_slof<T: numpress::AsFloat64>(
-        data: &[T],
-    ) -> Result<Bytes, ArrayRetrievalError> {
+    pub fn compress_numpress_slof<T: numpress::AsFloat64>(data: &[T]) -> Result<Bytes, ArrayRetrievalError> {
         let scaling = numpress::optimal_slof_fixed_point(data);
         let mut buf = Bytes::new();
         match numpress::encode_slof(data, &mut buf, scaling) {
@@ -399,7 +388,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     #[cfg(feature = "numpress")]
     pub fn decompress_numpress_linear(data: &[u8]) -> Result<Vec<f64>, ArrayRetrievalError> {
         if data.is_empty() {
-            return Ok(Vec::new());
+            return Ok(Vec::new())
         }
         match numpress::numpress_decompress(data) {
             Ok(data) => Ok(data),
@@ -408,10 +397,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     }
 
     #[cfg(feature = "numpress")]
-    pub fn decompress_numpress_slof(
-        data: &[u8],
-        dtype: BinaryDataArrayType,
-    ) -> Result<Cow<'static, [u8]>, ArrayRetrievalError> {
+    pub fn decompress_numpress_slof(data: &[u8], dtype: BinaryDataArrayType) -> Result<Cow<'static, [u8]>, ArrayRetrievalError> {
         use log::trace;
 
         let mut buf = Vec::new();
@@ -424,7 +410,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             BinaryDataArrayType::Float64 => {
                 let view = vec_as_bytes(decoded);
                 Ok(Cow::Owned(view))
-            }
+            },
             BinaryDataArrayType::Float32 => {
                 let n = decoded.len() * BinaryDataArrayType::Float32.size_of();
                 trace!("Mapping to {n} bytes for f32 storage");
@@ -434,11 +420,14 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                     view.extend(bytemuck::bytes_of(&val))
                 }
                 Ok(Cow::Owned(view))
+            },
+            _ => {
+                Err(ArrayRetrievalError::DecompressionError(
+                    BinaryCompressionType::NumpressSLOF.unsupported_msg(Some(
+                        format!("Not compatible with {:?}", dtype).as_str(),
+                    )),
+                ))
             }
-            _ => Err(ArrayRetrievalError::DecompressionError(
-                BinaryCompressionType::NumpressSLOF
-                    .unsupported_msg(Some(format!("Not compatible with {:?}", dtype).as_str())),
-            )),
         }
     }
 
@@ -525,31 +514,36 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         match dtype {
             BinaryDataArrayType::Float64 => {
                 let compressed =
-                    dictionary_encoding(bytemuck::cast_slice::<u8, f64>(&bytestring)).unwrap();
+                    dictionary_encoding(bytemuck::cast_slice::<u8, f64>(&bytestring))
+                        .unwrap();
                 let compressed = Self::compress_zstd(&compressed, dtype, false);
                 compressed
             }
             BinaryDataArrayType::Float32 => {
                 let compressed =
-                    dictionary_encoding(bytemuck::cast_slice::<u8, f32>(&bytestring)).unwrap();
+                    dictionary_encoding(bytemuck::cast_slice::<u8, f32>(&bytestring))
+                        .unwrap();
                 let compressed = Self::compress_zstd(&compressed, dtype, false);
                 compressed
             }
             BinaryDataArrayType::Int64 => {
                 let compressed =
-                    dictionary_encoding(bytemuck::cast_slice::<u8, i64>(&bytestring)).unwrap();
+                    dictionary_encoding(bytemuck::cast_slice::<u8, i64>(&bytestring))
+                        .unwrap();
                 let compressed = Self::compress_zstd(&compressed, dtype, false);
                 compressed
             }
             BinaryDataArrayType::Int32 => {
                 let compressed =
-                    dictionary_encoding(bytemuck::cast_slice::<u8, i32>(&bytestring)).unwrap();
+                    dictionary_encoding(bytemuck::cast_slice::<u8, i32>(&bytestring))
+                        .unwrap();
                 let compressed = Self::compress_zstd(&compressed, dtype, false);
                 compressed
             }
             _ => {
                 let compressed =
-                    dictionary_encoding(bytemuck::cast_slice::<u8, u8>(&bytestring)).unwrap();
+                    dictionary_encoding(bytemuck::cast_slice::<u8, u8>(&bytestring))
+                        .unwrap();
                 let compressed = Self::compress_zstd(&compressed, dtype, false);
                 compressed
             }
@@ -613,13 +607,19 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
         let data = Self::decompress_zstd(bytestring, dtype, false);
         match dtype {
-            BinaryDataArrayType::ASCII | BinaryDataArrayType::Unknown => {
-                dictionary_decoding(&data).unwrap()
-            }
-            BinaryDataArrayType::Float64 => to_bytes(&dictionary_decoding::<f64>(&data).unwrap()),
-            BinaryDataArrayType::Float32 => to_bytes(&dictionary_decoding::<f32>(&data).unwrap()),
-            BinaryDataArrayType::Int64 => to_bytes(&dictionary_decoding::<i64>(&data).unwrap()),
-            BinaryDataArrayType::Int32 => to_bytes(&dictionary_decoding::<i32>(&data).unwrap()),
+            BinaryDataArrayType::ASCII | BinaryDataArrayType::Unknown => dictionary_decoding(&data).unwrap(),
+            BinaryDataArrayType::Float64 => {
+                to_bytes(&dictionary_decoding::<f64>(&data).unwrap())
+            },
+            BinaryDataArrayType::Float32 => {
+                to_bytes(&dictionary_decoding::<f32>(&data).unwrap())
+            },
+            BinaryDataArrayType::Int64 => {
+                to_bytes(&dictionary_decoding::<i64>(&data).unwrap())
+            },
+            BinaryDataArrayType::Int32 => {
+                to_bytes(&dictionary_decoding::<i32>(&data).unwrap())
+            },
         }
     }
 
@@ -759,8 +759,11 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             BinaryCompressionType::NumpressLinearZstd => match self.dtype {
                 BinaryDataArrayType::Float64 => {
                     let bytestring = base64_decode!();
-                    let bytestring =
-                        Self::decompress_zstd(&bytestring, BinaryDataArrayType::Unknown, false);
+                    let bytestring = Self::decompress_zstd(
+                        &bytestring,
+                        BinaryDataArrayType::Unknown,
+                        false,
+                    );
                     let decoded = Self::decompress_numpress_linear(&bytestring)?;
                     let view = vec_as_bytes(decoded);
                     Ok(Cow::Owned(view))
@@ -775,8 +778,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             #[cfg(all(feature = "numpress", feature = "zstd"))]
             BinaryCompressionType::NumpressSLOFZstd => {
                 let bytestring = base64_decode!();
-                let bytestring =
-                    Self::decompress_zstd(&bytestring, BinaryDataArrayType::Unknown, false);
+                let bytestring = Self::decompress_zstd(&bytestring, BinaryDataArrayType::Unknown, false);
                 Self::decompress_numpress_slof(&bytestring, self.dtype)
             }
 
@@ -792,12 +794,14 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         start: usize,
         end: usize,
     ) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError> {
-        if start > end || !(end - start).is_multiple_of(self.dtype.size_of()) {
+        if start > end || (end - start) % self.dtype.size_of() != 0 {
             return Err(ArrayRetrievalError::DataTypeSizeMismatch);
         }
         match self.compression {
             BinaryCompressionType::Decoded => Ok(Cow::Borrowed(&self.data.as_slice()[start..end])),
-            _ => Ok(Cow::Owned(self.decode()?[start..end].to_vec())),
+            _ => {
+                Ok(Cow::Owned(self.decode()?[start..end].to_vec()))
+            }
         }
     }
 
@@ -806,14 +810,17 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             Ok(&mut self.data)
         } else {
             match self.decode()? {
-                Cow::Borrowed(_) => Ok(&mut self.data),
+                Cow::Borrowed(_) => {
+                    Ok(&mut self.data)
+                },
                 Cow::Owned(owned) => {
                     self.data = owned;
                     self.compression = BinaryCompressionType::Decoded;
                     Ok(&mut self.data)
-                }
+                },
             }
         }
+
     }
 
     pub fn clear(&mut self) {
@@ -1022,11 +1029,7 @@ mod test {
         let mut buf = String::new();
         fh.read_to_string(&mut buf)?;
         let bytes: Vec<u8> = buf.into();
-        let mut da = DataArray::wrap(
-            &ArrayType::MeanInverseReducedIonMobilityArray,
-            BinaryDataArrayType::Float64,
-            bytes,
-        );
+        let mut da = DataArray::wrap(&ArrayType::MeanInverseReducedIonMobilityArray, BinaryDataArrayType::Float64, bytes);
         da.compression = BinaryCompressionType::Zstd;
         *da.unit_mut() = Unit::VoltSecondPerSquareCentimeter;
         assert_eq!(da.unit(), Unit::VoltSecondPerSquareCentimeter);
@@ -1090,9 +1093,7 @@ mod test {
         da.store_compressed(BinaryCompressionType::DeltaShuffleZstd)
             .unwrap();
         let delta_zstd_len = da.data.len();
-        eprintln!(
-            "decoded: {decoded_len};\nzlib: {zlib_len};\nzstd: {zstd_len};\ndelta-zstd: {delta_zstd_len}"
-        );
+        eprintln!("decoded: {decoded_len};\nzlib: {zlib_len};\nzstd: {zstd_len};\ndelta-zstd: {delta_zstd_len}");
         da.decode_and_store().unwrap();
         let view = da.to_f64().unwrap();
         let err: f64 = points
@@ -1147,11 +1148,7 @@ mod test {
         let mut da_ref = make_array_from_file()?;
         da_ref.decode_and_store()?;
         for (a, b) in da.iter_f64()?.zip(da_ref.iter_f64()?) {
-            assert!(
-                (a - b).abs() < 1e-3,
-                "{a} - {b} = {} which is too large a deviation",
-                (a - b).abs()
-            )
+            assert!((a - b).abs() < 1e-3, "{a} - {b} = {} which is too large a deviation", (a - b).abs())
         }
 
         Ok(())
@@ -1187,6 +1184,7 @@ mod test {
         assert_eq!(da.decode().unwrap().len(), 0);
         assert_eq!(da.to_f64().unwrap().len(), 0);
     }
+
 
     #[cfg(feature = "zstd")]
     #[test]
