@@ -185,10 +185,15 @@ pub fn infer_format<P: Into<path::PathBuf>>(path: P) -> io::Result<(MassSpectrom
     let (format, is_gzipped) = infer_from_path(&path);
     match format {
         MassSpectrometryFormat::Unknown => {
-            let handle = fs::File::open(path.clone())?;
-            let mut stream = BufReader::new(handle);
-            let (format, is_gzipped) = infer_from_stream(&mut stream)?;
-            Ok((format, is_gzipped))
+            // If the path is a directory, don't try to open it as a file
+            if path.is_dir() {
+                Ok((MassSpectrometryFormat::Unknown, false))
+            } else {
+                let handle = fs::File::open(path.clone())?;
+                let mut stream = BufReader::new(handle);
+                let (format, is_gzipped) = infer_from_stream(&mut stream)?;
+                Ok((format, is_gzipped))
+            }
         }
         _ => Ok((format, is_gzipped)),
     }
