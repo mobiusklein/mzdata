@@ -1103,14 +1103,17 @@ param_value_ref_int!(usize);
 param_value_ref_float!(f32);
 param_value_ref_float!(f64);
 
-
 #[cfg(feature = "serde")]
 impl From<Value> for serde_json::Value {
     fn from(value: Value) -> Self {
         match value {
             Value::Boolean(val) => serde_json::Value::Bool(val),
-            Value::Float(val) => serde_json::Value::Number(serde_json::Number::from_f64(val).unwrap()),
-            Value::Int(val) => serde_json::Value::Number(serde_json::Number::from_i128(val as i128).unwrap()),
+            Value::Float(val) => {
+                serde_json::Value::Number(serde_json::Number::from_f64(val).unwrap())
+            }
+            Value::Int(val) => {
+                serde_json::Value::Number(serde_json::Number::from_i128(val as i128).unwrap())
+            }
             Value::String(val) => serde_json::Value::String(val),
             Value::Buffer(val) => serde_json::to_value(&val).unwrap(),
             Value::Empty => serde_json::Value::Null,
@@ -1233,31 +1236,58 @@ macro_rules! find_param_method {
 #[macro_export]
 macro_rules! curie {
     (MS:$acc:literal) => {
-        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::MS, accession: $acc }
+        $crate::params::CURIE {
+            controlled_vocabulary: $crate::params::ControlledVocabulary::MS,
+            accession: $acc,
+        }
     };
     (UO:$acc:literal) => {
-        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::UO, accession: $acc }
+        $crate::params::CURIE {
+            controlled_vocabulary: $crate::params::ControlledVocabulary::UO,
+            accession: $acc,
+        }
     };
     (EFO:$acc:literal) => {
-        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::EFO, accession: $acc }
+        $crate::params::CURIE {
+            controlled_vocabulary: $crate::params::ControlledVocabulary::EFO,
+            accession: $acc,
+        }
     };
     (BFO:$acc:literal) => {
-        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::BFO, accession: $acc }
+        $crate::params::CURIE {
+            controlled_vocabulary: $crate::params::ControlledVocabulary::BFO,
+            accession: $acc,
+        }
     };
     (BTO:$acc:literal) => {
-        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::BTO, accession: $acc }
+        $crate::params::CURIE {
+            controlled_vocabulary: $crate::params::ControlledVocabulary::BTO,
+            accession: $acc,
+        }
     };
     (OBI:$acc:literal) => {
-        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::OBI, accession: $acc }
+        $crate::params::CURIE {
+            controlled_vocabulary: $crate::params::ControlledVocabulary::OBI,
+            accession: $acc,
+        }
     };
     (HANCESTRO:$acc:literal) => {
-        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::HANCESTRO, accession: $acc }
+        $crate::params::CURIE {
+            controlled_vocabulary: $crate::params::ControlledVocabulary::HANCESTRO,
+            accession: $acc,
+        }
     };
     (NCIT:$acc:literal) => {
-        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::NCIT, accession: $acc }
+        $crate::params::CURIE {
+            controlled_vocabulary: $crate::params::ControlledVocabulary::NCIT,
+            accession: $acc,
+        }
     };
     (PRIDE:$acc:literal) => {
-        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::PRIDE, accession: $acc }
+        $crate::params::CURIE {
+            controlled_vocabulary: $crate::params::ControlledVocabulary::PRIDE,
+            accession: $acc,
+        }
     };
 }
 
@@ -1309,7 +1339,6 @@ impl PackedCURIE {
         ((self.0 & 0xff00000000000000) as u8).try_into().unwrap()
     }
 }
-
 
 impl Display for CURIE {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1963,7 +1992,6 @@ const BTO_CV_BYTES: &[u8] = BTO_CV.as_bytes();
 const NCIT_CV_BYTES: &[u8] = NCIT_CV.as_bytes();
 const PRIDE_CV_BYTES: &[u8] = PRIDE_CV.as_bytes();
 
-
 impl TryFrom<u8> for ControlledVocabulary {
     type Error = ControlledVocabularyResolutionError;
 
@@ -2171,7 +2199,7 @@ pub enum ControlledVocabularyResolutionError {
     #[error("Unrecognized controlled vocabulary {0}")]
     UnknownControlledVocabulary(String),
     #[error("Unrecognized controlled vocabulary code {0}")]
-    UnknownControlledVocabularyCode(u8)
+    UnknownControlledVocabularyCode(u8),
 }
 
 impl FromStr for ControlledVocabulary {
@@ -2372,331 +2400,95 @@ macro_rules! impl_param_described_deferred {
     )+};
 }
 
-/// Units that a term's value might have
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Unit {
-    Unknown,
+/// Easily define all units. See the usage for more details. The accession and name both have to be
+/// included in `&'static str` and `byte slice` to allow for constant time matching.
+macro_rules! units {
+    [$($unit:ident, $accession:literal, $baccession:literal, $name:literal, $bname:literal, $cv:ident, $id:literal);*;] => {
+        /// Units that a term's value might have
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        pub enum Unit {
+            Unknown,
+            $($unit,)*
+        }
 
-    // Mass
-    MZ,
-    Mass,
-    PartsPerMillion,
-
-    // Wavelength
-    Nanometer,
-
-    // Time
-    Minute,
-    Second,
-    Millisecond,
-    VoltSecondPerSquareCentimeter,
-
-    // Intensity
-    DetectorCounts,
-    PercentBasePeak,
-    PercentBasePeakTimes100,
-    AbsorbanceUnit,
-    CountsPerSecond,
-
-    // Collision Energy
-    Electronvolt,
-    Volt,
-
-    Celsius,
-    Kelvin,
-
-    Pascal,
-    Psi,
-
-    MicrolitersPerMinute,
-
-    Percent,
-    Dimensionless,
-}
-
-impl Unit {
-    pub const fn for_param(&self) -> (&'static str, &'static str) {
-        match self {
-            Self::Millisecond => ("UO:0000028", "millisecond"),
-            Self::Second => ("UO:0000010", "second"),
-            Self::Minute => ("UO:0000031", "minute"),
-            Self::VoltSecondPerSquareCentimeter => {
-                ("MS:1002814", "volt-second per square centimeter")
+        impl Unit {
+            pub const fn for_param(&self) -> (&'static str, &'static str) {
+                match self {
+                    $(Self::$unit => ($accession, $name),)*
+                    Self::Unknown => ("","")
+                }
             }
 
-            Self::MZ => ("MS:1000040", "m/z"),
-            Self::Mass => ("UO:000221", "dalton"),
+            pub const fn from_name(name: &str) -> Unit {
+                match name.as_bytes() {
+                    $($bname => Self::$unit,)*
+                    _ => Self::Unknown
+                }
+            }
 
-            Self::DetectorCounts => ("MS:1000131", "number of detector counts"),
-            Self::PercentBasePeak => ("MS:1000132", "percent of base peak"),
-            Self::PercentBasePeakTimes100 => ("MS:1000905", "percent of base peak times 100"),
-            Self::AbsorbanceUnit => ("UO:0000269", "absorbance unit"),
-            Self::CountsPerSecond => ("MS:1000814", "counts per second"),
+            pub const fn from_accession(acc: &str) -> Unit {
+                match acc.as_bytes() {
+                    $($baccession => Self::$unit,)*
+                    _ => Self::Unknown
+                }
+            }
 
-            Self::Electronvolt => ("UO:0000266", "electronvolt"),
-            Self::Percent => ("UO:0000187", "percent"),
+            pub const fn from_curie(acc: &CURIE) -> Unit {
+                match acc {
+                    $(CURIE {
+                        controlled_vocabulary: ControlledVocabulary::$cv,
+                        accession: $id,
+                    } => Self::$unit,)*
+                    _ => Self::Unknown
+                }
+            }
 
-            Self::Celsius => ("UO:0000027", "degree Celsius"),
-            Self::Kelvin => ("UO:0000012", "kelvin"),
+            pub const fn to_curie(&self) -> Option<CURIE> {
+                match self {
+                    $(Self::$unit => Some(CURIE {
+                        controlled_vocabulary: ControlledVocabulary::$cv,
+                        accession: $id,
+                    }),)*
+                    Self::Unknown => None
+                }
+            }
 
-            Self::Pascal => ("UO:0000110", "pascal"),
-            Self::Psi => ("UO:0010052", "pounds per square inch"),
+            pub const fn from_param(param: &Param) -> Unit {
+                param.unit
+            }
 
-            Self::MicrolitersPerMinute => ("UO:0000271", "microliters per minute"),
-
-            Self::Dimensionless => ("UO:0000186", "dimensionless unit"),
-
-            _ => ("", ""),
+            pub const fn is_unknown(&self) -> bool {
+                matches!(self, Self::Unknown)
+            }
         }
-    }
-
-    pub const fn from_name(name: &str) -> Unit {
-        let bytes = name.as_bytes();
-        match bytes {
-            b"millisecond" => Self::Millisecond,
-            b"second" => Self::Second,
-            b"minute" => Self::Minute,
-
-            b"m/z" => Self::MZ,
-            b"dalton" => Self::Mass,
-
-            b"number of detector counts" => Self::DetectorCounts,
-            b"percent of base peak" => Self::PercentBasePeak,
-            b"percent of base peak times 100" => Self::PercentBasePeakTimes100,
-            b"absorbance unit" => Self::AbsorbanceUnit,
-            b"counts per second" => Self::CountsPerSecond,
-
-            b"electronvolt" => Self::Electronvolt,
-            b"percent" => Self::Percent,
-
-            b"degree Celsius" => Self::Celsius,
-            b"kelvin" => Self::Kelvin,
-
-            b"pascal" => Self::Pascal,
-            b"pounds per square inch" => Self::Psi,
-
-            b"microliters per minute" => Self::MicrolitersPerMinute,
-
-            b"dimensionless unit" => Self::Dimensionless,
-            b"volt-second per square centimeter" => Self::VoltSecondPerSquareCentimeter,
-
-            _ => Unit::Unknown,
-        }
-    }
-
-    pub const fn from_accession(acc: &str) -> Unit {
-        let bytes = acc.as_bytes();
-        match bytes {
-            b"UO:0000028" => Self::Millisecond,
-            b"UO:0000010" => Self::Second,
-            b"UO:0000031" => Self::Minute,
-
-            b"MS:1000040" => Self::MZ,
-            b"UO:000221" => Self::Mass,
-
-            b"MS:1000131" => Self::DetectorCounts,
-            b"MS:1000132" => Self::PercentBasePeak,
-            b"MS:1000905" => Self::PercentBasePeakTimes100,
-            b"UO:0000269" => Self::AbsorbanceUnit,
-            b"MS:1000814" => Self::CountsPerSecond,
-
-            b"UO:0000266" => Self::Electronvolt,
-            b"UO:0000187" => Self::Percent,
-
-            b"UO:0000186" => Self::Dimensionless,
-
-            b"MS:1002814" => Self::VoltSecondPerSquareCentimeter,
-
-            b"UO:0000027" => Self::Celsius,
-            b"UO:0000012" => Self::Kelvin,
-
-            b"UO:0000110" => Self::Pascal,
-            b"UO:0010052" => Self::Psi,
-
-            b"UO:0000271" => Self::MicrolitersPerMinute,
-
-            _ => Unit::Unknown,
-        }
-    }
-
-    pub const fn from_curie(acc: &CURIE) -> Unit {
-        match acc {
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 28,
-            } => Self::Millisecond,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 10,
-            } => Self::Second,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 31,
-            } => Self::Minute,
-
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::MS,
-                accession: 1000040,
-            } => Self::MZ,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 221,
-            } => Self::Mass,
-
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::MS,
-                accession: 1000131,
-            } => Self::DetectorCounts,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::MS,
-                accession: 1000132,
-            } => Self::PercentBasePeak,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 269,
-            } => Self::AbsorbanceUnit,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::MS,
-                accession: 1000814,
-            } => Self::CountsPerSecond,
-
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 266,
-            } => Self::Electronvolt,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 187,
-            } => Self::Percent,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 186,
-            } => Self::Dimensionless,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::MS,
-                accession: 1002814,
-            } => Self::VoltSecondPerSquareCentimeter,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 27,
-            } => Self::Celsius,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 12,
-            } => Unit::Kelvin,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 110,
-            } => Unit::Pascal,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 10052,
-            } => Self::Psi,
-            CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 271,
-            } => Self::MicrolitersPerMinute,
-            _ => Unit::Unknown,
-        }
-    }
-
-    pub const fn to_curie(&self) -> Option<CURIE> {
-        match self {
-            Self::Millisecond => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 28,
-            }),
-            Self::Second => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 10,
-            }),
-            Self::Minute => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 31,
-            }),
-
-            Self::MZ => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::MS,
-                accession: 1000040,
-            }),
-            Self::Mass => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 221,
-            }),
-
-            Self::DetectorCounts => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::MS,
-                accession: 1000131,
-            }),
-            Self::PercentBasePeak => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::MS,
-                accession: 1000132,
-            }),
-            Self::AbsorbanceUnit => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 269,
-            }),
-            Self::CountsPerSecond => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::MS,
-                accession: 1000814,
-            }),
-
-            Self::Electronvolt => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 266,
-            }),
-            Self::Percent => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 187,
-            }),
-
-            Self::Dimensionless => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 186,
-            }),
-
-            Self::VoltSecondPerSquareCentimeter => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::MS,
-                accession: 1002814,
-            }),
-
-            Self::Celsius => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 27,
-            }),
-
-            Self::Kelvin => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 12,
-            }),
-
-            Self::Pascal => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 110,
-            }),
-            Self::Psi => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 10052,
-            }),
-
-            Self::MicrolitersPerMinute => Some(CURIE {
-                controlled_vocabulary: ControlledVocabulary::UO,
-                accession: 271,
-            }),
-
-            _ => None,
-        }
-    }
-
-    pub const fn from_param(param: &Param) -> Unit {
-        param.unit
-    }
-
-    pub const fn is_unknown(&self) -> bool {
-        matches!(self, Self::Unknown)
-    }
+    };
 }
+
+units![
+    AbsorbanceUnit, "UO:0000269", b"UO:0000269", "absorbance unit", b"absorbance unit", UO, 269;
+    Celsius, "UO:0000027", b"UO:0000027", "degree Celsius", b"degree Celsius", UO, 27;
+    CountsPerSecond, "MS:1000814", b"MS:1000814", "counts per second", b"counts per second", MS, 1000814;
+    DetectorCounts, "MS:1000131", b"MS:1000131", "number of detector counts", b"number of detector counts", MS, 1000131;
+    Dimensionless, "UO:0000186", b"UO:0000186", "dimensionless unit", b"dimensionless unit", UO, 186;
+    Electronvolt, "UO:0000266", b"UO:0000266", "electronvolt", b"electronvolt", UO, 266;
+    Kelvin, "UO:0000012", b"UO:0000012", "kelvin", b"kelvin", UO, 12;
+    Mass, "UO:000221", b"UO:000221", "dalton", b"dalton", UO, 221;
+    MicrolitersPerMinute, "UO:0000271", b"UO:0000271", "microliters per minute", b"microliters per minute", UO, 271;
+    Millisecond, "UO:0000028", b"UO:0000028", "millisecond", b"millisecond", UO, 28;
+    Minute, "UO:0000031", b"UO:0000031", "minute", b"minute", UO, 31;
+    MZ, "MS:1000040", b"MS:1000040", "m/z", b"m/z", MS, 1000040;
+    Nanometer, "UO:0000018", b"UO:0000018", "nanometer", b"nanometer", UO, 18;
+    PartsPerMillion, "UO:0000169", b"UO:0000169", "parts per million ", b"parts per million ", UO, 169;
+    Pascal, "UO:0000110", b"UO:0000110", "pascal", b"pascal", UO, 110;
+    Percent, "UO:0000187", b"UO:0000187", "percent", b"percent", UO, 187;
+    PercentBasePeak, "MS:1000132", b"MS:1000132", "percent of base peak", b"percent of base peak", MS, 1000132;
+    PercentBasePeakTimes100, "MS:1000905", b"MS:1000905", "percent of base peak times 100", b"percent of base peak times 100", MS, 1000905;
+    Psi, "UO:0010052", b"UO:0010052", "pounds per square inch", b"pounds per square inch", UO, 10052;
+    Second, "UO:0000010", b"UO:0000010", "second", b"second", UO, 10;
+    Volt, "UO:0000218", b"UO:0000218", "volt", b"volt", UO, 218;
+    VoltSecondPerSquareCentimeter, "MS:1002814", b"MS:1002814", "volt-second per square centimeter", b"volt-second per square centimeter", MS, 1002814;
+];
 
 impl Default for Unit {
     fn default() -> Self {
