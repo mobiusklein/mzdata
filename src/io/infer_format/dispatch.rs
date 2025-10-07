@@ -1209,6 +1209,7 @@ impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mas
 
 #[cfg(test)]
 mod test {
+    use crate::prelude::*;
     use super::*;
 
     #[test]
@@ -1219,7 +1220,7 @@ mod test {
             assert_eq!(reader.as_format(), MassSpectrometryFormat::BrukerTDF);
             eprintln!("{}", reader.len());
             let s = reader.get_spectrum_by_index(0).unwrap();
-            assert!(s.peaks.is_some());
+            assert!(s.has_ion_mobility_dimension());
         }
         Ok(())
     }
