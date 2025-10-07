@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.60.0] - 2025-10-07
+
+### Documentation
+
+- Document the feature flags
+
+### Fixed
+
+- Fix a collection of inconsistent function and trait documentation
+- Make `mzmlb` build again
+- Fix shorthand macros to work in scopes that do not return `io::Result`
+- Do not test HDF5 static linkage on Windows
+- Don't call fs::File::open on directories while inferring file format (#34)
+- Refactored the units to use a macro for guarenteed round tripping (#35)
+
 ## [0.59.2] - 2025-09-21
 
 ### Added
@@ -873,7 +888,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.59.2...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.60.0...HEAD
+[0.60.0]: https://github.com/mobiusklein/mzdata/compare/v0.59.2...v0.60.0
 [0.59.2]: https://github.com/mobiusklein/mzdata/compare/v0.59.1...v0.59.2
 [0.59.1]: https://github.com/mobiusklein/mzdata/compare/v0.59.0...v0.59.1
 [0.59.0]: https://github.com/mobiusklein/mzdata/compare/v0.58.2...v0.59.0
