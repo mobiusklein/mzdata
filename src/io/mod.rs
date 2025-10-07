@@ -37,7 +37,7 @@ pub use crate::io::mzml::{MzMLParserError, MzMLReader, MzMLWriter};
 pub use crate::io::mzmlb::{MzMLbError, MzMLbReader};
 
 #[cfg(feature = "imzml")]
-pub use crate::io::imzml::{ImzMLReader, IbdFile};
+pub use crate::io::imzml::{ImzMLReaderType, IbdFile};
 
 pub use crate::io::offset_index::OffsetIndex;
 pub use crate::io::traits::{

@@ -18,6 +18,8 @@ pub enum IbdError {
     UuidMismatch { expected: [u8; 16], found: [u8; 16] },
     #[error("Invalid offset or length for IBD data: offset={offset}, length={length}")]
     InvalidRange { offset: u64, length: u64 },
+    #[error("IBD file not found: {0}")]
+    FileNotFound(String),
 }
 
 impl From<IbdError> for io::Error {
@@ -89,36 +91,18 @@ impl IbdFile {
         &mut self,
         offset: usize,
         array_length: usize,
-        data_type: BinaryDataArrayType,
     ) -> Result<Vec<u8>, IbdError> {
         // Seek to the specified offset (skip UUID)
         self.reader.seek(SeekFrom::Start(offset as u64))?;
         
-        // Calculate the number of bytes to read based on data type and array length
-        let element_size = data_type.size_of();
-        
-        let total_bytes = array_length * element_size;
+        let total_bytes = array_length;
         let mut buffer = vec![0u8; total_bytes];
         self.reader.read_exact(&mut buffer)?;
         
         Ok(buffer)
     }
 
-    /// Read and decode a data array from the IBD file
-    pub fn read_data_array(
-        &mut self,
-        offset: u64,
-        array_length: u64,
-        data_type: BinaryDataArrayType,
-    ) -> Result<DataArray, IbdError> {
-        let raw_data = self.read_array(offset as usize, array_length as usize, data_type)?;
-        
-        let mut data_array = DataArray::new();
-        data_array.dtype = data_type;
-        data_array.data = raw_data; // DataArray.data is Vec<u8>, so store the raw bytes
-        
-        Ok(data_array)
-    }
+
 
     /// Read m/z data for a spectrum in continuous mode
     pub fn read_mz_array_continuous(&self) -> Option<&Vec<f64>> {
@@ -138,7 +122,6 @@ impl IbdFile {
         let raw_data = self.read_array(
             query.offset,
             query.length,
-            array.dtype
         )?;
         
         // Copy the data into the provided ByteArrayView

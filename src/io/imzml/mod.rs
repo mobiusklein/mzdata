@@ -23,7 +23,7 @@ pub mod ibd;
 pub mod reader;
 
 pub use ibd::{IbdDataMode, IbdFile, IbdError};
-pub use reader::{ImzMLReader, ImzMLReaderType, ImzMLSpectrumBuilder, ImzMLFileMetadata, ImzMLError, DataRangeQuery, is_imzml};
+pub use reader::{ImzMLReaderType, ImzMLSpectrumBuilder, ImzMLFileMetadata, ImzMLError, DataRangeQuery, is_imzml};
 
 // Re-export UUID for convenience
 pub use uuid::Uuid;

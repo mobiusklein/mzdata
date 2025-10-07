@@ -1,28 +1,45 @@
 use std::{
-    fs,
-    io::{self, BufReader},
+    collections::HashMap,
+    io::{self, BufReader, Read, Seek},
+    marker::PhantomData,
     mem,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
-use log::warn;
-use quick_xml::{events::Event, se, Reader};
+use log::{trace, warn};
+use quick_xml::{
+    events::{BytesEnd, BytesStart, BytesText, Event},
+    Error as XMLError,
+    Reader,
+};
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::io::{
-    mzml::{
-        CVParamParse, EntryType, FileMetadataBuilder, MzMLParserError, MzMLParserState, MzMLReader,
-        MzMLSAX, MzMLSpectrumBuilder, ParserResult, SpectrumBuilding, IncrementingIdMap
+use crate::{
+    io::{
+        mzml::{
+            CVParamParse, EntryType, FileMetadataBuilder, MzMLParserError, MzMLParserState,
+            MzMLSAX, MzMLSpectrumBuilder, ParserResult, SpectrumBuilding, XMLParseBase,
+            IncrementingIdMap,
+        },
+        traits::SpectrumSource,
+        utils::DetailLevel,
+        Generic3DIonMobilityFrameSource, IntoIonMobilityFrameSource, OffsetIndex,
     },
-    utils::DetailLevel,
-    SpectrumSource,
+    meta::{
+        DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun,
+        Sample, ScanSettings, Software,
+    },
+    params::{ControlledVocabulary, Param, ParamValue},
+    prelude::*,
+    spectrum::{
+        bindata::{ArrayRetrievalError, BuildFromArrayMap},
+        chromatogram::Chromatogram,
+        spectrum_types::MultiLayerSpectrum,
+        IsolationWindow, Precursor, ScanWindow, SelectedIon,
+    },
 };
-use mzpeaks::prelude::*;
-
-use crate::params::{ControlledVocabulary, ParamValue};
-use crate::prelude::*;
-use crate::spectrum::bindata::{ArrayRetrievalError, BinaryDataArrayType, BuildFromArrayMap};
+use mzpeaks::{prelude::*, CentroidPeak, DeconvolutedPeak};
 
 #[derive(Debug, Default)]
 pub struct ImzMLFileMetadata {
@@ -30,6 +47,7 @@ pub struct ImzMLFileMetadata {
     pub data_mode: Option<IbdDataMode>,
     pub ibd_checksum: Option<String>,
     pub ibd_checksum_type: Option<String>,
+    pub ibd_file_name: Option<String>,
 }
 
 use super::{
@@ -37,14 +55,14 @@ use super::{
     IbdError,
 };
 
-use crate::spectrum::spectrum_types::MultiLayerSpectrum;
+const BUFFER_SIZE: usize = 10000;
+
+pub type Bytes = Vec<u8>;
 
 #[derive(Debug, Default, Clone)]
 pub struct DataRangeQuery {
-    pub name: String,
     pub offset: usize,
     pub length: usize,
-    pub datatype: BinaryDataArrayType,
 }
 
 #[derive(Debug, Error)]
@@ -60,6 +78,12 @@ pub enum ImzMLError {
 impl From<ImzMLError> for io::Error {
     fn from(value: ImzMLError) -> Self {
         Self::new(io::ErrorKind::Other, Box::new(value))
+    }
+}
+
+impl From<io::Error> for ImzMLError {
+    fn from(value: io::Error) -> Self {
+        Self::IbdError(IbdError::IoError(value))
     }
 }
 
@@ -143,11 +167,6 @@ pub struct ImzmlMetadataBuilder<'a> {
     pub imzml_metadata: ImzMLFileMetadata,
 }
 
-
-
-impl XMLParseBase for FileMetadataBuilder<'_> {}
-impl CVParamParse for FileMetadataBuilder<'_> {}
-
 impl ImzmlMetadataBuilder<'_> {
     pub fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult {
         // Always delegate to the underlying builder
@@ -166,7 +185,7 @@ impl ImzmlMetadataBuilder<'_> {
                 match &state {
                     MzMLParserState::FileContents => {
                         // Try to handle as IMS parameter first
-                        match MzMLSpectrumBuilder::<C, D>::handle_param(event, reader_position, state) {
+                        match MzMLSpectrumBuilder::<CentroidPeak, DeconvolutedPeak>::handle_param(event, reader_position, state) {
                             Ok(param) => {
                                 if param.is_controlled() 
                                     && param.controlled_vocabulary == Some(ControlledVocabulary::IMS) 
@@ -175,10 +194,10 @@ impl ImzmlMetadataBuilder<'_> {
                                     match param.accession.unwrap() {
                                         1000080 => {
                                             // Handle UUID...
-                                            let uuid_str = param.value.as_str().trim_matches(|c| c == '{' || c == '}');
-                                            match Uuid::parse_str(uuid_str) {
+                                            let uuid_string = param.value.as_str().trim_matches(|c| c == '{' || c == '}').to_string();
+                                            match Uuid::parse_str(&uuid_string) {
                                                 Ok(uuid) => self.imzml_metadata.uuid = Some(uuid),
-                                                Err(e) => warn!("Failed to parse UUID '{}': {}", uuid_str, e),
+                                                Err(e) => warn!("Failed to parse UUID '{}': {}", uuid_string, e),
                                             }
                                         }
                                         1000031 => {
@@ -190,6 +209,9 @@ impl ImzmlMetadataBuilder<'_> {
                                         1000090 => {
                                             self.imzml_metadata.ibd_checksum = Some(param.value.to_string());
                                             self.imzml_metadata.ibd_checksum_type = Some("MD5".to_string());
+                                        }
+                                        1000070 => {
+                                            self.imzml_metadata.ibd_file_name = Some(param.value.to_string());
                                         }
                                         _ => {
                                             // Other IMS parameters - delegate to base builder
@@ -256,6 +278,67 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
 
     pub fn set_entry_type(&mut self, entry_type: EntryType) {
         self.inner.set_entry_type(entry_type)
+    }
+
+    pub fn with_data_registry(mut self, data_registry: &'a mut IbdFile) -> Self {
+        self.data_registry = Some(data_registry);
+        self
+    }
+}
+
+impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    SpectrumBuilding<'a, C, D, MultiLayerSpectrum<C, D>> for ImzMLSpectrumBuilder<'a, C, D>
+{
+    fn into_spectrum(self, spectrum: &mut MultiLayerSpectrum<C, D>) {
+        self.inner.into_spectrum(spectrum);
+    }
+
+    fn into_chromatogram(self, chromatogram: &mut crate::spectrum::chromatogram::Chromatogram) {
+        self.inner.into_chromatogram(chromatogram);
+    }
+
+    fn set_run_data_processing(&mut self, run_data_processing: Option<Box<str>>) {
+        self.inner.set_run_data_processing(run_data_processing);
+    }
+
+    fn borrow_instrument_configuration(
+        mut self,
+        instrument_id_map: &'a mut IncrementingIdMap,
+    ) -> Self {
+        self.inner = self.inner.borrow_instrument_configuration(instrument_id_map);
+        self
+    }
+
+    fn fill_spectrum<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P) {
+        self.inner.fill_spectrum(param);
+    }
+
+    fn current_array_mut(&mut self) -> &mut crate::spectrum::bindata::DataArray {
+        self.inner.current_array_mut()
+    }
+
+    fn precursor_mut(&mut self) -> &mut Precursor {
+        self.inner.precursor_mut()
+    }
+
+    fn new_precursor_mut(&mut self) -> &mut Precursor {
+        self.inner.new_precursor_mut()
+    }
+
+    fn new_selected_ion(&mut self) -> &mut SelectedIon {
+        self.inner.new_selected_ion()
+    }
+
+    fn selected_ion_mut(&mut self) -> &mut SelectedIon {
+        self.inner.selected_ion_mut()
+    }
+
+    fn scan_window_mut(&mut self) -> &mut ScanWindow {
+        self.inner.scan_window_mut()
+    }
+
+    fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
+        self.inner.isolation_window_mut()
     }
 }
 
@@ -344,7 +427,7 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
         state: MzMLParserState,
     ) -> ParserResult {
         let elt_name = event.name();
-        let res = match elt_name.as_ref() {
+        let res: Result<(), IbdError> = match elt_name.as_ref() {
             b"binaryDataArray" => {
                 // For imzML/IBD, we don't need a dataset name like mzMLb/HDF5
                 // We just need offset and length to read from the IBD file
@@ -360,13 +443,15 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
                 let data_request = mem::take(&mut self.current_data_range_query);
                 let array = self.inner.current_array_mut();
                 if !matches!(detail_level, DetailLevel::MetadataOnly) {
-                    self.data_registry
-                        .as_mut()
-                        .expect("Did not provide data registry")
-                        .get(&data_request, array)
-                } else {
-                    Ok(())
+                    // Now we can read from IBD file
+                    if let Some(data_registry) = &mut self.data_registry {
+                        data_registry.get(&data_request, array)?;
+                    } else {
+                        // No IBD file available - this is expected during metadata parsing
+                        // The data will be filled later when IBD file is available
+                    }
                 }
+                Ok(())
             }
             _ => Ok(()),
         };
@@ -379,9 +464,15 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
 
     fn text(
         &mut self,
-        event: &quick_xml::events::BytesText,
+        event: &BytesText,
         state: MzMLParserState,
     ) -> ParserResult {
+        // For imzML, binary data comes from IBD file, not XML content
+        // Skip any text content in <binary> tags
+        if state == MzMLParserState::Binary {
+            return Ok(state);
+        }
+        // Delegate other text events to inner parser
         self.inner.text(event, state)
     }
 }
@@ -437,40 +528,12 @@ pub struct ImzMLReaderType<
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
 
-    // ✅ ADD THESE FIELDS:
+    //TODO do I need these fields?
     pub imzml_metadata: ImzMLFileMetadata,
     pub ibd_file: Option<IbdFile>,  // This will be opened later when needed
 }
 
-impl<
-        R: Read + Seek,
-        C: CentroidLike + BuildFromArrayMap,
-        D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > IntoIonMobilityFrameSource<C, D> for ImzMLReaderType<R, C, D>
-{
-    type IonMobilityFrameSource<
-        CF: FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility>,
-        DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge,
-    > = Generic3DIonMobilityFrameSource<C, D, Self, CF, DF>;
-
-    fn try_into_frame_source<
-        CF: FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility>,
-        DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge,
-    >(
-        mut self,
-    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError>
-    {
-        if let Some(state) = self.has_ion_mobility() {
-            if matches!(state, HasIonMobility::Dimension) {
-                Ok(Self::IonMobilityFrameSource::new(self))
-            } else {
-                Err(crate::io::IntoIonMobilityFrameSourceError::ConversionNotPossible)
-            }
-        } else {
-            Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound)
-        }
-    }
-}
+// TODO: Implement IntoIonMobilityFrameSource after SpectrumSource is implemented
 
 impl<
         'a,
@@ -522,15 +585,66 @@ impl<
             Ok(()) => {}
             Err(_err) => {}
         }
+        if inst.imzml_metadata.ibd_file_name.is_none()
+        {
+            // Several of the imzML files I've seen don't actually include the IBD filename
+            // in the metadata, however there's no way to definitively know the imzml file path here
+            warn!("No IBD file specified in imzML metadata - will need to be provided later");
+        }
+        match inst.open_ibd_file() {
+            Ok(()) => {}
+            Err(_err) => {}
+        }
         inst
     }
 
-    /**Parse the metadata section of the file using [`FileMetadataBuilder`]
+
+
+    /// Attempt to open the IBD file based on metadata or by deriving the filename
+    fn open_ibd_file(&mut self) -> Result<(), ImzMLError> {
+        // If we already have an IBD file open, nothing to do
+        if self.ibd_file.is_some() {
+            return Ok(());
+        }
+
+        // Try to get IBD filename from metadata first
+        if let Some(ref ibd_filename) = self.imzml_metadata.ibd_file_name {
+            // Get data mode from metadata
+            let data_mode = self.imzml_metadata.data_mode.unwrap_or(IbdDataMode::Unknown);
+            
+            // Open the IBD file
+            let ibd_file = IbdFile::open(ibd_filename, data_mode)?;
+            
+            // Validate UUID if available
+            if let Some(expected_uuid) = &self.imzml_metadata.uuid {
+                let ibd_uuid_bytes = ibd_file.uuid();
+                let ibd_uuid = Uuid::from_bytes(*ibd_uuid_bytes);
+                if *expected_uuid != ibd_uuid {
+                    warn!(
+                        "UUID mismatch between imzML ({}) and IBD ({})",
+                        expected_uuid, ibd_uuid
+                    );
+                }
+            }
+            
+            self.ibd_file = Some(ibd_file);
+            return Ok(());
+        }
+
+        // If no IBD file in metadata, we can't derive it from generic R type
+        // This would need to be handled at a higher level where we have file paths
+        Err(ImzMLError::IbdError(IbdError::FileNotFound(
+            "No IBD file specified in metadata and cannot derive from generic reader".to_string()
+        )))
+    }
+
+
+    /**Parse the metadata section of the file using [`ImzmlMetadataBuilder`]
      */
     fn parse_metadata(&mut self) -> Result<(), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
-        let mut accumulator: ImzmlMetadataBuilder<'_> = ImzmlMetadataBuilder {
+        let mut accumulator = ImzmlMetadataBuilder {
             mzml_metadata_builder: FileMetadataBuilder {
                 instrument_id_map: Some(&mut self.instrument_id_map),
                 ..Default::default()
@@ -659,6 +773,7 @@ impl<
                 MzMLParserState::FileContents,
             )
         })?;
+        self.imzml_metadata.data_mode = Some(data_mode);
         
         let uuid = imzml_metadata.uuid.ok_or_else(|| {
             MzMLParserError::IncompleteElementError(
@@ -666,6 +781,7 @@ impl<
                 MzMLParserState::FileContents,
             )
         })?;
+        self.imzml_metadata.uuid = Some(uuid);
         
         let checksum = imzml_metadata.ibd_checksum.ok_or_else(|| {
             MzMLParserError::IncompleteElementError(
@@ -673,10 +789,12 @@ impl<
                 MzMLParserState::FileContents,
             )
         })?;
+        let checksum_for_log = checksum.clone();
+        self.imzml_metadata.ibd_checksum = Some(checksum);
+        self.imzml_metadata.ibd_checksum_type = imzml_metadata.ibd_checksum_type;
         
-        // TODO: Store these in the ImzMLReaderType struct for later use
         log::debug!("Parsed imzML metadata - Mode: {:?}, UUID: {}, Checksum: {}", 
-                   data_mode, uuid, checksum);
+                   data_mode, uuid, checksum_for_log);
 
         match self.state {
             MzMLParserState::SpectrumDone | MzMLParserState::ChromatogramDone => Ok(()),
@@ -835,7 +953,6 @@ impl<
         &mut self,
         spectrum: &mut MultiLayerSpectrum<C, D>,
     ) -> Result<usize, MzMLParserError> {
-        let accumulator = MzMLSpectrumBuilder::<C, D>::with_detail_level(self.detail_level);
         match self.state {
             MzMLParserState::SpectrumDone => {
                 self.state = MzMLParserState::Resume;
@@ -851,10 +968,19 @@ impl<
             }
             _ => {}
         }
+        
+        let detail_level = self.detail_level;
+        let mut accumulator = ImzMLSpectrumBuilder::<C, D>::with_detail_level(detail_level);
+        
+        // Connect the IBD file for data reading
+        if let Some(ref mut ibd_file) = self.ibd_file {
+            accumulator = accumulator.with_data_registry(ibd_file);
+        }
+        
         match self._parse_into(accumulator) {
             Ok((accumulator, sz)) => {
                 accumulator.into_spectrum(spectrum);
-                if self.detail_level == DetailLevel::Full {
+                if detail_level == DetailLevel::Full {
                     if let Err(e) = spectrum.try_build_peaks() {
                         log::debug!("Failed to eagerly load peaks from centroid spectrum: {e}");
                     }
