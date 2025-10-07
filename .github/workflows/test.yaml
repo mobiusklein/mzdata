@@ -30,7 +30,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --features nalgebra,parallelism,async,mzsignal,thermo,numpress -- --nocapture --show-output
+          args: --features nalgebra,parallelism,async,mzsignal,thermo,numpress,bruker_tdf -- --nocapture --show-output
 
   test-remote:
     name: PROXI Test Suite
