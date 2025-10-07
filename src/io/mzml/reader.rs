@@ -92,7 +92,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
     fn fill_spectrum<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P);
 
     /// Set the compression method for the current [`DataArray`]
-    fn set_current_compressiion(&mut self, compression: BinaryCompressionType) {
+    fn set_current_compression(&mut self, compression: BinaryCompressionType) {
         trace!("Setting current compression method for {:?} to {compression:?}", self.current_array_mut().name());
         self.current_array_mut().compression = compression;
     }
@@ -103,52 +103,52 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
             match param.accession().unwrap() {
                 // Compression types
                 x if x == unsafe { BinaryCompressionType::Zlib.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::Zlib);
+                    self.set_current_compression(BinaryCompressionType::Zlib);
                 }
                 x if x == unsafe { BinaryCompressionType::NoCompression.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::NoCompression);
+                    self.set_current_compression(BinaryCompressionType::NoCompression);
                 }
                 x if x == unsafe { BinaryCompressionType::NumpressLinear.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::NumpressLinear);
+                    self.set_current_compression(BinaryCompressionType::NumpressLinear);
                 }
                 x if x == unsafe { BinaryCompressionType::NumpressPIC.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::NumpressPIC);
+                    self.set_current_compression(BinaryCompressionType::NumpressPIC);
                 }
                 x if x == unsafe { BinaryCompressionType::NumpressSLOF.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::NumpressSLOF);
+                    self.set_current_compression(BinaryCompressionType::NumpressSLOF);
                 }
                 x if x == unsafe { BinaryCompressionType::NumpressLinearZlib.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::NumpressLinearZlib);
+                    self.set_current_compression(BinaryCompressionType::NumpressLinearZlib);
                 }
                 x if x == unsafe { BinaryCompressionType::NumpressPICZlib.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::NumpressPICZlib);
+                    self.set_current_compression(BinaryCompressionType::NumpressPICZlib);
                 }
                 x if x == unsafe { BinaryCompressionType::NumpressSLOFZlib.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::NumpressSLOFZlib);
+                    self.set_current_compression(BinaryCompressionType::NumpressSLOFZlib);
                 }
                 x if x == unsafe { BinaryCompressionType::DeltaPrediction.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::DeltaPrediction);
+                    self.set_current_compression(BinaryCompressionType::DeltaPrediction);
                 }
                 x if x == unsafe { BinaryCompressionType::LinearPrediction.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::LinearPrediction);
+                    self.set_current_compression(BinaryCompressionType::LinearPrediction);
                 }
                 x if x == unsafe { BinaryCompressionType::ShuffleZstd.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::ShuffleZstd);
+                    self.set_current_compression(BinaryCompressionType::ShuffleZstd);
                 }
                 x if x == unsafe { BinaryCompressionType::DeltaShuffleZstd.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::DeltaShuffleZstd);
+                    self.set_current_compression(BinaryCompressionType::DeltaShuffleZstd);
                 }
                 x if x == unsafe { BinaryCompressionType::Zstd.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::Zstd);
+                    self.set_current_compression(BinaryCompressionType::Zstd);
                 }
                 x if x == unsafe { BinaryCompressionType::ZstdDict.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::ZstdDict);
+                    self.set_current_compression(BinaryCompressionType::ZstdDict);
                 }
                 x if x == unsafe { BinaryCompressionType::NumpressLinearZstd.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::NumpressLinearZstd);
+                    self.set_current_compression(BinaryCompressionType::NumpressLinearZstd);
                 }
                 x if x == unsafe { BinaryCompressionType::NumpressSLOFZstd.accession().unwrap_unchecked() } => {
-                    self.set_current_compressiion(BinaryCompressionType::NumpressSLOFZstd);
+                    self.set_current_compression(BinaryCompressionType::NumpressSLOFZstd);
                 }
                 // Array data types
                 1000523 => {
