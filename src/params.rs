@@ -1940,6 +1940,9 @@ pub enum ControlledVocabulary {
     BTO,
     /// The PRIDE Controlled Vocabulary <https://www.ebi.ac.uk/ols4/ontologies/pride>
     PRIDE,
+    /// The Imaging MS Controlled Vocabulary <https://www.ms-imaging.org/imzml/>
+    #[cfg(feature = "imzml")]
+    IMS,
     Unknown,
 }
 
@@ -1952,6 +1955,8 @@ const BFO_CV: &str = "BFO";
 const BTO_CV: &str = "BTO";
 const NCIT_CV: &str = "NCIT";
 const PRIDE_CV: &str = "PRIDE";
+#[cfg(feature = "imzml")]
+const IMS_CV: &str = "IMS";
 
 const MS_CV_BYTES: &[u8] = MS_CV.as_bytes();
 const UO_CV_BYTES: &[u8] = UO_CV.as_bytes();
@@ -1962,6 +1967,8 @@ const BFO_CV_BYTES: &[u8] = BFO_CV.as_bytes();
 const BTO_CV_BYTES: &[u8] = BTO_CV.as_bytes();
 const NCIT_CV_BYTES: &[u8] = NCIT_CV.as_bytes();
 const PRIDE_CV_BYTES: &[u8] = PRIDE_CV.as_bytes();
+#[cfg(feature = "imzml")]
+const IMS_CV_BYTES: &[u8] = IMS_CV.as_bytes();
 
 
 impl TryFrom<u8> for ControlledVocabulary {
@@ -1978,6 +1985,8 @@ impl TryFrom<u8> for ControlledVocabulary {
             7 => Ok(Self::NCIT),
             8 => Ok(Self::BTO),
             9 => Ok(Self::PRIDE),
+            #[cfg(feature = "imzml")]
+            10 => Ok(Self::IMS),
             _ => Err(ControlledVocabularyResolutionError::UnknownControlledVocabularyCode(value)),
         }
     }
@@ -2022,6 +2031,8 @@ impl<'a> ControlledVocabulary {
             Self::NCIT => Cow::Borrowed(NCIT_CV),
             Self::BTO => Cow::Borrowed(BTO_CV),
             Self::PRIDE => Cow::Borrowed(PRIDE_CV),
+            #[cfg(feature = "imzml")]
+            Self::IMS => Cow::Borrowed(IMS_CV),
             Self::Unknown => panic!("Cannot encode unknown CV"),
         }
     }
@@ -2038,6 +2049,8 @@ impl<'a> ControlledVocabulary {
             Self::NCIT => NCIT_CV_BYTES,
             Self::BTO => BTO_CV_BYTES,
             Self::PRIDE => PRIDE_CV_BYTES,
+            #[cfg(feature = "imzml")]
+            Self::IMS => IMS_CV_BYTES,
             Self::Unknown => panic!("Cannot encode unknown CV"),
         }
     }
@@ -2185,6 +2198,8 @@ impl FromStr for ControlledVocabulary {
             OBI_CV => Ok(Self::OBI),
             BFO_CV => Ok(Self::BFO),
             HANCESTRO_CV => Ok(Self::HANCESTRO),
+            #[cfg(feature = "imzml")]
+            IMS_CV => Ok(Self::IMS),
             _ => Ok(Self::Unknown),
         }
     }

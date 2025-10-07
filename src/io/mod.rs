@@ -8,6 +8,8 @@ pub mod mgf;
 pub mod mzml;
 #[cfg(feature = "mzmlb")]
 pub mod mzmlb;
+#[cfg(feature = "imzml")]
+pub mod imzml;
 mod offset_index;
 #[cfg(feature = "proxi")]
 pub mod proxi;
@@ -33,6 +35,9 @@ pub use crate::io::mzml::{MzMLParserError, MzMLReader, MzMLWriter};
 
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::{MzMLbError, MzMLbReader};
+
+#[cfg(feature = "imzml")]
+pub use crate::io::imzml::{ImzMLReader, IbdFile};
 
 pub use crate::io::offset_index::OffsetIndex;
 pub use crate::io::traits::{
