@@ -928,7 +928,7 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
                     && state < MzMLParserState::Chromatogram =>
             {
                 eprintln!(
-                    "Attempting to start parsing a spectrum in state {}",
+                    "Attempting to start parsing a chromatogram in state {}",
                     self.mzml_parser.state
                 );
             }

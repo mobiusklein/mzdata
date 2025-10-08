@@ -19,11 +19,9 @@
 
 #![cfg(feature = "imzml")]
 
-pub mod ibd;
 pub mod reader;
 
-pub use ibd::{IbdDataMode, IbdFile, IbdError};
-pub use reader::{ImzMLReaderType, ImzMLSpectrumBuilder, ImzMLFileMetadata, ImzMLError, DataRangeQuery, is_imzml};
+pub use reader::{ImzMLReaderType, ImzMLError, ImzMLReader, is_imzml};
 
 // Re-export UUID for convenience
 pub use uuid::Uuid;

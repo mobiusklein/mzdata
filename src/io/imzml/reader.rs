@@ -3,7 +3,6 @@ use std::{
     io::{self, BufReader, Read, Seek},
     marker::PhantomData,
     mem,
-    path::PathBuf,
 };
 
 use log::{trace, warn};
@@ -18,13 +17,8 @@ use uuid::Uuid;
 use crate::{
     io::{
         mzml::{
-            CVParamParse, EntryType, FileMetadataBuilder, MzMLParserError, MzMLParserState,
-            MzMLSAX, MzMLSpectrumBuilder, ParserResult, SpectrumBuilding, XMLParseBase,
-            IncrementingIdMap,
-        },
-        traits::SpectrumSource,
-        utils::DetailLevel,
-        Generic3DIonMobilityFrameSource, IntoIonMobilityFrameSource, OffsetIndex,
+            CVParamParse, EntryType, FileMetadataBuilder, IncrementingIdMap, MzMLParserError, MzMLParserState, MzMLSAX, MzMLSpectrumBuilder, ParserResult, SpectrumBuilding
+        }, utils::DetailLevel, OffsetIndex
     },
     meta::{
         DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun,
@@ -33,13 +27,25 @@ use crate::{
     params::{ControlledVocabulary, Param, ParamValue},
     prelude::*,
     spectrum::{
-        bindata::{ArrayRetrievalError, BuildFromArrayMap},
+        bindata::{ArrayRetrievalError, BuildFromArrayMap, BinaryDataArrayType},
         chromatogram::Chromatogram,
         spectrum_types::MultiLayerSpectrum,
         IsolationWindow, Precursor, ScanWindow, SelectedIon,
     },
 };
 use mzpeaks::{prelude::*, CentroidPeak, DeconvolutedPeak};
+
+
+/// Represents the two data storage modes in imzML
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IbdDataMode {
+    /// All spectra share the same m/z values
+    Continuous,
+    /// Each spectrum has its own m/z and intensity arrays
+    Processed,
+    Unknown,
+}
+
 
 #[derive(Debug, Default)]
 pub struct ImzMLFileMetadata {
@@ -49,11 +55,6 @@ pub struct ImzMLFileMetadata {
     pub ibd_checksum_type: Option<String>,
     pub ibd_file_name: Option<String>,
 }
-
-use super::{
-    ibd::{IbdDataMode, IbdFile},
-    IbdError,
-};
 
 const BUFFER_SIZE: usize = 10000;
 
@@ -67,8 +68,6 @@ pub struct DataRangeQuery {
 
 #[derive(Debug, Error)]
 pub enum ImzMLError {
-    #[error("An IBD-related error occurred: {0}")]
-    IbdError(#[from] IbdError),
     #[error("An mzML-related error occurred: {0}")]
     MzMLError(#[from] MzMLParserError),
     #[error("An error occurred while decoding binary data: {0}")]
@@ -83,9 +82,10 @@ impl From<ImzMLError> for io::Error {
 
 impl From<io::Error> for ImzMLError {
     fn from(value: io::Error) -> Self {
-        Self::IbdError(IbdError::IoError(value))
+        Self::MzMLError(MzMLParserError::IOError(MzMLParserState::Start, value))
     }
 }
+
 
 /// Check if the buffer contains an imzML file by looking for the IMS controlled vocabulary
 /// There isn't AFAIK a formal mechanism to identify imzML files other than the presence of
@@ -122,7 +122,6 @@ pub fn is_imzml(buffer: &[u8]) -> bool {
             }
             Ok(Event::End(ref e)) => {
                 if e.name().as_ref() == b"cvList" {
-                    in_cv_list = false;
                     // If we've finished processing cvList and haven't found IMS, it's not imzML
                     return false;
                 }
@@ -141,8 +140,7 @@ pub struct ImzMLSpectrumBuilder<
     D: DeconvolutedCentroidLike + BuildFromArrayMap,
 > {
     inner: MzMLSpectrumBuilder<'a, C, D>,
-    data_registry: Option<&'a mut IbdFile>,
-    current_data_range_query: DataRangeQuery,
+    current_ibd_param: DataRangeQuery,
     metadata: ImzMLFileMetadata,
 }
 
@@ -152,8 +150,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
     fn default() -> Self {
         Self {
             inner: Default::default(),
-            data_registry: None,
-            current_data_range_query: DataRangeQuery::default(),
+            current_ibd_param: DataRangeQuery::default(),
             metadata: ImzMLFileMetadata::default(),
         }
     }
@@ -258,8 +255,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
     pub fn with_detail_level(detail_level: DetailLevel) -> Self {
         Self {
             inner: MzMLSpectrumBuilder::with_detail_level(detail_level),
-            data_registry: None,
-            current_data_range_query: DataRangeQuery::default(),
+            current_ibd_param: DataRangeQuery::default(),
             metadata: ImzMLFileMetadata::default(),
         }
     }
@@ -280,10 +276,6 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
         self.inner.set_entry_type(entry_type)
     }
 
-    pub fn with_data_registry(mut self, data_registry: &'a mut IbdFile) -> Self {
-        self.data_registry = Some(data_registry);
-        self
-    }
 }
 
 impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
@@ -380,14 +372,14 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
                                             match param.accession.unwrap() {
                                                 // IMS:1000102 - external offset
                                                 1000102 => {
-                                                    self.current_data_range_query.offset = param
+                                                    self.current_ibd_param.offset = param
                                                         .value
                                                         .to_u64()
                                                         .expect("Failed to extract external offset")
                                                         as usize
                                                 }
                                                 // IMS:1000103 - external array length
-                                                1000103 => self.current_data_range_query.length =
+                                                1000103 => self.current_ibd_param.length =
                                                     param.value.to_u64().expect(
                                                         "Failed to extract external array length",
                                                     )
@@ -421,44 +413,52 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
         Ok(state)
     }
 
-    fn end_element(
-        &mut self,
-        event: &quick_xml::events::BytesEnd,
-        state: MzMLParserState,
-    ) -> ParserResult {
+    fn end_element(&mut self, event: &BytesEnd, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
-        let res: Result<(), IbdError> = match elt_name.as_ref() {
+        match elt_name.as_ref() {
             b"binaryDataArray" => {
-                // For imzML/IBD, we don't need a dataset name like mzMLb/HDF5
-                // We just need offset and length to read from the IBD file
-                if self.current_data_range_query.offset == 0
-                    && self.current_data_range_query.length == 0
+                if self.current_ibd_param.offset == 0
+                    && self.current_ibd_param.length == 0
                 {
                     return Err(MzMLParserError::IncompleteElementError(
                         "The external data offset and length were missing".to_owned(),
                         MzMLParserState::BinaryDataArray,
                     ));
                 }
-                let detail_level = self.inner.detail_level;
-                let data_request = mem::take(&mut self.current_data_range_query);
+
+                let data_request = mem::take(&mut self.current_ibd_param);
                 let array = self.inner.current_array_mut();
-                if !matches!(detail_level, DetailLevel::MetadataOnly) {
-                    // Now we can read from IBD file
-                    if let Some(data_registry) = &mut self.data_registry {
-                        data_registry.get(&data_request, array)?;
-                    } else {
-                        // No IBD file available - this is expected during metadata parsing
-                        // The data will be filled later when IBD file is available
-                    }
+                
+                // Store IBD info as parameters in the array
+                use crate::params::Param;
+                if let Some(ref mut params) = array.params {
+                    params.push(Param::new_key_value(
+                        "IMS:1000102", // external offset  
+                        data_request.offset as i64,
+                    ));
+                    params.push(Param::new_key_value(
+                        "IMS:1000103", // external array length
+                        data_request.length as i64,  
+                    ));
+                } else {
+                    // Create params vector if it doesn't exist
+                    let mut params = Vec::new();
+                    params.push(Param::new_key_value(
+                        "IMS:1000102", // external offset  
+                        data_request.offset as i64,
+                    ));
+                    params.push(Param::new_key_value(
+                        "IMS:1000103", // external array length
+                        data_request.length as i64,  
+                    ));
+                    array.params = Some(Box::new(params));
                 }
-                Ok(())
+                
+                // Don't read IBD data here - just store the metadata
             }
-            _ => Ok(()),
-        };
-        match res {
-            Ok(()) => {}
-            Err(e) => Err(MzMLParserError::IOError(state, io::Error::from(e)))?,
+            _ => {}
         }
+        // Delegate to inner parser
         self.inner.end_element(event, state)
     }
 
@@ -488,6 +488,7 @@ additional random access operations are available.
 */
 pub struct ImzMLReaderType<
     R: Read,
+    S: Read + Seek,
     C: CentroidLike = CentroidPeak,
     D: DeconvolutedCentroidLike = DeconvolutedPeak,
 > {
@@ -495,6 +496,8 @@ pub struct ImzMLReaderType<
     pub state: MzMLParserState,
     /// The raw reader
     handle: BufReader<R>,
+    /// The IBD file reader
+    ibd_handle: BufReader<S>,
     /// A place to store the last error the parser encountered
     error: Option<Box<MzMLParserError>>,
     /// A spectrum ID to byte offset for fast random access
@@ -530,7 +533,6 @@ pub struct ImzMLReaderType<
 
     //TODO do I need these fields?
     pub imzml_metadata: ImzMLFileMetadata,
-    pub ibd_file: Option<IbdFile>,  // This will be opened later when needed
 }
 
 // TODO: Implement IntoIonMobilityFrameSource after SpectrumSource is implemented
@@ -539,24 +541,28 @@ impl<
         'a,
         'b: 'a,
         R: Read,
+        S: Read + Seek,
         C: CentroidLike + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > ImzMLReaderType<R, C, D>
+    > ImzMLReaderType<R, S, C, D>
 {
     /// Create a new [`ImzMLReaderType`] instance, wrapping the [`io::Read`] handle
     /// provided with an [`io::BufReader`] and parses the metadata section of the file.
-    pub fn new(file: R) -> ImzMLReaderType<R, C, D> {
-        Self::with_buffer_capacity_and_detail_level(file, BUFFER_SIZE, DetailLevel::Full)
+    pub fn new(file: R, ibd_file: S) -> ImzMLReaderType<R, S, C, D> {
+        Self::with_buffer_capacity_and_detail_level(file, ibd_file, BUFFER_SIZE, DetailLevel::Full)
     }
 
     pub fn with_buffer_capacity_and_detail_level(
         file: R,
+        ibd_file: S,
         capacity: usize,
         detail_level: DetailLevel,
-    ) -> ImzMLReaderType<R, C, D> {
+    ) -> ImzMLReaderType<R, S, C, D> {
         let handle = BufReader::with_capacity(capacity, file);
+        let ibd_handle = BufReader::with_capacity(capacity, ibd_file);
         let mut inst = ImzMLReaderType {
             handle,
+            ibd_handle,
             state: MzMLParserState::Start,
             error: None,
             buffer: Bytes::new(),
@@ -577,21 +583,13 @@ impl<
             instrument_id_map: Box::new(IncrementingIdMap::default()),
             num_spectra: None,
             run: MassSpectrometryRun::default(),
-
             imzml_metadata: ImzMLFileMetadata::default(),
-            ibd_file: None,
         };
         match inst.parse_metadata() {
             Ok(()) => {}
             Err(_err) => {}
         }
-        if inst.imzml_metadata.ibd_file_name.is_none()
-        {
-            // Several of the imzML files I've seen don't actually include the IBD filename
-            // in the metadata, however there's no way to definitively know the imzml file path here
-            warn!("No IBD file specified in imzML metadata - will need to be provided later");
-        }
-        match inst.open_ibd_file() {
+        match inst.check_ibd_file() {
             Ok(()) => {}
             Err(_err) => {}
         }
@@ -601,24 +599,13 @@ impl<
 
 
     /// Attempt to open the IBD file based on metadata or by deriving the filename
-    fn open_ibd_file(&mut self) -> Result<(), ImzMLError> {
-        // If we already have an IBD file open, nothing to do
-        if self.ibd_file.is_some() {
-            return Ok(());
-        }
-
-        // Try to get IBD filename from metadata first
-        if let Some(ref ibd_filename) = self.imzml_metadata.ibd_file_name {
-            // Get data mode from metadata
-            let data_mode = self.imzml_metadata.data_mode.unwrap_or(IbdDataMode::Unknown);
-            
-            // Open the IBD file
-            let ibd_file = IbdFile::open(ibd_filename, data_mode)?;
+    fn check_ibd_file(&mut self) -> Result<(), ImzMLError> {
             
             // Validate UUID if available
             if let Some(expected_uuid) = &self.imzml_metadata.uuid {
-                let ibd_uuid_bytes = ibd_file.uuid();
-                let ibd_uuid = Uuid::from_bytes(*ibd_uuid_bytes);
+                let mut ibd_uuid_bytes = [0u8; 16];
+                self.ibd_handle.read_exact(&mut ibd_uuid_bytes)?;
+                let ibd_uuid = Uuid::from_bytes(ibd_uuid_bytes);
                 if *expected_uuid != ibd_uuid {
                     warn!(
                         "UUID mismatch between imzML ({}) and IBD ({})",
@@ -626,18 +613,10 @@ impl<
                     );
                 }
             }
+            // TODO check that the checksum matches if available
             
-            self.ibd_file = Some(ibd_file);
             return Ok(());
         }
-
-        // If no IBD file in metadata, we can't derive it from generic R type
-        // This would need to be handled at a higher level where we have file paths
-        Err(ImzMLError::IbdError(IbdError::FileNotFound(
-            "No IBD file specified in metadata and cannot derive from generic reader".to_string()
-        )))
-    }
-
 
     /**Parse the metadata section of the file using [`ImzmlMetadataBuilder`]
      */
@@ -970,16 +949,15 @@ impl<
         }
         
         let detail_level = self.detail_level;
-        let mut accumulator = ImzMLSpectrumBuilder::<C, D>::with_detail_level(detail_level);
-        
-        // Connect the IBD file for data reading
-        if let Some(ref mut ibd_file) = self.ibd_file {
-            accumulator = accumulator.with_data_registry(ibd_file);
-        }
-        
+        let accumulator = ImzMLSpectrumBuilder::<C, D>::with_detail_level(detail_level);
+
+
         match self._parse_into(accumulator) {
             Ok((accumulator, sz)) => {
                 accumulator.into_spectrum(spectrum);
+                if detail_level != DetailLevel::MetadataOnly {
+                    self.load_ibd_arrays(spectrum)?;
+                }
                 if detail_level == DetailLevel::Full {
                     if let Err(e) = spectrum.try_build_peaks() {
                         log::debug!("Failed to eagerly load peaks from centroid spectrum: {e}");
@@ -990,11 +968,57 @@ impl<
             Err(err) => {
                 match &err {
                     MzMLParserError::EOF => {},
-                    err => log::error!("Error while reading mzML spectrum: {err}")
+                    err => log::error!("Error while reading ImzML spectrum: {err}")
                 };
                 Err(err)
             },
         }
+    }
+
+    fn load_ibd_arrays(&mut self, spectrum: &mut MultiLayerSpectrum<C, D>) -> Result<(), MzMLParserError> {
+        if let Some(ref mut arrays) = spectrum.arrays {
+            for array in arrays.byte_buffer_map.values_mut() {
+                // Look for IBD parameters we stored during parsing
+                let offset_param = array.params.as_ref()
+                    .and_then(|params| params.iter()
+                        .find(|p| p.accession == Some(1000102))  // IMS:1000102 external offset
+                        .and_then(|p| p.value.to_u64().ok()));
+                    
+                let length_param = array.params.as_ref()
+                    .and_then(|params| params.iter()
+                        .find(|p| p.accession == Some(1000103))  // IMS:1000103 external array length
+                        .and_then(|p| p.value.to_u64().ok()));
+                    
+                if let (Some(offset), Some(length)) = (offset_param, length_param) {
+                    // Read from IBD file
+                    use std::io::{Seek, SeekFrom};
+                    self.ibd_handle.seek(SeekFrom::Start(offset))
+                        .map_err(|e| MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e))?;
+                    
+                    // Determine data type size
+                    // TODO just use size_of
+                    let data_type_size = match array.dtype {
+                        BinaryDataArrayType::Float32 => 4,
+                        BinaryDataArrayType::Float64 => 8, 
+                        BinaryDataArrayType::Int32 => 4,
+                        BinaryDataArrayType::Int64 => 8,
+                        _ => {
+                            log::warn!("Unknown data type for IBD reading: {:?}", array.dtype);
+                            continue;
+                        }
+                    };
+                    
+                    let total_bytes = (length as usize) * data_type_size;
+                    let mut buffer = vec![0u8; total_bytes];
+                    self.ibd_handle.read_exact(&mut buffer)
+                        .map_err(|e| MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e))?;
+                    
+                    // Store in array
+                    array.data = buffer.into();
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Read the next spectrum directly. Used to implement iteration.
@@ -1055,3 +1079,5 @@ impl<
         }
     }
 }
+
+pub type ImzMLReader = ImzMLReaderType<CentroidPeak, DeconvolutedPeak>;
