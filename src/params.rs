@@ -1235,57 +1235,9 @@ macro_rules! find_param_method {
 
 #[macro_export]
 macro_rules! curie {
-    (MS:$acc:literal) => {
+    ($ns:ident:$acc:literal) => {
         $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::MS,
-            accession: $acc,
-        }
-    };
-    (UO:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::UO,
-            accession: $acc,
-        }
-    };
-    (EFO:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::EFO,
-            accession: $acc,
-        }
-    };
-    (BFO:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::BFO,
-            accession: $acc,
-        }
-    };
-    (BTO:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::BTO,
-            accession: $acc,
-        }
-    };
-    (OBI:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::OBI,
-            accession: $acc,
-        }
-    };
-    (HANCESTRO:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::HANCESTRO,
-            accession: $acc,
-        }
-    };
-    (NCIT:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::NCIT,
-            accession: $acc,
-        }
-    };
-    (PRIDE:$acc:literal) => {
-        $crate::params::CURIE {
-            controlled_vocabulary: $crate::params::ControlledVocabulary::PRIDE,
+            controlled_vocabulary: $crate::params::ControlledVocabulary::$ns,
             accession: $acc,
         }
     };
