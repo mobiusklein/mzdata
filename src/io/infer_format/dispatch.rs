@@ -5,13 +5,16 @@ use flate2::read::GzDecoder;
 use mzpeaks::{prelude::FeatureLike, CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, KnownCharge};
 use mzpeaks::{feature::{ChargedFeature, Feature}, IonMobility, Mass, MZ};
 
+#[cfg(feature = "xy")]
+use crate::io::xy::XyReaderType;
 #[allow(unused)]
 use crate::{io::{Generic3DIonMobilityFrameSource,
     IonMobilityFrameSource,
     IntoIonMobilityFrameSource,
     PreBufferedStream,
     RandomAccessIonMobilityFrameIterator},
-    spectrum::MultiLayerIonMobilityFrame};
+    spectrum::MultiLayerIonMobilityFrame,
+    };
 use crate::io::{traits::{MZFileReader, RandomAccessSpectrumIterator, SpectrumSource}, RestartableGzDecoder};
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::MzMLbReaderType;
@@ -59,6 +62,8 @@ pub enum MZReaderType<
     MzML(MzMLReaderType<R, C, D>),
     #[cfg(feature = "mgf")]
     MGF(MGFReaderType<R, C, D>),
+    #[cfg(feature = "xy")]
+    Xy(XyReaderType<R, C, D>),
     #[cfg(feature = "thermo")]
     ThermoRaw(ThermoRawReaderType<C, D>),
     #[cfg(feature = "mzmlb")]
@@ -79,6 +84,8 @@ impl<
             Self::MzML(arg0) => f.debug_tuple("MzML").field(&arg0.source_file_name()).finish(),
             #[cfg(feature = "mgf")]
             Self::MGF(arg0) => f.debug_tuple("MGF").field(&arg0.source_file_name()).finish(),
+            #[cfg(feature = "xy")]
+            Self::Xy(arg0) => f.debug_tuple("Xy").field(&arg0.source_file_name()).finish(),
             #[cfg(feature = "thermo")]
             Self::ThermoRaw(arg0) => f.debug_tuple("ThermoRaw").field(&arg0.source_file_name()).finish(),
             #[cfg(feature = "mzmlb")]
@@ -176,6 +183,8 @@ macro_rules! msfmt_dispatch {
             MZReaderType::MzML($r) => $e,
             #[cfg(feature = "mgf")]
             MZReaderType::MGF($r) => $e,
+            #[cfg(feature = "xy")]
+            MZReaderType::Xy($r) => $e,
             #[cfg(feature = "thermo")]
             MZReaderType::ThermoRaw($r) => $e,
             #[cfg(feature = "mzmlb")]
@@ -207,6 +216,8 @@ impl<R: io::Read + io::Seek,
             MZReaderType::MzML(_) => MassSpectrometryFormat::MzML,
             #[cfg(feature = "mgf")]
             MZReaderType::MGF(_) => MassSpectrometryFormat::MGF,
+            #[cfg(feature = "xy")]
+            MZReaderType::Xy(_) => MassSpectrometryFormat::Xy,
             #[cfg(feature = "thermo")]
             MZReaderType::ThermoRaw(_) => MassSpectrometryFormat::ThermoRaw,
             #[cfg(feature = "mzmlb")]
@@ -431,6 +442,8 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
             MZReaderType::MzML(reader) => reader.construct_index_from_stream(),
             #[cfg(feature = "mgf")]
             MZReaderType::MGF(reader) => reader.construct_index_from_stream(),
+            #[cfg(feature = "xy")]
+            MZReaderType::Xy(reader) => 1,
             #[cfg(feature = "thermo")]
             MZReaderType::ThermoRaw(reader) => reader.construct_index_from_stream(),
             #[cfg(feature = "mzmlb")]
@@ -461,6 +474,11 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
             MassSpectrometryFormat::MzML => {
                 let reader = MzMLReaderType::open_path(path)?;
                 Ok(Self::MzML(reader))
+            }
+            #[cfg(feature = "xy")]
+            MassSpectrometryFormat::Xy => {
+                let reader = XyReaderType::open_path(path)?;
+                Ok(Self::Xy(reader))
             }
             #[cfg(feature = "thermo")]
             MassSpectrometryFormat::ThermoRaw => {
@@ -501,6 +519,11 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
             MassSpectrometryFormat::MGF => {
                 let reader = MGFReaderType::open_file(source)?;
                 Ok(Self::MGF(reader))
+            }
+            #[cfg(feature = "xy")]
+            MassSpectrometryFormat::Xy => {
+                let reader = XyReaderType::open_file(source)?;
+                Ok(Self::Xy(reader))
             }
             #[cfg(feature = "mzml")]
             MassSpectrometryFormat::MzML => {
@@ -558,6 +581,8 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
             MZReaderType::MzML(reader) => reader.get_spectrum_by_time(time),
             #[cfg(feature = "mgf")]
             MZReaderType::MGF(reader) => reader.get_spectrum_by_time(time),
+            #[cfg(feature = "xy")]
+            MZReaderType::Xy(_) => None,
             #[cfg(feature = "thermo")]
             MZReaderType::ThermoRaw(reader) => reader.get_spectrum_by_time(time),
             #[cfg(feature = "mzmlb")]
@@ -653,6 +678,10 @@ macro_rules! msfmt_dispatch_cap {
             MZReaderType::MGF($r) => {
                 $e?;
             },
+            #[cfg(feature = "xy")]
+            MZReaderType::Xy($r) => {
+                $e?;
+            },
             #[cfg(feature = "thermo")]
             MZReaderType::ThermoRaw($r) => {
                 $e?;
@@ -705,6 +734,8 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
             MZReaderType::MzML(reader) => IMMZReaderType::MzML(reader.try_into_frame_source()?),
             #[cfg(feature = "mgf")]
             MZReaderType::MGF(_) => return Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound),
+            #[cfg(feature = "xy")]
+            MZReaderType::Xy(_) => return Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound),
             #[cfg(feature="thermo")]
             MZReaderType::ThermoRaw(_) => return Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound),
             #[cfg(feature="mzmlb")]

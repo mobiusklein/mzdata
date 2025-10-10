@@ -55,11 +55,12 @@ debug = true
 
 [features]
 # default = ["nalgebra", "parallelism", "mzsignal", "zlib-ng-compat"]
-default = ["zlib-ng-compat", "mgf", "mzml"]
+default = ["zlib-ng-compat", "mgf", "mzml", "xy"]
 
 checksum = ["dep:md5", "dep:sha1", "dep:base16ct"]
 
 mgf = []
+xy = []
 mzml = ["dep:quick-xml", "checksum", "dep:memchr"]
 
 # mzsignal's main functionality requires a linear algebra backend.
@@ -165,7 +166,10 @@ base16ct = { version = "0.2.0", features = ["alloc"], optional = true }
 # Bytes and compression
 flate2 = { version = "1.0.20" }
 numpress = { version = "1.1.0", optional = true, package = "numpress-rs" }
-bytemuck = { version = "1.18.0", features = ["extern_crate_alloc", "min_const_generics"] }
+bytemuck = { version = "1.18.0", features = [
+    "extern_crate_alloc",
+    "min_const_generics",
+] }
 base64-simd = "0.8.0"
 
 # Async reader features
