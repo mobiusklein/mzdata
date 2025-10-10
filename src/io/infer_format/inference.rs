@@ -8,6 +8,8 @@ use std::{
 
 use flate2::bufread::GzDecoder;
 
+#[cfg(feature = "xy")]
+use crate::io::xy::is_xy;
 use crate::{
     io::compression::{is_gzipped, is_gzipped_extension},
     meta::FormatConversion,
@@ -38,6 +40,7 @@ pub enum MassSpectrometryFormat {
     MzMLb,
     ThermoRaw,
     BrukerTDF,
+    Xy,
     Unknown,
 }
 
@@ -66,6 +69,9 @@ impl MassSpectrometryFormat {
             }
             MassSpectrometryFormat::BrukerTDF => {
                 ControlledVocabulary::MS.const_param_ident("Bruker TDF format", 1002817)
+            }
+            MassSpectrometryFormat::Xy => {
+                ControlledVocabulary::MS.const_param_ident("text format", 1001369)
             }
             MassSpectrometryFormat::Unknown => return None,
         };
@@ -121,6 +127,8 @@ pub fn infer_from_path<P: Into<path::PathBuf>>(path: P) -> (MassSpectrometryForm
             let form = match ext {
                 "mzml" => MassSpectrometryFormat::MzML,
                 "mgf" => MassSpectrometryFormat::MGF,
+                #[cfg(feature = "xy")]
+                "xy" => MassSpectrometryFormat::Xy,
                 #[cfg(feature = "mzmlb")]
                 "mzmlb" => MassSpectrometryFormat::MzMLb,
                 #[cfg(feature = "thermo")]
@@ -168,6 +176,8 @@ pub fn infer_from_stream<R: Read + Seek>(
         _ if is_mzml(&buf) => Ok((MassSpectrometryFormat::MzML, is_stream_gzipped)),
         #[cfg(feature = "mgf")]
         _ if is_mgf(&buf) => Ok((MassSpectrometryFormat::MGF, is_stream_gzipped)),
+        #[cfg(feature = "xy")]
+        _ if is_xy(&buf) => Ok((MassSpectrometryFormat::Xy, is_stream_gzipped)),
         #[cfg(feature = "thermo")]
         _ if is_thermo_raw_prefix(&buf) => {
             Ok((MassSpectrometryFormat::ThermoRaw, is_stream_gzipped))

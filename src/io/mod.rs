@@ -14,6 +14,8 @@ pub mod proxi;
 mod shorthand;
 pub(crate) mod traits;
 mod utils;
+#[cfg(feature = "xy")]
+pub mod xy;
 
 pub(crate) mod compression;
 
@@ -47,7 +49,9 @@ pub use crate::io::traits::{
 };
 
 #[cfg(feature = "async_partial")]
-pub use crate::io::traits::{AsyncSpectrumSource, AsyncRandomAccessSpectrumIterator, SpectrumStream};
+pub use crate::io::traits::{
+    AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource, SpectrumStream,
+};
 
 #[cfg(feature = "async")]
 pub use crate::io::traits::AsyncMZFileReader;
@@ -79,11 +83,9 @@ pub mod tdf;
 
 pub mod usi;
 
-
 // A location to re-export the symbols needed to make mz_read and
 // mz_write macros behave properly in other crates.
 #[doc(hidden)]
 pub mod _impl {
     pub use super::shorthand::*;
-
 }
