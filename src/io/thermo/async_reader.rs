@@ -8,12 +8,15 @@ use tokio;
 use super::ThermoRawReaderType as SyncThermoRawReaderType;
 use crate::{
     io::{
-        traits::{AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, SpectrumStream},
+        traits::{AsyncRandomAccessSpectrumIterator, SpectrumStream},
         DetailLevel,
     },
     prelude::*,
     spectrum::MultiLayerSpectrum,
 };
+
+#[cfg(feature = "async")]
+use crate::io::traits::AsyncMZFileReader;
 
 pub struct ThermoRawReaderType<
     C: CentroidLike + From<CentroidPeak> + Send = CentroidPeak,
@@ -295,7 +298,7 @@ mod test {
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn test_read() -> io::Result<()> {
         let mut reader: ThermoRawReaderType<CentroidPeak, DeconvolutedPeak> =
-            ThermoRawReaderType::open_path("./test/data/small.RAW").await?;
+            ThermoRawReaderType::new("./test/data/small.RAW").await?;
 
         let n = reader.len();
         let mut ms1_counter = 0;

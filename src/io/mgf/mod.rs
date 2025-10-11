@@ -16,10 +16,10 @@ pub use writer::{
     SimpleMGFWriterType,
 };
 
-#[cfg(feature = "async")]
+#[cfg(feature = "async_partial")]
 mod async_reader;
 
-#[cfg(feature = "async")]
+#[cfg(feature = "async_partial")]
 pub use crate::io::mgf::async_reader::{
     MGFReader as AsyncMGFReader, MGFReaderType as AsyncMGFReaderType,
 };

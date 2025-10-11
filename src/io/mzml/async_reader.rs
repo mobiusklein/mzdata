@@ -17,10 +17,13 @@ use quick_xml::{
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
+#[cfg(feature = "async")]
+use crate::io::traits::AsyncMZFileReader;
+
 use crate::{
     io::{
         traits::{
-            AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource,
+            AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource,
             SpectrumStream,
         },
         utils::DetailLevel,

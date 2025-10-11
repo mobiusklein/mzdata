@@ -1,5 +1,5 @@
 #![allow(clippy::type_complexity, clippy::large_enum_variant)]
-use std::{collections::VecDeque, fmt::Debug, fs, io::{self, Cursor}, marker::PhantomData, path::{self, Path}};
+use std::{fmt::Debug, fs, io::{self, Cursor}, marker::PhantomData, path::{self, Path}};
 
 use flate2::read::GzDecoder;
 use mzpeaks::{prelude::FeatureLike, CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, KnownCharge};
@@ -761,7 +761,7 @@ mod async_impl {
     use crate::io::mgf::AsyncMGFReaderType;
     #[cfg(feature = "mzml")]
     use crate::io::mzml::AsyncMzMLReaderType;
-    use crate::io::traits::{AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource};
+    use crate::io::traits::{AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource};
 
     #[cfg(feature = "thermo")]
     use crate::io::thermo::AsyncThermoRawReaderType;
@@ -950,7 +950,7 @@ mod async_impl {
 
     #[cfg(feature = "async")]
     impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
-         D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap + Send + Sync + 'static> AsyncMZFileReader<C, D, MultiLayerSpectrum<C,D>> for AsyncMZReaderType<tokio::fs::File, C, D> {
+         D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap + Send + Sync + 'static> crate::io::traits::AsyncMZFileReader<C, D, MultiLayerSpectrum<C,D>> for AsyncMZReaderType<tokio::fs::File, C, D> {
 
         async fn construct_index_from_stream(&mut self) -> u64 {
             amsfmt_dispatch!(self, reader, reader.construct_index_from_stream().await)
@@ -1052,6 +1052,8 @@ mod async_impl {
         #[cfg(feature = "async")]
         /// Create a reader from a file on the local file system denoted by `path`.
         pub async fn from_path<P: AsRef<Path>>(self, path: P) -> io::Result<AsyncMZReaderType<tokio::fs::File, C, D>> {
+            use crate::io::traits::AsyncMZFileReader;
+
             let mut reader = AsyncMZReaderType::open_path(path::PathBuf::from(path.as_ref())).await?;
             reader.set_detail_level(self.detail_level);
             Ok(reader)
@@ -1241,6 +1243,7 @@ impl<R: io::Read + io::Seek, C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mas
 
 #[cfg(test)]
 mod test {
+    #[allow(unused)]
     use crate::prelude::*;
     use super::*;
 

@@ -29,9 +29,9 @@ mod reader;
 
 pub use reader::{is_thermo_raw_prefix, ThermoRawReader, ThermoRawReaderType};
 
-#[cfg(feature = "async")]
+#[cfg(feature = "async_partial")]
 mod async_reader;
-#[cfg(feature = "async")]
+#[cfg(feature = "async_partial")]
 pub use async_reader::{
     ThermoRawReader as AsyncThermoRawReader, ThermoRawReaderType as AsyncThermoRawReaderType,
 };
