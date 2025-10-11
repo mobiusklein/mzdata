@@ -29,7 +29,10 @@ pub enum DetailLevel {
     #[default]
     /// Read all spectral data, including peak data, eagerly decoding it. This is the default
     Full,
-    /// Read all spectral data, including peak data but defer decoding until later if possible
+    /// Read all spectral data, including peak data but defer decoding until later if possible.
+    /// Check a format reader's documentation to see if it supports lazy loading. Lazy loading
+    /// is only really of value for dense profile mode data or very, very long peak lists
+    /// that are large and expensive to decode.
     Lazy,
     /// Read only the metadata of spectra, ignoring peak data entirely
     MetadataOnly,

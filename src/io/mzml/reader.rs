@@ -1123,11 +1123,15 @@ impl<'a> From<MzMLSpectrumBuilder<'a>> for RawSpectrum {
 
 /**
 An mzML parser that supports iteration and random access. The parser produces
-[`Spectrum`] instances, which may be converted to [`RawSpectrum`](crate::spectrum::RawSpectrum)
+[`MultiLayerSpectrum`] instances, which may be converted to [`RawSpectrum`](crate::spectrum::RawSpectrum)
 or [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum) as is appropriate to the data.
 
 When the readable stream the parser is wrapped around supports [`io::Seek`],
 additional random access operations are available.
+
+Because mzML stores the numerical data arrays in common compressed buffer formats, it
+is possible to defer decoding these until you need them with [`DetailLevel::Lazy`], unlike
+most other formats.
 */
 pub struct MzMLReaderType<
     R: Read,
