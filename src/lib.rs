@@ -88,8 +88,8 @@
 //!
 //! `mzdata` uses [`flate2`](https://crates.io/crates/flate2) to compress and decompress `zlib`-type compressed streams, but there are three different backends available with different tradeoffs in speed and build convenience:
 //!
-//! - `zlib` - The historical implementation. Faster than `miniz_oxide` and consistently produces the largest compression. Requires a nearly ubiquitous C library at build time.
-//! - `zlib-ng-compat` - The fasted, often nearly largest if not largest compression and decompression. Requires a C library or a C compiler at build time.
+//! - `zlib` - The historical implementation. Faster than `miniz_oxide` and consistently produces the best compression. Requires a nearly ubiquitous C library at build time.
+//! - `zlib-ng-compat` - The fastest, often nearly best if not best compression and decompression. Requires a C library or a C compiler at build time.
 //! - `zlib-ng` - C library dependency, I encountered build errors but your mileage may vary. Requires a C library or a C compiler at build time.
 //! - `miniz_oxide` - Pure Rust backend, the slowest in practice.
 //!
