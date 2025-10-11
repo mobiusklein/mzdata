@@ -15,7 +15,7 @@ use mzdata::spectrum::SignalContinuity;
 fn main() {
     let mut ms1_count = 0;
     let mut msn_count = 0;
-    let reader = MzMLReader::new(fs::File::open("./test/data/small.mzML").unwrap());
+    let reader = MzMLReader::open_path("./test/data/small.mzML").unwrap();
     for spectrum in reader {
         if spectrum.ms_level() == 1 {
             ms1_count += 1;
