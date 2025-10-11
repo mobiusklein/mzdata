@@ -1,5 +1,5 @@
 #![allow(clippy::type_complexity, clippy::large_enum_variant)]
-use std::{fmt::Debug, fs, io, marker::PhantomData, path::{self, Path}};
+use std::{collections::VecDeque, fmt::Debug, fs, io::{self, Cursor}, marker::PhantomData, path::{self, Path}};
 
 use flate2::read::GzDecoder;
 use mzpeaks::{prelude::FeatureLike, CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak, KnownCharge};
@@ -12,7 +12,7 @@ use crate::{io::{Generic3DIonMobilityFrameSource,
     PreBufferedStream,
     RandomAccessIonMobilityFrameIterator},
     spectrum::MultiLayerIonMobilityFrame};
-use crate::io::{traits::{MZFileReader, RandomAccessSpectrumIterator, SpectrumSource}, RestartableGzDecoder};
+use crate::{io::{traits::{MZFileReader, RandomAccessSpectrumIterator, SpectrumSource}, MemorySpectrumSource, RestartableGzDecoder}, meta::FileMetadataConfig};
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::MzMLbReaderType;
 
@@ -165,6 +165,22 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap, D: DeconvolutedCe
         reader.get_mut().set_detail_level(self.detail_level);
         Ok(reader)
     }
+
+
+    /// Create a "reader" from an existing collection of spectra in memory.
+    ///
+    /// Extra metadata may be provided if it is available, but it is not required.
+    ///
+    /// # Note
+    /// This uses [`MemorySpectrumSource`] internally, which requires the spectrum data structure
+    /// implement [`Clone`]. All of the [`SpectrumLike`] types here derive `Clone`, but the peak types
+    /// must also implement [`Clone`] too.
+    ///
+    /// All spectra are kept in memory, so keep this in mind if you are passing a large collection!
+    pub fn from_spectra(self, source: impl IntoIterator<Item = MultiLayerSpectrum<C, D>>, metadata: Option<FileMetadataConfig>) -> MZReaderType<Cursor<&'static [u8]>, C, D>
+            where C: Clone + Send + Sync + 'static, D: Clone + Send + Sync + 'static {
+        MZReaderType::<Cursor<&'static [u8]>, C, D>::open_spectra(source, metadata)
+    }
 }
 
 
@@ -283,6 +299,22 @@ impl<R: io::Read + io::Seek,
                 Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
             }
         }
+    }
+
+    /// Create a "reader" from an existing collection of spectra in memory.
+    ///
+    /// Extra metadata may be provided if it is available, but it is not required.
+    ///
+    /// # Note
+    /// This uses [`MemorySpectrumSource`] internally, which requires the spectrum data structure
+    /// implement [`Clone`]. All of the [`SpectrumLike`] types here derive `Clone`, but the peak types
+    /// must also implement [`Clone`] too.
+    ///
+    /// All spectra are kept in memory, so keep this in mind if you are passing a large collection!
+    pub fn open_spectra(source: impl IntoIterator<Item = MultiLayerSpectrum<C, D>>, metadata: Option<FileMetadataConfig>) -> MZReaderType<Cursor<&'static [u8]>, C, D>
+            where C: Clone + Send + Sync + 'static, D: Clone + Send + Sync + 'static {
+        let source = MemorySpectrumSource::new_with_metadata(source.into_iter().collect(), metadata.unwrap_or_default());
+        MZReaderType::Unknown(Box::new(source), PhantomData)
     }
 }
 
