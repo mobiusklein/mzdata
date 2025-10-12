@@ -1279,7 +1279,7 @@ mod async_traits {
 
         /// Retrieve a spectrum by it's integer index
         fn get_spectrum_by_index(&mut self, index: usize)
-            -> impl Future<Output = Option<S>> + Send;
+            -> impl Future<Output = Option<S>>;
 
         /// Retrieve a spectrum by its scan start time
         /// Considerably more complex than seeking by ID or index, this involves
