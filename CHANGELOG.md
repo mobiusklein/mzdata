@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.60.2] - 2025-10-12
+
+### Added
+
+- Add more detail about how mzML works with `DetailLevel::Lazy`
+- Add `MZReaderType::open_spectra` for easily converting a collection of spectra into an `MZReaderType`
+
+### Documentation
+
+- Grammar
+
+### Fixed
+
+- Simplified curie macro (#39)
+- Update the README example code to use `MZReader` instead of the `mz_read` macro
+- Fix `async_partial` compilation
+
 ## [0.60.0] - 2025-10-07
 
 ### Documentation
@@ -888,7 +905,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.60.1...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.60.2...HEAD
+[0.60.2]: https://github.com/mobiusklein/mzdata/compare/v0.60.1...v0.60.2
 [0.60.1]: https://github.com/mobiusklein/mzdata/compare/v0.60.0...v0.60.1
 [0.60.0]: https://github.com/mobiusklein/mzdata/compare/v0.59.2...v0.60.0
 [0.59.2]: https://github.com/mobiusklein/mzdata/compare/v0.59.1...v0.59.2
