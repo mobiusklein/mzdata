@@ -12,7 +12,7 @@ use crate::{io::{Generic3DIonMobilityFrameSource,
     PreBufferedStream,
     RandomAccessIonMobilityFrameIterator},
     spectrum::MultiLayerIonMobilityFrame};
-use crate::{io::{traits::{MZFileReader, RandomAccessSpectrumIterator, SpectrumSource}, MemorySpectrumSource, RestartableGzDecoder}, meta::FileMetadataConfig};
+use crate::{io::{traits::{MZFileReader, RandomAccessSpectrumIterator, SpectrumSource}, MemorySpectrumSource, RestartableGzDecoder}, meta::FileMetadataConfig, prelude::SeekRead};
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::MzMLbReaderType;
 
@@ -146,6 +146,11 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap, D: DeconvolutedCe
         Ok(reader)
     }
 
+    /// See [`MZReaderType::open_read_seek_generic`]
+    pub fn from_read_seek_generic(self, source: Box<dyn SeekRead>) -> Result<MZReaderType<Box<dyn SeekRead>, C, D>, io::Error> {
+        MZReaderType::<Box<dyn SeekRead>, C, D>::open_read_seek_generic(source)
+    }
+
     /// Create a reader from a type that supports [`io::Read`].
     ///
     /// This will internally wrap the file in a [`PreBufferedStream`] for metadata
@@ -166,6 +171,10 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap, D: DeconvolutedCe
         Ok(reader)
     }
 
+    /// See [`MZReaderType::open_read_generic`]
+    pub fn from_read_generic(self, source: Box<dyn io::Read>) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, MZReaderType<PreBufferedStream<Box<dyn io::Read>>, C, D>>> {
+        MZReaderType::<PreBufferedStream<fs::File>, C, D>::open_read_generic(source)
+    }
 
     /// Create a "reader" from an existing collection of spectra in memory.
     ///
@@ -265,6 +274,12 @@ impl<R: io::Read + io::Seek,
         if gzipped {
             return Err(io::Error::new(io::ErrorKind::Unsupported, "This method does not support gzipped streams"))
         }
+        MZReaderType::create_from_read_seek(stream, fmt)
+    }
+
+    /// Shared plumbing for all generic read-seek openers, so that `n+1`th format changes
+    /// are repeated as few times as possible
+    fn create_from_read_seek(stream: R, fmt: MassSpectrometryFormat) -> io::Result<Self> {
         match fmt {
             #[cfg(feature = "mgf")]
             MassSpectrometryFormat::MGF => Ok(Self::MGF(MGFReaderType::new_indexed(stream))),
@@ -277,6 +292,27 @@ impl<R: io::Read + io::Seek,
     }
 
     /// Create a reader from a type that supports [`io::Read`] and
+    /// [`io::Seek`], generic over whether or not the stream is gzip-compressed
+    /// or not, at the cost of an extra layer of indirection.
+    ///
+    /// # Note
+    /// Not all formats can be read from an `io` type, these will
+    /// fail to open and an error will be returned
+    ///
+    /// # Performance
+    /// See [`MZReaderType::open_gzipped_read_seek`] for more details
+    pub fn open_read_seek_generic(mut stream: Box<dyn SeekRead>) -> io::Result<MZReaderType<Box<dyn SeekRead>, C, D>> {
+        let (fmt, gzipped) = infer_from_stream(&mut stream)?;
+        if gzipped {
+            log::trace!("Reading gzipped generic seekable stream");
+            let stream = Box::new(RestartableGzDecoder::new(io::BufReader::new(stream))) as Box<dyn SeekRead>;
+            MZReaderType::create_from_read_seek(stream, fmt)
+        } else {
+            MZReaderType::open_read_seek(stream)
+        }
+    }
+
+    /// Create a reader from a type that supports [`io::Read`] and
     /// [`io::Seek`] that is gzip-compressed.
     ///
     /// # Note
@@ -284,21 +320,19 @@ impl<R: io::Read + io::Seek,
     ///
     /// Not all formats can be read from an `io` type, these will
     /// fail to open and an error will be returned
+    ///
+    /// # Performance
+    /// A gzip compressed stream is very slow to do random access on, especially seeking backwards.
+    /// This method is provided as a convenience, but special care should be taken if you anticipate doing things
+    /// like searching over time or backtracking to find precursors. Often, a different algorithm using
+    /// the non-`io::Seek`-requiring method helps in these scenarios.
     pub fn open_gzipped_read_seek(mut stream: R) -> io::Result<MZReaderType<RestartableGzDecoder<io::BufReader<R>>, C, D>> {
         let (fmt, gzipped) = infer_from_stream(&mut stream)?;
         if !gzipped {
             return Err(io::Error::new(io::ErrorKind::Unsupported, "This method does not support non-gzipped streams"))
         }
         let stream = RestartableGzDecoder::new(io::BufReader::new(stream));
-        match fmt {
-            #[cfg(feature = "mgf")]
-            MassSpectrometryFormat::MGF => Ok(MZReaderType::MGF(MGFReaderType::new_indexed(stream))),
-            #[cfg(feature = "mzml")]
-            MassSpectrometryFormat::MzML => Ok(MZReaderType::MzML(MzMLReaderType::new_indexed(stream))),
-            _ => {
-                Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
-            }
-        }
+        MZReaderType::create_from_read_seek(stream, fmt)
     }
 
     /// Create a "reader" from an existing collection of spectra in memory.
@@ -361,6 +395,21 @@ impl<R: io::Read,
      C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
      D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> MZReaderType<PreBufferedStream<R>, C, D> {
 
+    /// Shared plumbing for all generic read openers, so that `n+1`th format changes
+    /// are repeated as few times as possible
+    fn create_from_prebuffered_reader(stream: PreBufferedStream<R>, fmt: MassSpectrometryFormat) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, MZReaderType<PreBufferedStream<R>, C, D>>> {
+        let reader = match fmt {
+            #[cfg(feature = "mgf")]
+            MassSpectrometryFormat::MGF => MZReaderType::MGF(MGFReaderType::new(stream)),
+            #[cfg(feature = "mzml")]
+            MassSpectrometryFormat::MzML => MZReaderType::MzML(MzMLReaderType::new(stream)),
+            _ => {
+                return Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
+            }
+        };
+        Ok(StreamingSpectrumIterator::new(reader))
+    }
+
     /// Create a reader from a type that supports [`io::Read`].
     ///
     /// This will internally wrap the file in a [`PreBufferedStream`] for metadata
@@ -379,16 +428,7 @@ impl<R: io::Read,
             return Err(io::Error::new(io::ErrorKind::Unsupported, "This method does not support gzipped streams"))
         }
 
-        let reader = match fmt {
-            #[cfg(feature = "mgf")]
-            MassSpectrometryFormat::MGF => Self::MGF(MGFReaderType::new(stream)),
-            #[cfg(feature = "mzml")]
-            MassSpectrometryFormat::MzML => Self::MzML(MzMLReaderType::new(stream)),
-            _ => {
-                return Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
-            }
-        };
-        Ok(StreamingSpectrumIterator::new(reader))
+        MZReaderType::create_from_prebuffered_reader(stream, fmt)
     }
 
     /// Create a reader from a type that supports [`io::Read`] is gzip-compressed.
@@ -410,25 +450,30 @@ impl<R: io::Read,
         if !gzipped {
             return Err(io::Error::new(io::ErrorKind::Unsupported, "This method only supports gzipped streams"))
         }
-        let mut stream = PreBufferedStream::new(GzDecoder::new(stream))?;
+        let stream = PreBufferedStream::new(GzDecoder::new(stream))?;
+        MZReaderType::create_from_prebuffered_reader(stream, fmt)
+    }
 
-        let reader = match fmt {
-            #[cfg(feature = "mgf")]
-            MassSpectrometryFormat::MGF => MZReaderType::MGF(MGFReaderType::new(stream)),
-            #[cfg(feature = "mzml")]
-            MassSpectrometryFormat::MzML => MZReaderType::MzML(MzMLReaderType::new(stream)),
-            _ => {
-                return Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
-            }
-        };
-        Ok(StreamingSpectrumIterator::new(reader))
+    /// Create a reader from a type that supports [`io::Read`] generic over gzipped
+    /// compression, at the cost of another layer of indirection.
+    ///
+    /// See [`MZReaderType::open_read`] for more details.
+    pub fn open_read_generic(stream: Box<dyn io::Read>) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, MZReaderType<PreBufferedStream<Box<dyn io::Read>>, C, D>>> {
+        let mut stream = PreBufferedStream::new(stream)?;
+        let (fmt, gzipped) = infer_from_stream(&mut stream)?;
+        if gzipped {
+            let decoder = Box::new(GzDecoder::new(stream)) as Box<dyn io::Read>;
+            let mut stream = PreBufferedStream::new(decoder)?;
+            MZReaderType::create_from_prebuffered_reader(stream, fmt)
+        } else {
+            MZReaderType::create_from_prebuffered_reader(stream, fmt)
+        }
     }
 
     /// See [`MZReaderType::open_read`].
     ///
     /// This function lets the caller specify the prebuffering size for files with large
     /// headers that exceed the default buffer size.
-    #[allow(unreachable_code)]
     pub fn open_read_with_buffer_size(stream: R, buffer_size: usize) -> io::Result<StreamingSpectrumIterator<C, D, MultiLayerSpectrum<C, D>, Self>> {
         let mut stream = PreBufferedStream::new_with_buffer_size(stream, buffer_size)?;
         let (fmt, gzipped) = infer_from_stream(&mut stream)?;
@@ -437,16 +482,7 @@ impl<R: io::Read,
             return Err(io::Error::new(io::ErrorKind::Unsupported, "This method does not support gzipped streams"))
         }
 
-        let reader = match fmt {
-            #[cfg(feature = "mgf")]
-            MassSpectrometryFormat::MGF => Self::MGF(MGFReaderType::new(stream)),
-            #[cfg(feature = "mzml")]
-            MassSpectrometryFormat::MzML => Self::MzML(MzMLReaderType::new(stream)),
-            _ => {
-                return Err(io::Error::new(io::ErrorKind::Unsupported, format!("This method does not support {fmt}")))
-            }
-        };
-        Ok(StreamingSpectrumIterator::new(reader))
+        MZReaderType::create_from_prebuffered_reader(stream, fmt)
     }
 }
 
@@ -1257,6 +1293,18 @@ mod test {
             let s = reader.get_spectrum_by_index(0).unwrap();
             assert!(s.has_ion_mobility_dimension());
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_gzipped_read_seek() -> io::Result<()> {
+        let stream = fs::File::open("test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz")?;
+        let reader: MZReaderType<Box<dyn SeekRead>> = MZReader::<fs::File>::open_read_seek_generic(Box::new(stream) as Box<dyn SeekRead>)?;
+        assert_eq!(reader.len(), 103);
+
+        let stream = fs::File::open("test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz")?;
+        let reader = MZReader::<fs::File>::open_gzipped_read_seek(stream)?;
+        assert_eq!(reader.len(), 103);
         Ok(())
     }
 }
