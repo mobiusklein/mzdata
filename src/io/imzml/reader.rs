@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{self, BufReader, Read, Seek},
+    io::{self, BufReader, Read, Seek, SeekFrom},
     marker::PhantomData,
     mem,
 };
@@ -141,7 +141,6 @@ pub struct ImzMLSpectrumBuilder<
 > {
     inner: MzMLSpectrumBuilder<'a, C, D>,
     current_ibd_param: DataRangeQuery,
-    metadata: ImzMLFileMetadata,
 }
 
 impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap> Default
@@ -151,7 +150,6 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
         Self {
             inner: Default::default(),
             current_ibd_param: DataRangeQuery::default(),
-            metadata: ImzMLFileMetadata::default(),
         }
     }
 }
@@ -256,7 +254,6 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
         Self {
             inner: MzMLSpectrumBuilder::with_detail_level(detail_level),
             current_ibd_param: DataRangeQuery::default(),
-            metadata: ImzMLFileMetadata::default(),
         }
     }
 
@@ -487,7 +484,7 @@ When the readable stream the parser is wrapped around supports [`io::Seek`],
 additional random access operations are available.
 */
 pub struct ImzMLReaderType<
-    R: Read,
+    R: Read + Seek,
     S: Read + Seek,
     C: CentroidLike = CentroidPeak,
     D: DeconvolutedCentroidLike = DeconvolutedPeak,
@@ -540,7 +537,7 @@ pub struct ImzMLReaderType<
 impl<
         'a,
         'b: 'a,
-        R: Read,
+        R: Read + Seek,
         S: Read + Seek,
         C: CentroidLike + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
@@ -1078,6 +1075,138 @@ impl<
             },
         }
     }
+
+    //pub fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
+
+    //pub fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
+
+    //pub fn iter_chromatograms(&mut self) -> ChromatogramIter<'_, C, D> {
 }
 
-pub type ImzMLReader = ImzMLReaderType<CentroidPeak, DeconvolutedPeak>;
+/// [`ImzMLReaderType`] instances are [`Iterator`]s over [`MultiLayerSpectrum`], like all
+/// file format readers. This involves advancing the position of the internal imzML file
+/// reader in-place without seeking.
+impl<R: Read + Seek, S: Read + Seek, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap> Iterator
+    for ImzMLReaderType<R, S, C, D>
+{
+    type Item = MultiLayerSpectrum<C, D>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.read_next()
+    }
+}
+
+/// They can also be used to fetch specific spectra by ID, index, or start
+/// time when the underlying file stream supports [`io::Seek`].
+impl<
+        R: Read + Seek,
+        S: Read + Seek,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for ImzMLReaderType<R, S, C, D>
+{
+    /// Retrieve a spectrum by it's native ID
+    fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
+        let offset = self.spectrum_index.get(id)?;
+        let start = self
+            .handle
+            .stream_position()
+            .expect("Failed to save checkpoint");
+        self.handle.seek(SeekFrom::Start(offset))
+            .expect("Failed to move seek to offset");
+        // Skip check_stream for now - not implemented
+        self.state = MzMLParserState::Resume;
+        let result = self.read_next();
+        self.handle.seek(SeekFrom::Start(start))
+            .expect("Failed to restore offset");
+        result
+    }
+
+    /// Retrieve a spectrum by it's integer index
+    fn get_spectrum_by_index(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
+        let (_id, offset) = self.spectrum_index.get_index(index)?;
+        let byte_offset = offset;
+        let start = self
+            .handle
+            .stream_position()
+            .expect("Failed to save checkpoint");
+        self.handle.seek(SeekFrom::Start(byte_offset)).ok()?;
+        // Skip check_stream for now - not implemented  
+        self.state = MzMLParserState::Resume;
+        let result = self.read_next();
+        self.handle.seek(SeekFrom::Start(start))
+            .expect("Failed to restore offset");
+        result
+    }
+
+    /// Return the data stream to the beginning
+    fn reset(&mut self) {
+        self.state = MzMLParserState::Resume;
+        self.handle.seek(SeekFrom::Start(0))
+            .expect("Failed to reset file stream");
+    }
+
+    fn get_index(&self) -> &OffsetIndex {
+        if !self.spectrum_index.init {
+            warn!("Attempting to use an uninitialized offset index on MzMLReaderType")
+        }
+        &self.spectrum_index
+    }
+
+    fn set_index(&mut self, index: OffsetIndex) {
+        self.spectrum_index = index
+    }
+
+    fn detail_level(&self) -> &DetailLevel {
+        &self.detail_level
+    }
+
+    fn set_detail_level(&mut self, detail_level: DetailLevel) {
+        self.detail_level = detail_level;
+    }
+}
+
+/// The iterator can also be updated to move to a different location in the
+/// stream efficiently.
+impl<
+        R: Read + Seek,
+        S: Read + Seek,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for ImzMLReaderType<R, S, C, D>
+{
+    fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
+        match self._offset_of_id(id) {
+            Some(offset) => match self.handle.seek(SeekFrom::Start(offset)) {
+                Ok(_) => Ok(self),
+                Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
+            },
+            None => Err(SpectrumAccessError::SpectrumIdNotFound(id.to_string())),
+        }
+    }
+
+    fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
+        match self._offset_of_index(index) {
+            Some(offset) => match self.handle.seek(SeekFrom::Start(offset)) {
+                Ok(_) => Ok(self),
+                Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
+            },
+            None => Err(SpectrumAccessError::SpectrumIndexNotFound(index)),
+        }
+    }
+
+    fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
+        match self._offset_of_time(time) {
+            Some(offset) => match self.handle.seek(SeekFrom::Start(offset)) {
+                Ok(_) => Ok(self),
+                Err(err) => Err(SpectrumAccessError::IOError(Some(err))),
+            },
+            None => Err(SpectrumAccessError::SpectrumNotFound),
+        }
+    }
+}
+
+
+
+
+pub type ImzMLReader<R, S> = ImzMLReaderType<R, S, CentroidPeak, DeconvolutedPeak>;
