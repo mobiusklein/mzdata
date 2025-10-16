@@ -1079,11 +1079,73 @@ impl<
         }
     }
 
-    //pub fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
 
-    //pub fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
+    pub fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
+        let offset = self.chromatogram_index.get(id)?;
+        let start = self
+            .handle
+            .stream_position()
+            .expect("Failed to save checkpoint");
+        self.seek(SeekFrom::Start(offset))
+            .expect("Failed to move seek to offset");
+        debug_assert!(
+            self.check_stream("chromatogram").unwrap(),
+            "The next XML tag was not `chromatogram`"
+        );
+        self.state = MzMLParserState::Resume;
+        let result = self._read_next_chromatogram();
+        self.seek(SeekFrom::Start(start))
+            .expect("Failed to restore offset");
+        result.ok()
+    }
 
-    //pub fn iter_chromatograms(&mut self) -> ChromatogramIter<'_, C, D> {
+    pub fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
+        let (_key, offset) = self.chromatogram_index.get_index(index)?;
+        let start = self
+            .handle
+            .stream_position()
+            .expect("Failed to save checkpoint");
+        self.seek(SeekFrom::Start(offset))
+            .expect("Failed to move seek to offset");
+        debug_assert!(
+            self.check_stream("chromatogram").unwrap(),
+            "The next XML tag was not `chromatogram`"
+        );
+        self.state = MzMLParserState::Resume;
+        let result = self._read_next_chromatogram();
+        self.seek(SeekFrom::Start(start))
+            .expect("Failed to restore offset");
+        result.ok()
+    }
+
+    pub fn iter_chromatograms(&mut self) -> ChromatogramIter<'_, R, C, D> {
+        ChromatogramIter::new(self)
+    }
+
+    pub fn validate_ibd_checksum(&mut self) -> Result<bool, ImzMLError> {
+        // Validate the IBD file checksum matches metadata
+        todo!()
+    }
+    
+    pub fn validate_uuid_consistency(&mut self) -> Result<bool, ImzMLError> {
+        // Check that UUID in IBD file matches XML metadata
+        todo!()
+    }
+}
+
+impl<
+        R: SeekRead,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > ChromatogramSource for ImzMLReaderType<R, C, D>
+{
+    fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
+        self.get_chromatogram_by_id(id)
+    }
+
+    fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
+        self.get_chromatogram_by_index(index)
+    }
 }
 
 /// [`ImzMLReaderType`] instances are [`Iterator`]s over [`MultiLayerSpectrum`], like all
@@ -1213,11 +1275,11 @@ impl<
 impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
     MZFileReader<C, D, MultiLayerSpectrum<C, D>> for ImzMLReaderType<fs::File, fs::File, C, D>
 {
-    fn open_file(source: fs::File) -> io::Result<Self> {
+    fn open_file(_source: fs::File) -> io::Result<Self> {
         #[cfg(feature = "filename")]
         {
             // Get the path from the file using the filename crate
-            let xml_path = filename::file_name(&source)
+            let xml_path = filename::file_name(&_source)
                 .ok_or_else(|| {
                     io::Error::new(io::ErrorKind::InvalidInput, "Source file has no path")
                 })?;
@@ -1242,7 +1304,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
             let ibd_file = fs::File::open(&ibd_path)?;
             
             // Create the reader with both files
-            Ok(Self::new(source, ibd_file))
+            Ok(Self::new(_source, ibd_file))
         }
         #[cfg(not(feature = "filename"))]
         {

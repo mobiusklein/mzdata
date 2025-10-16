@@ -1752,7 +1752,7 @@ impl<
     }
 }
 
-/// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
+/// [`MzMLReaderType`] instances are [`Iterator`]s over [`MultiLayerSpectrum`]
 impl<
         R: io::Read,
         C: CentroidLike + BuildFromArrayMap,
