@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     io::{self, BufReader, Read, Seek, SeekFrom},
     marker::PhantomData,
-    mem,
+    mem, fs
 };
 
 use log::{trace, warn};
@@ -13,6 +13,9 @@ use quick_xml::{
 };
 use thiserror::Error;
 use uuid::Uuid;
+
+#[cfg(feature = "filename")]
+use filename;
 
 use crate::{
     io::{
@@ -1206,7 +1209,85 @@ impl<
     }
 }
 
+/// For open_file we assume that the IBD file is named the same as the imzML file
+impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
+    MZFileReader<C, D, MultiLayerSpectrum<C, D>> for ImzMLReaderType<fs::File, fs::File, C, D>
+{
+    fn open_file(source: fs::File) -> io::Result<Self> {
+        #[cfg(feature = "filename")]
+        {
+            // Get the path from the file using the filename crate
+            let xml_path = filename::file_name(&source)
+                .ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "Source file has no path")
+                })?;
+                
+            // Derive IBD path from imzML path
+            let mut ibd_path = xml_path.with_extension("ibd");
+            if !ibd_path.exists() {
+                // Try .IBD (uppercase)
+                ibd_path = xml_path.with_extension("IBD");
+                if !ibd_path.exists() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!(
+                            "Could not find associated IBD file for imzML at {}",
+                            ibd_path.display()
+                        ),
+                    ));
+                }
+            }
+            
+            // Open the IBD file
+            let ibd_file = fs::File::open(&ibd_path)?;
+            
+            // Create the reader with both files
+            Ok(Self::new(source, ibd_file))
+        }
+        #[cfg(not(feature = "filename"))]
+        {
+            // Cannot implement without filename feature
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "Cannot open imzML from File handle without the `filename` feature - use open_path() or ImzMLReaderType::new() directly"
+            ))
+        }
+    }
 
+    fn construct_index_from_stream(&mut self) -> u64 {
+        // Index should already be constructed during metadata parsing
+        self.spectrum_index.len() as u64
+    }
+}
 
+impl<R: Read + Seek, S: Read + Seek, C: CentroidLike, D: DeconvolutedCentroidLike> MSDataFileMetadata
+    for ImzMLReaderType<R, S, C, D>
+{
+    crate::impl_metadata_trait!();
+
+    fn scan_settings(&self) -> Option<&Vec<ScanSettings>> {
+        Some(&self.scan_settings)
+    }
+
+    fn scan_settings_mut(&mut self) -> Option<&mut Vec<ScanSettings>> {
+        Some(&mut self.scan_settings)
+    }
+
+    fn spectrum_count_hint(&self) -> Option<u64> {
+        self.num_spectra
+    }
+
+    fn set_spectrum_count_hint(&mut self, _value: Option<u64>) {
+        self.num_spectra = _value;
+    }
+
+    fn run_description(&self) -> Option<&MassSpectrometryRun> {
+        Some(&self.run)
+    }
+
+    fn run_description_mut(&mut self) -> Option<&mut MassSpectrometryRun> {
+        Some(&mut self.run)
+    }
+}
 
 pub type ImzMLReader<R, S> = ImzMLReaderType<R, S, CentroidPeak, DeconvolutedPeak>;
