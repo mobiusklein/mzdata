@@ -87,7 +87,7 @@ impl<T: Send> Collator<T> {
 
     /// Block on reading from `receiver` until it takes more than a microsecond to
     /// retrieve the next item from it, or until `batch_size` items have been read
-    pub fn receive_from(&mut self, receiver: &Receiver<(usize, T)>, batch_size: usize) {
+    pub fn receive_from(&mut self, receiver: &Receiver<(usize, T)>, batch_size: usize) -> bool {
         self.receive_from_timeout(receiver, batch_size, Duration::from_micros(1))
     }
 
@@ -98,15 +98,16 @@ impl<T: Send> Collator<T> {
         receiver: &Receiver<(usize, T)>,
         batch_size: usize,
         timeout: Duration,
-    ) {
+    ) -> bool {
         let mut counter = 0usize;
         while let Ok((group_idx, group)) = receiver.recv_timeout(timeout) {
             self.receive(group_idx, group);
             counter += 1;
             if counter > batch_size {
-                break;
+                return true;
             }
         }
+        false
     }
 
     pub fn receive_from_map_timeout<U, F: Fn(usize, U) -> (usize, T)>(

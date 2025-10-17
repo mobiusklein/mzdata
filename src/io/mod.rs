@@ -87,3 +87,6 @@ pub mod _impl {
     pub use super::shorthand::*;
 
 }
+
+#[cfg(feature = "parallelism")]
+pub use utils::ConcurrentLoader;
