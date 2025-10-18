@@ -1259,6 +1259,10 @@ macro_rules! curie {
     (PRIDE:$acc:literal) => {
         $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::PRIDE, accession: $acc }
     };
+    (IMZML:$acc:literal) => {
+        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::IMZML, accession: $acc }
+    };
+
 }
 
 impl CURIE {
@@ -1382,16 +1386,12 @@ impl TryFrom<&Param> for CURIE {
     type Error = String;
 
     fn try_from(value: &Param) -> Result<Self, Self::Error> {
-        if value.is_controlled() {
-            Ok(CURIE::new(
-                value.controlled_vocabulary.unwrap(),
-                value.accession.unwrap(),
-            ))
-        } else {
-            Err(format!(
-                "{} does is not a controlled vocabulary term",
+        match (value.controlled_vocabulary, value.accession) {
+            (Some(cv), Some(acc)) => Ok(CURIE::new(cv, acc)),
+            _ => Err(format!(
+                "{} is missing controlled vocabulary or accession",
                 value.name()
-            ))
+            )),
         }
     }
 }
@@ -1400,16 +1400,12 @@ impl<'a> TryFrom<&ParamCow<'a>> for CURIE {
     type Error = String;
 
     fn try_from(value: &ParamCow<'a>) -> Result<Self, Self::Error> {
-        if value.is_controlled() {
-            Ok(CURIE::new(
-                value.controlled_vocabulary.unwrap(),
-                value.accession.unwrap(),
-            ))
-        } else {
-            Err(format!(
-                "{} does is not a controlled vocabulary term",
+        match (value.controlled_vocabulary, value.accession) {
+            (Some(cv), Some(acc)) => Ok(CURIE::new(cv, acc)),
+            _ => Err(format!(
+                "{} is missing controlled vocabulary or accession",
                 value.name()
-            ))
+            )),
         }
     }
 }
