@@ -47,7 +47,7 @@ mod test {
     fn test_reader() {
         let path = path::Path::new("./test/data/small.mgf");
         let file = fs::File::open(path).expect("Test file doesn't exist");
-        let reader = MGFReaderType::<_>::new(file);
+        let reader = MGFReaderType::<_, CentroidPeak, DeconvolutedPeak>::new(file);
         let mut ms1_count = 0;
         let mut msn_count = 0;
         for scan in reader {
@@ -116,13 +116,13 @@ mod test {
     fn test_read_unsupported() -> io::Result<()> {
         let path = path::Path::new("./test/data/small.mgf");
         let file = fs::File::open(path).expect("Test file doesn't exist");
-        let mut reader = MGFReaderType::<_>::new(file);
+        let mut reader = MGFReader::new(file);
 
         assert!(reader.get_chromatogram_by_id("not real").is_none());
         assert!(reader.get_chromatogram_by_index(0).is_none());
         assert!(reader.spectrum_count_hint().is_none());
 
-        reader = MGFReaderType::<_>::open_path(path)?;
+        reader = MGFReaderType::open_path(path)?;
         assert_eq!(reader.spectrum_count_hint().unwrap() as usize, reader.len());
 
         assert!(reader.run_description().is_some());

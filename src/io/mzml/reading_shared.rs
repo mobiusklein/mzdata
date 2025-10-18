@@ -105,6 +105,8 @@ impl Display for MzMLParserState {
     }
 }
 
+
+/// Whether the current parsing target is a `<spectrum>` or `<chromatogram>`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum EntryType {
     #[default]

@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     convert::TryInto,
     fs,
-    io::{self, BufReader, Read, Seek, SeekFrom},
+    io::{self, BufReader, Read, Seek, SeekFrom, BufRead},
     marker::PhantomData,
     mem,
 };
@@ -1122,26 +1122,22 @@ impl<'a> From<MzMLSpectrumBuilder<'a>> for RawSpectrum {
 }
 
 /**
-An mzML parser that supports iteration and random access. The parser produces
-[`MultiLayerSpectrum`] instances, which may be converted to [`RawSpectrum`](crate::spectrum::RawSpectrum)
-or [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum) as is appropriate to the data.
+An mzML reader type that assumes its input stream implements [`io::BufRead`]. See
+[`MzMLReaderType`] for general information. The types are equivalent.
 
-When the readable stream the parser is wrapped around supports [`io::Seek`],
-additional random access operations are available.
-
-Because mzML stores the numerical data arrays in common compressed buffer formats, it
-is possible to defer decoding these until you need them with [`DetailLevel::Lazy`], unlike
-most other formats.
+If you need to construct an mzML reader directly from an [`io::BufRead`]  stream, use
+[`BufferedMzMLReaderType::new_buffered`] or [`BufferedMzMLReaderType::new_buffered_with_index`]
+respectively.
 */
-pub struct MzMLReaderType<
-    R: Read,
+pub struct BufferedMzMLReaderType<
+    R: BufRead,
     C: CentroidLike = CentroidPeak,
     D: DeconvolutedCentroidLike = DeconvolutedPeak,
 > {
     /// The state the parser was in last.
     pub state: MzMLParserState,
     /// The raw reader
-    handle: BufReader<R>,
+    handle: R,
     /// A place to store the last error the parser encountered
     error: Option<Box<MzMLParserError>>,
     /// A spectrum ID to byte offset for fast random access
@@ -1176,11 +1172,31 @@ pub struct MzMLReaderType<
     deconvoluted_type: PhantomData<D>,
 }
 
+
+/**
+An mzML parser that supports iteration and random access. The parser produces
+[`MultiLayerSpectrum`] instances, which may be converted to [`RawSpectrum`](crate::spectrum::RawSpectrum)
+or [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum) as is appropriate to the data.
+
+When the readable stream the parser is wrapped around supports [`io::Seek`],
+additional random access operations are available.
+
+Because mzML stores the numerical data arrays in common compressed buffer formats, it
+is possible to defer decoding these until you need them with [`DetailLevel::Lazy`], unlike
+most other formats.
+
+# Note
+[`MzMLReaderType`] will wrap the provided [`io::Read`] in [`io::BufReader`] internally, no
+need to do this yourself. If you *must* provide an [`io::BufRead`] implementer, directly
+use [`BufferedMzMLReaderType::new_buffered`] or [`BufferedMzMLReaderType::new_buffered_with_index`]
+*/
+pub type MzMLReaderType<R, C, D> = BufferedMzMLReaderType<BufReader<R>, C, D>;
+
 impl<
-        R: Read + Seek,
+        R: BufRead + Seek,
         C: CentroidLike + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > IntoIonMobilityFrameSource<C, D> for MzMLReaderType<R, C, D>
+    > IntoIonMobilityFrameSource<C, D> for BufferedMzMLReaderType<R, C, D>
 {
     type IonMobilityFrameSource<
         CF: FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility>,
@@ -1206,27 +1222,24 @@ impl<
     }
 }
 
+
 impl<
         'a,
         'b: 'a,
-        R: Read,
+        R: BufRead,
         C: CentroidLike + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > MzMLReaderType<R, C, D>
-{
-    /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
-    /// provided with an [`io::BufReader`] and parses the metadata section of the file.
-    pub fn new(file: R) -> MzMLReaderType<R, C, D> {
-        Self::with_buffer_capacity_and_detail_level(file, BUFFER_SIZE, DetailLevel::Full)
+    > BufferedMzMLReaderType<R, C, D> {
+
+    pub fn new_buffered(handle: R) -> BufferedMzMLReaderType<R, C, D> {
+        Self::new_buffered_with_detail_level(handle, DetailLevel::Full)
     }
 
-    pub fn with_buffer_capacity_and_detail_level(
-        file: R,
-        capacity: usize,
+    pub fn new_buffered_with_detail_level(
+        handle: R,
         detail_level: DetailLevel,
-    ) -> MzMLReaderType<R, C, D> {
-        let handle = BufReader::with_capacity(capacity, file);
-        let mut inst = MzMLReaderType {
+    ) -> BufferedMzMLReaderType<R, C, D> {
+        let mut inst = BufferedMzMLReaderType {
             handle,
             state: MzMLParserState::Start,
             error: None,
@@ -1255,7 +1268,42 @@ impl<
         }
         inst
     }
+}
 
+
+impl<
+        'a,
+        'b: 'a,
+        R: Read,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > BufferedMzMLReaderType<io::BufReader<R>, C, D> {
+
+    /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
+    /// provided with an [`io::BufReader`] and parses the metadata section of the file.
+    pub fn new(file: R) -> BufferedMzMLReaderType<io::BufReader<R>, C, D> {
+        Self::with_buffer_capacity_and_detail_level(file, BUFFER_SIZE, DetailLevel::Full)
+    }
+
+    pub fn with_buffer_capacity_and_detail_level(
+        file: R,
+        capacity: usize,
+        detail_level: DetailLevel,
+    ) -> BufferedMzMLReaderType<io::BufReader<R>, C, D> {
+        let handle = BufReader::with_capacity(capacity, file);
+        Self::new_buffered_with_detail_level(handle, detail_level)
+    }
+
+}
+
+impl<
+        'a,
+        'b: 'a,
+        R: BufRead,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > BufferedMzMLReaderType<R, C, D>
+{
     /**Parse the metadata section of the file using [`FileMetadataBuilder`]
      */
     fn parse_metadata(&mut self) -> Result<(), MzMLParserError> {
@@ -1630,10 +1678,10 @@ impl<
 /// When the underlying stream supports random access, this type can read the index at the end of
 /// an `indexedmzML` document and use the offset map to jump to immediately jump to a specific spectrum
 impl<
-        R: SeekRead,
+        R: SeekRead + BufRead,
         C: CentroidLike + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > MzMLReaderType<R, C, D>
+    > BufferedMzMLReaderType<R, C, D>
 {
     pub fn check_stream(&mut self, next_tag: &str) -> Result<bool, MzMLParserError> {
         let position = match self.stream_position() {
@@ -1742,10 +1790,10 @@ impl<
 }
 
 impl<
-        R: SeekRead,
+        R: SeekRead + BufRead,
         C: CentroidLike + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > ChromatogramSource for MzMLReaderType<R, C, D>
+    > ChromatogramSource for BufferedMzMLReaderType<R, C, D>
 {
     fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
         self.get_chromatogram_by_id(id)
@@ -1758,10 +1806,10 @@ impl<
 
 /// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
 impl<
-        R: io::Read,
+        R: BufRead,
         C: CentroidLike + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > Iterator for MzMLReaderType<R, C, D>
+    > Iterator for BufferedMzMLReaderType<R, C, D>
 {
     type Item = MultiLayerSpectrum<C, D>;
 
@@ -1773,10 +1821,10 @@ impl<
 /// They can also be used to fetch specific spectra by ID, index, or start
 /// time when the underlying file stream supports [`io::Seek`].
 impl<
-        R: SeekRead,
+        R: SeekRead + BufRead,
         C: CentroidLike + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+    > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for BufferedMzMLReaderType<R, C, D>
 {
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
@@ -1848,10 +1896,10 @@ impl<
 /// The iterator can also be updated to move to a different location in the
 /// stream efficiently.
 impl<
-        R: SeekRead,
+        R: SeekRead + BufRead,
         C: CentroidLike + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<R, C, D>
+    > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for BufferedMzMLReaderType<R, C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_id(id) {
@@ -1889,17 +1937,60 @@ enum IndexRecoveryOperation {
     IOFailure(io::Error),
 }
 
+
 impl<
         R: SeekRead,
         C: CentroidLike + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
-    > MzMLReaderType<R, C, D>
-{
+    > BufferedMzMLReaderType<io::BufReader<R>, C, D> {
+
     /// Construct a new MzMLReaderType and build an offset index
     /// using [`Self::build_index`]
-    pub fn new_indexed(file: R) -> MzMLReaderType<R, C, D> {
+    pub fn new_indexed(file: R) -> BufferedMzMLReaderType<io::BufReader<R>, C, D> {
         Self::with_buffer_capacity_and_detail_level_indexed(file, BUFFER_SIZE, DetailLevel::Full)
     }
+
+    pub fn with_buffer_capacity_and_detail_level_indexed(
+        file: R,
+        capacity: usize,
+        detail_level: DetailLevel,
+    ) -> BufferedMzMLReaderType<io::BufReader<R>, C, D> {
+        let mut reader = Self::with_buffer_capacity_and_detail_level(file, capacity, detail_level);
+        reader._read_index();
+        reader
+    }
+}
+
+
+impl<
+        R: SeekRead + BufRead,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > BufferedMzMLReaderType<R, C, D> {
+
+    /// Specialized indexing constructors for directly opening [`io::BufRead`]
+    pub fn new_buffered_with_index(file: R) -> BufferedMzMLReaderType<R, C, D> {
+        Self::new_buffered_with_detail_level_indexed(file, DetailLevel::Full)
+    }
+
+    /// Specialized indexing constructors for directly opening [`io::BufRead`] with more control
+    pub fn new_buffered_with_detail_level_indexed(
+        file: R,
+        detail_level: DetailLevel,
+    ) -> BufferedMzMLReaderType<R, C, D> {
+        let mut reader = Self::new_buffered_with_detail_level(file, detail_level);
+        reader._read_index();
+        reader
+    }
+}
+
+
+impl<
+        R: SeekRead + BufRead,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > BufferedMzMLReaderType<R, C, D>
+{
 
     fn _read_index(&mut self) {
         if let Err(err) = self.read_index_from_end() {
@@ -1978,15 +2069,6 @@ impl<
         Ok(())
     }
 
-    pub fn with_buffer_capacity_and_detail_level_indexed(
-        file: R,
-        capacity: usize,
-        detail_level: DetailLevel,
-    ) -> MzMLReaderType<R, C, D> {
-        let mut reader = Self::with_buffer_capacity_and_detail_level(file, capacity, detail_level);
-        reader._read_index();
-        reader
-    }
 
     pub fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.handle.seek(pos)
@@ -2154,7 +2236,7 @@ impl<
 }
 
 impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
-    MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MzMLReaderType<fs::File, C, D>
+    MZFileReader<C, D, MultiLayerSpectrum<C, D>> for BufferedMzMLReaderType<io::BufReader<fs::File>, C, D>
 {
     fn open_file(source: fs::File) -> io::Result<Self> {
         Ok(Self::new_indexed(source))
@@ -2176,8 +2258,8 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
     }
 }
 
-impl<R: Read, C: CentroidLike, D: DeconvolutedCentroidLike> MSDataFileMetadata
-    for MzMLReaderType<R, C, D>
+impl<R: BufRead, C: CentroidLike, D: DeconvolutedCentroidLike> MSDataFileMetadata
+    for BufferedMzMLReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
 
@@ -2232,28 +2314,28 @@ pub(crate) fn is_mzml(buf: &[u8]) -> bool {
 
 pub struct ChromatogramIter<
     'a,
-    R: SeekRead,
+    R: SeekRead + BufRead,
     C: CentroidLike + BuildFromArrayMap,
     D: DeconvolutedCentroidLike + BuildFromArrayMap,
 > {
-    reader: &'a mut MzMLReaderType<R, C, D>,
+    reader: &'a mut BufferedMzMLReaderType<R, C, D>,
     index: usize,
 }
 
 impl<
         'a,
-        R: SeekRead,
+        R: SeekRead + BufRead,
         C: CentroidLike + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > ChromatogramIter<'a, R, C, D>
 {
-    pub fn new(reader: &'a mut MzMLReaderType<R, C, D>) -> Self {
+    pub fn new(reader: &'a mut BufferedMzMLReaderType<R, C, D>) -> Self {
         Self { reader, index: 0 }
     }
 }
 
 impl<
-        R: SeekRead,
+        R: SeekRead + BufRead,
         C: CentroidLike + BuildFromArrayMap,
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > Iterator for ChromatogramIter<'_, R, C, D>
@@ -2948,6 +3030,20 @@ mod test {
         reader.reset();
         let spec2 = reader.iter().nth(10).unwrap();
         assert_eq!(spec.id(), spec2.id());
+        Ok(())
+    }
+
+    #[test]
+    fn test_from_vec() -> io::Result<()> {
+        let mut buffer = Vec::new();
+        fs::File::open("./test/data/small.mzML")?.read_to_end(&mut buffer)?;
+
+        let buffer_borrowed = buffer.as_slice();
+
+        let reader: BufferedMzMLReaderType<_, CentroidPeak, DeconvolutedPeak> = BufferedMzMLReaderType::new_buffered(buffer_borrowed);
+        let spectra: Vec<_> = reader.collect();
+
+        assert_eq!(spectra[30].index(), 30);
         Ok(())
     }
 

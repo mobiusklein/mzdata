@@ -66,9 +66,9 @@
 //! The [`mzsignal`](mzsignal) crate provides signal processing, peak picking, and feature finding funcitonality. Part of this behavior requires a linear algebra implementation. [`mzsignal`](mzsignal) is flexible. It can use either `nalgebra`, a pure Rust library that is self-contained but optimized for small matrices, or `ndarray-linalg` which requires an external LAPACK library be available either at build time or run time, all of which are outside the basic Rust ecosystem. Enabling the `mzsignal` feature **requires** one of the following features:
 //!
 //! - `nalgebra` - No external dependencies.
-//! - `openblas` - Requires OpenBlas (see https://crates.io/crates/ndarray-linalg)
-//! - `intel-mkl` - Requires Intel's Math Kernel Library (see https://crates.io/crates/ndarray-linalg)
-//! - `netlib` - Requires the NETLIB (see https://crates.io/crates/ndarray-linalg)
+//! - `openblas` - Requires OpenBlas (see <https://crates.io/crates/ndarray-linalg>)
+//! - `intel-mkl` - Requires Intel's Math Kernel Library (see <https://crates.io/crates/ndarray-linalg>)
+//! - `netlib` - Requires the NETLIB (see <https://crates.io/crates/ndarray-linalg>)
 //!
 //! ### File Formats
 //!
@@ -77,7 +77,7 @@
 //! |   Feature    | File Format                                                     | Dependency                                                                                                    |
 //! | :----------: | :-------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------ |
 //! |   `mzmlb`    | [mzMLb](https://pubs.acs.org/doi/10.1021/acs.jproteome.0c00192) | HDF5 C shared library at runtime or statically linked with `hdf5-rs`, possibly a C compiler                   |
-//! |   `thermo`   | Thermo-Fisher RAW Format                                        | .NET runtime at build time _and_ runtime, possibly a C compiler                                               |
+//! |   `thermo`   | Thermo-Fisher RAW Format                                        | [dotnet](https://dotnet.microsoft.com/en-us/download/dotnet) runtime at build time _and_ runtime, possibly a C compiler |
 //! | `bruker_tdf` | Bruker TDF Format                                               | SQLite3 C library at runtime or statically linked with `rusqlite`, requires `mzsignal` for flattening spectra |
 //!
 //! Additionally, mzML and MGF are supported by default, but they can be disabled by skipping default features and not enabling the `mzml` and `mgf` features.

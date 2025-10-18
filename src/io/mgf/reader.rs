@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     convert::TryInto,
     fs,
-    io::{self, prelude::*, SeekFrom},
+    io::{self, prelude::*, BufReader, SeekFrom},
     marker::PhantomData,
     str,
 };
@@ -392,16 +392,14 @@ impl MGFIndexing for TPPTitleParsingScanNumberIndexing {
 }
 
 
-/// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
-/// The parser produces [`Spectrum`](crate::spectrum::Spectrum) instances. These may be
-/// converted directly into [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum)
-/// instances which better represent the nature of this preprocessed data type.
-pub struct MGFReaderType<
-    R: io::Read,
+/// An MGF reader that assumes its input stream implements [`io::BufRead`]. See
+/// [`MGFReaderType`] for more information.
+pub struct BufferedMGFReaderType<
+    R: Read + BufRead,
     C: CentroidLike = CentroidPeak,
     D: DeconvolutedCentroidLike + From<DeconvolutedPeak> = DeconvolutedPeak,
 > {
-    pub handle: io::BufReader<R>,
+    pub handle: R,
     pub state: MGFParserState,
     pub offset: usize,
     pub error: Option<MGFError>,
@@ -418,6 +416,12 @@ pub struct MGFReaderType<
     deconvoluted_type: PhantomData<D>,
     indexing: Box<dyn MGFIndexing>,
 }
+
+/// An MGF (Mascot Generic Format) file parser that supports iteration and random access.
+/// The parser produces [`Spectrum`](crate::spectrum::Spectrum) instances. These may be
+/// converted directly into [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum)
+/// instances which better represent the nature of this preprocessed data type.
+pub type MGFReaderType<R, C, D> = BufferedMGFReaderType<io::BufReader<R>, C, D>;
 
 pub(crate) trait MGFLineParsing<
     C: CentroidLike + From<CentroidPeak>,
@@ -664,10 +668,10 @@ pub(crate) trait MGFLineParsing<
 }
 
 impl<
-        R: io::Read,
+        R: BufRead,
         C: CentroidLike + From<CentroidPeak>,
         D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MGFLineParsing<C, D> for MGFReaderType<R, C, D>
+    > MGFLineParsing<C, D> for BufferedMGFReaderType<R, C, D>
 {
     fn state(&self) -> &MGFParserState {
         &self.state
@@ -692,12 +696,50 @@ impl<
     }
 }
 
+
 impl<
-        R: io::Read,
+    R: Read,
+    C: CentroidLike + From<CentroidPeak>,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak>
+> BufferedMGFReaderType<BufReader<R>, C, D> {
+
+    /// Create a new, unindexed MGF parser
+    pub fn new(file: R) -> BufferedMGFReaderType<io::BufReader<R>, C, D> {
+        let handle = BufReader::with_capacity(500, file);
+        Self::new_buffered(handle)
+    }
+}
+
+
+impl<
+        R: BufRead,
         C: CentroidLike + From<CentroidPeak>,
         D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MGFReaderType<R, C, D>
+    > BufferedMGFReaderType<R, C, D>
 {
+
+    /// Create a new, unindexed MGF parser from a buffered source
+    pub fn new_buffered(handle: R) -> Self {
+        BufferedMGFReaderType {
+            handle,
+            state: MGFParserState::Start,
+            offset: 0,
+            error: None,
+            index: OffsetIndex::new("spectrum".to_owned()),
+            centroid_type: PhantomData,
+            deconvoluted_type: PhantomData,
+            instrument_configurations: HashMap::new(),
+            data_processings: Vec::new(),
+            softwares: Vec::new(),
+            samples: Vec::new(),
+            file_description: Self::default_file_description(),
+            detail_level: DetailLevel::Full,
+            run: MassSpectrometryRun::default(),
+            read_counter: 0,
+            indexing: Box::new(DefaultTitleIndexing()),
+        }
+    }
+
     fn read_line(&mut self, buffer: &mut String) -> io::Result<usize> {
         self.handle.read_line(buffer)
     }
@@ -825,36 +867,13 @@ impl<
     pub fn set_indexer(&mut self, indexer: Box<dyn MGFIndexing>) {
         <Self as MGFLineParsing<C, D>>::set_indexer(self, indexer);
     }
-
-    /// Create a new, unindexed MGF parser
-    pub fn new(file: R) -> MGFReaderType<R, C, D> {
-        let handle = io::BufReader::with_capacity(500, file);
-        MGFReaderType {
-            handle,
-            state: MGFParserState::Start,
-            offset: 0,
-            error: None,
-            index: OffsetIndex::new("spectrum".to_owned()),
-            centroid_type: PhantomData,
-            deconvoluted_type: PhantomData,
-            instrument_configurations: HashMap::new(),
-            data_processings: Vec::new(),
-            softwares: Vec::new(),
-            samples: Vec::new(),
-            file_description: Self::default_file_description(),
-            detail_level: DetailLevel::Full,
-            run: MassSpectrometryRun::default(),
-            read_counter: 0,
-            indexing: Box::new(DefaultTitleIndexing()),
-        }
-    }
 }
 
 impl<
-        R: io::Read,
+        R: BufRead,
         C: CentroidLike + From<CentroidPeak>,
         D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > Iterator for MGFReaderType<R, C, D>
+    > Iterator for BufferedMGFReaderType<R, C, D>
 {
     type Item = MultiLayerSpectrum<C, D>;
 
@@ -864,12 +883,13 @@ impl<
     }
 }
 
+
 impl<
         R: SeekRead,
         C: CentroidLike + From<CentroidPeak>,
         D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MGFReaderType<R, C, D>
-{
+    > BufferedMGFReaderType<io::BufReader<R>, C, D> {
+
     /// Construct a new MGFReaderType and build an offset index
     /// using [`Self::build_index`]
     pub fn new_indexed(file: R) -> MGFReaderType<R, C, D> {
@@ -884,6 +904,22 @@ impl<
     pub fn new_indexed_with(file: R, indexer: Box<dyn MGFIndexing>) -> MGFReaderType<R, C, D> {
         let mut reader = Self::new(file);
         reader.set_indexer(indexer);
+        reader.build_index();
+        reader
+    }
+
+}
+
+
+impl<
+        R: SeekRead + BufRead,
+        C: CentroidLike + From<CentroidPeak>,
+        D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
+    > BufferedMGFReaderType<R, C, D>
+{
+
+    pub fn new_buffered_with_index(file: R) -> BufferedMGFReaderType<R, C, D> {
+        let mut reader = Self::new_buffered(file);
         reader.build_index();
         reader
     }
@@ -948,10 +984,10 @@ impl<
 }
 
 impl<
-        R: SeekRead,
+        R: SeekRead + BufRead,
         C: CentroidLike + From<CentroidPeak>,
         D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+    > SpectrumSource<C, D, MultiLayerSpectrum<C, D>> for BufferedMGFReaderType<R, C, D>
 {
     fn detail_level(&self) -> &DetailLevel {
         &self.detail_level
@@ -1017,10 +1053,10 @@ impl<
 }
 
 impl<
-        R: SeekRead,
+        R: SeekRead + BufRead,
         C: CentroidLike + From<CentroidPeak>,
         D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D>
+    > RandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for BufferedMGFReaderType<R, C, D>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self._offset_of_id(id) {
@@ -1070,7 +1106,7 @@ impl<
 impl<
         C: CentroidLike + From<CentroidPeak>,
         D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MZFileReader<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<fs::File, C, D>
+    > MZFileReader<C, D, MultiLayerSpectrum<C, D>> for BufferedMGFReaderType<BufReader<fs::File>, C, D>
 {
     fn open_file(source: fs::File) -> io::Result<Self> {
         Ok(Self::new(source))
@@ -1084,10 +1120,10 @@ impl<
 /// The MGF format does not contain any consistent metadata, but additional
 /// information can be included after creation.
 impl<
-        R: io::Read,
+        R: BufRead,
         C: CentroidLike + From<CentroidPeak>,
         D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > MSDataFileMetadata for MGFReaderType<R, C, D>
+    > MSDataFileMetadata for BufferedMGFReaderType<R, C, D>
 {
     crate::impl_metadata_trait!();
 
@@ -1109,10 +1145,10 @@ impl<
 }
 
 impl<
-        R: Read,
+        R: BufRead,
         C: CentroidLike + From<CentroidPeak>,
         D: DeconvolutedCentroidLike + From<DeconvolutedPeak>,
-    > ChromatogramSource for MGFReaderType<R, C, D>
+    > ChromatogramSource for BufferedMGFReaderType<R, C, D>
 {
     fn get_chromatogram_by_id(&mut self, _: &str) -> Option<Chromatogram> {
         None

@@ -32,7 +32,7 @@ pub(crate) use reading_shared::{IncrementingIdMap, ParserResult};
 
 pub use crate::io::mzml::reader::{
     MzMLReader, MzMLReaderType, MzMLSpectrumBuilder,
-    SpectrumBuilding,
+    SpectrumBuilding, BufferedMzMLReaderType,
 };
 
 pub(crate) use crate::io::mzml::reader::is_mzml;
