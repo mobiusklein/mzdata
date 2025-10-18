@@ -61,6 +61,7 @@ checksum = ["dep:md5", "dep:sha1", "dep:base16ct"]
 
 mgf = []
 mzml = ["dep:quick-xml", "checksum", "dep:memchr"]
+imzml = ["mzml", "dep:uuid"]
 
 # mzsignal's main functionality requires a linear algebra backend.
 # Rust does not support exclusive-or style feature flags.
@@ -137,6 +138,7 @@ serde_json = { version = "1.0", optional = true }
 serde_with = { version = "3.12.0", optional = true }
 
 quick-xml = { version = "0.30", features = ["serialize"], optional = true }
+uuid = { version = "1.0", features = ["v4", "serde"], optional = true }
 num-traits = "0.2"
 log = "0.4.20"
 indexmap = { version = "2.0.0", features = ["serde"] }
@@ -222,6 +224,7 @@ features = [
     "mzsignal",
     "nalgebra",
     "mzmlb",
+    "imzml",
     "async",
     "proxi",
     "proxi-async",

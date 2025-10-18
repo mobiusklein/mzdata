@@ -24,6 +24,9 @@ use crate::io::mzml::is_mzml;
 #[cfg(feature = "thermo")]
 use crate::io::thermo::is_thermo_raw_prefix;
 
+#[cfg(feature = "imzml")]
+use crate::io::imzml::is_imzml;
+
 #[cfg(feature = "bruker_tdf")]
 use crate::io::tdf::is_tdf;
 
@@ -38,6 +41,7 @@ pub enum MassSpectrometryFormat {
     MzMLb,
     ThermoRaw,
     BrukerTDF,
+    IMzML,
     Unknown,
 }
 
@@ -63,6 +67,9 @@ impl MassSpectrometryFormat {
             }
             MassSpectrometryFormat::ThermoRaw => {
                 ControlledVocabulary::MS.const_param_ident("Thermo RAW format", 1000563)
+            }
+            MassSpectrometryFormat::IMzML => {
+                ControlledVocabulary::MS.const_param_ident("imzML format", 1003577)
             }
             MassSpectrometryFormat::BrukerTDF => {
                 ControlledVocabulary::MS.const_param_ident("Bruker TDF format", 1002817)
@@ -119,12 +126,16 @@ pub fn infer_from_path<P: Into<path::PathBuf>>(path: P) -> (MassSpectrometryForm
     if let Some(ext) = path.extension() {
         if let Some(ext) = ext.to_ascii_lowercase().to_str() {
             let form = match ext {
+                #[cfg(feature = "mzml")]
                 "mzml" => MassSpectrometryFormat::MzML,
+                #[cfg(feature = "mgf")]
                 "mgf" => MassSpectrometryFormat::MGF,
                 #[cfg(feature = "mzmlb")]
                 "mzmlb" => MassSpectrometryFormat::MzMLb,
                 #[cfg(feature = "thermo")]
                 "raw" => MassSpectrometryFormat::ThermoRaw,
+                #[cfg(feature = "imzml")]
+                "imzml" => MassSpectrometryFormat::IMzML,
                 _ => MassSpectrometryFormat::Unknown,
             };
             (form, is_gzipped)
@@ -164,6 +175,8 @@ pub fn infer_from_stream<R: Read + Seek>(
     stream.seek(io::SeekFrom::Start(current_pos))?;
 
     match &buf {
+        #[cfg(feature = "imzml")]
+        _ if is_imzml(&buf) => Ok((MassSpectrometryFormat::IMzML, is_stream_gzipped)),
         #[cfg(feature = "mzml")]
         _ if is_mzml(&buf) => Ok((MassSpectrometryFormat::MzML, is_stream_gzipped)),
         #[cfg(feature = "mgf")]
