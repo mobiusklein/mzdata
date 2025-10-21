@@ -295,11 +295,13 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
         self.inner.set_run_data_processing(run_data_processing);
     }
 
-    fn borrow_instrument_configuration(
+
+    fn borrow_metadata(
         mut self,
         instrument_id_map: &'a mut IncrementingIdMap,
+        reference_param_groups: &'a HashMap<String, Vec<Param>>,
     ) -> Self {
-        self.inner = self.inner.borrow_instrument_configuration(instrument_id_map);
+        self.inner = self.inner.borrow_metadata(instrument_id_map, reference_param_groups);
         self
     }
 
@@ -411,6 +413,10 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
                     _ => return self.inner.empty_element(event, state, reader_position),
                 }
             }
+            // Delegate referenceableParamGroupRef to inner parser so array type/dtype get set
+            b"referenceableParamGroupRef" => {
+                return self.inner.empty_element(event, state, reader_position);
+            }
             _ => {}
         }
         Ok(state)
@@ -467,19 +473,21 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
 
                 // Fallbacks:
                 // 1) If dtype wasn't set by MS cvParams, infer from array name.
-                if array.dtype == BinaryDataArrayType::Unknown {
-                    array.dtype = array.name.preferred_dtype();
-                }
+                    if array.dtype == BinaryDataArrayType::Unknown {
+                        log::debug!("[imzML fallback] dtype unknown for array {:?}, inferring from array name {:?}", array.name, array.unit);
+                        array.dtype = array.name.preferred_dtype();
+                    }
                 // 2) If the array name was never set, try to infer from unit or position.
-                if matches!(array.name, ArrayType::Unknown) {
-                    // Basic heuristic: if unit is m/z, call it MZArray; otherwise IntensityArray.
-                    // imzML spectra usually list m/z first, then intensity.
-                    array.name = if array.unit == Unit::MZ {
-                        ArrayType::MZArray
-                    } else {
-                        ArrayType::IntensityArray
-                    };
-                }
+                    if matches!(array.name, ArrayType::Unknown) {
+                        log::debug!("[imzML fallback] array name unknown, inferring from unit {:?}", array.unit);
+                        // Basic heuristic: if unit is m/z, call it MZArray; otherwise IntensityArray.
+                        // imzML spectra usually list m/z first, then intensity.
+                        array.name = if array.unit == Unit::MZ {
+                            ArrayType::MZArray
+                        } else {
+                            ArrayType::IntensityArray
+                        };
+                    }
 
                 // Don't read IBD data here - just store the metadata
             }
@@ -828,7 +836,7 @@ impl<
 
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
-        accumulator = accumulator.borrow_instrument_configuration(&mut self.instrument_id_map);
+        accumulator = accumulator.borrow_metadata(&mut self.instrument_id_map, &mut self.reference_param_groups);
         accumulator.set_run_data_processing(self.run.default_data_processing_id.clone().map(|v| v.into_boxed_str()));
         let mut offset: usize = 0;
 
