@@ -30,7 +30,7 @@ use crate::{
     params::{ControlledVocabulary, Param, ParamValue},
     prelude::*,
     spectrum::{
-        bindata::{ArrayRetrievalError, BuildFromArrayMap, BinaryDataArrayType, BinaryCompressionType, DataArray, ArrayType},
+        bindata::{ArrayRetrievalError, BuildFromArrayMap, BinaryCompressionType, ArrayType},
         chromatogram::Chromatogram,
         spectrum_types::MultiLayerSpectrum,
         IsolationWindow, Precursor, ScanWindow, SelectedIon,
@@ -472,20 +472,20 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
                 }
 
                 // Fallbacks:
-                // 1) If dtype wasn't set by MS cvParams, infer from array name.
-                    if array.dtype == BinaryDataArrayType::Unknown {
-                        log::debug!("[imzML fallback] dtype unknown for array {:?}, inferring from array name {:?}", array.name, array.unit);
-                        array.dtype = array.name.preferred_dtype();
-                    }
-                // 2) If the array name was never set, try to infer from unit or position.
+                // If the array name was never set, try to infer from unit or position.
                     if matches!(array.name, ArrayType::Unknown) {
-                        log::debug!("[imzML fallback] array name unknown, inferring from unit {:?}", array.unit);
+                        log::warn!("[imzML fallback] array name unknown, inferring from unit {:?}", array.unit);
                         // Basic heuristic: if unit is m/z, call it MZArray; otherwise IntensityArray.
                         // imzML spectra usually list m/z first, then intensity.
                         array.name = if array.unit == Unit::MZ {
                             ArrayType::MZArray
-                        } else {
+                        } else if array.unit == Unit::DetectorCounts {
                             ArrayType::IntensityArray
+                        } else {
+                            return Err(MzMLParserError::IncompleteElementError(
+                                format!("Binary data array type was not specified. Array has unit {:?} but no array type cvParam (MS:1000514 for m/z or MS:1000515 for intensity)", array.unit),
+                                MzMLParserState::BinaryDataArray,
+                            ));
                         };
                     }
 
@@ -512,15 +512,6 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
     }
 }
 
-
-/*
-An mzML parser that supports iteration and random access. The parser produces
-[`Spectrum`] instances, which may be converted to [`RawSpectrum`](crate::spectrum::RawSpectrum)
-or [`CentroidSpectrum`](crate::spectrum::CentroidSpectrum) as is appropriate to the data.
-
-When the readable stream the parser is wrapped around supports [`io::Seek`],
-additional random access operations are available.
-*/
 pub struct ImzMLReaderType<
     R: Read + Seek,
     S: Read + Seek,
@@ -533,27 +524,19 @@ pub struct ImzMLReaderType<
     handle: BufReader<R>,
     /// The IBD file reader
     ibd_handle: BufReader<S>,
-    /// A place to store the last error the parser encountered
     error: Option<Box<MzMLParserError>>,
-    /// A spectrum ID to byte offset for fast random access
     pub spectrum_index: OffsetIndex,
     pub chromatogram_index: Box<OffsetIndex>,
-    /// The description of the file's contents and the previous data files that were
-    /// consumed to produce it.
     pub(crate) file_description: FileDescription,
     /// A mapping of different instrument configurations (source, analyzer, detector) components
-    /// by ID string.
     pub(crate) instrument_configurations: HashMap<u32, InstrumentConfiguration>,
-    /// The different software components that were involved in the processing and creation of this
-    /// file.
+    /// Any referenceable param groups that are encountered when parsing the metadata section live here.
+    pub(crate) reference_param_groups: HashMap<String, Vec<Param>>,
     pub(crate) softwares: Vec<Software>,
     pub(crate) samples: Vec<Sample>,
-    /// The data processing and signal transformation operations performed on the raw data in previous
-    /// source files to produce this file's contents.
+
     pub(crate) data_processings: Vec<DataProcessing>,
     pub(crate) scan_settings: Vec<ScanSettings>,
-    /// A cache of repeated paramters
-    pub reference_param_groups: HashMap<String, Vec<Param>>,
     pub detail_level: DetailLevel,
 
     // SpectrumList attributes
@@ -566,11 +549,8 @@ pub struct ImzMLReaderType<
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
 
-    //TODO do I need these fields?
     pub imzml_metadata: ImzMLFileMetadata,
 }
-
-// TODO: Implement IntoIonMobilityFrameSource after SpectrumSource is implemented
 
 impl<
         'a,
@@ -1024,11 +1004,6 @@ impl<
                         .find(|p| p.accession == Some(1000103))  // IMS:1000103 external array length
                         .and_then(|p| p.value.to_u64().ok()));
 
-                let encoded_len_param = array.params.as_ref()
-                    .and_then(|params| params.iter()
-                        .find(|p| p.accession == Some(1000104))  // IMS:1000104 external encoded length
-                        .and_then(|p| p.value.to_u64().ok()));
-                    
                 if let (Some(offset), Some(length)) = (offset_param, length_param) {
                     // Read from IBD file
                     use std::io::{Seek, SeekFrom};
@@ -1046,88 +1021,13 @@ impl<
                             array.data = buffer.into();
                             array.compression = BinaryCompressionType::Decoded;
                         }
-                        // Zlib in imzML IBD typically indicates the on-disk bytes are zlib-compressed
-                        BinaryCompressionType::Zlib => {
-                            let encoded_len = encoded_len_param.map(|v| v as usize).unwrap_or_else(|| {
-                                warn!("Missing IMS:1000104 (encoded length) for zlib-compressed IBD; attempting to read raw length");
-                                // Fallback to raw byte count if encoded length missing
-                                (length as usize) * array.dtype.size_of()
-                            });
-                            let mut buffer = vec![0u8; encoded_len];
-                            self.ibd_handle.read_exact(&mut buffer)
-                                .map_err(|e| MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e))?;
-                            // Decompress now so array is usable without base64 step
-                            let decompressed = DataArray::decompress_zlib(&buffer);
-                            array.data = decompressed.into();
-                            array.compression = BinaryCompressionType::Decoded;
-                        }
-                        // Decode Numpress-on-IBD variants if enabled
-                        #[cfg(feature = "numpress")]
-                        BinaryCompressionType::NumpressLinear | BinaryCompressionType::NumpressLinearZlib => {
-                            let encoded_len = encoded_len_param.map(|v| v as usize).unwrap_or((length as usize) * array.dtype.size_of());
-                            let mut buffer = vec![0u8; encoded_len];
-                            self.ibd_handle.read_exact(&mut buffer)
-                                .map_err(|e| MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e))?;
-                            let raw = if matches!(array.compression, BinaryCompressionType::NumpressLinearZlib) {
-                                DataArray::decompress_zlib(&buffer)
-                            } else { buffer };
-                            let decoded = DataArray::decompress_numpress_linear(&raw)?;
-                            array.data = vec_as_bytes(decoded).into();
-                            array.compression = BinaryCompressionType::Decoded;
-                        }
-                        #[cfg(all(feature = "numpress"))]
-                        BinaryCompressionType::NumpressSLOF | BinaryCompressionType::NumpressSLOFZlib => {
-                            let encoded_len = encoded_len_param.map(|v| v as usize).unwrap_or((length as usize) * array.dtype.size_of());
-                            let mut buffer = vec![0u8; encoded_len];
-                            self.ibd_handle.read_exact(&mut buffer)
-                                .map_err(|e| MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e))?;
-                            let raw = if matches!(array.compression, BinaryCompressionType::NumpressSLOFZlib) {
-                                DataArray::decompress_zlib(&buffer)
-                            } else { buffer };
-                            let decoded = DataArray::decompress_numpress_slof(&raw, array.dtype)?;
-                            array.data = decoded.into_owned();
-                            array.compression = BinaryCompressionType::Decoded;
-                        }
-                        #[cfg(feature = "zstd")]
-                        BinaryCompressionType::Zstd => {
-                            let encoded_len = encoded_len_param.map(|v| v as usize).unwrap_or((length as usize) * array.dtype.size_of());
-                            let mut buffer = vec![0u8; encoded_len];
-                            self.ibd_handle.read_exact(&mut buffer)
-                                .map_err(|e| MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e))?;
-                            let decoded = DataArray::decompress_zstd(&buffer, array.dtype, false);
-                            array.data = decoded.into();
-                            array.compression = BinaryCompressionType::Decoded;
-                        }
-                        #[cfg(feature = "zstd")]
-                        BinaryCompressionType::ShuffleZstd => {
-                            let encoded_len = encoded_len_param.map(|v| v as usize).unwrap_or((length as usize) * array.dtype.size_of());
-                            let mut buffer = vec![0u8; encoded_len];
-                            self.ibd_handle.read_exact(&mut buffer)
-                                .map_err(|e| MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e))?;
-                            let decoded = DataArray::decompress_zstd(&buffer, array.dtype, true);
-                            array.data = decoded.into();
-                            array.compression = BinaryCompressionType::Decoded;
-                        }
-                        #[cfg(feature = "zstd")]
-                        BinaryCompressionType::DeltaShuffleZstd => {
-                            let encoded_len = encoded_len_param.map(|v| v as usize).unwrap_or((length as usize) * array.dtype.size_of());
-                            let mut buffer = vec![0u8; encoded_len];
-                            self.ibd_handle.read_exact(&mut buffer)
-                                .map_err(|e| MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e))?;
-                            let decoded = DataArray::decompress_delta_zstd(&buffer, array.dtype, true);
-                            array.data = decoded.into();
-                            array.compression = BinaryCompressionType::Decoded;
-                        }
+                        // Strictly speaking there are specific CVs for compression of the IBD rather than using the ones in the standard PSI ontology.
+                        // For now this should be considered a TODO rather than trying something technically incorrect.
                         other => {
-                            // Unknown/unsupported compression in IBD path: read encoded bytes if we can
-                            let encoded_len = encoded_len_param.map(|v| v as usize).unwrap_or(0);
-                            if encoded_len == 0 { continue; }
-                            let mut buffer = vec![0u8; encoded_len];
-                            self.ibd_handle.read_exact(&mut buffer)
-                                .map_err(|e| MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e))?;
-                            array.data = buffer.into();
-                            // Leave array.compression as-is
-                            warn!("Stored {:?}-compressed bytes from IBD without decoding; subsequent consumers must handle decode()", other);
+                            return Err(MzMLParserError::IncompleteElementError(
+                                format!("Unsupported compression type {:?} for imzML IBD data", other),
+                                MzMLParserState::BinaryDataArray,
+                            ));
                         }
                     }
                 }
@@ -1284,16 +1184,6 @@ impl<
 
     pub fn iter_chromatograms(&mut self) -> ChromatogramIter<'_, R, S, C, D> {
         ChromatogramIter::new(self)
-    }
-
-    pub fn validate_ibd_checksum(&mut self) -> Result<bool, ImzMLError> {
-        // Validate the IBD file checksum matches metadata
-        todo!()
-    }
-    
-    pub fn validate_uuid_consistency(&mut self) -> Result<bool, ImzMLError> {
-        // Check that UUID in IBD file matches XML metadata
-        todo!()
     }
 }
 
