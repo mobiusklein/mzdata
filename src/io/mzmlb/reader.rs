@@ -680,13 +680,14 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
         self.inner.fill_binary_data_array(param)
     }
 
-    fn borrow_instrument_configuration(
+    fn borrow_metadata(
         mut self,
         instrument_configurations: &'a mut IncrementingIdMap,
+        reference_param_groups: &'a HashMap<String, Vec<Param>>,
     ) -> Self {
         self.inner = self
             .inner
-            .borrow_instrument_configuration(instrument_configurations);
+            .borrow_metadata(instrument_configurations, reference_param_groups);
         self
     }
 
