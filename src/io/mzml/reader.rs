@@ -2127,66 +2127,7 @@ impl<
     /// Builds an offset index to each `<spectrum>` XML element
     /// by doing a fast pre-scan of the XML file.
     pub fn build_index(&mut self) -> u64 {
-        let start = self
-            .handle
-            .stream_position()
-            .expect("Failed to save restore location");
-        trace!("Starting to build offset index by traversing the file, storing last position as {start}");
-        self.seek(SeekFrom::Start(0))
-            .expect("Failed to reset stream to beginning");
-        let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
-        loop {
-            match reader.read_event_into(&mut self.buffer) {
-                Ok(Event::Start(ref e)) => {
-                    let element_name = e.name();
-                    if element_name.as_ref() == b"spectrum" {
-                        // Hit a spectrum, extract ID and save current offset
-
-                        for attr_parsed in e.attributes() {
-                            match attr_parsed {
-                                Ok(attr) => {
-                                    if attr.key.as_ref() == b"id" {
-                                        let scan_id = attr
-                                            .unescape_value()
-                                            .expect("Error decoding spectrum id in streaming mzML index")
-                                            .to_string();
-                                        // This count is off by 2 because somehow the < and > bytes are removed?
-                                        self.spectrum_index.insert(
-                                            scan_id,
-                                            (reader.buffer_position() - e.len() - 2) as u64,
-                                        );
-                                        break;
-                                    };
-                                }
-                                Err(_msg) => {}
-                            }
-                        }
-                    }
-                }
-                Ok(Event::End(ref e)) => {
-                    let element_name = e.name();
-                    if element_name.as_ref() == b"spectrumList" {
-                        break;
-                    }
-                }
-                Ok(Event::Eof) => {
-                    break;
-                }
-                _ => {}
-            };
-            self.buffer.clear();
-        }
-        let offset = reader.buffer_position() as u64;
-        trace!("Ended indexing scan at offset {offset}. Restoring starting position {start}");
-        self.handle
-            .seek(SeekFrom::Start(start))
-            .expect("Failed to restore location");
-        self.spectrum_index.init = true;
-        if self.spectrum_index.is_empty() {
-            warn!("An index was built but no entries were found")
-        }
-        offset
+        super::build_spectrum_index(&mut self.handle, &mut self.spectrum_index, &mut self.buffer)
     }
 }
 

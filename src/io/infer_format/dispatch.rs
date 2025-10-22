@@ -544,14 +544,7 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
             }
             #[cfg(feature = "imzml")]
             MassSpectrometryFormat::IMzML => {
-                let path: path::PathBuf = path.into();
-                let xml_file = fs::File::open(&path)?;
-                let mut ibd_path = path.with_extension("ibd");
-                if !ibd_path.exists() {
-                    ibd_path = path.with_extension("IBD");
-                }
-                let ibd_file = fs::File::open(&ibd_path)?;
-                let reader = ImzMLReaderType::new(xml_file, ibd_file);
+                let reader = ImzMLReaderType::open_path(path)?;
                 Ok(Self::IMzML(reader))
             }
             #[cfg(feature = "thermo")]

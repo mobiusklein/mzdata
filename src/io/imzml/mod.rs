@@ -21,7 +21,7 @@
 
 pub mod reader;
 
-pub use reader::{ImzMLReaderType, ImzMLError, ImzMLReader, is_imzml};
+pub use reader::{ImzMLReaderType, ImzMLReader, is_imzml};
 
 // Re-export UUID for convenience
 pub use uuid::Uuid;

@@ -11,7 +11,6 @@ use quick_xml::{
     Error as XMLError,
     Reader,
 };
-use thiserror::Error;
 use uuid::Uuid;
 
 #[cfg(feature = "filename")]
@@ -30,13 +29,12 @@ use crate::{
     params::{ControlledVocabulary, Param, ParamValue},
     prelude::*,
     spectrum::{
-        bindata::{ArrayRetrievalError, BuildFromArrayMap, BinaryCompressionType, ArrayType},
+        bindata::{BuildFromArrayMap, BinaryCompressionType, ArrayType},
         chromatogram::Chromatogram,
         spectrum_types::MultiLayerSpectrum,
         IsolationWindow, Precursor, ScanWindow, SelectedIon,
     },
 };
-use crate::params::Unit;
 use mzpeaks::{prelude::*, CentroidPeak, DeconvolutedPeak};
 
 
@@ -71,26 +69,6 @@ pub struct DataRangeQuery {
     pub encoded_length: Option<usize>,
 }
 
-#[derive(Debug, Error)]
-pub enum ImzMLError {
-    #[error("An mzML-related error occurred: {0}")]
-    MzMLError(#[from] MzMLParserError),
-    #[error("An error occurred while decoding binary data: {0}")]
-    ArrayRetrievalError(#[from] ArrayRetrievalError),
-}
-
-impl From<ImzMLError> for io::Error {
-    fn from(value: ImzMLError) -> Self {
-        Self::new(io::ErrorKind::Other, Box::new(value))
-    }
-}
-
-impl From<io::Error> for ImzMLError {
-    fn from(value: io::Error) -> Self {
-        Self::MzMLError(MzMLParserError::IOError(MzMLParserState::Start, value))
-    }
-}
-
 
 /// Check if the buffer contains an imzML file by looking for the IMS controlled vocabulary
 /// There isn't AFAIK a formal mechanism to identify imzML files other than the presence of
@@ -103,7 +81,7 @@ pub fn is_imzml(buffer: &[u8]) -> bool {
     log::debug!("Checking for imzML format...");
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) => {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 match e.name().as_ref() {
                     b"cvList" => {
                         in_cv_list = true;
@@ -212,6 +190,14 @@ impl ImzmlMetadataBuilder<'_> {
                                         1000090 => {
                                             self.imzml_metadata.ibd_checksum = Some(param.value.to_string());
                                             self.imzml_metadata.ibd_checksum_type = Some("MD5".to_string());
+                                        }
+                                        1000091 => {
+                                            self.imzml_metadata.ibd_checksum = Some(param.value.to_string());
+                                            self.imzml_metadata.ibd_checksum_type = Some("SHA1".to_string());
+                                        }
+                                        1000092 => {
+                                            self.imzml_metadata.ibd_checksum = Some(param.value.to_string());
+                                            self.imzml_metadata.ibd_checksum_type = Some("SHA256".to_string());
                                         }
                                         1000070 => {
                                             self.imzml_metadata.ibd_file_name = Some(param.value.to_string());
@@ -473,25 +459,12 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
                             .build(),
                     );
                 }
-
-                // Fallbacks:
-                // If the array name was never set, try to infer from unit or position.
-                    if matches!(array.name, ArrayType::Unknown) {
-                        log::warn!("[imzML fallback] array name unknown, inferring from unit {:?}", array.unit);
-                        // Basic heuristic: if unit is m/z, call it MZArray; otherwise IntensityArray.
-                        // imzML spectra usually list m/z first, then intensity.
-                        array.name = if array.unit == Unit::MZ {
-                            ArrayType::MZArray
-                        } else if array.unit == Unit::DetectorCounts {
-                            ArrayType::IntensityArray
-                        } else {
-                            return Err(MzMLParserError::IncompleteElementError(
-                                format!("Binary data array type was not specified. Array has unit {:?} but no array type cvParam (MS:1000514 for m/z or MS:1000515 for intensity)", array.unit),
-                                MzMLParserState::BinaryDataArray,
-                            ));
-                        };
-                    }
-
+                if matches!(array.name, ArrayType::Unknown) {
+                        return Err(MzMLParserError::IncompleteElementError(
+                            format!("Binary data array type was not specified. Array has unit {:?} but no array type cvParam (MS:1000514 for m/z or MS:1000515 for intensity)", array.unit),
+                            MzMLParserState::BinaryDataArray,
+                        ));
+                    };
                 // Don't read IBD data here - just store the metadata
             }
             _ => {}
@@ -611,13 +584,14 @@ impl<
             Ok(()) => {}
             Err(_err) => {}
         }
+        inst.build_index();
         inst
     }
 
 
 
     /// Attempt to open the IBD file based on metadata or by deriving the filename
-    fn check_ibd_file(&mut self) -> Result<(), ImzMLError> {
+    fn check_ibd_file(&mut self) -> io::Result<()> {
             
             // Validate UUID if available
             if let Some(expected_uuid) = &self.imzml_metadata.uuid {
@@ -633,7 +607,7 @@ impl<
             }
             // TODO check that the checksum matches if available
             
-            return Ok(());
+            Ok(())
         }
 
     /**Parse the metadata section of the file using [`ImzmlMetadataBuilder`]
@@ -1344,6 +1318,16 @@ impl<
     pub fn stream_position(&mut self) -> io::Result<u64> {
         self.handle.stream_position()
     }
+
+    /// Builds an offset index to each `<spectrum>` XML element
+    /// by doing a fast pre-scan of the XML file.
+    pub fn build_index(&mut self) -> u64 {
+        crate::io::mzml::build_spectrum_index(
+            &mut self.handle,
+            &mut self.spectrum_index,
+            &mut self.buffer
+        )
+    }
 }
 
 /// Iterator over chromatograms for imzML, paralleling the mzML implementation
@@ -1448,9 +1432,8 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                 ibd_path = path.with_extension("IBD");
             }
             let ibd_file = fs::File::open(&ibd_path)?;
-            let mut reader = ImzMLReaderType::new(xml_file, ibd_file);
-            // Create an index
-            reader.construct_index_from_stream();
+            let reader = ImzMLReaderType::new(xml_file, ibd_file);
+            // Index is already built in the constructor
             Ok(reader)
         }
 
