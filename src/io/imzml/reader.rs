@@ -100,7 +100,7 @@ pub fn is_imzml(buffer: &[u8]) -> bool {
     let mut reader = Reader::from_reader(&mut bufread);
     let mut buf = Vec::new();
     let mut in_cv_list = false;
-
+    log::debug!("Checking for imzML format...");
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
@@ -133,7 +133,10 @@ pub fn is_imzml(buffer: &[u8]) -> bool {
             }
             Ok(Event::Eof) => return false,
             Ok(_) => {}
-            Err(_) => return false,
+            Err(e) => {
+                log::warn!("XML parsing error while checking for imzML format: {}", e);
+                return false;
+            }
         }
         buf.clear();
     }
@@ -1433,10 +1436,29 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
         }
     }
 
+    
+    fn open_path<P>(path: P) -> io::Result<Self>
+        where
+            P: Into<std::path::PathBuf> + Clone, 
+        {
+            let path: std::path::PathBuf = path.into();
+            let xml_file = fs::File::open(&path)?;
+            let mut ibd_path = path.with_extension("ibd");
+            if !ibd_path.exists() {
+                ibd_path = path.with_extension("IBD");
+            }
+            let ibd_file = fs::File::open(&ibd_path)?;
+            let mut reader = ImzMLReaderType::new(xml_file, ibd_file);
+            // Create an index
+            reader.construct_index_from_stream();
+            Ok(reader)
+        }
+
     fn construct_index_from_stream(&mut self) -> u64 {
         // Index should already be constructed during metadata parsing
         self.spectrum_index.len() as u64
     }
+
 }
 
 impl<R: Read + Seek, S: Read + Seek, C: CentroidLike, D: DeconvolutedCentroidLike> MSDataFileMetadata
