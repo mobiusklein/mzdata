@@ -1325,7 +1325,7 @@ mod test {
     }
 }
 
-#[cfg(all(feature = "proxi-async", feature = "async"))]
+#[cfg(all(feature = "proxi-async", feature = "async_partial"))]
 #[cfg(test)]
 mod test_async {
     use super::*;

@@ -17,8 +17,11 @@ use super::{
     MGFError, MGFParserState, MGFIndexing, DefaultTitleIndexing
 };
 
+#[cfg(feature = "async")]
+use crate::io::traits::AsyncMZFileReader;
+
 use crate::{
-    io::traits::{AsyncMZFileReader, AsyncRandomAccessSpectrumIterator, SpectrumStream},
+    io::traits::{AsyncRandomAccessSpectrumIterator, SpectrumStream},
     meta::{
         DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata,
         MassSpectrometryRun, Sample, Software,

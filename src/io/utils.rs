@@ -29,7 +29,10 @@ pub enum DetailLevel {
     #[default]
     /// Read all spectral data, including peak data, eagerly decoding it. This is the default
     Full,
-    /// Read all spectral data, including peak data but defer decoding until later if possible
+    /// Read all spectral data, including peak data but defer decoding until later if possible.
+    /// Check a format reader's documentation to see if it supports lazy loading. Lazy loading
+    /// is only really of value for dense profile mode data or very, very long peak lists
+    /// that are large and expensive to decode.
     Lazy,
     /// Read only the metadata of spectra, ignoring peak data entirely
     MetadataOnly,
@@ -333,6 +336,63 @@ impl<T: io::Seek + io::Write> io::Seek for MD5HashingStream<T> {
 }
 
 
+#[cfg(feature = "parallelism")]
+mod parallelism {
+    use rayon::prelude::*;
+    use crate::prelude::*;
+
+    use super::*;
+
+    /// A helper type to load spectra concurrently across multiple threads.
+    /// Requires the reader type implement [`MZFileReader`].
+    ///
+    /// # Note
+    /// This helper is still too low level. Expect a higher level API to eventually become available.
+    pub struct ConcurrentLoader {
+        path: PathBuf,
+        num_threads: Option<usize>,
+    }
+
+    impl ConcurrentLoader {
+        pub fn new(path: PathBuf, num_threads: Option<usize>) -> Self {
+            Self { path, num_threads }
+        }
+
+        /// Do the actual concurrent loading
+        pub fn load<F: MZFileReader<C, D, S>, C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D> + Send>(self) -> io::Result<Vec<S>> {
+            let guide = F::open_path(&self.path)?;
+            let n = guide.len();
+
+            let num_threads = self.num_threads.unwrap_or_else(|| rayon::max_num_threads());
+
+            let task = || -> Vec<S>{
+                let mut chunks: Vec<_> = (0..n).into_par_iter().chunks((n / num_threads / 3).max(10)).map(|ii| {
+                    let start = ii[0];
+                    let mut local_reader = F::open_path(&self.path).unwrap();
+                    let spectra: Vec<_> = ii.into_iter().flat_map(|i| local_reader.get_spectrum_by_index(i)).collect();
+                    (start ,spectra)
+                }).collect();
+                chunks.par_sort_by(|a, b| a.0.cmp(&b.0));
+                chunks.into_iter().map(|(_, chunk)| chunk).flatten().collect()
+            };
+
+            let out = if let Some(num_threads) = self.num_threads {
+                let pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads).thread_name(|i| format!("mzdata-concurrent-loader-{i}")).build().unwrap();
+                pool.install(|| task())
+            } else {
+                task()
+            };
+
+            Ok(out)
+        }
+    }
+}
+
+
+#[cfg(feature = "parallelism")]
+pub use parallelism::ConcurrentLoader;
+
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -373,6 +433,23 @@ mod test {
         assert_eq!(buffer, buffer2);
 
         assert!(stream.seek(io::SeekFrom::Start(556)).is_err());
+
+        Ok(())
+    }
+
+    #[cfg(feature = "parallelism")]
+    #[test]
+    fn test_parallel_load() -> io::Result<()> {
+        use crate::prelude::*;
+
+        let loader= ConcurrentLoader::new("./test/data/batching_test.mzML".into(), Some(4));
+        let spectra = loader.load::<crate::MzMLReader<fs::File>, _, _, _>()?;
+        assert_eq!(spectra.len(), 2232);
+
+        let _ = spectra.iter().fold(0, |last, spec| {
+            assert_eq!(last, spec.index());
+            spec.index() + 1
+        });
 
         Ok(())
     }

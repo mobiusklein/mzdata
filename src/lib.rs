@@ -22,7 +22,7 @@
 //!
 //! It also includes a set of representation layers for spectra in [`mzdata::spectrum`](crate::spectrum)
 //!
-//! # Example
+//! ## Example
 //! ```rust
 //! use std::fs;
 //! use mzdata::prelude::*;
@@ -55,6 +55,66 @@
 //! The library makes heavy use of traits to abstract over the implementation details of different file formats.
 //! These traits are included in [`mzdata::prelude`](crate::prelude). It also imports [`mzpeaks::prelude`].
 //!
+//!
+//! ## Features
+//! [`mzdata`](crate) provides many optional features, some of which are self-contained, while others layer funcitonality.
+//!
+//! ### `mzsignal`-related
+//!
+//! TLDR: Unless you are already using `ndarray-linalg` in your dependency graph, you should enable `mzsignal` + `nalgebra`.
+//!
+//! The [`mzsignal`](mzsignal) crate provides signal processing, peak picking, and feature finding funcitonality. Part of this behavior requires a linear algebra implementation. [`mzsignal`](mzsignal) is flexible. It can use either `nalgebra`, a pure Rust library that is self-contained but optimized for small matrices, or `ndarray-linalg` which requires an external LAPACK library be available either at build time or run time, all of which are outside the basic Rust ecosystem. Enabling the `mzsignal` feature **requires** one of the following features:
+//!
+//! - `nalgebra` - No external dependencies.
+//! - `openblas` - Requires OpenBlas (see https://crates.io/crates/ndarray-linalg)
+//! - `intel-mkl` - Requires Intel's Math Kernel Library (see https://crates.io/crates/ndarray-linalg)
+//! - `netlib` - Requires the NETLIB (see https://crates.io/crates/ndarray-linalg)
+//!
+//! ### File Formats
+//!
+//! [`mzdata`](crate) supports reading several file formats, some of which add large dependencies and can be opted into or out of.
+//!
+//! |   Feature    | File Format                                                     | Dependency                                                                                                    |
+//! | :----------: | :-------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------ |
+//! |   `mzmlb`    | [mzMLb](https://pubs.acs.org/doi/10.1021/acs.jproteome.0c00192) | HDF5 C shared library at runtime or statically linked with `hdf5-rs`, possibly a C compiler                   |
+//! |   `thermo`   | Thermo-Fisher RAW Format                                        | .NET runtime at build time _and_ runtime, possibly a C compiler                                               |
+//! | `bruker_tdf` | Bruker TDF Format                                               | SQLite3 C library at runtime or statically linked with `rusqlite`, requires `mzsignal` for flattening spectra |
+//!
+//! Additionally, mzML and MGF are supported by default, but they can be disabled by skipping default features and not enabling the `mzml` and `mgf` features.
+//!
+//! To complicate matters the `hdf5_static` feature combined with `mzmlb` handles statically linking the HDF5 C library and `zlib` together to avoid symbol collision with other compression libraries used by `mzdata`.
+//!
+//! ### Compression
+//!
+//! `mzdata` uses [`flate2`](https://crates.io/crates/flate2) to compress and decompress `zlib`-type compressed streams, but there are three different backends available with different tradeoffs in speed and build convenience:
+//!
+//! - `zlib` - The historical implementation. Faster than `miniz_oxide` and consistently produces the best compression. Requires a nearly ubiquitous C library at build time.
+//! - `zlib-ng-compat` - The fastest, often nearly best if not best compression and decompression. Requires a C library or a C compiler at build time.
+//! - `zlib-ng` - C library dependency, I encountered build errors but your mileage may vary. Requires a C library or a C compiler at build time.
+//! - `miniz_oxide` - Pure Rust backend, the slowest in practice.
+//!
+//! `mzdata` was also a test-bed for some experimental compression techniques.
+//!
+//! - `zstd` - Enables layered Zstandard and byte shuffling + dictionary encoding methods.
+//!
+//! ### Async I/O
+//!
+//! `mzdata` uses synchronous I/O by default, but includes code for some async options:
+//!
+//! - `async_partial` - Implements trait-level asynchronous versions of the spectrum reading traits and implementations for mzML, MGF, and Thermo RAW files using [`tokio`](https://crates.io/crates/tokio), but doesn't enable the `tokio/fs` module which carries additional requirements which is not compatible with all platforms.
+//! - `async` - Enables `async_partial` and `tokio/fs`.
+//!
+//! ### PROXI
+//!
+//! `mzdata` includes [PROXI](https://www.psidev.info/proxi) clients for fetching spectra from supporting servers on the internet using [USIs](https://www.psidev.info/usi).
+//!
+//! - `proxi` - Provides a synchronous client in `mzdata::io::proxi` and adds `mzdata::io::usi::USI::download_spectrum_blocking`
+//! - `async-proxi` - Provides an asynchronous client in `mzdata::io::proxi` and adds `mzdata::io::usi::USI::download_spectrum_async`
+//!
+//! ### Other
+//!
+//! - `serde` - Enables `serde` serialization and deserialization for most library types that aren't directly connected to an I/O device.
+//! - `parallelism` - Enables `rayon` parallel iterators on a small number of internal operations to speed up some operations relating to decompression signal processing. This is unlikely to be notice-able in most cases. More benefit is had by simply processing multiple spectra in parallel using `rayon`'s bridging adapters.
 //!
 pub mod io;
 pub mod meta;

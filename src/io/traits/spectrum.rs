@@ -14,7 +14,7 @@ use thiserror::Error;
 use crate::io::utils::FileSource;
 use crate::io::{DetailLevel, OffsetIndex};
 use crate::meta::{
-    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software,
+    DataProcessing, FileDescription, FileMetadataConfig, InstrumentConfiguration, MassSpectrometryRun, Sample, Software
 };
 use crate::prelude::MSDataFileMetadata;
 use crate::spectrum::group::{SpectrumGroup, SpectrumGroupingIterator};
@@ -970,7 +970,7 @@ pub trait RandomAccessSpectrumGroupingIterator<
 
 /// A collection of spectra held in memory but providing an interface
 /// identical to a data file. This structure owns its data, so in order
-/// to yield ownership for [`SpectrumSource`], they are cloned
+/// to yield ownership for [`SpectrumSource`], they are cloned.
 #[derive(Debug, Default)]
 pub struct MemorySpectrumSource<
     C: CentroidLike = CentroidPeak,
@@ -982,6 +982,11 @@ pub struct MemorySpectrumSource<
     offsets: OffsetIndex,
     _c: PhantomData<C>,
     _d: PhantomData<D>,
+    metadata: FileMetadataConfig
+}
+
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>> MSDataFileMetadata for MemorySpectrumSource<C, D, S> {
+    crate::delegate_impl_metadata_trait!(expr, x => { &x.metadata }, &mut => { &mut x.metadata });
 }
 
 impl<
@@ -991,6 +996,10 @@ impl<
     > MemorySpectrumSource<C, D, S>
 {
     pub fn new(spectra: VecDeque<S>) -> Self {
+        Self::new_with_metadata(spectra, Default::default())
+    }
+
+    pub fn new_with_metadata(spectra: VecDeque<S>, metadata: FileMetadataConfig) -> Self {
         let mut offsets = OffsetIndex::new("spectrum".to_string());
         spectra.iter().enumerate().for_each(|(i, s)| {
             offsets.insert(s.id().to_string(), i as u64);
@@ -1000,6 +1009,7 @@ impl<
             spectra,
             position: 0,
             offsets,
+            metadata,
             _c: PhantomData,
             _d: PhantomData,
         }
@@ -1269,7 +1279,7 @@ mod async_traits {
 
         /// Retrieve a spectrum by it's integer index
         fn get_spectrum_by_index(&mut self, index: usize)
-            -> impl Future<Output = Option<S>> + Send;
+            -> impl Future<Output = Option<S>>;
 
         /// Retrieve a spectrum by its scan start time
         /// Considerably more complex than seeking by ID or index, this involves

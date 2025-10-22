@@ -1,7 +1,7 @@
 set dotenv-load := true
 
 test-units:
-    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress
+    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,bruker_tdf
 
 test-coverage:
     cargo llvm-cov --lib --tests nextest --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,mzmlb,async,numpress --html
@@ -9,7 +9,7 @@ test-coverage:
 alias t := test-units
 
 test-units-more:
-    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress
+    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,bruker_tdf
 
 quick-docs:
     cargo doc --no-deps -p mzdata
