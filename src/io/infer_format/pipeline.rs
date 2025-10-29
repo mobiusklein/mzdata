@@ -15,6 +15,9 @@ use crate::io::PreBufferedStream;
 #[cfg(feature = "mzmlb")]
 pub use crate::io::mzmlb::{MzMLbReaderType, MzMLbWriterBuilder};
 
+#[cfg(feature = "imzml")]
+use crate::io::imzml::ImzMLReaderType;
+
 #[allow(unused)]
 use crate::io::compression::RestartableGzDecoder;
 #[cfg(feature = "mgf")]
@@ -299,6 +302,20 @@ pub trait MassSpectrometryReadWriteProcess<
                     #[cfg(feature = "mzmlb")]
                     MassSpectrometryFormat::MzMLb => {
                         let reader = MzMLbReaderType::new(&read_path)?;
+                        let reader = self.transform_reader(reader, format)?;
+                        self.open_writer(reader, format, write_path)?;
+                        Ok(())
+                    },
+                    #[cfg(feature = "imzml")]
+                    MassSpectrometryFormat::IMzML => {
+                        let xml_file = fs::File::open(&read_path)?;
+                        let mut ibd_path = read_path.with_extension("ibd");
+                        if !ibd_path.exists() {
+                            ibd_path = read_path.with_extension("IBD");
+                        }
+                        let ibd_file = fs::File::open(&ibd_path)?;
+
+                        let reader = ImzMLReaderType::new(xml_file, ibd_file);
                         let reader = self.transform_reader(reader, format)?;
                         self.open_writer(reader, format, write_path)?;
                         Ok(())

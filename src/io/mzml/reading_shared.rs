@@ -1179,3 +1179,83 @@ impl IncrementingIdMap {
         }
     }
 }
+
+/// Builds an offset index to each `<spectrum>` XML element by doing a fast pre-scan
+/// of an mzML or imzML file. This is a shared utility function used by both
+/// [`MzMLReaderType`](crate::io::mzml::MzMLReaderType) and
+/// [`ImzMLReaderType`](crate::io::imzml::ImzMLReaderType).
+///
+/// # Arguments
+/// * `handle` - A seekable buffered reader positioned at any point in the file
+/// * `spectrum_index` - The offset index to populate with spectrum ID -> byte offset mappings
+/// * `buffer` - A reusable buffer for XML parsing
+///
+/// # Returns
+/// The byte offset where indexing stopped (usually at the end of `<spectrumList>`)
+pub fn build_spectrum_index<R: SeekRead>(
+    handle: &mut io::BufReader<R>,
+    spectrum_index: &mut OffsetIndex,
+    buffer: &mut Bytes,
+) -> u64 {
+    use quick_xml::{events::Event, Reader};
+    use log::trace;
+
+    let start = handle
+        .stream_position()
+        .expect("Failed to save restore location");
+    trace!("Starting to build offset index by traversing the file, storing last position as {start}");
+    handle.seek(SeekFrom::Start(0))
+        .expect("Failed to reset stream to beginning");
+    let mut reader = Reader::from_reader(&mut *handle);
+    reader.trim_text(true);
+    loop {
+        match reader.read_event_into(buffer) {
+            Ok(Event::Start(ref e)) => {
+                let element_name = e.name();
+                if element_name.as_ref() == b"spectrum" {
+                    // Hit a spectrum, extract ID and save current offset
+                    for attr_parsed in e.attributes() {
+                        match attr_parsed {
+                            Ok(attr) => {
+                                if attr.key.as_ref() == b"id" {
+                                    let scan_id = attr
+                                        .unescape_value()
+                                        .expect("Error decoding spectrum id in streaming index")
+                                        .to_string();
+                                    // This count is off by 2 because somehow the < and > bytes are removed?
+                                    spectrum_index.insert(
+                                        scan_id,
+                                        (reader.buffer_position() - e.len() - 2) as u64,
+                                    );
+                                    break;
+                                };
+                            }
+                            Err(_msg) => {}
+                        }
+                    }
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let element_name = e.name();
+                if element_name.as_ref() == b"spectrumList" {
+                    break;
+                }
+            }
+            Ok(Event::Eof) => {
+                break;
+            }
+            _ => {}
+        };
+        buffer.clear();
+    }
+    let offset = reader.buffer_position() as u64;
+    trace!("Ended indexing scan at offset {offset}. Restoring starting position {start}");
+    handle
+        .seek(SeekFrom::Start(start))
+        .expect("Failed to restore location");
+    spectrum_index.init = true;
+    if spectrum_index.is_empty() {
+        warn!("An index was built but no entries were found")
+    }
+    offset
+}

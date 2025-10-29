@@ -363,9 +363,11 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
         }
     }
 
-    fn borrow_instrument_configuration(
+
+    fn borrow_metadata(
         self,
         instrument_configurations: &'a mut IncrementingIdMap,
+        reference_param_groups: &'a HashMap<String, Vec<Param>>,
     ) -> Self;
 }
 
@@ -407,6 +409,7 @@ pub struct MzMLSpectrumBuilder<
     pub instrument_id_map: Option<&'a mut IncrementingIdMap>,
     pub run_level_data_processing: Option<Box<str>>,
     pub spectrum_data_processing_ref: Option<Box<str>>,
+    pub reference_param_groups: Option<&'a HashMap<String, Vec<Param>>>,
     entry_type: EntryType,
     centroid_type: PhantomData<C>,
     deconvoluted_type: PhantomData<D>,
@@ -430,6 +433,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> Default for MzMLSpectrumBuild
             instrument_id_map: Default::default(),
             run_level_data_processing: None,
             spectrum_data_processing_ref: None,
+            reference_param_groups: None,
             entry_type: Default::default(),
             centroid_type: PhantomData,
             deconvoluted_type: PhantomData,
@@ -509,11 +513,14 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
         };
     }
 
-    fn borrow_instrument_configuration(
+
+    fn borrow_metadata(
         mut self,
         instrument_configurations: &'inner mut IncrementingIdMap,
+        reference_param_groups: &'inner HashMap<String, Vec<Param>>,
     ) -> Self {
         self.instrument_id_map = Some(instrument_configurations);
+        self.reference_param_groups = Some(reference_param_groups);
         self
     }
 
@@ -923,6 +930,35 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
     ) -> ParserResult {
         let elt_name = event.name();
         match elt_name.as_ref() {
+            b"referenceableParamGroupRef" => {
+                for attr_parsed in event.attributes() {
+                    match attr_parsed {
+                        Ok(attr) => {
+                            if attr.key.as_ref() == b"ref" {
+                                let group_id = attr
+                                    .unescape_value()
+                                    .expect("Error decoding reference group")
+                                    .to_string();
+                                if let Some(ref_param_groups) = self.reference_param_groups {
+                                    let param_group = match ref_param_groups.get(&group_id) {
+                                        Some(params) => params.clone(),
+                                        None => {
+                                            panic!("Encountered a referenceableParamGroupRef without a group definition")
+                                        }
+                                    };
+
+                                    for param in param_group {
+                                        self.fill_param_into(param, state)
+                                    }
+                                }
+                            }
+                        }
+                        Err(msg) => {
+                            return Err(self.handle_xml_error(msg.into(), state));
+                        }
+                    }
+                }
+            }
             // Inline the `fill_param_into` to avoid excessive copies.
             b"cvParam" | b"userParam" => {
                 match Self::handle_param_borrowed(event, reader_position, state) {
@@ -1393,7 +1429,7 @@ impl<
         B: MzMLSAX + SpectrumBuilding<'a, C, D, MultiLayerSpectrum<C, D>> + 'a,
     >(
         &'b mut self,
-        mut accumulator: B,
+        accumulator: B,
     ) -> Result<(B, usize), MzMLParserError> {
         if self.state == MzMLParserState::EOF {
             return Err(MzMLParserError::SectionOver("spectrum"));
@@ -1401,7 +1437,8 @@ impl<
 
         let mut reader = Reader::from_reader(&mut self.handle);
         reader.trim_text(true);
-        accumulator = accumulator.borrow_instrument_configuration(&mut self.instrument_id_map);
+        let mut accumulator = accumulator
+            .borrow_metadata(&mut self.instrument_id_map, &self.reference_param_groups);
         accumulator.set_run_data_processing(self.run.default_data_processing_id.clone().map(|v| v.into_boxed_str()));
         let mut offset: usize = 0;
 
@@ -1756,7 +1793,7 @@ impl<
     }
 }
 
-/// [`MzMLReaderType`] instances are [`Iterator`]s over [`Spectrum`]
+/// [`MzMLReaderType`] instances are [`Iterator`]s over [`MultiLayerSpectrum`]
 impl<
         R: io::Read,
         C: CentroidLike + BuildFromArrayMap,
@@ -2090,66 +2127,7 @@ impl<
     /// Builds an offset index to each `<spectrum>` XML element
     /// by doing a fast pre-scan of the XML file.
     pub fn build_index(&mut self) -> u64 {
-        let start = self
-            .handle
-            .stream_position()
-            .expect("Failed to save restore location");
-        trace!("Starting to build offset index by traversing the file, storing last position as {start}");
-        self.seek(SeekFrom::Start(0))
-            .expect("Failed to reset stream to beginning");
-        let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
-        loop {
-            match reader.read_event_into(&mut self.buffer) {
-                Ok(Event::Start(ref e)) => {
-                    let element_name = e.name();
-                    if element_name.as_ref() == b"spectrum" {
-                        // Hit a spectrum, extract ID and save current offset
-
-                        for attr_parsed in e.attributes() {
-                            match attr_parsed {
-                                Ok(attr) => {
-                                    if attr.key.as_ref() == b"id" {
-                                        let scan_id = attr
-                                            .unescape_value()
-                                            .expect("Error decoding spectrum id in streaming mzML index")
-                                            .to_string();
-                                        // This count is off by 2 because somehow the < and > bytes are removed?
-                                        self.spectrum_index.insert(
-                                            scan_id,
-                                            (reader.buffer_position() - e.len() - 2) as u64,
-                                        );
-                                        break;
-                                    };
-                                }
-                                Err(_msg) => {}
-                            }
-                        }
-                    }
-                }
-                Ok(Event::End(ref e)) => {
-                    let element_name = e.name();
-                    if element_name.as_ref() == b"spectrumList" {
-                        break;
-                    }
-                }
-                Ok(Event::Eof) => {
-                    break;
-                }
-                _ => {}
-            };
-            self.buffer.clear();
-        }
-        let offset = reader.buffer_position() as u64;
-        trace!("Ended indexing scan at offset {offset}. Restoring starting position {start}");
-        self.handle
-            .seek(SeekFrom::Start(start))
-            .expect("Failed to restore location");
-        self.spectrum_index.init = true;
-        if self.spectrum_index.is_empty() {
-            warn!("An index was built but no entries were found")
-        }
-        offset
+        super::build_spectrum_index(&mut self.handle, &mut self.spectrum_index, &mut self.buffer)
     }
 }
 

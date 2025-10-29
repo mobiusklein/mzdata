@@ -20,6 +20,8 @@ pub use crate::io::mzmlb::MzMLbReaderType;
 use crate::io::mgf::MGFReaderType;
 #[cfg(feature = "mzml")]
 use crate::io::mzml::MzMLReaderType;
+#[cfg(feature = "imzml")]
+use crate::io::imzml::ImzMLReaderType;
 
 use crate::meta::MSDataFileMetadata;
 use crate::spectrum::bindata::BuildFromArrayMap;
@@ -63,6 +65,8 @@ pub enum MZReaderType<
     ThermoRaw(ThermoRawReaderType<C, D>),
     #[cfg(feature = "mzmlb")]
     MzMLb(Box<MzMLbReaderType<C, D>>),
+    #[cfg(feature = "imzml")]
+    IMzML(ImzMLReaderType<fs::File, fs::File, C, D>),
     #[cfg(feature = "bruker_tdf")]
     BrukerTDF(TDFSpectrumReaderType<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>, C, D>),
     Unknown(Box<dyn SpectrumSourceWithMetadata<C, D, MultiLayerSpectrum<C, D>> + Send + Sync>, PhantomData<R>),
@@ -83,6 +87,8 @@ impl<
             Self::ThermoRaw(arg0) => f.debug_tuple("ThermoRaw").field(&arg0.source_file_name()).finish(),
             #[cfg(feature = "mzmlb")]
             Self::MzMLb(arg0) => f.debug_tuple("MzMLb").field(&arg0.source_file_name()).finish(),
+            #[cfg(feature = "imzml")]
+            Self::IMzML(arg0) => f.debug_tuple("IMzML").field(&arg0.source_file_name()).finish(),
             #[cfg(feature = "bruker_tdf")]
             Self::BrukerTDF(arg0) => f.debug_tuple("BrukerTDF").field(&arg0.source_file_name()).finish(),
             Self::Unknown(arg0, _) => f.debug_tuple("Unknown").field(&arg0.source_file_name()).finish(),
@@ -205,6 +211,8 @@ macro_rules! msfmt_dispatch {
             MZReaderType::ThermoRaw($r) => $e,
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb($r) => $e,
+            #[cfg(feature = "imzml")]
+            MZReaderType::IMzML($r) => $e,
             #[cfg(feature = "bruker_tdf")]
             MZReaderType::BrukerTDF($r) => $e,
             MZReaderType::Unknown($r, _) => $e,
@@ -236,6 +244,8 @@ impl<R: io::Read + io::Seek,
             MZReaderType::ThermoRaw(_) => MassSpectrometryFormat::ThermoRaw,
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(_) => MassSpectrometryFormat::MzMLb,
+            #[cfg(feature = "imzml")]
+            MZReaderType::IMzML(_) => MassSpectrometryFormat::IMzML,
             #[cfg(feature = "bruker_tdf")]
             MZReaderType::BrukerTDF(_) => MassSpectrometryFormat::BrukerTDF,
             _ => MassSpectrometryFormat::Unknown
@@ -503,6 +513,8 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
             MZReaderType::ThermoRaw(reader) => reader.construct_index_from_stream(),
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(reader) => reader.construct_index_from_stream(),
+            #[cfg(feature = "imzml")]
+            MZReaderType::IMzML(reader) => reader.construct_index_from_stream(),
             #[cfg(feature = "bruker_tdf")]
             MZReaderType::BrukerTDF(reader) => reader.construct_index_from_stream(),
             MZReaderType::Unknown(reader, _) => reader.get_index().len() as u64,
@@ -529,6 +541,11 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
             MassSpectrometryFormat::MzML => {
                 let reader = MzMLReaderType::open_path(path)?;
                 Ok(Self::MzML(reader))
+            }
+            #[cfg(feature = "imzml")]
+            MassSpectrometryFormat::IMzML => {
+                let reader = ImzMLReaderType::open_path(path)?;
+                Ok(Self::IMzML(reader))
             }
             #[cfg(feature = "thermo")]
             MassSpectrometryFormat::ThermoRaw => {
@@ -574,6 +591,11 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
             MassSpectrometryFormat::MzML => {
                 let reader = MzMLReaderType::open_file(source)?;
                 Ok(Self::MzML(reader))
+            }
+            #[cfg(feature = "imzml")]
+            MassSpectrometryFormat::IMzML => {
+                let reader = ImzMLReaderType::open_file(source)?;
+                Ok(Self::IMzML(reader))
             }
             #[cfg(feature = "thermo")]
             MassSpectrometryFormat::ThermoRaw => {
@@ -630,6 +652,8 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
             MZReaderType::ThermoRaw(reader) => reader.get_spectrum_by_time(time),
             #[cfg(feature = "mzmlb")]
             MZReaderType::MzMLb(reader) => reader.get_spectrum_by_time(time),
+            #[cfg(feature = "imzml")]
+            MZReaderType::IMzML(reader) => reader.get_spectrum_by_time(time),
             #[cfg(feature = "bruker_tdf")]
             MZReaderType::BrukerTDF(r) => r.get_spectrum_by_time(time),
             MZReaderType::Unknown(r, _) => r.get_spectrum_by_time(time),
@@ -729,6 +753,10 @@ macro_rules! msfmt_dispatch_cap {
             MZReaderType::MzMLb($r) => {
                 $e?;
             },
+            #[cfg(feature = "imzml")]
+            MZReaderType::IMzML($r) => {
+                $e?;
+            },
             #[cfg(feature = "bruker_tdf")]
             MZReaderType::BrukerTDF($r) => {
                 $e?;
@@ -777,6 +805,8 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
             MZReaderType::ThermoRaw(_) => return Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound),
             #[cfg(feature="mzmlb")]
             MZReaderType::MzMLb(reader) => IMMZReaderType::MzMLb(Box::new(reader.try_into_frame_source()?)),
+            #[cfg(feature = "imzml")]
+            MZReaderType::IMzML(_) => return Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound),
             #[cfg(feature="bruker_tdf")]
             MZReaderType::BrukerTDF(reader) => {
                 IMMZReaderType::BrukerTDF(reader.try_into_frame_source()?, PhantomData)
