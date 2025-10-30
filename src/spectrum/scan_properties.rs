@@ -604,27 +604,6 @@ impl PrecursorSelection for Precursor {
     }
 }
 
-/// [`PrecursorSelection`] implementers implement [`IonProperties`] but these
-/// convenience methods are
-// impl<T> IonProperties for T
-// where
-//     T: PrecursorSelection,
-// {
-//     #[inline]
-//     fn mz(&self) -> f64 {
-//         self.ion().unwrap().mz()
-//     }
-
-//     #[inline]
-//     fn neutral_mass(&self) -> f64 {
-//         self.ion().unwrap().neutral_mass()
-//     }
-
-//     #[inline]
-//     fn charge(&self) -> Option<i32> {
-//         self.ion().unwrap().charge()
-//     }
-// }
 
 /**
 Describes the polarity of a mass spectrum. A spectrum is either `Positive` (1+), `Negative` (-1)
