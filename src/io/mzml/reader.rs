@@ -465,7 +465,7 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
     }
 
     fn selected_ion_mut(&mut self) -> &mut SelectedIon {
-        self.precursor_mut().ion_mut()
+        self.precursor_mut().ion_mut().unwrap()
     }
 
     fn current_array_mut(&mut self) -> &mut DataArray {
@@ -526,7 +526,7 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
 
     fn new_selected_ion(&mut self) -> &mut SelectedIon {
         let prec = self.precursor_mut();
-        prec.last_ion_mut()
+        prec.last_ion_mut().unwrap()
     }
 
     fn into_chromatogram(self, chromatogram: &mut Chromatogram) {

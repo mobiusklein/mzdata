@@ -29,7 +29,7 @@ impl SelectionTargetSpecification {
     }
 
     pub fn from_spectrum(spectrum: &MultiLayerSpectrum) -> Self {
-        let prec = spectrum.precursor().unwrap();
+        let prec = spectrum.precursor().unwrap().ion().unwrap();
         Self {
             mz: prec.mz(),
             charge: prec.charge(),
@@ -113,7 +113,8 @@ impl<R: SpectrumSource> MSnTargetTrackingIterator<R> {
             .iter()
             .map(|s| {
                 let prec = s.precursor().unwrap();
-                let mz = prec.mz();
+                let ion = prec.ion().unwrap();
+                let mz = ion.mz();
                 let t = s.start_time();
                 let hits: usize = self
                     .targets
@@ -131,7 +132,7 @@ impl<R: SpectrumSource> MSnTargetTrackingIterator<R> {
                     })
                     .sum();
                 if hits == 0 {
-                    let p = SelectionTargetSpecification::new(mz, prec.charge(), t - 0.5..t + 0.5);
+                    let p = SelectionTargetSpecification::new(mz, prec.ion().and_then(|i| i.charge()), t - 0.5..t + 0.5);
                     // eprintln!("Added {p:?}");
                     self.targets.push_back(p);
                     1

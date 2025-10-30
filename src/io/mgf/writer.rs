@@ -53,27 +53,28 @@ pub trait MGFHeaderStyle: Sized {
         writer: &mut MGFWriterType<W, C, D, Self>,
         precursor: &Precursor,
     ) -> io::Result<()> {
-        let ion = precursor.ion();
-        writer.handle.write_all(b"PEPMASS=")?;
-        writer.handle.write_all(ion.mz.to_string().as_bytes())?;
-        writer.handle.write_all(b" ")?;
-        writer
-            .handle
-            .write_all(ion.intensity.to_string().as_bytes())?;
-        if let Some(charge) = ion.charge {
+        if let Some(ion) = precursor.ion() {
+            writer.handle.write_all(b"PEPMASS=")?;
+            writer.handle.write_all(ion.mz.to_string().as_bytes())?;
             writer.handle.write_all(b" ")?;
-            writer.handle.write_all(charge.to_string().as_bytes())?;
-        }
-        writer.handle.write_all(b"\n")?;
+            writer
+                .handle
+                .write_all(ion.intensity.to_string().as_bytes())?;
+            if let Some(charge) = ion.charge {
+                writer.handle.write_all(b" ")?;
+                writer.handle.write_all(charge.to_string().as_bytes())?;
+            }
+            writer.handle.write_all(b"\n")?;
+            for param in ion
+                .params()
+                .iter()
+                .chain(precursor.activation.params())
+            {
+                writer.write_param(param)?;
+            }
 
-        for param in precursor
-            .ion()
-            .params()
-            .iter()
-            .chain(precursor.activation.params())
-        {
-            writer.write_param(param)?;
         }
+
         if let Some(pid) = precursor.precursor_id() {
             writer.handle.write_all(b"PRECURSORSCAN=")?;
             writer.handle.write_all(pid.as_bytes())?;
@@ -169,7 +170,7 @@ impl<W: io::Write, C: CentroidLike, D: DeconvolutedCentroidLike, Y: MGFHeaderSty
         let idx = spectrum.index();
         let charge = spectrum
             .precursor()
-            .and_then(|prec| prec.ion().charge())
+            .and_then(|prec| prec.ion().and_then(|i| i.charge()))
             .unwrap_or_default();
         let id = spectrum.id();
         let run_id = self.run_description().and_then(|d| d.id.as_ref());

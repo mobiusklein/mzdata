@@ -298,7 +298,7 @@ pub struct Acquisition {
 
 impl Acquisition {
     pub fn start_time(&self) -> f64 {
-        self.first_scan().unwrap().start_time
+        self.first_scan().map(|v| v.start_time).unwrap_or_default()
     }
 
     pub fn first_scan(&self) -> Option<&ScanEvent> {
@@ -517,7 +517,7 @@ A trait for abstracting over how a precursor ion is described, immutably.
 */
 pub trait PrecursorSelection {
     /// Describes the selected ion's properties
-    fn ion(&self) -> &SelectedIon;
+    fn ion(&self) -> Option<&SelectedIon>;
     /// Describes the isolation window around the selected ion
     fn isolation_window(&self) -> &IsolationWindow;
     /// The precursor scan ID, if given
@@ -534,23 +534,23 @@ pub trait PrecursorSelection {
         self.iter().count() > 0
     }
 
-    fn last_ion(&self) -> &SelectedIon {
-        self.iter().last().unwrap()
+    fn last_ion(&self) -> Option<&SelectedIon> {
+        self.iter().last()
     }
 
     fn iter_mut(&mut self) -> impl Iterator<Item = &mut SelectedIon>;
-    fn ion_mut(&mut self) -> &mut SelectedIon;
+    fn ion_mut(&mut self) -> Option<&mut SelectedIon>;
     fn activation_mut(&mut self) -> &mut Activation;
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow;
     fn add_ion(&mut self, ion: SelectedIon);
-    fn last_ion_mut(&mut self) -> &mut SelectedIon {
-        self.iter_mut().last().unwrap()
+    fn last_ion_mut(&mut self) -> Option<&mut SelectedIon> {
+        self.iter_mut().last()
     }
 }
 
 impl PrecursorSelection for Precursor {
-    fn ion(&self) -> &SelectedIon {
-        self.ions.first().as_ref().unwrap()
+    fn ion(&self) -> Option<&SelectedIon> {
+        self.ions.first()
     }
 
     fn isolation_window(&self) -> &IsolationWindow {
@@ -569,11 +569,11 @@ impl PrecursorSelection for Precursor {
         &self.activation
     }
 
-    fn ion_mut(&mut self) -> &mut SelectedIon {
+    fn ion_mut(&mut self) -> Option<&mut SelectedIon> {
         if self.ions.is_empty() {
             self.ions.push(SelectedIon::default())
         }
-        self.ions.first_mut().unwrap()
+        self.ions.first_mut()
     }
 
     fn activation_mut(&mut self) -> &mut Activation {
@@ -596,33 +596,35 @@ impl PrecursorSelection for Precursor {
         self.ions.push(ion);
     }
 
-    fn last_ion_mut(&mut self) -> &mut SelectedIon {
+    fn last_ion_mut(&mut self) -> Option<&mut SelectedIon> {
         if self.ions.is_empty() {
             self.ions.push(SelectedIon::default())
         }
-        self.iter_mut().last().unwrap()
+        self.iter_mut().last()
     }
 }
 
-impl<T> IonProperties for T
-where
-    T: PrecursorSelection,
-{
-    #[inline]
-    fn mz(&self) -> f64 {
-        self.ion().mz()
-    }
+/// [`PrecursorSelection`] implementers implement [`IonProperties`] but these
+/// convenience methods are
+// impl<T> IonProperties for T
+// where
+//     T: PrecursorSelection,
+// {
+//     #[inline]
+//     fn mz(&self) -> f64 {
+//         self.ion().unwrap().mz()
+//     }
 
-    #[inline]
-    fn neutral_mass(&self) -> f64 {
-        self.ion().neutral_mass()
-    }
+//     #[inline]
+//     fn neutral_mass(&self) -> f64 {
+//         self.ion().unwrap().neutral_mass()
+//     }
 
-    #[inline]
-    fn charge(&self) -> Option<i32> {
-        self.ion().charge()
-    }
-}
+//     #[inline]
+//     fn charge(&self) -> Option<i32> {
+//         self.ion().unwrap().charge()
+//     }
+// }
 
 /**
 Describes the polarity of a mass spectrum. A spectrum is either `Positive` (1+), `Negative` (-1)

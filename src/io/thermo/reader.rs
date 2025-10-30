@@ -825,7 +825,7 @@ pub(crate) mod sealed {
                 0 => None,
                 z => Some(z),
             };
-            *precursor.ion_mut() = ion;
+            *precursor.ion_mut().unwrap() = ion;
 
             let activation = &mut precursor.activation;
             let vact = vprec.activation();
@@ -1578,16 +1578,16 @@ mod test {
                 s.start_time() - r.start_time()
             );
             if s.ms_level() == 2 {
-                let ps = s.precursor().unwrap();
-                let pr = r.precursor().unwrap();
+                let ps = s.precursor().unwrap().ion().unwrap();
+                let pr = r.precursor().unwrap().ion().unwrap();
                 assert!(
-                    (ps.ion().mz() - pr.ion().mz()).abs() < 1e-3,
+                    (ps.mz() - pr.mz()).abs() < 1e-3,
                     "{} - {} = {}",
-                    ps.ion().mz(),
-                    pr.ion().mz(),
-                    ps.ion().mz() - pr.ion().mz()
+                    ps.mz(),
+                    pr.mz(),
+                    ps.mz() - pr.mz()
                 );
-                assert_eq!(ps.ion().charge, pr.ion().charge);
+                assert_eq!(ps.charge, pr.charge);
             }
         });
 

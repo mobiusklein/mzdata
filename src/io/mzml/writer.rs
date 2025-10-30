@@ -1567,31 +1567,32 @@ where
     }
 
     pub fn write_selected_ions(&mut self, precursor: &impl PrecursorSelection) -> WriterResult {
+        let n = precursor.iter().count().to_string();
         let mut outer = bstart!("selectedIonList");
-        attrib!("count", "1", outer);
+        attrib!("count", n, outer);
         start_event!(self, outer);
-        let tag = bstart!("selectedIon");
-        start_event!(self, tag);
-
-        let ion = precursor.ion();
-        self.handle.write_param(
-            &self
-                .ms_cv
-                .param_val("MS:1000744", "selected ion m/z", ion.mz)
-                .with_unit("MS:1000040", "m/z"),
-        )?;
-        self.handle.write_param(
-            &self
-                .ms_cv
-                .param_val("MS:1000042", "peak intensity", ion.intensity)
-                .with_unit("MS:1000131", "number of detector counts"),
-        )?;
-        if let Some(charge) = &ion.charge {
-            self.handle
-                .write_param(&self.ms_cv.param_val("MS:1000041", "charge state", charge))?;
+        for ion in precursor.iter() {
+            let tag = bstart!("selectedIon");
+            start_event!(self, tag);
+            self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param_val("MS:1000744", "selected ion m/z", ion.mz)
+                    .with_unit("MS:1000040", "m/z"),
+            )?;
+            self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param_val("MS:1000042", "peak intensity", ion.intensity)
+                    .with_unit("MS:1000131", "number of detector counts"),
+            )?;
+            if let Some(charge) = &ion.charge {
+                self.handle
+                    .write_param(&self.ms_cv.param_val("MS:1000041", "charge state", charge))?;
+            }
+            self.handle.write_param_list(ion.params().iter())?;
+            end_event!(self, tag);
         }
-        self.handle.write_param_list(ion.params().iter())?;
-        end_event!(self, tag);
         end_event!(self, outer);
         Ok(())
     }

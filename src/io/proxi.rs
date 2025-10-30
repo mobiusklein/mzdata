@@ -947,16 +947,16 @@ impl From<&PROXISpectrum> for SpectrumDescription {
 
                 "selected ion m/z" => {
                     has_precursor = true;
-                    precursor.ion_mut().mz = param.to_f64().expect("Failed to parse ion m/z");
+                    precursor.ion_mut().unwrap().mz = param.to_f64().expect("Failed to parse ion m/z");
                 }
                 "peak intensity" => {
                     has_precursor = true;
-                    precursor.ion_mut().intensity =
+                    precursor.ion_mut().unwrap().intensity =
                         param.to_f32().expect("Failed to parse peak intensity");
                 }
                 "charge state" => {
                     has_precursor = true;
-                    precursor.ion_mut().charge =
+                    precursor.ion_mut().unwrap().charge =
                         Some(param.to_i32().expect("Failed to parse ion charge"));
                 }
 
@@ -1162,7 +1162,7 @@ where
                 iw.upper_bound - iw.target,
             ));
 
-            let ion = precursor.ion();
+            let ion = precursor.ion().unwrap();
             this.add_attribute(PROXIParam::new(
                 curie!(MS:1000744),
                 "selected ion m/z",
