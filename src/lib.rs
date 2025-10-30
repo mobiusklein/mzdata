@@ -9,6 +9,7 @@
 //!   3. mzMLb files using [`MzMLbReader`] in [`mzdata::io::mzmlb`](crate::io::mzmlb), if the `mzmlb` feature is enabled
 //!   4. Thermo RAW files using [`ThermoRawReader`](crate::io::thermo::ThermoRawReader) in [`mzdata::io::thermo`](crate::io::thermo), if the `thermo` feature is enabled
 //!   5. Bruker TDF files using [`TDFSpectrumReader`](crate::io::tdf::TDFSpectrumReader) in [`mzdata::io::tdf`](crate::io::tdf), if the `bruker_tdf` feature is enabled
+//!   6. imzML files using [`ImzMLReader`](crate::io::ImzMLReader) in [`mzdata::io::imzml`](crate::io::imzml), if the `imzml` feature is enabled
 //!
 //! and writing:
 //!   1. MGF files using [`MGFWriter`] in [`mzdata::io::mgf`](crate::io::mgf)
@@ -79,6 +80,7 @@
 //! |   `mzmlb`    | [mzMLb](https://pubs.acs.org/doi/10.1021/acs.jproteome.0c00192) | HDF5 C shared library at runtime or statically linked with `hdf5-rs`, possibly a C compiler                   |
 //! |   `thermo`   | Thermo-Fisher RAW Format                                        | .NET runtime at build time _and_ runtime, possibly a C compiler                                               |
 //! | `bruker_tdf` | Bruker TDF Format                                               | SQLite3 C library at runtime or statically linked with `rusqlite`, requires `mzsignal` for flattening spectra |
+//! | `imzml`      | [imzML](https://www.ms-imaging.org/imzml/)                      | None |
 //!
 //! Additionally, mzML and MGF are supported by default, but they can be disabled by skipping default features and not enabling the `mzml` and `mgf` features.
 //!
@@ -91,6 +93,7 @@
 //! - `zlib` - The historical implementation. Faster than `miniz_oxide` and consistently produces the best compression. Requires a nearly ubiquitous C library at build time.
 //! - `zlib-ng-compat` - The fastest, often nearly best if not best compression and decompression. Requires a C library or a C compiler at build time.
 //! - `zlib-ng` - C library dependency, I encountered build errors but your mileage may vary. Requires a C library or a C compiler at build time.
+//! - `zlib-rs` - Pure Rust backend, competitive with `zlib-ng`.
 //! - `miniz_oxide` - Pure Rust backend, the slowest in practice.
 //!
 //! `mzdata` was also a test-bed for some experimental compression techniques.

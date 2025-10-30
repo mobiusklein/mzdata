@@ -82,6 +82,7 @@ parallelism = ["dep:rayon", "mzsignal?/parallelism"]
 zlib = ["flate2/zlib"]
 zlib-ng-compat = ["flate2/zlib-ng-compat"]
 zlib-ng = ["flate2/zlib-ng"]
+zlib-rs = ["flate2/zlib-rs"]
 miniz_oxide = ["flate2/rust_backend"]
 
 # Enables reading mzMLb
