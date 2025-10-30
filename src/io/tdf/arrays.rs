@@ -100,6 +100,7 @@ impl<'a> FrameToArraysMapper<'a> {
             let mut arrays_at = BinaryArrayMap::new();
             arrays_at.add(mz_array);
             arrays_at.add(intensity_array);
+            arrays_at.sort_by_array(&ArrayType::MZArray).unwrap();
             arrays.push(arrays_at);
             scan_begin = scan_end;
         }

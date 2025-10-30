@@ -242,7 +242,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     pub fn into_spectrum_reader<CP: CentroidLike, DP: DeconvolutedCentroidLike>(
         self,
     ) -> TDFSpectrumReaderType<C, D, CP, DP> {
-        self.into_spectrum_reader_with_peak_merging_tolerance(PEAK_MERGE_TOLERANCE)
+        self.into_spectrum_reader_with_peak_merging_tolerance(PEAK_MERGE_TOLERANCE, false)
     }
 
     /// Consume this reader, wrapping it in a [`TDFSpectrumReaderType`] with the
@@ -253,11 +253,12 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     >(
         self,
         peak_merging_tolerance: Tolerance,
+        do_consolidate_peaks: bool,
     ) -> TDFSpectrumReaderType<C, D, CP, DP> {
         TDFSpectrumReaderType {
             frame_reader: self,
             peak_merging_tolerance,
-            do_consolidate_peaks: true,
+            do_consolidate_peaks,
             _cp: PhantomData,
             _dp: PhantomData,
         }
@@ -531,6 +532,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             },
             crate::spectrum::FeatureDataLevel::RawData(arrays) => {
                 let peaks = if do_consolidate {
+                    log::trace!("Consolidating peaks for {}", descr.index);
                     consolidate_peaks(
                         &arrays,
                         &(0..arrays.ion_mobility_dimension.len() as u32),
@@ -576,10 +578,12 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 
             let arrays = if !matches!(self.detail_level, DetailLevel::MetadataOnly) {
                 if let Some(pasef) = entry.pasef_msms() {
+                    log::trace!("Extracting {index} as PasefFrameMsMs with range {:?}", pasef.scan_start..pasef.scan_end);
                     let arrays = FrameToArraysMapper::new(&frame, &self.metadata)
                         .process_3d_slice(pasef.scan_start..pasef.scan_end);
                     Some(arrays)
                 } else if let Some(dia_pasef) = entry.dia_window() {
+                    log::trace!("Extracting {index} as DIAFrameMsMsWindow with range {:?}", dia_pasef.scan_start..dia_pasef.scan_end);
                     let arrays = FrameToArraysMapper::new(&frame, &self.metadata)
                         .process_3d_slice(dia_pasef.scan_start..dia_pasef.scan_end);
                     Some(arrays)
@@ -1613,6 +1617,7 @@ mod test {
     #[test]
     fn test_tdf_spectrum() -> io::Result<()> {
         let mut reader = TDFSpectrumReader::open_path("test/data/diaPASEF.d")?;
+        reader.set_consolidate_peaks(true);
         eprintln!("{}", reader.len());
         let s = reader.get_spectrum_by_index(0).unwrap();
         assert!(s.peaks.is_some());

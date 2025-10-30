@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::hash_map::{Iter, IterMut};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
 #[cfg(feature = "parallelism")]
@@ -615,7 +615,17 @@ impl BinaryArrayMap3D {
     /// any [`DataArray`] cannot be decoded, or if an expected array is absent.
     pub fn unstack(&self) -> Result<BinaryArrayMap, ArrayRetrievalError> {
         let mut destination = self.additional_arrays.clone();
+        if log::log_enabled!(log::Level::Trace) {
+            let dims = self.iter().map(|(_, arr)| arr.iter().map(|v| v.0.clone()).collect::<HashSet<_>>()).reduce(|mut acc, v| {
+                for k in v {
+                    acc.insert(k);
+                }
+                acc
+            }).unwrap_or_default();
+            let sizes: Vec<_> = self.iter().map(|v| v.1.mzs().map(|a| a.len()).unwrap_or_default()).collect();
 
+            log::trace!("Unstacking 3D array with {dims:?} with sizes {sizes:?} over {} bins", self.ion_mobility_dimension.len());
+        }
         let mut im_dim =
             DataArray::from_name_and_type(&self.ion_mobility_type, BinaryDataArrayType::Float64);
         im_dim.unit = self.ion_mobility_unit;
@@ -643,10 +653,10 @@ impl BinaryArrayMap3D {
             let mzs = layer.mzs()?;
             total_points += mzs.len();
             if let Some(mz) = mzs.first() {
-                current_mz = mz.min(current_mz);
+                current_mz = current_mz.min(*mz);
             }
             if let Some(mz) = mzs.last() {
-                max_mz = mz.max(max_mz);
+                max_mz = max_mz.max(*mz);
             }
             mz_axes.push(mzs);
             indices.push(0usize);
@@ -711,6 +721,16 @@ impl BinaryArrayMap3D {
                 }
             }
             current_mz = next_mz;
+        }
+
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!("Last m/z visited {current_mz}, max m/z {max_mz}");
+
+            for (mzs, ind) in mz_axes.iter().zip(indices.iter()) {
+                if let Some(next_mz) = mzs.get(*ind) {
+                    log::trace!("Handled {ind} entries of slice with {} elements, next element is {next_mz}", mzs.len());
+                }
+            }
         }
 
         debug_assert_eq!(
