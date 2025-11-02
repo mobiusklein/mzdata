@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.61.0] - 2025-11-02
+
+### Added
+
+- Add `MZReaderType::open_read_generic` and `MZReaderType::open_read_seek_generic` to abstract away compression
+- Add `ConcurrentLoader` utility, still too low level
+- Add support for imzML (#36) contributed by @poshul
+- Add more documentation for recent features
+
+### Changed
+
+- Breaking change to make `PrecursorSelection` safer with fewer precondition assumptions about the existence of selected ions
+
+### Fixed
+
+- Fix error in `BinaryArrayMap3D::unstack` skipping some m/z values
+
+### Removed
+
+- Breaking change that removes automatic `IonProperties` implementation from all `PrecursorSelection` implementation
+
 ## [0.60.3] - 2025-10-12
 
 ### Changed
@@ -911,7 +932,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.60.3...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.61.0...HEAD
+[0.61.0]: https://github.com/mobiusklein/mzdata/compare/v0.60.3...v0.61.0
 [0.60.3]: https://github.com/mobiusklein/mzdata/compare/v0.60.2...v0.60.3
 [0.60.2]: https://github.com/mobiusklein/mzdata/compare/v0.60.1...v0.60.2
 [0.60.1]: https://github.com/mobiusklein/mzdata/compare/v0.60.0...v0.60.1
