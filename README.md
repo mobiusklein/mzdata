@@ -41,6 +41,9 @@ fn main() {
 2. `MGF`
 3. `mzMLb`
 4. Thermo RAW
+5. Bruker TDF
+6. `imzML`
+7. PROXI
 
 ## Disclaimer
 This library was made in part to learn Rust, so it may not use the preferred idioms,
