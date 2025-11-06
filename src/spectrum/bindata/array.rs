@@ -159,6 +159,10 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         Ok(self.data.len())
     }
 
+    /// Directly set the data buffer from a slice of a [`Pod`] type.
+    ///
+    /// This will return an error if `std::mem::size_of::<T>()` is not equal to
+    /// the size of [`DataArray::dtype`].
     pub fn update_buffer<T: Pod>(
         &mut self,
         data_buffer: &[T],
@@ -172,6 +176,11 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    /// Add the value of a [`Pod`] implementing type `T` to the array, converting it
+    /// to native byte representation.
+    ///
+    /// This will return an error if `std::mem::size_of::<T>()` is not equal to
+    /// the size of [`DataArray::dtype`].
     pub fn push<T: Pod>(&mut self, value: T) -> Result<(), ArrayRetrievalError> {
         if !matches!(self.compression, BinaryCompressionType::Decoded) {
             self.decode_and_store()?;
@@ -186,6 +195,11 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    /// Add the values from a slice of a [`Pod`] implementing type `T` to the array, converting the slice
+    /// a slice of `T` in its native byte representation.
+    ///
+    /// This will return an error if `std::mem::size_of::<T>()` is not equal to
+    /// the size of [`DataArray::dtype`].
     pub fn extend<T: Pod>(&mut self, values: &[T]) -> Result<(), ArrayRetrievalError> {
         if !matches!(self.compression, BinaryCompressionType::Decoded) {
             self.decode_and_store()?;
@@ -200,6 +214,38 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    /// Add the values from a buffer of bytes to the array directly.
+    ///
+    /// This will return an error if `values.len()` is not a multiple of
+    /// the size of [`DataArray::dtype`].
+    pub fn extend_raw(&mut self, values: &[u8]) -> Result<(), ArrayRetrievalError> {
+        if values.len() % self.dtype.size_of() != 0 {
+            Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        } else {
+            self.data.extend_from_slice(values);
+            Ok(())
+        }
+    }
+
+    /// Add the values from an iterator over [`Pod`] type `T`.
+    ///
+    /// This is more efficient than repeated calls to [`DataArray::push`] or collecting
+    /// to a `Vec` and then using [`DataArray::extend`], but equivalent to either.
+    ///
+    /// This will return an error if `std::mem::size_of::<T>()` is not equal to
+    /// the size of [`DataArray::dtype`].
+    pub fn extend_iter<T: Pod>(&mut self, iter: impl IntoIterator<Item=T>) -> Result<(), ArrayRetrievalError> {
+        if mem::size_of::<T>() != self.dtype.size_of() {
+            return Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        }
+        for val in iter.into_iter() {
+            self.data.extend_from_slice(bytemuck::bytes_of(&val));
+        }
+        Ok(())
+    }
+
+    /// Encode the data buffer to a byte array using the requested [`BinaryCompressionType`] to
+    /// compress it and then base64 encode it.
     pub fn encode_bytestring(&self, compression: BinaryCompressionType) -> Bytes {
         if self.compression == compression {
             log::trace!("Fast-path encoding {}:{}", self.name, self.dtype);
@@ -342,284 +388,6 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             _ => {
                 panic!("Compresion type {:?} is unsupported", compression)
             }
-        }
-    }
-
-    pub fn compress_zlib(bytestring: &[u8]) -> Bytes {
-        let result = Bytes::new();
-        let mut compressor = ZlibEncoder::new(result, Compression::best());
-        compressor.write_all(bytestring).expect("Error compressing");
-        compressor.finish().expect("Error compressing")
-    }
-
-    pub fn decompress_zlib(bytestring: &[u8]) -> Bytes {
-        let result = Bytes::new();
-        let mut decompressor = ZlibDecoder::new(result);
-        decompressor
-            .write_all(bytestring)
-            .unwrap_or_else(|e| panic!("Decompression error: {}", e));
-        decompressor
-            .finish()
-            .unwrap_or_else(|e| panic!("Decompression error: {}", e))
-    }
-
-    #[cfg(feature = "numpress")]
-    pub fn compress_numpress_linear(data: &[f64]) -> Result<Bytes, ArrayRetrievalError> {
-        if data.is_empty() {
-            return Ok(Bytes::new());
-        }
-        let scaling = numpress::optimal_scaling(data);
-        match numpress::numpress_compress(data, scaling) {
-            Ok(data) => Ok(data),
-            Err(e) => Err(ArrayRetrievalError::DecompressionError(e.to_string())),
-        }
-    }
-
-    #[cfg(feature = "numpress")]
-    pub fn compress_numpress_slof<T: numpress::AsFloat64>(data: &[T]) -> Result<Bytes, ArrayRetrievalError> {
-        let scaling = numpress::optimal_slof_fixed_point(data);
-        let mut buf = Bytes::new();
-        match numpress::encode_slof(data, &mut buf, scaling) {
-            Ok(_) => Ok(buf),
-            Err(e) => Err(ArrayRetrievalError::DecompressionError(e.to_string())),
-        }
-    }
-
-    #[cfg(feature = "numpress")]
-    pub fn decompress_numpress_linear(data: &[u8]) -> Result<Vec<f64>, ArrayRetrievalError> {
-        if data.is_empty() {
-            return Ok(Vec::new())
-        }
-        match numpress::numpress_decompress(data) {
-            Ok(data) => Ok(data),
-            Err(e) => Err(ArrayRetrievalError::DecompressionError(e.to_string())),
-        }
-    }
-
-    #[cfg(feature = "numpress")]
-    pub fn decompress_numpress_slof(data: &[u8], dtype: BinaryDataArrayType) -> Result<Cow<'static, [u8]>, ArrayRetrievalError> {
-        use log::trace;
-
-        let mut buf = Vec::new();
-        let decoded = match numpress::decode_slof(data, &mut buf) {
-            Ok(_) => buf,
-            Err(e) => return Err(ArrayRetrievalError::DecompressionError(e.to_string())),
-        };
-        trace!("Numpress SLOF decoded to {} points", decoded.len());
-        match dtype {
-            BinaryDataArrayType::Float64 => {
-                let view = vec_as_bytes(decoded);
-                Ok(Cow::Owned(view))
-            },
-            BinaryDataArrayType::Float32 => {
-                let n = decoded.len() * BinaryDataArrayType::Float32.size_of();
-                trace!("Mapping to {n} bytes for f32 storage");
-                let mut view: Vec<u8> = Vec::with_capacity(n);
-                for val in decoded {
-                    let val = val as f32;
-                    view.extend(bytemuck::bytes_of(&val))
-                }
-                Ok(Cow::Owned(view))
-            },
-            _ => {
-                Err(ArrayRetrievalError::DecompressionError(
-                    BinaryCompressionType::NumpressSLOF.unsupported_msg(Some(
-                        format!("Not compatible with {:?}", dtype).as_str(),
-                    )),
-                ))
-            }
-        }
-    }
-
-    #[cfg(feature = "zstd")]
-    pub(crate) fn compress_zstd(
-        bytestring: &[u8],
-        dtype: BinaryDataArrayType,
-        shuffle: bool,
-    ) -> Bytes {
-        let level: i32 = std::env::var("MZDATA_ZSTD_LEVEL")
-            .map(|v| v.parse())
-            .unwrap_or(Ok(zstd::DEFAULT_COMPRESSION_LEVEL))
-            .unwrap_or(zstd::DEFAULT_COMPRESSION_LEVEL);
-        if !shuffle {
-            return zstd::bulk::compress(bytestring, level).unwrap();
-        }
-        match dtype {
-            BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => {
-                zstd::bulk::compress(bytestring, level).unwrap()
-            }
-            BinaryDataArrayType::Float64 => {
-                zstd::bulk::compress(&transpose_f64(bytemuck::cast_slice(bytestring)), level)
-                    .unwrap()
-            }
-            BinaryDataArrayType::Float32 => {
-                zstd::bulk::compress(&transpose_f32(bytemuck::cast_slice(bytestring)), level)
-                    .unwrap()
-            }
-            BinaryDataArrayType::Int64 => {
-                zstd::bulk::compress(&transpose_i64(bytemuck::cast_slice(bytestring)), level)
-                    .unwrap()
-            }
-            BinaryDataArrayType::Int32 => {
-                zstd::bulk::compress(&transpose_i32(bytemuck::cast_slice(bytestring)), level)
-                    .unwrap()
-            }
-        }
-    }
-
-    #[cfg(feature = "zstd")]
-    pub(crate) fn compress_delta_zstd(
-        bytestring: &[u8],
-        dtype: BinaryDataArrayType,
-        shuffle: bool,
-    ) -> Bytes {
-        use bytemuck::cast_slice;
-
-        use super::delta_encoding;
-
-        match dtype {
-            BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => {
-                Self::compress_zstd(bytestring, dtype, shuffle)
-            }
-            BinaryDataArrayType::Float64 => {
-                let mut buf = cast_slice::<_, f64>(bytestring).to_vec();
-                delta_encoding(&mut buf);
-                Self::compress_zstd(cast_slice(&buf), dtype, shuffle)
-            }
-            BinaryDataArrayType::Float32 => {
-                let mut buf = cast_slice::<_, f32>(bytestring).to_vec();
-                delta_encoding(&mut buf);
-                Self::compress_zstd(cast_slice(&buf), dtype, shuffle)
-            }
-            BinaryDataArrayType::Int64 => {
-                let mut buf = cast_slice::<_, i64>(bytestring).to_vec();
-                delta_encoding(&mut buf);
-                Self::compress_zstd(cast_slice(&buf), dtype, shuffle)
-            }
-            BinaryDataArrayType::Int32 => {
-                let mut buf = cast_slice::<_, i32>(bytestring).to_vec();
-                delta_encoding(&mut buf);
-                Self::compress_zstd(cast_slice(&buf), dtype, shuffle)
-            }
-        }
-    }
-
-    #[cfg(feature = "zstd")]
-    pub fn compress_dict_zstd(bytestring: &[u8], dtype: BinaryDataArrayType) -> Bytes {
-        use super::encodings::dictionary_encoding;
-        log::trace!("Dictionary encoding {} bytes as {dtype}", bytestring.len());
-        if bytestring.is_empty() {
-            return Self::compress_zstd(&bytestring, dtype, false);
-        }
-        match dtype {
-            BinaryDataArrayType::Float64 => {
-                let compressed =
-                    dictionary_encoding(bytemuck::cast_slice::<u8, f64>(&bytestring))
-                        .unwrap();
-                let compressed = Self::compress_zstd(&compressed, dtype, false);
-                compressed
-            }
-            BinaryDataArrayType::Float32 => {
-                let compressed =
-                    dictionary_encoding(bytemuck::cast_slice::<u8, f32>(&bytestring))
-                        .unwrap();
-                let compressed = Self::compress_zstd(&compressed, dtype, false);
-                compressed
-            }
-            BinaryDataArrayType::Int64 => {
-                let compressed =
-                    dictionary_encoding(bytemuck::cast_slice::<u8, i64>(&bytestring))
-                        .unwrap();
-                let compressed = Self::compress_zstd(&compressed, dtype, false);
-                compressed
-            }
-            BinaryDataArrayType::Int32 => {
-                let compressed =
-                    dictionary_encoding(bytemuck::cast_slice::<u8, i32>(&bytestring))
-                        .unwrap();
-                let compressed = Self::compress_zstd(&compressed, dtype, false);
-                compressed
-            }
-            _ => {
-                let compressed =
-                    dictionary_encoding(bytemuck::cast_slice::<u8, u8>(&bytestring))
-                        .unwrap();
-                let compressed = Self::compress_zstd(&compressed, dtype, false);
-                compressed
-            }
-        }
-    }
-
-    #[cfg(feature = "zstd")]
-    pub(crate) fn decompress_zstd(data: &[u8], dtype: BinaryDataArrayType, shuffle: bool) -> Bytes {
-        let mut decoder = zstd::Decoder::new(std::io::Cursor::new(data)).unwrap();
-        let mut buf = Vec::new();
-        decoder.read_to_end(&mut buf).unwrap();
-        if !shuffle {
-            return buf;
-        }
-        match dtype {
-            BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => buf,
-            BinaryDataArrayType::Float64 => reverse_transpose_f64(&buf),
-            BinaryDataArrayType::Float32 => reverse_transpose_f32(&buf),
-            BinaryDataArrayType::Int64 => reverse_transpose_i64(&buf),
-            BinaryDataArrayType::Int32 => reverse_transpose_i32(&buf),
-        }
-    }
-
-    #[cfg(feature = "zstd")]
-    pub(crate) fn decompress_delta_zstd(
-        data: &[u8],
-        dtype: BinaryDataArrayType,
-        shuffle: bool,
-    ) -> Bytes {
-        use super::delta_decoding;
-
-        let mut delta = Self::decompress_zstd(data, dtype, shuffle);
-        match dtype {
-            BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => delta,
-            BinaryDataArrayType::Float64 => {
-                let buf = bytemuck::cast_slice_mut::<_, f64>(&mut delta);
-                delta_decoding(buf);
-                delta
-            }
-            BinaryDataArrayType::Float32 => {
-                let buf = bytemuck::cast_slice_mut::<_, f32>(&mut delta);
-                delta_decoding(buf);
-                delta
-            }
-            BinaryDataArrayType::Int64 => {
-                let buf = bytemuck::cast_slice_mut::<_, i64>(&mut delta);
-                delta_decoding(buf);
-                delta
-            }
-            BinaryDataArrayType::Int32 => {
-                let buf = bytemuck::cast_slice_mut::<_, i32>(&mut delta);
-                delta_decoding(buf);
-                delta
-            }
-        }
-    }
-
-    #[cfg(feature = "zstd")]
-    pub(crate) fn decompress_dict_zstd(bytestring: &[u8], dtype: BinaryDataArrayType) -> Bytes {
-        use super::encodings::dictionary_decoding;
-
-        let data = Self::decompress_zstd(bytestring, dtype, false);
-        match dtype {
-            BinaryDataArrayType::ASCII | BinaryDataArrayType::Unknown => dictionary_decoding(&data).unwrap(),
-            BinaryDataArrayType::Float64 => {
-                to_bytes(&dictionary_decoding::<f64>(&data).unwrap())
-            },
-            BinaryDataArrayType::Float32 => {
-                to_bytes(&dictionary_decoding::<f32>(&data).unwrap())
-            },
-            BinaryDataArrayType::Int64 => {
-                to_bytes(&dictionary_decoding::<i64>(&data).unwrap())
-            },
-            BinaryDataArrayType::Int32 => {
-                to_bytes(&dictionary_decoding::<i32>(&data).unwrap())
-            },
         }
     }
 
@@ -901,6 +669,288 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     /// Set the identifier referencing a [`DataProcessing`](crate::meta::DataProcessing)
     pub fn set_data_processing_reference(&mut self, data_processing_reference: Option<Box<str>>) {
         self.data_processing_reference = data_processing_reference;
+    }
+}
+
+
+/// [`DataArray`] implements several compression codecs, some of which require additional dependencies.
+impl DataArray {
+    pub fn compress_zlib(bytestring: &[u8]) -> Bytes {
+        let result = Bytes::new();
+        let mut compressor = ZlibEncoder::new(result, Compression::best());
+        compressor.write_all(bytestring).expect("Error compressing");
+        compressor.finish().expect("Error compressing")
+    }
+
+    pub fn decompress_zlib(bytestring: &[u8]) -> Bytes {
+        let result = Bytes::new();
+        let mut decompressor = ZlibDecoder::new(result);
+        decompressor
+            .write_all(bytestring)
+            .unwrap_or_else(|e| panic!("Decompression error: {}", e));
+        decompressor
+            .finish()
+            .unwrap_or_else(|e| panic!("Decompression error: {}", e))
+    }
+
+    #[cfg(feature = "numpress")]
+    pub fn compress_numpress_linear(data: &[f64]) -> Result<Bytes, ArrayRetrievalError> {
+        if data.is_empty() {
+            return Ok(Bytes::new());
+        }
+        let scaling = numpress::optimal_scaling(data);
+        match numpress::numpress_compress(data, scaling) {
+            Ok(data) => Ok(data),
+            Err(e) => Err(ArrayRetrievalError::DecompressionError(e.to_string())),
+        }
+    }
+
+    #[cfg(feature = "numpress")]
+    pub fn compress_numpress_slof<T: numpress::AsFloat64>(data: &[T]) -> Result<Bytes, ArrayRetrievalError> {
+        let scaling = numpress::optimal_slof_fixed_point(data);
+        let mut buf = Bytes::new();
+        match numpress::encode_slof(data, &mut buf, scaling) {
+            Ok(_) => Ok(buf),
+            Err(e) => Err(ArrayRetrievalError::DecompressionError(e.to_string())),
+        }
+    }
+
+    #[cfg(feature = "numpress")]
+    pub fn decompress_numpress_linear(data: &[u8]) -> Result<Vec<f64>, ArrayRetrievalError> {
+        if data.is_empty() {
+            return Ok(Vec::new())
+        }
+        match numpress::numpress_decompress(data) {
+            Ok(data) => Ok(data),
+            Err(e) => Err(ArrayRetrievalError::DecompressionError(e.to_string())),
+        }
+    }
+
+    #[cfg(feature = "numpress")]
+    pub fn decompress_numpress_slof(data: &[u8], dtype: BinaryDataArrayType) -> Result<Cow<'static, [u8]>, ArrayRetrievalError> {
+        use log::trace;
+
+        let mut buf = Vec::new();
+        let decoded = match numpress::decode_slof(data, &mut buf) {
+            Ok(_) => buf,
+            Err(e) => return Err(ArrayRetrievalError::DecompressionError(e.to_string())),
+        };
+        trace!("Numpress SLOF decoded to {} points", decoded.len());
+        match dtype {
+            BinaryDataArrayType::Float64 => {
+                let view = vec_as_bytes(decoded);
+                Ok(Cow::Owned(view))
+            },
+            BinaryDataArrayType::Float32 => {
+                let n = decoded.len() * BinaryDataArrayType::Float32.size_of();
+                trace!("Mapping to {n} bytes for f32 storage");
+                let mut view: Vec<u8> = Vec::with_capacity(n);
+                for val in decoded {
+                    let val = val as f32;
+                    view.extend(bytemuck::bytes_of(&val))
+                }
+                Ok(Cow::Owned(view))
+            },
+            _ => {
+                Err(ArrayRetrievalError::DecompressionError(
+                    BinaryCompressionType::NumpressSLOF.unsupported_msg(Some(
+                        format!("Not compatible with {:?}", dtype).as_str(),
+                    )),
+                ))
+            }
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    pub(crate) fn compress_zstd(
+        bytestring: &[u8],
+        dtype: BinaryDataArrayType,
+        shuffle: bool,
+    ) -> Bytes {
+        let level: i32 = std::env::var("MZDATA_ZSTD_LEVEL")
+            .map(|v| v.parse())
+            .unwrap_or(Ok(zstd::DEFAULT_COMPRESSION_LEVEL))
+            .unwrap_or(zstd::DEFAULT_COMPRESSION_LEVEL);
+        if !shuffle {
+            return zstd::bulk::compress(bytestring, level).unwrap();
+        }
+        match dtype {
+            BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => {
+                zstd::bulk::compress(bytestring, level).unwrap()
+            }
+            BinaryDataArrayType::Float64 => {
+                zstd::bulk::compress(&transpose_f64(bytemuck::cast_slice(bytestring)), level)
+                    .unwrap()
+            }
+            BinaryDataArrayType::Float32 => {
+                zstd::bulk::compress(&transpose_f32(bytemuck::cast_slice(bytestring)), level)
+                    .unwrap()
+            }
+            BinaryDataArrayType::Int64 => {
+                zstd::bulk::compress(&transpose_i64(bytemuck::cast_slice(bytestring)), level)
+                    .unwrap()
+            }
+            BinaryDataArrayType::Int32 => {
+                zstd::bulk::compress(&transpose_i32(bytemuck::cast_slice(bytestring)), level)
+                    .unwrap()
+            }
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    pub(crate) fn compress_delta_zstd(
+        bytestring: &[u8],
+        dtype: BinaryDataArrayType,
+        shuffle: bool,
+    ) -> Bytes {
+        use bytemuck::cast_slice;
+
+        use super::delta_encoding;
+
+        match dtype {
+            BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => {
+                Self::compress_zstd(bytestring, dtype, shuffle)
+            }
+            BinaryDataArrayType::Float64 => {
+                let mut buf = cast_slice::<_, f64>(bytestring).to_vec();
+                delta_encoding(&mut buf);
+                Self::compress_zstd(cast_slice(&buf), dtype, shuffle)
+            }
+            BinaryDataArrayType::Float32 => {
+                let mut buf = cast_slice::<_, f32>(bytestring).to_vec();
+                delta_encoding(&mut buf);
+                Self::compress_zstd(cast_slice(&buf), dtype, shuffle)
+            }
+            BinaryDataArrayType::Int64 => {
+                let mut buf = cast_slice::<_, i64>(bytestring).to_vec();
+                delta_encoding(&mut buf);
+                Self::compress_zstd(cast_slice(&buf), dtype, shuffle)
+            }
+            BinaryDataArrayType::Int32 => {
+                let mut buf = cast_slice::<_, i32>(bytestring).to_vec();
+                delta_encoding(&mut buf);
+                Self::compress_zstd(cast_slice(&buf), dtype, shuffle)
+            }
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    pub fn compress_dict_zstd(bytestring: &[u8], dtype: BinaryDataArrayType) -> Bytes {
+        use super::encodings::dictionary_encoding;
+        log::trace!("Dictionary encoding {} bytes as {dtype}", bytestring.len());
+        if bytestring.is_empty() {
+            return Self::compress_zstd(&bytestring, dtype, false);
+        }
+        match dtype {
+            BinaryDataArrayType::Float64 => {
+                let compressed =
+                    dictionary_encoding(bytemuck::cast_slice::<u8, f64>(&bytestring))
+                        .unwrap();
+                let compressed = Self::compress_zstd(&compressed, dtype, false);
+                compressed
+            }
+            BinaryDataArrayType::Float32 => {
+                let compressed =
+                    dictionary_encoding(bytemuck::cast_slice::<u8, f32>(&bytestring))
+                        .unwrap();
+                let compressed = Self::compress_zstd(&compressed, dtype, false);
+                compressed
+            }
+            BinaryDataArrayType::Int64 => {
+                let compressed =
+                    dictionary_encoding(bytemuck::cast_slice::<u8, i64>(&bytestring))
+                        .unwrap();
+                let compressed = Self::compress_zstd(&compressed, dtype, false);
+                compressed
+            }
+            BinaryDataArrayType::Int32 => {
+                let compressed =
+                    dictionary_encoding(bytemuck::cast_slice::<u8, i32>(&bytestring))
+                        .unwrap();
+                let compressed = Self::compress_zstd(&compressed, dtype, false);
+                compressed
+            }
+            _ => {
+                let compressed =
+                    dictionary_encoding(bytemuck::cast_slice::<u8, u8>(&bytestring))
+                        .unwrap();
+                let compressed = Self::compress_zstd(&compressed, dtype, false);
+                compressed
+            }
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    pub(crate) fn decompress_zstd(data: &[u8], dtype: BinaryDataArrayType, shuffle: bool) -> Bytes {
+        let mut decoder = zstd::Decoder::new(std::io::Cursor::new(data)).unwrap();
+        let mut buf = Vec::new();
+        decoder.read_to_end(&mut buf).unwrap();
+        if !shuffle {
+            return buf;
+        }
+        match dtype {
+            BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => buf,
+            BinaryDataArrayType::Float64 => reverse_transpose_f64(&buf),
+            BinaryDataArrayType::Float32 => reverse_transpose_f32(&buf),
+            BinaryDataArrayType::Int64 => reverse_transpose_i64(&buf),
+            BinaryDataArrayType::Int32 => reverse_transpose_i32(&buf),
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    pub(crate) fn decompress_delta_zstd(
+        data: &[u8],
+        dtype: BinaryDataArrayType,
+        shuffle: bool,
+    ) -> Bytes {
+        use super::delta_decoding;
+
+        let mut delta = Self::decompress_zstd(data, dtype, shuffle);
+        match dtype {
+            BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => delta,
+            BinaryDataArrayType::Float64 => {
+                let buf = bytemuck::cast_slice_mut::<_, f64>(&mut delta);
+                delta_decoding(buf);
+                delta
+            }
+            BinaryDataArrayType::Float32 => {
+                let buf = bytemuck::cast_slice_mut::<_, f32>(&mut delta);
+                delta_decoding(buf);
+                delta
+            }
+            BinaryDataArrayType::Int64 => {
+                let buf = bytemuck::cast_slice_mut::<_, i64>(&mut delta);
+                delta_decoding(buf);
+                delta
+            }
+            BinaryDataArrayType::Int32 => {
+                let buf = bytemuck::cast_slice_mut::<_, i32>(&mut delta);
+                delta_decoding(buf);
+                delta
+            }
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    pub(crate) fn decompress_dict_zstd(bytestring: &[u8], dtype: BinaryDataArrayType) -> Bytes {
+        use super::encodings::dictionary_decoding;
+
+        let data = Self::decompress_zstd(bytestring, dtype, false);
+        match dtype {
+            BinaryDataArrayType::ASCII | BinaryDataArrayType::Unknown => dictionary_decoding(&data).unwrap(),
+            BinaryDataArrayType::Float64 => {
+                to_bytes(&dictionary_decoding::<f64>(&data).unwrap())
+            },
+            BinaryDataArrayType::Float32 => {
+                to_bytes(&dictionary_decoding::<f32>(&data).unwrap())
+            },
+            BinaryDataArrayType::Int64 => {
+                to_bytes(&dictionary_decoding::<i64>(&data).unwrap())
+            },
+            BinaryDataArrayType::Int32 => {
+                to_bytes(&dictionary_decoding::<i32>(&data).unwrap())
+            },
+        }
     }
 }
 

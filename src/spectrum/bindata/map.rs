@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::hash_map::{Iter, IterMut};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 
 #[cfg(feature = "parallelism")]
@@ -209,44 +209,8 @@ impl BinaryArrayMap {
         Ok(mz_array)
     }
 
-    /// Sort all the arrays in the map by `name` if they are the same length
-    pub fn sort_by_array(&mut self, name: &ArrayType) -> Result<(), ArrayRetrievalError> {
-        let query_axis = self
-            .get(name)
-            .ok_or_else(|| ArrayRetrievalError::NotFound(name.clone()))?;
-        macro_rules! sort_mask {
-            ($conv:expr, $cmp:expr) => {{
-                let vals = $conv?;
-                if vals.is_sorted() {
-                    return Ok(());
-                }
-                let n = vals.len();
-                let mut mask: Vec<usize> = (0..n).into_iter().collect();
-                mask.sort_by(|i, j| {
-                    let a = vals[*i];
-                    let b = vals[*j];
-                    $cmp(&a, &b)
-                });
-                (mask, n)
-            }};
-        }
-        let (mut mask, n) = match query_axis.dtype() {
-            BinaryDataArrayType::Float64 => {
-                sort_mask!(query_axis.to_f64(), f64::total_cmp)
-            }
-            BinaryDataArrayType::Float32 => {
-                sort_mask!(query_axis.to_f32(), f32::total_cmp)
-            }
-            BinaryDataArrayType::Int64 => {
-                sort_mask!(query_axis.to_i64(), i64::cmp)
-            }
-            BinaryDataArrayType::Int32 => {
-                sort_mask!(query_axis.to_i32(), i32::cmp)
-            }
-            BinaryDataArrayType::ASCII => todo!(),
-            BinaryDataArrayType::Unknown => todo!(),
-        };
-
+    pub fn sort_from_indices(&mut self, mut mask: Vec<usize>) -> Result<(), ArrayRetrievalError> {
+        let n = mask.len();
         const TOMBSTONE: usize = usize::MAX;
         for idx in 0..n {
             if mask[idx] != TOMBSTONE {
@@ -287,6 +251,47 @@ impl BinaryArrayMap {
             }
         }
         Ok(())
+    }
+
+    /// Sort all the arrays in the map by `name` if they are the same length
+    pub fn sort_by_array(&mut self, name: &ArrayType) -> Result<(), ArrayRetrievalError> {
+        let query_axis = self
+            .get(name)
+            .ok_or_else(|| ArrayRetrievalError::NotFound(name.clone()))?;
+        macro_rules! sort_mask {
+            ($conv:expr, $cmp:expr) => {{
+                let vals = $conv?;
+                if vals.is_sorted() {
+                    return Ok(());
+                }
+                let n = vals.len();
+                let mut mask: Vec<usize> = (0..n).into_iter().collect();
+                mask.sort_by(|i, j| {
+                    let a = vals[*i];
+                    let b = vals[*j];
+                    $cmp(&a, &b)
+                });
+                (mask, n)
+            }};
+        }
+        let (mask, _) = match query_axis.dtype() {
+            BinaryDataArrayType::Float64 => {
+                sort_mask!(query_axis.to_f64(), f64::total_cmp)
+            }
+            BinaryDataArrayType::Float32 => {
+                sort_mask!(query_axis.to_f32(), f32::total_cmp)
+            }
+            BinaryDataArrayType::Int64 => {
+                sort_mask!(query_axis.to_i64(), i64::cmp)
+            }
+            BinaryDataArrayType::Int32 => {
+                sort_mask!(query_axis.to_i32(), i32::cmp)
+            }
+            BinaryDataArrayType::ASCII => todo!(),
+            BinaryDataArrayType::Unknown => todo!(),
+        };
+
+        self.sort_from_indices(mask)
     }
 
     /// Get a mutable reference to the m/z array if it is present
@@ -615,130 +620,63 @@ impl BinaryArrayMap3D {
     /// any [`DataArray`] cannot be decoded, or if an expected array is absent.
     pub fn unstack(&self) -> Result<BinaryArrayMap, ArrayRetrievalError> {
         let mut destination = self.additional_arrays.clone();
-        if log::log_enabled!(log::Level::Trace) {
-            let dims = self.iter().map(|(_, arr)| arr.iter().map(|v| v.0.clone()).collect::<HashSet<_>>()).reduce(|mut acc, v| {
-                for k in v {
-                    acc.insert(k);
-                }
-                acc
-            }).unwrap_or_default();
-            let sizes: Vec<_> = self.iter().map(|v| v.1.mzs().map(|a| a.len()).unwrap_or_default()).collect();
 
-            log::trace!("Unstacking 3D array with {dims:?} with sizes {sizes:?} over {} bins", self.ion_mobility_dimension.len());
-        }
         let mut im_dim =
             DataArray::from_name_and_type(&self.ion_mobility_type, BinaryDataArrayType::Float64);
         im_dim.unit = self.ion_mobility_unit;
+        let mut sizes = Vec::new();
+        let mut mz_size = None;
+        for (layer, im) in self.arrays.iter().zip(self.ion_mobility_dimension.iter()) {
+            sizes.clear();
+            for (key, array) in layer.iter() {
+                match destination.get_mut(&key) {
+                    Some(sink) => {
+                        sink.extend_raw(&array.data).inspect_err(|e| {
+                            log::error!("Failed to extend {key:?}: {e}");
+                        })?;
+                    },
+                    None => {
+                        destination.add(array.clone());
+                    },
+                }
+                if matches!(key, ArrayType::MZArray) {
+                    mz_size = Some(array.data_len()?);
+                } else {
+                    sizes.push((key, array.data_len()?));
+                }
+            }
+            if let Some(mz_size) = mz_size {
+                im_dim.extend_iter(std::iter::repeat_n(*im, mz_size))?;
+            } else {
+                if let Some((_, size)) = sizes.first() {
+                    im_dim.extend_iter(std::iter::repeat_n(*im, *size))?;
+                }
+            }
+        }
+
+        let sorter = if let Some(mz_array) = destination.get(&ArrayType::MZArray) {
+            let mzs = mz_array.to_f64()?;
+            let ims = im_dim.to_f64()?;
+
+            let mut indices: Vec<usize> = Vec::with_capacity(mzs.len());
+            indices.extend(0..mzs.len());
+            indices.sort_by(|i, j| {
+                mzs[*i].total_cmp(&mzs[*j]).then_with(|| ims[*i].total_cmp(&ims[*j]))
+            });
+            Some(indices)
+        } else {
+            None
+        };
+
+        let final_size = im_dim.data_len()?;
 
         destination.add(im_dim);
 
-        let mut current_mz = f64::INFINITY;
-        let mut max_mz = f64::NEG_INFINITY;
-        let mut mz_axes = Vec::new();
-        let mut indices = Vec::new();
-
-        // Prepare the destination to have a waiting array of all types in the layers of this
-        // array stack.
-        let mut total_points = 0;
-        for layer in self.arrays.iter() {
-            for (key, array) in layer.iter() {
-                if !destination.has_array(key) {
-                    let mut new_array = DataArray::from_name_and_type(key, array.dtype);
-                    new_array.unit = array.unit;
-                    new_array.params = array.params.clone();
-                    new_array.compression = BinaryCompressionType::Decoded;
-                    destination.add(new_array);
-                }
-            }
-            let mzs = layer.mzs()?;
-            total_points += mzs.len();
-            if let Some(mz) = mzs.first() {
-                current_mz = current_mz.min(*mz);
-            }
-            if let Some(mz) = mzs.last() {
-                max_mz = max_mz.max(*mz);
-            }
-            mz_axes.push(mzs);
-            indices.push(0usize);
+        if let Some(sorter)  = sorter {
+            destination.sort_from_indices(sorter)?;
+        } else if final_size > 0 {
+            log::debug!("Unsorted unstack");
         }
-
-        let mut n_points_added = 0;
-        while current_mz <= max_mz {
-            let mut next_mz = f64::INFINITY;
-            for (bin_i, (im, layer)) in self.iter().enumerate() {
-                if let Some(i) = indices.get(bin_i).copied() {
-                    if let Some(mz) = mz_axes[bin_i].get(i).copied() {
-                        if (mz - current_mz).abs() < 1e-12 {
-                            n_points_added += 1;
-                            destination
-                                .get_mut(&ArrayType::MZArray)
-                                .as_mut()
-                                .unwrap()
-                                .push(mz)?;
-                            destination
-                                .get_mut(&self.ion_mobility_type)
-                                .as_mut()
-                                .unwrap()
-                                .push(im)?;
-                            for (key, array) in layer.iter() {
-                                if *key == ArrayType::MZArray {
-                                    continue;
-                                }
-                                match array.dtype() {
-                                    BinaryDataArrayType::Unknown => panic!(
-                                        "Cannot re-sort opaque or unknown dimension data types"
-                                    ),
-                                    BinaryDataArrayType::ASCII => {
-                                        let val = array.decode()?[i];
-                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                    }
-                                    BinaryDataArrayType::Float64 => {
-                                        let val = array.to_f64()?[i];
-                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                    }
-                                    BinaryDataArrayType::Float32 => {
-                                        let val = array.to_f32()?[i];
-                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                    }
-                                    BinaryDataArrayType::Int64 => {
-                                        let val = array.to_i64()?[i];
-                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                    }
-                                    BinaryDataArrayType::Int32 => {
-                                        let val = array.to_i32()?[i];
-                                        destination.get_mut(key).as_mut().unwrap().push(val)?;
-                                    }
-                                }
-                            }
-                            indices[bin_i] += 1;
-                            if let Some(mz) = mz_axes[bin_i].get(i + 1).copied() {
-                                next_mz = mz.min(next_mz);
-                            }
-                        } else if mz > current_mz {
-                            next_mz = mz.min(next_mz);
-                        }
-                    }
-                }
-            }
-            current_mz = next_mz;
-        }
-
-        if log::log_enabled!(log::Level::Trace) {
-            log::trace!("Last m/z visited {current_mz}, max m/z {max_mz}");
-
-            for (mzs, ind) in mz_axes.iter().zip(indices.iter()) {
-                if let Some(next_mz) = mzs.get(*ind) {
-                    log::trace!("Handled {ind} entries of slice with {} elements, next element is {next_mz}", mzs.len());
-                }
-            }
-        }
-
-        debug_assert_eq!(
-            n_points_added,
-            total_points,
-            "Expected to have unstacked {total_points} from {} arrays, got {n_points_added} instead", mz_axes.len()
-        );
-
         Ok(destination)
     }
 
@@ -917,7 +855,6 @@ mod test {
         let unstacked_n = unstacked.mzs()?.len();
 
         assert_eq!(unstacked_n, n);
-
         Ok(())
     }
 }
