@@ -86,16 +86,18 @@ impl<'a> FrameToArraysMapper<'a> {
             let drift = self.metadata.im_converter.convert((i + first_scan) as u32);
             im_dimension.push(drift);
 
-            let mz_array = DataArray::wrap(
+            let mut mz_array = DataArray::wrap(
                 &ArrayType::MZArray,
                 BinaryDataArrayType::Float64,
                 mz_array_bytes,
             );
-            let intensity_array = DataArray::wrap(
+            mz_array.unit = Unit::MZ;
+            let mut intensity_array = DataArray::wrap(
                 &ArrayType::IntensityArray,
                 BinaryDataArrayType::Float32,
                 intensity_array_bytes,
             );
+            intensity_array.unit = Unit::DetectorCounts;
 
             let mut arrays_at = BinaryArrayMap::new();
             arrays_at.add(mz_array);
