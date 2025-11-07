@@ -996,21 +996,23 @@ pub(crate) mod sealed {
 
             if let Some(mz) = data.mz() {
                 let buffer = mz.bytes();
-                let mz_array = DataArray::wrap(
+                let mut mz_array = DataArray::wrap(
                     &ArrayType::MZArray,
                     BinaryDataArrayType::Float64,
                     buffer.to_vec(),
                 );
+                mz_array.unit = Unit::MZ;
                 arrays.add(mz_array)
             }
 
             if let Some(intensity) = data.intensity() {
                 let buffer = intensity.bytes();
-                let intensity_array = DataArray::wrap(
+                let mut intensity_array = DataArray::wrap(
                     &ArrayType::IntensityArray,
                     BinaryDataArrayType::Float32,
                     buffer.to_vec(),
                 );
+                intensity_array.unit = Unit::DetectorCounts;
                 arrays.add(intensity_array);
             }
             arrays
