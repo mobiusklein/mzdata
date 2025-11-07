@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.62.1] - 2025-11-07
+
+### Added
+
+- Add units to Thermo reader arrays
+
 ## [0.62.0] - 2025-11-06
 
 ### Fixed
@@ -939,7 +945,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.62.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.62.1...HEAD
+[0.62.1]: https://github.com/mobiusklein/mzdata/compare/v0.62.0...v0.62.1
 [0.62.0]: https://github.com/mobiusklein/mzdata/compare/v0.61.0...v0.62.0
 [0.61.0]: https://github.com/mobiusklein/mzdata/compare/v0.60.3...v0.61.0
 [0.60.3]: https://github.com/mobiusklein/mzdata/compare/v0.60.2...v0.60.3
