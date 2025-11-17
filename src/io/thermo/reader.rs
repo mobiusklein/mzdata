@@ -241,25 +241,7 @@ pub(crate) mod sealed {
 
             if extra_data {
                 let data = self.handle.get_extended_spectrum_data(index, true)?;
-                if let Some(baseline) = data.baseline() {
-                    let buffer = to_bytes(baseline.as_ref());
-                    let intensity_array = DataArray::wrap(
-                        &ArrayType::BaselineArray,
-                        BinaryDataArrayType::Float32,
-                        buffer,
-                    );
-                    arrays.add(intensity_array);
-                }
-
-                if let Some(noise) = data.noise() {
-                    let buffer = to_bytes(noise.as_ref());
-                    let intensity_array = DataArray::wrap(
-                        &ArrayType::SignalToNoiseArray,
-                        BinaryDataArrayType::Float32,
-                        buffer,
-                    );
-                    arrays.add(intensity_array);
-                }
+                self.populate_extended_data(&mut arrays, &data);
             }
 
             Some(arrays)
@@ -375,12 +357,57 @@ pub(crate) mod sealed {
         /// Get a status log as a [`Chromatogram`]
         pub fn get_status_log_trace_by_name(&self, trace_id: &str) -> Option<Chromatogram> {
             let temperature_pattern = regex::Regex::new(r#"Temp\S?\s|Temperature|°C"#).unwrap();
+            let pressure_pattern = regex::Regex::new(r#"\(psi\)"#).unwrap();
+
+            macro_rules! create_data_array {
+                ($descr:ident, $log:ident, $dtype:expr) => {
+                    match $descr.chromatogram_type {
+                        ChromatogramType::TemperatureChromatogram => {
+                            let data = $log.values();
+                            let mut array = DataArray::from_name_type_size(
+                                &ArrayType::TemperatureArray,
+                                $dtype,
+                                data.len(),
+                            );
+                            array.unit = Unit::Celsius;
+                            array.extend(&data).unwrap();
+                            array
+                        }
+                        ChromatogramType::PressureChromatogram => {
+                            let data = $log.values();
+                            let mut array = DataArray::from_name_type_size(
+                                &ArrayType::PressureArray,
+                                $dtype,
+                                data.len(),
+                            );
+                            array.unit = Unit::Psi;
+                            array.extend(&data).unwrap();
+                            array
+                        },
+                        _ => {
+                            let data = $log.values();
+                            let name = $log.name.strip_suffix(":").unwrap_or_else(|| &$log.name);
+                            let mut array = DataArray::from_name_type_size(
+                                &ArrayType::nonstandard(&name),
+                                $dtype,
+                                data.len(),
+                            );
+                            array.extend(&data).unwrap();
+                            array
+                        }
+                    }
+                };
+            }
+
             if let Some(logs) = self.handle.get_status_logs() {
                 macro_rules! make_description {
                     ($descr:ident, $log:ident) => {
-                        $descr.id = $log.name.clone();
+                        let name = $log.name.strip_suffix(":").unwrap_or_else(|| &$log.name).to_string();
+                        $descr.id = name;
                         if temperature_pattern.is_match(&($log.name)) {
                             $descr.chromatogram_type = ChromatogramType::TemperatureChromatogram;
+                        } else if pressure_pattern.is_match(&($log.name)) {
+                            $descr.chromatogram_type = ChromatogramType::PressureChromatogram;
                         }
                     };
                 }
@@ -428,15 +455,7 @@ pub(crate) mod sealed {
                             let mut arrays = BinaryArrayMap::new();
                             make_description!(descr, log);
                             make_arrays!(log, arrays);
-
-                            let data = log.values();
-                            let mut array = DataArray::from_name_type_size(
-                                &ArrayType::nonstandard(&log.name),
-                                BinaryDataArrayType::Float64,
-                                data.len(),
-                            );
-
-                            array.extend(&data).unwrap();
+                            let array = create_data_array!(descr, log, BinaryDataArrayType::Float64);
                             arrays.add(array);
                             Some(Chromatogram::new(descr, arrays))
                         } else {
@@ -449,15 +468,7 @@ pub(crate) mod sealed {
                             let mut arrays = BinaryArrayMap::new();
                             make_description!(descr, log);
                             make_arrays!(log, arrays);
-
-                            let data = log.values();
-                            let mut array = DataArray::from_name_type_size(
-                                &ArrayType::nonstandard(&log.name),
-                                BinaryDataArrayType::Int64,
-                                data.len(),
-                            );
-
-                            array.extend(&data).unwrap();
+                            let array = create_data_array!(descr, log, BinaryDataArrayType::Int64);
                             arrays.add(array);
                             Some(Chromatogram::new(descr, arrays))
                         } else {
@@ -1033,22 +1044,34 @@ pub(crate) mod sealed {
 
             if let Some(baseline) = data.baseline() {
                 let buffer = to_bytes(baseline.as_ref());
-                let intensity_array = DataArray::wrap(
+                let baseline_array = DataArray::wrap(
                     &ArrayType::BaselineArray,
                     BinaryDataArrayType::Float32,
                     buffer,
                 );
-                arrays.add(intensity_array);
+                arrays.add(baseline_array);
             }
 
             if let Some(noise) = data.noise() {
                 let buffer = to_bytes(noise.as_ref());
-                let intensity_array = DataArray::wrap(
+                let snr_array = DataArray::wrap(
                     &ArrayType::SignalToNoiseArray,
                     BinaryDataArrayType::Float32,
                     buffer,
                 );
-                arrays.add(intensity_array);
+                arrays.add(snr_array);
+            }
+
+            // The resolution array is only present on FT mass analyzers where the resolution
+            // is a function of m/z.
+            if let Some(resolution) = data.resolution() {
+                let buffer = to_bytes(resolution.as_ref());
+                let resolution_array = DataArray::wrap(
+                    &ArrayType::ResolutionArray,
+                    BinaryDataArrayType::Float32,
+                    buffer,
+                );
+                arrays.add(resolution_array);
             }
         }
 
@@ -1735,7 +1758,9 @@ mod test {
 
         let spec = reader.get_spectrum_by_index(0).unwrap();
         let arrays = spec.arrays.as_ref().unwrap();
-        arrays.iter().find(|(k, _)| **k == ArrayType::ChargeArray);
+        assert!(arrays.iter().find(|(k, _)| **k == ArrayType::ChargeArray).is_some());
+        assert!(arrays.iter().find(|(k, _)| **k == ArrayType::SignalToNoiseArray).is_some());
+        assert!(arrays.iter().find(|(k, _)| **k == ArrayType::BaselineArray).is_some());
         Ok(())
     }
 }
