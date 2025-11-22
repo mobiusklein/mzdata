@@ -423,7 +423,7 @@ crate::cvmap! {
         #[doc = "Thermo RAW format - Thermo Scientific RAW file format."]
         ThermoRAW,
         #[term(cv=MS, accession=1000564, name="PSI mzData format", flags={0}, parents={["MS:1000560"]})]
-        #[doc = "PSI mzData format - Proteomics Standards Inititative mzData file format."]
+        #[doc = "PSI mzData format - Proteomics Standards Initiative mzData file format."]
         PSIMzData,
         #[term(cv=MS, accession=1000565, name="Micromass PKL format", flags={0}, parents={["MS:1000560"]})]
         #[doc = "Micromass PKL format - Micromass PKL file format."]
@@ -435,7 +435,7 @@ crate::cvmap! {
         #[doc = "Bruker/Agilent YEP format - Bruker/Agilent YEP file format."]
         BrukerAgilentYEP,
         #[term(cv=MS, accession=1000584, name="mzML format", flags={0}, parents={["MS:1000560"]})]
-        #[doc = "mzML format - Proteomics Standards Inititative mzML file format."]
+        #[doc = "mzML format - Proteomics Standards Initiative mzML file format."]
         MzML,
         #[term(cv=MS, accession=1000613, name="DTA format", flags={0}, parents={["MS:1000560"]})]
         #[doc = "DTA format - SEQUEST DTA file format."]
@@ -545,8 +545,14 @@ crate::cvmap! {
         #[term(cv=MS, accession=1003448, name="SCIEX WIFF2 format", flags={0}, parents={["MS:1000560"]})]
         #[doc = "SCIEX WIFF2 format - SCIEX WIFF2 file format."]
         SCIEXWIFF2,
+        #[term(cv=MS, accession=1003610, name="mzPeak format", flags={0}, parents={["MS:1000560"]})]
+        #[doc = "mzPeak format - Proteomics Standards Initiatve mzPeak file format."]
+        MzPeak,
+        #[term(cv=MS, accession=1003611, name="imzML format", flags={0}, parents={["MS:1000560"]})]
+        #[doc = "imzML format - IMSIS imzML imaging file format."]
+        ImzML,
     }
-    //[[[end]]] (sum: tevATyl5zS)
+    //[[[end]]] (sum: QVYejnNt0n)
 }
 
 #[allow(unused, clippy::upper_case_acronyms)]

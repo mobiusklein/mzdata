@@ -387,7 +387,7 @@ crate::cvmap! {
         #[doc="microelectrospray - Electrospray ionization at a solvent flow rate of 300-800 nL/min where the flow is a result of a mechanical pump. See nanoelectrospray."]
         Microelectrospray,
         #[term(cv=MS, accession=1000398, name="nanoelectrospray", flags={0}, parents={["MS:1000073"]})]
-        #[doc="nanoelectrospray - Electrospray ionization at a flow rate less than ~25 nL/min. Nanoelectrospray is synonymous with nanospray. The flow is dependent on the potenial on the tip of the electrospray needle and/or a gas presure to push the sample through the needle. See also electrospray ionization and microelectrospray."]
+        #[doc="nanoelectrospray - Electrospray ionization at a flow rate less than ~25 nL/min. Nanoelectrospray is synonymous with nanospray. The flow is dependent on the potential on the tip of the electrospray needle and/or a gas pressure to push the sample through the needle. See also electrospray ionization and microelectrospray."]
         Nanoelectrospray,
         #[term(cv=MS, accession=1000399, name="penning ionization", flags={0}, parents={["MS:1000008"]})]
         #[doc="penning ionization - Ionization that occurs through the interaction of two or more neutral gaseous species, at least one of which is internally excited."]
@@ -432,7 +432,7 @@ crate::cvmap! {
         #[doc="proton transfer charge reduction - Process to transfer one or more protons from a multiply charged cation (peptide or protein ion) to a proton acceptor anion or neutral basic compound, thereby reducing the charge of the original analyte."]
         ProtonTransferChargeReduction,
     }
-    // [[[end]]] (sum: sgB0zq2JzK)
+    // [[[end]]] (sum: unkE82aPAS)
 }
 
 crate::cvmap! {

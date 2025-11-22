@@ -1252,6 +1252,21 @@ crate::cvmap! {
         #[term(cv=MS, accession=1003447, name="SCIEX MS Data Converter", flags={2}, parents={["MS:1000690", "MS:1001457"]})]
         #[doc="SCIEX MS Data Converter - A software for converting SCIEX wiff or wiff2 format to mzML."]
         SCIEXMSDataConverter,
+        #[term(cv=MS, accession=1003607, name="timsControl", flags={4}, parents={["MS:1000692", "MS:1001455"]})]
+        #[doc="timsControl - Bruker software for data acquisition."]
+        TimsControl,
+        #[term(cv=MS, accession=1003608, name="MetaboScape", flags={3}, parents={["MS:1000692", "MS:1001456", "MS:1001457"]})]
+        #[doc="MetaboScape - Bruker software for untargeted metabolomics and lipidomics data analysis."]
+        MetaboScape,
+        #[term(cv=MS, accession=1003609, name="TASQ", flags={3}, parents={["MS:1000692", "MS:1001456", "MS:1001457"]})]
+        #[doc="TASQ - Bruker software for target screening and quantitation."]
+        TASQ,
+        #[term(cv=MS, accession=1003612, name="InstaNovo", flags={1}, parents={["MS:1001456"]})]
+        #[doc="InstaNovo - InstaNovo is a deep learning based tool using a Transformer architecture for de novo peptide sequencing."]
+        InstaNovo,
+        #[term(cv=MS, accession=1003613, name="InstaNovo+", flags={1}, parents={["MS:1001456"]})]
+        #[doc="InstaNovo+ - InstaNovo+ is a deep learning based tool using a Diffusion architecture for de novo peptide sequencing."]
+        InstaNovoplus,
         #[term(cv=MS, accession=4000151, name="MsQuality", flags={1}, parents={["MS:1001456"]})]
         #[doc="MsQuality - MsQuality – an interoperable open-source package for the calculation of standardized quality metrics of mass spectrometry data."]
         MsQuality,
@@ -1259,7 +1274,7 @@ crate::cvmap! {
         #[doc="DIAMetric - DIAMetric is a Data-Independent Acquisition Quality Metric Generator."]
         DIAMetric,
     }
-    //[[[end]]] (sum: hwFwvphdPv)
+    //[[[end]]] (sum: mF8JQzpJfO)
 }
 
 #[cfg(test)]
