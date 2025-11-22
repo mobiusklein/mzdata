@@ -1275,7 +1275,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
         self.get_chromatogram_by_index(index)
     }
 
-    fn chromatogram_count(&self) -> usize {
+    fn count_chromatograms(&self) -> usize {
         self.chromatogram_index.len()
     }
 }
