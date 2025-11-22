@@ -899,6 +899,10 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             _ => None,
         }
     }
+
+    fn count_chromatograms(&self) -> usize {
+        2
+    }
 }
 
 impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge> Iterator
@@ -1208,6 +1212,10 @@ impl<
 
     fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
         self.frame_reader.get_chromatogram_by_index(index)
+    }
+
+    fn count_chromatograms(&self) -> usize {
+        self.frame_reader.count_chromatograms()
     }
 }
 

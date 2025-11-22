@@ -1121,6 +1121,10 @@ impl<
     fn get_chromatogram_by_index(&mut self, _: usize) -> Option<Chromatogram> {
         None
     }
+
+    fn count_chromatograms(&self) -> usize {
+        0
+    }
 }
 
 pub type MGFReader<R> = MGFReaderType<R, CentroidPeak, DeconvolutedPeak>;

@@ -1,5 +1,5 @@
 //! Reader implementation for Bruker's TDF data files, [`TDFFrameReaderType`] for ion mobility frames
-//! and [`TDFSpectrumReaderType`] for sumed or sliced spectra.
+//! and [`TDFSpectrumReaderType`] for summed or sliced spectra.
 //!
 //! **Requires the `bruker_tdf` feature**
 //!

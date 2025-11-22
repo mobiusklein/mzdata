@@ -1791,6 +1791,10 @@ impl<
     fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
         self.get_chromatogram_by_index(index)
     }
+
+    fn count_chromatograms(&self) -> usize {
+        self.chromatogram_index.len()
+    }
 }
 
 /// [`MzMLReaderType`] instances are [`Iterator`]s over [`MultiLayerSpectrum`]

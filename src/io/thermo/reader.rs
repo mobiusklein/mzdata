@@ -1495,6 +1495,10 @@ impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike> Chromato
             _ => None,
         }
     }
+
+    fn count_chromatograms(&self) -> usize {
+        2
+    }
 }
 
 /// A convenience alias for [`ThermoRawReaderType`] with peak types specified.

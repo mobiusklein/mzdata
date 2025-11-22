@@ -398,6 +398,22 @@ impl<R: io::Read + io::Seek,
             _ => None
         }
     }
+
+    fn count_chromatograms(&self) -> usize {
+        match self {
+            #[cfg(feature = "mzml")]
+            MZReaderType::MzML(r) => r.count_chromatograms(),
+            #[cfg(feature = "mgf")]
+            MZReaderType::MGF(r) => r.count_chromatograms(),
+            #[cfg(feature = "thermo")]
+            MZReaderType::ThermoRaw(r) => r.count_chromatograms(),
+            #[cfg(feature = "mzmlb")]
+            MZReaderType::MzMLb(r) => r.count_chromatograms(),
+            #[cfg(feature = "bruker_tdf")]
+            MZReaderType::BrukerTDF(r) => r.count_chromatograms(),
+            _ => 0
+        }
+    }
 }
 
 #[allow(unused)]

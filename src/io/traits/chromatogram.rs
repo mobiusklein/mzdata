@@ -18,6 +18,9 @@ pub trait ChromatogramSource {
     {
         ChromatogramIterator::new(self)
     }
+
+    /// Get the number of pre-defined chromatograms available in this source
+    fn count_chromatograms(&self) -> usize;
 }
 
 /// A facade for a [`ChromatogramSource`] that is an [`Iterator`] over [`Chromatogram`] instances
