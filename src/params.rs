@@ -1187,6 +1187,29 @@ pub struct CURIE {
     pub accession: AccessionIntCode,
 }
 
+impl TryFrom<mzcv::ControlledVocabulary> for ControlledVocabulary {
+    type Error = ControlledVocabularyResolutionError;
+
+    fn try_from(value: mzcv::ControlledVocabulary) -> Result<Self, Self::Error> {
+        Ok(match value {
+            mzcv::ControlledVocabulary::MS => Self::MS,
+            mzcv::ControlledVocabulary::UO => Self::UO,
+            mzcv::ControlledVocabulary::EFO => Self::EFO,
+            mzcv::ControlledVocabulary::OBI => Self::OBI,
+            mzcv::ControlledVocabulary::HANCESTRO => Self::HANCESTRO,
+            mzcv::ControlledVocabulary::BFO => Self::BFO,
+            mzcv::ControlledVocabulary::NCIT => Self::NCIT,
+            mzcv::ControlledVocabulary::BTO => Self::BTO,
+            mzcv::ControlledVocabulary::PRIDE => Self::PRIDE,
+            _ => {
+                return Err(ControlledVocabularyResolutionError::UnknownControlledVocabulary(value.to_string()))
+            }
+        })
+    }
+}
+
+
+
 #[allow(unused)]
 macro_rules! accessioncode {
     ($acc:literal) => {
