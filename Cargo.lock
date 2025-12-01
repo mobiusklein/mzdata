@@ -2071,6 +2071,7 @@ dependencies = [
  "chrono",
  "clap",
  "criterion",
+ "encoding_rs",
  "env_logger",
  "filename",
  "flate2",

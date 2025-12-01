@@ -461,8 +461,14 @@ impl IndexedMzMLIndexExtractor {
                             if attr.key.as_ref() == b"idRef" {
                                 self.last_id = attr
                                     .unescape_value()
-                                    .expect("Error decoding idRef")
-                                    .to_string();
+                                    .map(|v| v.to_string())
+                                    .or_else(|_| -> Result<String, quick_xml::Error> {
+                                        log::warn!("Detected non-UTF8 character in idRef");
+                                        Ok(quick_xml::escape::escape(encoding_rs::mem::decode_latin1(&attr.value).as_ref()).into())
+                                    })
+                                    .unwrap_or_else(|e| {
+                                        panic!("Error decoding idRef on offset {e} from bytes {:?}", attr.value)
+                                    });
                             }
                         }
                         Err(err) => {
