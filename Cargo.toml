@@ -60,7 +60,7 @@ default = ["zlib-ng-compat", "mgf", "mzml"]
 checksum = ["dep:md5", "dep:sha1", "dep:base16ct"]
 
 mgf = []
-mzml = ["dep:quick-xml", "checksum", "dep:memchr"]
+mzml = ["dep:quick-xml", "checksum", "dep:memchr", "dep:encoding_rs"]
 imzml = ["mzml", "dep:uuid"]
 
 # mzsignal's main functionality requires a linear algebra backend.
@@ -201,6 +201,7 @@ pin-project-lite = { version = "0.2.16", optional = true }
 memchr = { version = "2.7.4", optional = true }
 libloading = { version = "0.8.6", optional = true }
 zstd = { version = "0.13.3", optional = true }
+encoding_rs = { version = "0.8.35", optional = true }
 
 
 [dev-dependencies]
