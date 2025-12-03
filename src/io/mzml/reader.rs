@@ -741,7 +741,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                 self.entry_id = match attr.unescape_value()
                                     .map(|v| v.to_string())
                                     .or_else(|_| -> Result<String, quick_xml::Error> {
-                                        log::warn!("Detected non-UTF8 character in spectrum id");
+                                        log::trace!("Detected non-UTF8 character in spectrum id");
                                         Ok(quick_xml::escape::escape(encoding_rs::mem::decode_latin1(&attr.value).as_ref()).into())
                                     }) {
                                     Ok(value) => value.to_string(),
@@ -905,7 +905,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                     .unescape_value()
                                     .map(|v| v.to_string())
                                     .or_else(|_| -> Result<String, quick_xml::Error> {
-                                        log::warn!("Detected non-UTF8 character in chromatogram id");
+                                        log::trace!("Detected non-UTF8 character in chromatogram id");
                                         Ok(quick_xml::escape::escape(encoding_rs::mem::decode_latin1(&attr.value).as_ref()).into())
                                     }).unwrap();
                                 trace!("Stored chromatogram id = {}", self.entry_id);
