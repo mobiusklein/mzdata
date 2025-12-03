@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.63.2] - 2025-12-03
+
+### Added
+
+- Support latin1 in mzML param names and values too
+
 ## [0.63.1] - 2025-12-01
 
 ### Added
@@ -970,7 +976,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.63.1...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.63.2...HEAD
+[0.63.2]: https://github.com/mobiusklein/mzdata/compare/v0.63.1...v0.63.2
 [0.63.1]: https://github.com/mobiusklein/mzdata/compare/v0.63.0...v0.63.1
 [0.63.0]: https://github.com/mobiusklein/mzdata/compare/v0.62.1...v0.63.0
 [0.62.1]: https://github.com/mobiusklein/mzdata/compare/v0.62.0...v0.62.1
