@@ -834,6 +834,7 @@ pub enum ChromatogramType {
     FlowRateChromatogram,
     PressureChromatogram,
     TemperatureChromatogram,
+    ElectromagneticRadiationChromatogram,
 }
 
 impl ChromatogramType {
@@ -848,6 +849,7 @@ impl ChromatogramType {
             1000813 => Self::EmissionChromatogram,
             1003020 => Self::FlowRateChromatogram,
             1003019 => Self::PressureChromatogram,
+            1000811 => Self::ElectromagneticRadiationChromatogram,
             1000626 => Self::Unknown,
             1002715 => Self::TemperatureChromatogram,
             _ => return None,
@@ -858,7 +860,7 @@ impl ChromatogramType {
     pub fn is_electromagnetic_radiation(&self) -> bool {
         matches!(
             self,
-            Self::AbsorptionChromatogram | Self::EmissionChromatogram
+            Self::AbsorptionChromatogram | Self::EmissionChromatogram | Self::ElectromagneticRadiationChromatogram
         )
     }
 
@@ -895,6 +897,7 @@ impl ChromatogramType {
                 CURIE::new(ControlledVocabulary::MS, 1000473)
             }
             Self::AbsorptionChromatogram => CURIE::new(ControlledVocabulary::MS, 1000812),
+            Self::ElectromagneticRadiationChromatogram => CURIE::new(ControlledVocabulary::MS, 1000811),
             Self::EmissionChromatogram => CURIE::new(ControlledVocabulary::MS, 1000813),
             Self::FlowRateChromatogram => CURIE::new(ControlledVocabulary::MS, 1003020),
             Self::PressureChromatogram => CURIE::new(ControlledVocabulary::MS, 1003019),
