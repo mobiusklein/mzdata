@@ -457,6 +457,7 @@ macro_rules! _populate_stacked_array_from {
                 bin_array.push(v)?;
             } else {
                 let mut bin_array = DataArray::from_name_and_type($array_type, $array.dtype());
+                *bin_array.unit_mut() = $array.unit();
                 bin_array.push(v)?;
                 bin.add(bin_array);
             }
@@ -694,6 +695,7 @@ impl BinaryArrayMap3D {
             return Err(ArrayRetrievalError::NotFound(ArrayType::IonMobilityArray));
         }
         let (im_dim, im_type) = source.ion_mobility()?;
+        this.ion_mobility_unit = source.get(&im_type).unwrap().unit;
         this.ion_mobility_type = im_type;
         if im_dim.is_empty() {
             return Ok(this);
@@ -835,6 +837,9 @@ mod test {
 
         let spec = reader.get_spectrum_by_id("merged=42869 frame=9717 scanStart=1 scanEnd=705").unwrap();
         let mut arrays = spec.arrays.unwrap();
+        let units_map: HashMap<_, _> = arrays.iter().map(|(k, v)| {
+            (k.clone(), v.unit)
+        }).collect();
         let mzs = arrays.mzs()?;
         assert!(!mzs.is_sorted());
         drop(mzs);
@@ -849,12 +854,17 @@ mod test {
             .map(|(_, va)| va.mzs().unwrap().len())
             .sum();
 
+        assert_eq!(units_map[&arrays_3d.ion_mobility_type], arrays_3d.ion_mobility_unit);
+
         assert_eq!(n, stacked_n);
 
         let unstacked = arrays_3d.unstack()?;
         let unstacked_n = unstacked.mzs()?.len();
 
         assert_eq!(unstacked_n, n);
+        for (k, v) in unstacked.iter() {
+            assert_eq!(units_map[k], v.unit);
+        }
         Ok(())
     }
 }
