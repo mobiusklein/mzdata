@@ -431,8 +431,11 @@ crate::cvmap! {
         #[term(cv=MS, accession=1003249, name="proton transfer charge reduction", flags={0}, parents={["MS:1000008"]})]
         #[doc="proton transfer charge reduction - Process to transfer one or more protons from a multiply charged cation (peptide or protein ion) to a proton acceptor anion or neutral basic compound, thereby reducing the charge of the original analyte."]
         ProtonTransferChargeReduction,
+        #[term(cv=MS, accession=1003775, name="secondary electrospray ionization", flags={0}, parents={["MS:1000240"]})]
+        #[doc="secondary electrospray ionization - Secondary electrospray ionization (SESI) is an atmospheric pressure ionization (API) technique that uses a primary nano-electrospray plume of solvent ions to ionize neutral gaseous molecules in the gas phase via efficient proton transfer reactions. Operating at atmospheric pressure, SESI allows for the sensitive and real-time detection of volatile organic compounds (VOCs) and vapors with minimal sample preparation, making it ideal for applications like breath analysis and environmental monitoring."]
+        SecondaryElectrosprayIonization,
     }
-    // [[[end]]] (sum: unkE82aPAS)
+    // [[[end]]] (sum: oHd7VhBpwa)
 }
 
 crate::cvmap! {
