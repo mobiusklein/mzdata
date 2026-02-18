@@ -556,7 +556,7 @@ crate::cvmap! {
 }
 
 #[allow(unused, clippy::upper_case_acronyms)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[doc = "The kinds of spectrum that might be represented"]
 pub enum SpectrumType {
