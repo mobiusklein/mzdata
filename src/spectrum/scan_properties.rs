@@ -664,6 +664,17 @@ pub enum SignalContinuity {
     Profile = 5,
 }
 
+impl SignalContinuity {
+
+    pub const fn is_profile(&self) -> bool {
+        matches!(self, Self::Profile)
+    }
+
+    pub const fn is_centroid(&self) -> bool {
+        matches!(self, Self::Centroid)
+    }
+}
+
 impl Display for SignalContinuity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
