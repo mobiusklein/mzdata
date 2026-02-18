@@ -2442,6 +2442,9 @@ units![
     Minute, "UO:0000031", b"UO:0000031", "minute", b"minute", UO, 31;
     MZ, "MS:1000040", b"MS:1000040", "m/z", b"m/z", MS, 1000040;
     Nanometer, "UO:0000018", b"UO:0000018", "nanometer", b"nanometer", UO, 18;
+    Micrometer, "UO:0000017", b"UO:0000017", "micrometer", b"micrometer", UO, 17;
+    Millimeter, "UO:0000016", b"UO:0000016", "millimeter", b"millimeter", UO, 16;
+    Centimeter, "UO:0000015", b"UO:0000015", "centimeter", b"centimeter", UO, 15;
     PartsPerMillion, "UO:0000169", b"UO:0000169", "parts per million ", b"parts per million ", UO, 169;
     Pascal, "UO:0000110", b"UO:0000110", "pascal", b"pascal", UO, 110;
     Percent, "UO:0000187", b"UO:0000187", "percent", b"percent", UO, 187;
@@ -2451,6 +2454,10 @@ units![
     Second, "UO:0000010", b"UO:0000010", "second", b"second", UO, 10;
     Volt, "UO:0000218", b"UO:0000218", "volt", b"volt", UO, 218;
     VoltSecondPerSquareCentimeter, "MS:1002814", b"MS:1002814", "volt-second per square centimeter", b"volt-second per square centimeter", MS, 1002814;
+    Hertz, "UO:000106", b"UO:000106", "hertz", b"hertz", UO, 106;
+    Liter, "UO:0000099", b"UO:0000099", "liter", b"liter", UO, 99;
+    Milliliter, "UO:0000098", b"UO:0000098", "milliliter", b"milliliter", UO, 98;
+    Microliter, "UO:0000101", b"UO:0000101", "microliter", b"microliter", UO, 101;
 ];
 
 impl Default for Unit {
