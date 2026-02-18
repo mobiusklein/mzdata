@@ -830,7 +830,7 @@ impl_param_described!(Activation, SpectrumDescription);
 impl_param_described_deferred!(SelectedIon, Acquisition, ScanEvent);
 
 /// Types of chromatograms enumerated in the PSI-MS controlled vocabulary
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ChromatogramType {
     #[default]

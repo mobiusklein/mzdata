@@ -9,7 +9,9 @@ use std::time;
 use std::sync::mpsc::sync_channel;
 
 use mzdata::io::Source;
+use mzdata::meta::SpectrumType;
 use mzdata::prelude::*;
+use mzdata::spectrum::ChromatogramType;
 use mzdata::spectrum::{
     DeconvolutedSpectrum, MultiLayerSpectrum, RefPeakDataLevel, SignalContinuity, SpectrumLike,
 };
@@ -22,7 +24,9 @@ struct MSDataFileSummary {
     pub charge_table: HashMap<i32, usize>,
     pub peak_charge_table: HashMap<u8, HashMap<i32, usize>>,
     pub peak_mode_table: HashMap<SignalContinuity, usize>,
-    pub has_ion_mobility: bool
+    pub has_ion_mobility: bool,
+    pub spectrum_types: HashMap<Option<SpectrumType>, usize>,
+    pub chromatogram_types: HashMap<ChromatogramType, usize>
 }
 
 impl Default for MSDataFileSummary {
@@ -35,6 +39,8 @@ impl Default for MSDataFileSummary {
             peak_charge_table: Default::default(),
             peak_mode_table: Default::default(),
             has_ion_mobility: false,
+            spectrum_types: Default::default(),
+            chromatogram_types: Default::default(),
         }
     }
 }
@@ -46,6 +52,7 @@ impl MSDataFileSummary {
         self.end_time = self.end_time.max(time);
         let level = scan.ms_level();
         *self.level_table.entry(level).or_default() += 1;
+        *self.spectrum_types.entry(scan.spectrum_type()).or_default() += 1;
         if level > 1 {
             if let Some(charge) = scan.precursor().unwrap().ion().and_then(|i| i.charge()) {
                 *self.charge_table.entry(charge).or_default() += 1;
@@ -137,6 +144,12 @@ impl MSDataFileSummary {
         println!("{:0.3} seconds elapsed, handled {i} spectra", elapsed.as_secs_f64());
     }
 
+    pub fn scan_chromatograms<R: ChromatogramSource + Send + 'static>(&mut self, reader: &mut R) {
+        for chrom in reader.iter_chromatograms() {
+            *self.chromatogram_types.entry(chrom.chromatogram_type()).or_default() += 1;
+        }
+    }
+
     pub fn write_out(&self) {
         println!("Start Time: {:0.2}", self.start_time);
         println!("End Time: {:0.2}", self.end_time);
@@ -146,6 +159,20 @@ impl MSDataFileSummary {
         level_set.sort_by_key(|(a, _)| *a);
         for (level, count) in level_set.iter() {
             println!("\t{}: {}", level, count);
+        }
+
+        let mut spec_types: Vec<(_, _)> = self.spectrum_types.iter().collect();
+        spec_types.sort_by(|a, b| a.0.cmp(b.0));
+
+        if spec_types.iter().any(|v| v.0.is_some_and(|v| v != SpectrumType::MS1Spectrum && v != SpectrumType::MSnSpectrum)) {
+            println!("Spectrum types:");
+            for (level, count) in spec_types.iter() {
+                if let Some(level) = level {
+                    println!("\t{}: {}", level.name(), count);
+                } else {
+                    println!("\tUnknown: {}", count);
+                }
+            }
         }
 
         println!("Precursor Charge States:");
@@ -184,6 +211,15 @@ impl MSDataFileSummary {
                 SignalContinuity::Centroid => println!("Peaks: {}", count),
                 SignalContinuity::Profile => println!("Points: {}", count),
             });
+
+        if !self.chromatogram_types.is_empty() {
+            let mut spec_types: Vec<(_, _)> = self.chromatogram_types.iter().collect();
+            spec_types.sort_by(|a, b| a.0.cmp(b.0));
+            println!("Chromatogram types:");
+            for (level, count) in spec_types.iter() {
+                println!("\t{:?}: {}", level, count);
+            }
+        }
     }
 }
 
@@ -200,8 +236,11 @@ fn main() -> io::Result<()> {
             summarizer.scan_file(reader)
         })?;
     } else {
-        let reader = MZReader::open_path(path)?;
+        let mut reader = MZReader::open_path(path)?;
         eprintln!("Format: {}", reader.as_format());
+        if reader.count_chromatograms() > 0 {
+            summarizer.scan_chromatograms(&mut reader);
+        }
         summarizer.scan_file(reader)
     };
 
