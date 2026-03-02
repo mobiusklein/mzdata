@@ -1,0 +1,16 @@
+[package]
+name = "pymzdata"
+version = "0.63.3"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "pymzdata"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.28.0", features = ["extension-module", "abi3-py39", "serde"] }
+mzdata = { path = "../../", version = "0.63.3", default-features = false, features = ["mzml", "mgf", "nalgebra", "bruker_tdf", "thermo", "zlib-ng-compat", "proxi"] }
+mzpeaks = { version = ">=1.0.6,<1.1.0" }
+numpy = "0.28.0"
+serde-pyobject = "0.8.0"
