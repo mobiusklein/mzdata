@@ -1109,6 +1109,7 @@ pub enum BinaryCompressionType {
     ZstdDict,
     NumpressLinearZstd,
     NumpressSLOFZstd,
+    NumpressPICZstd,
 }
 
 impl BinaryCompressionType {
@@ -1157,11 +1158,12 @@ impl BinaryCompressionType {
             BinaryCompressionType::NumpressPICZlib => 1002747,
             BinaryCompressionType::DeltaPrediction => 1003089,
             BinaryCompressionType::LinearPrediction => 1003090,
-            BinaryCompressionType::NumpressSLOFZstd => 9999994,
-            BinaryCompressionType::NumpressLinearZstd => 9999995,
-            BinaryCompressionType::ZstdDict => 9999996,
-            BinaryCompressionType::Zstd => 9999997,
-            BinaryCompressionType::ShuffleZstd => 9999998,
+            BinaryCompressionType::NumpressSLOFZstd => 1003785,
+            BinaryCompressionType::NumpressLinearZstd => 1003783,
+            BinaryCompressionType::NumpressPICZstd => 1003784,
+            BinaryCompressionType::ZstdDict => 1003782,
+            BinaryCompressionType::Zstd => 1003780,
+            BinaryCompressionType::ShuffleZstd => 1003781,
             BinaryCompressionType::DeltaShuffleZstd => 9999999,
             BinaryCompressionType::Decoded => return None,
         };
@@ -1218,6 +1220,14 @@ impl BinaryCompressionType {
                 } =>
             {
                 Some(BinaryCompressionType::NumpressSLOFZstd)
+            }
+            x if x
+                == CURIE {
+                    controlled_vocabulary: ControlledVocabulary::MS,
+                    accession: BinaryCompressionType::NumpressPICZstd.accession().unwrap(),
+                } =>
+            {
+                Some(BinaryCompressionType::NumpressPICZstd)
             }
             x if x
                 == CURIE {
@@ -1317,6 +1327,15 @@ impl BinaryCompressionType {
             BinaryCompressionType::NumpressLinearZstd => {
                 return Some(ParamCow::const_new(
                     "MS-Numpress linear prediction compression followed by zstd compression",
+                    crate::params::ValueRef::Empty,
+                    self.accession(),
+                    Some(ControlledVocabulary::MS),
+                    Unit::Unknown,
+                ))
+            }
+            BinaryCompressionType::NumpressPICZstd => {
+                return Some(ParamCow::const_new(
+                    "MS-Numpress positive integer compression followed by zstd compression",
                     crate::params::ValueRef::Empty,
                     self.accession(),
                     Some(ControlledVocabulary::MS),

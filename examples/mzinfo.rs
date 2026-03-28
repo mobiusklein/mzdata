@@ -240,6 +240,7 @@ fn main() -> io::Result<()> {
         eprintln!("Format: {}", reader.as_format());
         if reader.count_chromatograms() > 0 {
             summarizer.scan_chromatograms(&mut reader);
+            reader.reset();
         }
         summarizer.scan_file(reader)
     };
