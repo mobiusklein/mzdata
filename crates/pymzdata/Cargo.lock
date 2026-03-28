@@ -1823,7 +1823,7 @@ dependencies = [
 
 [[package]]
 name = "pymzdata"
-version = "0.1.0"
+version = "0.63.3"
 dependencies = [
  "mzdata",
  "mzpeaks",
