@@ -1,5 +1,4 @@
-use mzdata::prelude::{IonMobilityFrameLike, SpectrumLike, ParamDescribed, ParamLike};
-use mzdata::params::{CURIE, CURIEParsingError};
+use mzdata::prelude::{IonMobilityFrameLike, SpectrumLike, ParamDescribed};
 use mzdata::spectrum::{
     MultiLayerIonMobilityFrame, MultiLayerSpectrum, SignalContinuity,
 };
@@ -14,7 +13,7 @@ use mzpeaks::{
 use pyo3::prelude::*;
 use numpy::{IntoPyArray, PyArray1, self};
 
-use crate::params::{PyParam, PyPrecursor, PyScanEvent};
+use crate::params::{PyParam, PyPrecursor, PyScanEvent, find_param};
 
 #[pyclass(name = "SignalContinuity", module = "pymzdata", skip_from_py_object, eq, )]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -134,18 +133,7 @@ impl PySpectrum {
 
     #[pyo3(signature = (name = None, accession = None))]
     fn find_param(&self, name: Option<&str>, accession: Option<&str>) -> PyResult<Option<PyParam>> {
-        use mzdata::params::ParamDescribed;
-        if name.is_none() && accession.is_none() {
-            return Err(pyo3::exceptions::PyTypeError::new_err("Must provide one of `name` or `accession`"));
-        }
-        if let Some(name) = name {
-            Ok(self.inner.description().params().iter().find(|p| p.name() == name).cloned().map(PyParam))
-        } else if let Some(accession) = accession {
-            let acc: Option<CURIE> = Some(accession.parse().map_err(|e: CURIEParsingError| pyo3::exceptions::PyValueError::new_err(e.to_string()))?);
-            Ok(self.inner.description().params().iter().find(|p| p.curie() == acc).cloned().map(PyParam))
-        } else {
-            Ok(None)
-        }
+        find_param(&self.inner, name, accession)
     }
 
     fn scan_events(&self) -> Vec<PyScanEvent> {
@@ -350,18 +338,7 @@ impl PyIonMobilityFrame {
 
     #[pyo3(signature = (name = None, accession = None))]
     fn find_param(&self, name: Option<&str>, accession: Option<&str>) -> PyResult<Option<PyParam>> {
-        use mzdata::params::ParamDescribed;
-        if name.is_none() && accession.is_none() {
-            return Err(pyo3::exceptions::PyTypeError::new_err("Must provide one of `name` or `accession`"));
-        }
-        if let Some(name) = name {
-            Ok(self.inner.description().params().iter().find(|p| p.name() == name).cloned().map(PyParam))
-        } else if let Some(accession) = accession {
-            let acc: Option<CURIE> = Some(accession.parse().map_err(|e: CURIEParsingError| pyo3::exceptions::PyValueError::new_err(e.to_string()))?);
-            Ok(self.inner.description().params().iter().find(|p| p.curie() == acc).cloned().map(PyParam))
-        } else {
-            Ok(None)
-        }
+        find_param(&self.inner, name, accession)
     }
 
     fn scan_events(&self) -> Vec<PyScanEvent> {

@@ -78,6 +78,22 @@ impl From<Param> for PyParam {
     }
 }
 
+
+pub fn find_param(source: &impl ParamDescribed,  name: Option<&str>, accession: Option<&str>) -> PyResult<Option<PyParam>> {
+    if name.is_none() && accession.is_none() {
+        return Err(pyo3::exceptions::PyTypeError::new_err("Must provide one of `name` or `accession`"));
+    }
+    if let Some(name) = name {
+        Ok(source.params().iter().find(|p| p.name() == name).cloned().map(PyParam))
+    } else if let Some(accession) = accession {
+        let acc: Option<CURIE> = Some(accession.parse().map_err(|e: CURIEParsingError| pyo3::exceptions::PyValueError::new_err(e.to_string()))?);
+        Ok(source.params().iter().find(|p| p.curie() == acc).cloned().map(PyParam))
+    } else {
+        Ok(None)
+    }
+}
+
+
 // ---------------------------------------------------------------------------
 // PyIsolationWindow
 // ---------------------------------------------------------------------------
@@ -178,18 +194,7 @@ impl PySelectedIon {
 
     #[pyo3(signature = (name = None, accession = None))]
     fn find_param(&self, name: Option<&str>, accession: Option<&str>) -> PyResult<Option<PyParam>> {
-        use mzdata::params::ParamDescribed;
-        if name.is_none() && accession.is_none() {
-            return Err(pyo3::exceptions::PyTypeError::new_err("Must provide one of `name` or `accession`"));
-        }
-        if let Some(name) = name {
-            Ok(self.0.params().iter().find(|p| p.name() == name).cloned().map(PyParam))
-        } else if let Some(accession) = accession {
-            let acc: Option<CURIE> = Some(accession.parse().map_err(|e: CURIEParsingError| pyo3::exceptions::PyValueError::new_err(e.to_string()))?);
-            Ok(self.0.params().iter().find(|p| p.curie() == acc).cloned().map(PyParam))
-        } else {
-            Ok(None)
-        }
+        find_param(&self.0, name, accession)
     }
 
     fn __repr__(&self) -> String {
@@ -236,18 +241,7 @@ impl PyActivation {
 
     #[pyo3(signature = (name = None, accession = None))]
     fn find_param(&self, name: Option<&str>, accession: Option<&str>) -> PyResult<Option<PyParam>> {
-        use mzdata::params::ParamDescribed;
-        if name.is_none() && accession.is_none() {
-            return Err(pyo3::exceptions::PyTypeError::new_err("Must provide one of `name` or `accession`"));
-        }
-        if let Some(name) = name {
-            Ok(self.0.params().iter().find(|p| p.name() == name).cloned().map(PyParam))
-        } else if let Some(accession) = accession {
-            let acc: Option<CURIE> = Some(accession.parse().map_err(|e: CURIEParsingError| pyo3::exceptions::PyValueError::new_err(e.to_string()))?);
-            Ok(self.0.params().iter().find(|p| p.curie() == acc).cloned().map(PyParam))
-        } else {
-            Ok(None)
-        }
+        find_param(&self.0, name, accession)
     }
 
     fn __repr__(&self) -> String {
@@ -340,18 +334,7 @@ impl PyScanEvent {
 
     #[pyo3(signature = (name = None, accession = None))]
     fn find_param(&self, name: Option<&str>, accession: Option<&str>) -> PyResult<Option<PyParam>> {
-        use mzdata::params::ParamDescribed;
-        if name.is_none() && accession.is_none() {
-            return Err(pyo3::exceptions::PyTypeError::new_err("Must provide one of `name` or `accession`"));
-        }
-        if let Some(name) = name {
-            Ok(self.0.params().iter().find(|p| p.name() == name).cloned().map(PyParam))
-        } else if let Some(accession) = accession {
-            let acc: Option<CURIE> = Some(accession.parse().map_err(|e: CURIEParsingError| pyo3::exceptions::PyValueError::new_err(e.to_string()))?);
-            Ok(self.0.params().iter().find(|p| p.curie() == acc).cloned().map(PyParam))
-        } else {
-            Ok(None)
-        }
+        find_param(&self.0, name, accession)
     }
 
     fn __repr__(&self) -> String {

@@ -6,7 +6,7 @@ use mzdata::prelude::*;
 use mzdata::params::{CURIEParsingError, ParamDescribed, CURIE};
 use pyo3::prelude::*;
 
-use crate::params::PyParam;
+use crate::params::{PyParam, find_param};
 
 // ---------------------------------------------------------------------------
 // PyComponentType
@@ -118,36 +118,7 @@ impl PyComponent {
         name: Option<&str>,
         accession: Option<&str>,
     ) -> PyResult<Option<PyParam>> {
-        if name.is_none() && accession.is_none() {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
-                "Must provide one of `name` or `accession`",
-            ));
-        }
-        if let Some(n) = name {
-            Ok(self
-                .0
-                .params()
-                .iter()
-                .find(|p| p.name() == n)
-                .cloned()
-                .map(PyParam))
-        } else if let Some(acc) = accession {
-            let curie: Option<CURIE> = Some(
-                acc.parse()
-                    .map_err(|e: CURIEParsingError| {
-                        pyo3::exceptions::PyValueError::new_err(e.to_string())
-                    })?,
-            );
-            Ok(self
-                .0
-                .params()
-                .iter()
-                .find(|p| p.curie() == curie)
-                .cloned()
-                .map(PyParam))
-        } else {
-            Ok(None)
-        }
+        find_param(&self.0, name, accession)
     }
 
     fn __repr__(&self) -> String {
@@ -192,36 +163,7 @@ impl PyInstrumentConfiguration {
         name: Option<&str>,
         accession: Option<&str>,
     ) -> PyResult<Option<PyParam>> {
-        if name.is_none() && accession.is_none() {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
-                "Must provide one of `name` or `accession`",
-            ));
-        }
-        if let Some(n) = name {
-            Ok(self
-                .0
-                .params()
-                .iter()
-                .find(|p| p.name() == n)
-                .cloned()
-                .map(PyParam))
-        } else if let Some(acc) = accession {
-            let curie: Option<CURIE> = Some(
-                acc.parse()
-                    .map_err(|e: CURIEParsingError| {
-                        pyo3::exceptions::PyValueError::new_err(e.to_string())
-                    })?,
-            );
-            Ok(self
-                .0
-                .params()
-                .iter()
-                .find(|p| p.curie() == curie)
-                .cloned()
-                .map(PyParam))
-        } else {
-            Ok(None)
-        }
+        find_param(&self.0, name, accession)
     }
 
     fn __repr__(&self) -> String {
