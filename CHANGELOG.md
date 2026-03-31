@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.63.4] - 2026-03-31
+
+### Added
+
+- Add `ChromatogramType::ElectromagneticRadiationChromatogram`
+- Add additional metric length, hertz, and volume `Unit`
+- Add `Ord` and `Hash` impls to `SpectrumType`
+- Add `is_profile` and `is_centroid` predicates to `SignalContinuity`
+- Add finalized accession codes for Zstd based compression methods
+- Add file-level metadata to the Python API
+- Update `thermorawfilereader` to v0.6.0, add Excedion to the instrument database, add `MZDATA_IGNORE_UNKNOWN_INSTRUMENT` to support ignoring unknown instrument models
+
+### Changed
+
+- Deprecate `main.rs`, point to `mzinfo.rs` example
+
+### Fixed
+
+- Start python bindings, vis wasm
+
 ## [0.63.3] - 2025-12-06
 
 ### Fixed
@@ -982,7 +1002,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.63.3...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.63.4...HEAD
+[0.63.4]: https://github.com/mobiusklein/mzdata/compare/v0.63.3...v0.63.4
 [0.63.3]: https://github.com/mobiusklein/mzdata/compare/v0.63.2...v0.63.3
 [0.63.2]: https://github.com/mobiusklein/mzdata/compare/v0.63.1...v0.63.2
 [0.63.1]: https://github.com/mobiusklein/mzdata/compare/v0.63.0...v0.63.1
