@@ -831,9 +831,9 @@ dependencies = [
 
 [[package]]
 name = "dotnetrawfilereader-sys"
-version = "0.5.5"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c67533b645a6500a290ce6ee85ee7b809b776de6674c92b3edfa285debffc7e7"
+checksum = "12133984f1ab906194700b36d4c2d88bb150c87364b0e85cee4942cc14565a88"
 dependencies = [
  "include_dir",
  "netcorehost",
@@ -3527,9 +3527,9 @@ dependencies = [
 
 [[package]]
 name = "thermorawfilereader"
-version = "0.5.5"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d390ffb0b192738d5d64c1e669362fba388e409c487f8f3c29597de9091df164"
+checksum = "75d2509335a6a7ba5d1be77e57225d4502fb66d7d93213e29479f357012bf368"
 dependencies = [
  "bytemuck",
  "dotnetrawfilereader-sys",

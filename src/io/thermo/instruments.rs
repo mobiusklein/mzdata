@@ -121,6 +121,8 @@ pub enum InstrumentModelType {
     Orbitrap_Eclipse,
     Orbitrap_GC,
     Orbitrap_Astral,
+    Orbitrap_Astral_Zoom,
+    Orbitrap_Excedion_Pro,
 }
 
 impl Display for InstrumentModelType {
@@ -189,6 +191,7 @@ impl InstrumentModelType {
             InstrumentModelType::MAT95XP_Trap => param!("MAT95XP Trap", 1000176),
             InstrumentModelType::Orbitrap_Ascend => param!("Orbitrap Ascend", 1003356),
             InstrumentModelType::Orbitrap_Astral => param!("Orbitrap Astral", 1003378),
+            InstrumentModelType::Orbitrap_Astral_Zoom => param!("Orbitrap Atral", 1003442),
             InstrumentModelType::Orbitrap_Eclipse => param!("Orbitrap Eclipse", 1003029),
             InstrumentModelType::Orbitrap_Exploris_120 => param!("Orbitrap Exploris 120", 1003095),
             InstrumentModelType::Orbitrap_Exploris_240 => param!("Orbitrap Exploris 240", 1003094),
@@ -199,6 +202,7 @@ impl InstrumentModelType {
             InstrumentModelType::Orbitrap_Fusion_Lumos => param!("Orbitrap Fusion Lumos", 1002732),
             InstrumentModelType::Orbitrap_ID_X => param!("Orbitrap ID-X", 1003112),
             InstrumentModelType::Orbitrap_GC => param!("Q Exactive GC Orbitrap", 1003395),
+            InstrumentModelType::Orbitrap_Excedion_Pro => param!("Orbitrap Excedion Pro", 1002994),
             InstrumentModelType::PolarisQ => param!("PolarisQ", 1000185),
             InstrumentModelType::Q_Exactive => param!("Q Exactive", 1001911),
             InstrumentModelType::Q_Exactive_HF => param!("Q Exactive HF", 1002523),
@@ -232,7 +236,7 @@ impl InstrumentModelType {
     }
 }
 
-static INSTRUMENT_MODEL_TYPE_MATCH: [(&str, InstrumentModelType, MatchType); 90] = [
+static INSTRUMENT_MODEL_TYPE_MATCH: &'static [(&str, InstrumentModelType, MatchType)] = &[
     (
         "MAT253",
         InstrumentModelType::MAT253,
@@ -582,6 +586,11 @@ static INSTRUMENT_MODEL_TYPE_MATCH: [(&str, InstrumentModelType, MatchType); 90]
         MatchType::Contains,
     ),
     (
+        "ASTRAL ZOOM",
+        InstrumentModelType::Orbitrap_Astral,
+        MatchType::Contains,
+    ),
+    (
         "FUSION ETD",
         InstrumentModelType::Orbitrap_Fusion_ETD,
         MatchType::Contains,
@@ -611,6 +620,16 @@ static INSTRUMENT_MODEL_TYPE_MATCH: [(&str, InstrumentModelType, MatchType); 90]
         InstrumentModelType::Accela_PDA,
         MatchType::Exact,
     ),
+    (
+        "ORBITRAP EXCEDION PRO",
+        InstrumentModelType::Orbitrap_Excedion_Pro,
+        MatchType::Contains,
+    ),
+    (
+        "ORBITRAP EXCEDION",
+        InstrumentModelType::Orbitrap_Excedion_Pro,
+        MatchType::Contains,
+    )
 ];
 
 pub fn parse_instrument_model(instrument_model: &str) -> InstrumentModelType {
@@ -618,7 +637,7 @@ pub fn parse_instrument_model(instrument_model: &str) -> InstrumentModelType {
     let model_type_no_spaces = model_type.replace(" ", "");
     log::debug!("Parsing instrument model: '{}' -> '{}' (no spaces: '{}')",
         instrument_model, model_type, model_type_no_spaces);
-    
+
     for (key, model_enum, match_type) in INSTRUMENT_MODEL_TYPE_MATCH.iter() {
         let hit = match match_type {
             MatchType::Exact => **key == model_type,
@@ -758,7 +777,8 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<DetectorT
         InstrumentModelType::Orbitrap_Exploris_240 |
         InstrumentModelType::Orbitrap_Exploris_480 |
         InstrumentModelType::Orbitrap_Exploris_GC_240 |
-        InstrumentModelType::Orbitrap_GC => {
+        InstrumentModelType::Orbitrap_GC |
+        InstrumentModelType::Orbitrap_Excedion_Pro => {
             vec![DetectorTypeTerm::InductiveDetector]
         },
 
@@ -767,7 +787,7 @@ pub fn instrument_model_to_detector(model: InstrumentModelType) -> Vec<DetectorT
             vec![DetectorTypeTerm::InductiveDetector]
         },
 
-        InstrumentModelType::Orbitrap_Astral => {
+        InstrumentModelType::Orbitrap_Astral | InstrumentModelType::Orbitrap_Astral_Zoom => {
             vec![DetectorTypeTerm::InductiveDetector, DetectorTypeTerm::ElectronMultiplier]
         },
 
@@ -1015,7 +1035,8 @@ pub fn create_instrument_configurations(model: InstrumentModelType, source: Comp
         InstrumentModelType::Orbitrap_Exploris_240 |
         InstrumentModelType::Orbitrap_Exploris_480 |
         InstrumentModelType::Orbitrap_Exploris_GC_240|
-		InstrumentModelType::Orbitrap_GC  => {
+		InstrumentModelType::Orbitrap_GC |
+        InstrumentModelType::Orbitrap_Excedion_Pro  => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
@@ -1034,7 +1055,7 @@ pub fn create_instrument_configurations(model: InstrumentModelType, source: Comp
 
         }
 
-        InstrumentModelType::Orbitrap_Astral => {
+        InstrumentModelType::Orbitrap_Astral | InstrumentModelType::Orbitrap_Astral_Zoom => {
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());

@@ -991,14 +991,30 @@ pub(crate) mod sealed {
             &self,
             mass_analyzer: MassAnalyzer,
         ) -> u32 {
-            *self
+            self
                 .components_to_instrument_id
                 .get(&mass_analyzer)
+                .copied()
                 .unwrap_or_else(|| {
-                    panic!(
-                        "Failed to map instrument configuration for {:?} from among {:?}",
-                        mass_analyzer, self.components_to_instrument_id,
-                    )
+                    let ignore_unknown_instrument = std::env::var("MZDATA_IGNORE_UNKNOWN_INSTRUMENT").unwrap_or_else(|_| "error".into());
+                    match ignore_unknown_instrument.as_str() {
+                        "ignore" => {
+                            log::error!(
+                                "Failed to map instrument configuration for {:?} from among {:?}, failing over with the first instrument method",
+                                mass_analyzer, self.components_to_instrument_id,
+                            );
+                            0
+                        },
+                        "silent" => {
+                            0
+                        },
+                        "error" | _ => {
+                            panic!(
+                                "Failed to map instrument configuration for {:?} from among {:?}. To allow this with a warning, set env var MZDATA_IGNORE_UNKNOWN_INSTRUMENT=ignore",
+                                mass_analyzer, self.components_to_instrument_id,
+                            )
+                        },
+                    }
                 })
         }
 
