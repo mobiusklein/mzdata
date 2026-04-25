@@ -370,6 +370,7 @@ where
         Value::Buffer(v) => serializer.serialize_bytes(v),
         Value::Boolean(v) => serializer.serialize_bool(*v),
         Value::Empty => serializer.serialize_unit(),
+        Value::List(v) => serializer.collect_seq(v.iter())
     }
 }
 
@@ -410,6 +411,16 @@ where
 
         fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
             Ok(Value::Empty.into())
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>, {
+            let mut entries = Vec::new();
+            while let Some(val) = SeqAccess::next_element::<Value>(&mut seq)? {
+                entries.push(val);
+            }
+            Ok(Value::List(entries.into_boxed_slice()).into())
         }
 
         fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
@@ -480,6 +491,14 @@ impl ParamValue for PROXIValue {
     fn to_bool(&self) -> Result<bool, crate::params::ParamValueParseError> {
         <Value as ParamValue>::to_bool(&self.0)
     }
+
+    fn is_list(&self) -> bool {
+        <Value as ParamValue>::is_list(&self.0)
+    }
+
+    fn as_slice(&self) -> std::borrow::Cow<'_, [Value]> {
+        <Value as ParamValue>::as_slice(&self.0)
+    }
 }
 
 impl Display for PROXIValue {
@@ -491,6 +510,7 @@ impl Display for PROXIValue {
             Value::Buffer(v) => write!(f, "{v:?}"),
             Value::Boolean(v) => write!(f, "{v}"),
             Value::Empty => Ok(()),
+            Value::List(_) => write!(f, "{}", self.0)
         }
     }
 }
@@ -639,6 +659,14 @@ impl ParamValue for PROXIParam {
 
     fn to_bool(&self) -> Result<bool, crate::params::ParamValueParseError> {
         <PROXIValue as ParamValue>::to_bool(&self.value)
+    }
+
+    fn is_list(&self) -> bool {
+        <PROXIValue as ParamValue>::is_list(&self.value)
+    }
+
+    fn as_slice(&self) -> std::borrow::Cow<'_, [Value]> {
+        <PROXIValue as ParamValue>::as_slice(&self.value)
     }
 }
 
