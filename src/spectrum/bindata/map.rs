@@ -630,7 +630,7 @@ impl BinaryArrayMap3D {
         for (layer, im) in self.arrays.iter().zip(self.ion_mobility_dimension.iter()) {
             sizes.clear();
             for (key, array) in layer.iter() {
-                match destination.get_mut(&key) {
+                match destination.get_mut(key) {
                     Some(sink) => {
                         sink.extend_raw(&array.data).inspect_err(|e| {
                             log::error!("Failed to extend {key:?}: {e}");
@@ -648,10 +648,8 @@ impl BinaryArrayMap3D {
             }
             if let Some(mz_size) = mz_size {
                 im_dim.extend_iter(std::iter::repeat_n(*im, mz_size))?;
-            } else {
-                if let Some((_, size)) = sizes.first() {
-                    im_dim.extend_iter(std::iter::repeat_n(*im, *size))?;
-                }
+            } else if let Some((_, size)) = sizes.first() {
+                im_dim.extend_iter(std::iter::repeat_n(*im, *size))?;
             }
         }
 

@@ -861,18 +861,15 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            match attr.key.as_ref() {
-                                b"dataProcessingRef" => {
-                                    match attr.unescape_value() {
-                                        Ok(v) => {
-                                            self.current_array.set_data_processing_reference(Some(v.into()));
-                                            dp_set = true;
-                                            break;
-                                        },
-                                        Err(msg) => return Err(self.handle_xml_error(msg, state))
-                                    }
+                            if attr.key.as_ref() == b"dataProcessingRef" {
+                                match attr.unescape_value() {
+                                    Ok(v) => {
+                                        self.current_array.set_data_processing_reference(Some(v.into()));
+                                        dp_set = true;
+                                        break;
+                                    },
+                                    Err(msg) => return Err(self.handle_xml_error(msg, state))
                                 }
-                                _ => {}
                             }
                         },
                         Err(msg) => {
