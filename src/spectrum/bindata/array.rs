@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::fmt::{self, Formatter};
 use std::io::prelude::*;
 use std::mem;
+use std::num;
 
 use base64_simd;
 use bytemuck::Pod;
@@ -45,13 +46,21 @@ use super::encodings::{
 #[derive(Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataArray {
+    /// The raw data of the array, stored in a variety of states controlled by [`Self::Compression`], as native bytes
     pub data: Bytes,
+    /// The *kind* of data stored in the array, as in bit-width primitive types
     pub dtype: BinaryDataArrayType,
+    /// How [`Self::data`] is encoded and compressed.
     pub compression: BinaryCompressionType,
+    /// The *what* the data stored in the array was measuring, e.g. an m/z array
     pub name: ArrayType,
+    /// Additional metadata parameters
     pub params: Option<Box<ParamList>>,
+    /// The [`Unit`] for the data measurements
     pub unit: Unit,
-    item_count: Option<usize>,
+    /// A cache for the number of elements stored in the array
+    item_count: Option<num::NonZero<usize>>,
+    /// An identifier reference to a data processing method other than the default method
     data_processing_reference: Option<Box<str>>,
 }
 
@@ -71,9 +80,7 @@ impl core::fmt::Debug for DataArray {
 
 const EMPTY_BUFFER: [u8; 0] = [];
 
-/// A type to represent a base64-encoded, possibly compressed data
-/// array of a fixed size, usually numeric, type. It can be decoded,
-/// and it can
+
 impl<'transient, 'lifespan: 'transient> DataArray {
     pub fn new() -> DataArray {
         DataArray {
@@ -143,6 +150,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    /// This method assumes the data are already in native byte order
     pub fn wrap(name: &ArrayType, dtype: BinaryDataArrayType, data: Bytes) -> DataArray {
         DataArray {
             dtype,
@@ -153,13 +161,18 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    /// This method assumes the data are already in native byte order
     fn set_buffer_of_type(&mut self, data_buffer: Vec<u8>) -> Result<usize, ArrayRetrievalError> {
-        self.item_count = Some(data_buffer.len() / self.dtype().size_of());
+        if data_buffer.is_empty() {
+            self.item_count = None;
+        } else {
+            self.item_count = num::NonZero::try_from(data_buffer.len() / self.dtype().size_of()).ok();
+        }
         self.data = data_buffer;
         Ok(self.data.len())
     }
 
-    /// Directly set the data buffer from a slice of a [`Pod`] type.
+    /// Directly set the data buffer from a slice of a [`Pod`] type, copying it.
     ///
     /// This will return an error if `std::mem::size_of::<T>()` is not equal to
     /// the size of [`DataArray::dtype`].
@@ -170,7 +183,8 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         if self.dtype.size_of() != mem::size_of::<T>() {
             Err(ArrayRetrievalError::DataTypeSizeMismatch)
         } else {
-            self.item_count = Some(data_buffer.len());
+            let n = data_buffer.len();
+            self.item_count = num::NonZero::try_from(n).ok();
             self.data = to_bytes(data_buffer);
             Ok(self.data.len())
         }
@@ -190,7 +204,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         } else {
             let data = bytemuck::bytes_of(&value);
             self.data.extend_from_slice(data);
-            self.item_count = self.item_count.map(|i| i + 1);
+            self.item_count = self.item_count.map(|i| i.saturating_add(1));
             Ok(())
         }
     }
@@ -207,7 +221,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         if self.dtype.size_of() != mem::size_of::<T>() {
             Err(ArrayRetrievalError::DataTypeSizeMismatch)
         } else {
-            self.item_count = self.item_count.map(|i| i + values.len());
+            self.item_count = self.item_count.map(|i| i.saturating_add(values.len()));
             let data = bytemuck::cast_slice(values);
             self.data.extend_from_slice(data);
             Ok(())
@@ -239,7 +253,8 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             return Err(ArrayRetrievalError::DataTypeSizeMismatch)
         }
         for val in iter.into_iter() {
-            self.data.extend_from_slice(bytemuck::bytes_of(&val));
+            let vb = bytemuck::bytes_of(&val);
+            self.data.extend_from_slice(vb);
         }
         Ok(())
     }
@@ -405,7 +420,8 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                     // decoded.
                     Cow::Borrowed(_view) => Ok(self.compression),
                     Cow::Owned(buffer) => {
-                        self.item_count = Some(buffer.len() / self.dtype.size_of());
+                        let n = buffer.len() / self.dtype.size_of();
+                        self.item_count = n.try_into().ok();
                         self.data = buffer;
                         self.compression = BinaryCompressionType::Decoded;
                         Ok(self.compression)
@@ -440,8 +456,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                 Ok(Cow::Owned(bytestring))
             }
             BinaryCompressionType::Zlib => {
-                let bytestring = base64_decode!();
-                Ok(Cow::Owned(Self::decompress_zlib(&bytestring)))
+                let mut bytestring = base64_decode!();
+                bytestring = Self::decompress_zlib(&bytestring);
+                Ok(Cow::Owned(bytestring))
             }
             #[cfg(feature = "zstd")]
             BinaryCompressionType::Zstd => {
@@ -606,7 +623,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         if self.compression == compression {
             Ok(())
         } else {
-            self.item_count = self.data_len().ok();
+            self.item_count = self.data_len().ok().and_then(|n| n.try_into().ok());
             let bytes = self.encode_bytestring(compression);
             self.data = bytes;
             self.compression = compression;
@@ -675,6 +692,26 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
 /// [`DataArray`] implements several compression codecs, some of which require additional dependencies.
 impl DataArray {
+
+    /// Internal helper to byteswap an array
+    #[allow(unused)]
+    fn byteswap(mut data: Vec<u8>, dtype: BinaryDataArrayType) -> Result<Vec<u8>, ArrayRetrievalError> {
+        let z = dtype.size_of();
+        if !(data.len() % z == 0) {
+            return Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        }
+        match z {
+            1 => {
+                data.reverse();
+                Ok(data)
+            },
+            x => {
+                data.chunks_exact_mut(x).for_each(|c| c.reverse());
+                Ok(data)
+            }
+        }
+    }
+
     pub fn compress_zlib(bytestring: &[u8]) -> Bytes {
         let result = Bytes::new();
         let mut compressor = ZlibEncoder::new(result, Compression::best());
@@ -688,9 +725,10 @@ impl DataArray {
         decompressor
             .write_all(bytestring)
             .unwrap_or_else(|e| panic!("Decompression error: {}", e));
-        decompressor
+        let buf = decompressor
             .finish()
-            .unwrap_or_else(|e| panic!("Decompression error: {}", e))
+            .unwrap_or_else(|e| panic!("Decompression error: {}", e));
+        buf
     }
 
     #[cfg(feature = "numpress")]
@@ -762,6 +800,10 @@ impl DataArray {
     }
 
     #[cfg(feature = "zstd")]
+    /// Compress the byte buffer using Zstandard compression.
+    ///
+    /// The default compression level is controlled by [`zstd::DEFAULT_COMPRESSION_LEVEL`], but the `MZDATA_ZSTD_LEVEL`
+    /// environment variable can be used to raise or lower it as desired.
     pub(crate) fn compress_zstd(
         bytestring: &[u8],
         dtype: BinaryDataArrayType,
@@ -965,7 +1007,7 @@ impl<'transient, 'lifespan: 'transient> ByteArrayView<'transient, 'lifespan> for
 
     fn data_len(&'lifespan self) -> Result<usize, ArrayRetrievalError> {
         if let Some(z) = self.item_count {
-            Ok(z)
+            Ok(z.get())
         } else {
             let view = self.view()?;
             let n = view.len();

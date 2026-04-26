@@ -1146,6 +1146,20 @@ impl BinaryCompressionType {
         }
     }
 
+    /// Check if the compressor handles endianess during decoding. Otherwise the data needs to be
+    /// byteswapped to little endianess on big endian systems before use
+    pub const fn is_endian_aware(&self) -> bool {
+        match self {
+            BinaryCompressionType::Zlib |
+            BinaryCompressionType::NoCompression |
+            BinaryCompressionType::DeltaPrediction |
+            BinaryCompressionType::LinearPrediction |
+            BinaryCompressionType::Zstd => false,
+            _ => true,
+
+        }
+    }
+
     pub const fn accession(&self) -> Option<u32> {
         let acc = match self {
             BinaryCompressionType::NoCompression => 1000576,
