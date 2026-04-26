@@ -639,27 +639,68 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         match dtype {
             BinaryDataArrayType::Float32 => {
                 let view = self.to_f32()?;
-                let recast = to_bytes(&view);
-                self.dtype = dtype;
-                self.set_buffer_of_type(recast)
+                #[cfg(target_endian = "big")]
+                {
+                    let mut recast = to_bytes(&view);
+                    dtype.swap_bytes(&mut recast)?;
+                    self.dtype = dtype;
+                    self.set_buffer_of_type(recast)
+                }
+                #[cfg(not(target_endian = "big"))]
+                {
+                    let recast = to_bytes(&view);
+                    self.dtype = dtype;
+                    self.set_buffer_of_type(recast)
+                }
+
             }
             BinaryDataArrayType::Float64 => {
                 let view = self.to_f64()?;
-                let recast = to_bytes(&view);
-                self.dtype = dtype;
-                self.set_buffer_of_type(recast)
+                #[cfg(target_endian = "big")]
+                {
+                    let mut recast = to_bytes(&view);
+                    dtype.swap_bytes(&mut recast)?;
+                    self.dtype = dtype;
+                    self.set_buffer_of_type(recast)
+                }
+                #[cfg(not(target_endian = "big"))]
+                {
+                    let recast = to_bytes(&view);
+                    self.dtype = dtype;
+                    self.set_buffer_of_type(recast)
+                }
             }
             BinaryDataArrayType::Int32 => {
                 let view = self.to_i32()?;
-                let recast = to_bytes(&view);
-                self.dtype = dtype;
-                self.set_buffer_of_type(recast)
+                #[cfg(target_endian = "big")]
+                {
+                    let mut recast = to_bytes(&view);
+                    dtype.swap_bytes(&mut recast)?;
+                    self.dtype = dtype;
+                    self.set_buffer_of_type(recast)
+                }
+                #[cfg(not(target_endian = "big"))]
+                {
+                    let recast = to_bytes(&view);
+                    self.dtype = dtype;
+                    self.set_buffer_of_type(recast)
+                }
             }
             BinaryDataArrayType::Int64 => {
                 let view = self.to_i64()?;
-                let recast = to_bytes(&view);
-                self.dtype = dtype;
-                self.set_buffer_of_type(recast)
+                #[cfg(target_endian = "big")]
+                {
+                    let mut recast = to_bytes(&view);
+                    dtype.swap_bytes(&mut recast)?;
+                    self.dtype = dtype;
+                    self.set_buffer_of_type(recast)
+                }
+                #[cfg(not(target_endian = "big"))]
+                {
+                    let recast = to_bytes(&view);
+                    self.dtype = dtype;
+                    self.set_buffer_of_type(recast)
+                }
             }
             _ => Ok(0),
         }
@@ -692,26 +733,6 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
 /// [`DataArray`] implements several compression codecs, some of which require additional dependencies.
 impl DataArray {
-
-    /// Internal helper to byteswap an array
-    #[allow(unused)]
-    fn byteswap(mut data: Vec<u8>, dtype: BinaryDataArrayType) -> Result<Vec<u8>, ArrayRetrievalError> {
-        let z = dtype.size_of();
-        if !(data.len() % z == 0) {
-            return Err(ArrayRetrievalError::DataTypeSizeMismatch)
-        }
-        match z {
-            1 => {
-                data.reverse();
-                Ok(data)
-            },
-            x => {
-                data.chunks_exact_mut(x).for_each(|c| c.reverse());
-                Ok(data)
-            }
-        }
-    }
-
     pub fn compress_zlib(bytestring: &[u8]) -> Bytes {
         let result = Bytes::new();
         let mut compressor = ZlibEncoder::new(result, Compression::best());

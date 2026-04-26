@@ -1083,6 +1083,39 @@ impl BinaryDataArrayType {
             _ => None,
         }
     }
+
+    /// Byte order swap the data stored in
+    pub fn swap_bytes(&self, data: &mut [u8]) -> Result<(), ArrayRetrievalError> {
+        let z = self.size_of();
+        if !(data.len() % z == 0) {
+            return Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        }
+        match z {
+            1 => {
+                data.reverse();
+            }
+            4 => {
+                data.as_chunks_mut::<4>().0.into_iter().for_each(|c| {
+                    *c = u32::from_ne_bytes(*c).swap_bytes().to_ne_bytes();
+                });
+            }
+            8 => {
+                data.as_chunks_mut::<8>().0.into_iter().for_each(|c| {
+                    *c = u64::from_ne_bytes(*c).swap_bytes().to_ne_bytes();
+                });
+                // data.chunks_exact_mut(4).for_each(|c| {
+                //     c.swap(0, 7);
+                //     c.swap(1, 6);
+                //     c.swap(2, 5);
+                //     c.swap(3, 4);
+                // });
+            }
+            x => {
+                data.chunks_exact_mut(x).for_each(|c| c.reverse());
+            }
+        }
+        Ok(())
+    }
 }
 
 /// The range of compression and encoding states that a raw byte buffer
@@ -1638,5 +1671,20 @@ mod test {
         let decoded: Vec<f64> = dictionary_decoding(&encoded).unwrap();
 
         assert_eq!(data, decoded);
+    }
+
+    #[test]
+    fn test_byteswap() {
+        let x = 42u32;
+        let mut bytes_of = x.to_le_bytes();
+        BinaryDataArrayType::Int32.swap_bytes(&mut bytes_of).unwrap();
+        let y1 = u32::from_le_bytes(bytes_of);
+        let y2 = x.swap_bytes();
+        assert_eq!(y1, y2);
+
+        bytes_of = x.to_be_bytes();
+        BinaryDataArrayType::Int32.swap_bytes(&mut bytes_of).unwrap();
+        let y1 = u32::from_le_bytes(bytes_of);
+        assert_eq!(x, y1);
     }
 }
