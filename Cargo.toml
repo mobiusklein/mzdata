@@ -184,7 +184,7 @@ ndarray = { version = "0.15.6", optional = true }
 filename = { version = "0.1.1", optional = true }
 
 # PROXI-related behaviors
-reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
+reqwest = { version = "0.13", features = ["json", "blocking"], optional = true }
 futures = { version = "0.3", optional = true }
 
 # Thermo RAW-related features
