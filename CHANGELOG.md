@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.63.5] - 2026-05-12
+
+### Added
+
+- Add new `List` variant to `Value` and equivalent types, as well as `ParamValue` trait
+- Add modest support for proper handling of endianness in `DataArray`
+- Upgrade to `thermorawfilereader.rs` v0.7.0 which fixes charge states and macOS ARM support
+- Add MSE iterator behavior `SpectrumMSEIterator`  and `into_mse_iterator` for spectrum and ion mobility frame iterators
+
+### Changed
+
+- Upgrade `mzsignal` version to v1.1.9
+- Implementation detail `to_bytes` always uses little endian bytes
+- Upgrade `mzsignal` to v1.1.10
+- Upgrade `reqwest` to v0.13
+
+### Fixed
+
+- Reduce `DataArray` size by 1 byte
+- Convert non-finite charge state values to 0
+
 ## [0.63.4] - 2026-03-31
 
 ### Added
@@ -1002,7 +1023,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.63.4...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.63.5...HEAD
+[0.63.5]: https://github.com/mobiusklein/mzdata/compare/v0.63.4...v0.63.5
 [0.63.4]: https://github.com/mobiusklein/mzdata/compare/v0.63.3...v0.63.4
 [0.63.3]: https://github.com/mobiusklein/mzdata/compare/v0.63.2...v0.63.3
 [0.63.2]: https://github.com/mobiusklein/mzdata/compare/v0.63.1...v0.63.2
