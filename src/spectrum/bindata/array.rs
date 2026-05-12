@@ -8,6 +8,7 @@ use base64_simd;
 use bytemuck::Pod;
 use flate2::write::{ZlibDecoder, ZlibEncoder};
 use flate2::Compression;
+use num_traits::ToBytes;
 
 use crate::params::{ParamList, Unit};
 
@@ -176,7 +177,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     ///
     /// This will return an error if `std::mem::size_of::<T>()` is not equal to
     /// the size of [`DataArray::dtype`].
-    pub fn update_buffer<T: Pod>(
+    pub fn update_buffer<T: Pod + ToBytes>(
         &mut self,
         data_buffer: &[T],
     ) -> Result<usize, ArrayRetrievalError> {

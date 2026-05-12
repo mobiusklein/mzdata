@@ -6,7 +6,7 @@ use std::{
 };
 use thiserror::{self, Error};
 
-use num_traits::Num;
+use num_traits::{Num, ToBytes};
 #[cfg(feature = "numpress")]
 use numpress;
 
@@ -17,8 +17,14 @@ use crate::{
 
 pub type Bytes = Vec<u8>;
 
-pub fn to_bytes<T: Pod>(data: &[T]) -> Bytes {
-    bytemuck::cast_slice(data).to_vec()
+/// Convert the values in `data` into an owned buffer of little-endian bytes
+pub fn to_bytes<T: Pod + ToBytes>(data: &[T]) -> Bytes {
+    let n = data.len();
+    let mut buf = Vec::with_capacity(n * size_of::<T>());
+    for v in data {
+        buf.extend_from_slice(v.to_le_bytes().as_ref());
+    }
+    buf
 }
 
 pub fn as_bytes<T: Pod>(data: &[T]) -> &[u8] {
@@ -33,10 +39,6 @@ pub fn vec_as_bytes<T: Pod>(data: Vec<T>) -> Bytes {
     buf
 }
 
-const fn is_target_little_endian() -> bool {
-    u16::from_ne_bytes([1, 0]) == 1
-}
-
 mod byte_rotation {
     use super::*;
 
@@ -49,11 +51,14 @@ mod byte_rotation {
             buffer.reserve(delta);
         }
 
-        if is_target_little_endian() {
+        #[cfg(target_endian = "little")]
+        {
             for i in 0..N {
                 buffer.extend(bytes.iter().map(|b| b[i]))
             }
-        } else {
+        }
+        #[cfg(target_endian = "big")]
+        {
             for i in (0..N).rev() {
                 buffer.extend(bytes.iter().map(|b| b[i]))
             }
@@ -99,13 +104,16 @@ mod byte_rotation {
         buffer.clear();
         buffer.resize(data.len(), 0);
 
-        if is_target_little_endian() {
+        #[cfg(target_endian = "little")]
+        {
             for (i, band) in data.chunks_exact(n_entries).enumerate() {
                 for (j, byte) in band.iter().copied().enumerate() {
                     bytemuck::cast_slice_mut::<_, [u8; N]>(buffer)[j][i] = byte;
                 }
             }
-        } else {
+        }
+        #[cfg(target_endian = "big")]
+        {
             for (i, band) in data.chunks_exact(n_entries).enumerate() {
                 for (j, byte) in band.iter().copied().enumerate() {
                     bytemuck::cast_slice_mut::<_, [u8; N]>(buffer)[j][(N - 1) - i] = byte;
