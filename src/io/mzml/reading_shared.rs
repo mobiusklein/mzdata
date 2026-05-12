@@ -372,8 +372,10 @@ pub trait CVParamParse: XMLParseBase {
 
 /// SAX-style start/end/text/empty event handlers
 pub trait MzMLSAX {
+    /// Called on opening tag of an XML element
     fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult;
 
+    /// Called on a self-contained tag of an XML element `<... />`
     fn empty_element(
         &mut self,
         event: &BytesStart,
@@ -381,6 +383,7 @@ pub trait MzMLSAX {
         reader_position: usize,
     ) -> ParserResult;
 
+    /// Called on closing tag of an XML element
     fn end_element(&mut self, event: &BytesEnd, state: MzMLParserState) -> ParserResult;
 
     fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult;
