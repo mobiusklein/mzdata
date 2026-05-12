@@ -664,6 +664,17 @@ pub enum SignalContinuity {
     Profile = 5,
 }
 
+impl SignalContinuity {
+
+    pub const fn is_profile(&self) -> bool {
+        matches!(self, Self::Profile)
+    }
+
+    pub const fn is_centroid(&self) -> bool {
+        matches!(self, Self::Centroid)
+    }
+}
+
 impl Display for SignalContinuity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
@@ -819,7 +830,7 @@ impl_param_described!(Activation, SpectrumDescription);
 impl_param_described_deferred!(SelectedIon, Acquisition, ScanEvent);
 
 /// Types of chromatograms enumerated in the PSI-MS controlled vocabulary
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ChromatogramType {
     #[default]
@@ -834,6 +845,7 @@ pub enum ChromatogramType {
     FlowRateChromatogram,
     PressureChromatogram,
     TemperatureChromatogram,
+    ElectromagneticRadiationChromatogram,
 }
 
 impl ChromatogramType {
@@ -848,6 +860,7 @@ impl ChromatogramType {
             1000813 => Self::EmissionChromatogram,
             1003020 => Self::FlowRateChromatogram,
             1003019 => Self::PressureChromatogram,
+            1000811 => Self::ElectromagneticRadiationChromatogram,
             1000626 => Self::Unknown,
             1002715 => Self::TemperatureChromatogram,
             _ => return None,
@@ -858,7 +871,7 @@ impl ChromatogramType {
     pub fn is_electromagnetic_radiation(&self) -> bool {
         matches!(
             self,
-            Self::AbsorptionChromatogram | Self::EmissionChromatogram
+            Self::AbsorptionChromatogram | Self::EmissionChromatogram | Self::ElectromagneticRadiationChromatogram
         )
     }
 
@@ -895,6 +908,7 @@ impl ChromatogramType {
                 CURIE::new(ControlledVocabulary::MS, 1000473)
             }
             Self::AbsorptionChromatogram => CURIE::new(ControlledVocabulary::MS, 1000812),
+            Self::ElectromagneticRadiationChromatogram => CURIE::new(ControlledVocabulary::MS, 1000811),
             Self::EmissionChromatogram => CURIE::new(ControlledVocabulary::MS, 1000813),
             Self::FlowRateChromatogram => CURIE::new(ControlledVocabulary::MS, 1003020),
             Self::PressureChromatogram => CURIE::new(ControlledVocabulary::MS, 1003019),

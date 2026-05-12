@@ -635,6 +635,10 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'_, C, D> {
         }
     }
 
+    /// Find the point coordinate within the peak layer's coordinate system.
+    ///
+    /// **NOTE**: The [`Self::Deconvoluted`] layer uses a different coordinate system compared to the others, it should
+    /// be explicitly tested against.
     pub fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize> {
         match self {
             Self::Missing => None,

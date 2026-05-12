@@ -30,6 +30,8 @@ pub enum Value {
     /// No value specified
     #[default]
     Empty,
+    /// A list of heterogenous [`Value`]
+    List(Box<[Value]>),
 }
 
 impl Eq for Value {}
@@ -78,6 +80,9 @@ pub trait ParamValue {
         self.is_i64() | self.is_f64()
     }
 
+    /// Check if the value is a list
+    fn is_list(&self) -> bool;
+
     /// Check if the value is a boolean
     fn is_boolean(&self) -> bool;
 
@@ -122,6 +127,9 @@ pub trait ParamValue {
     /// represents the byte representation of the native value, while
     /// [`ParamValue::as_bytes`] is a byte string of the string representation.
     fn to_buffer(&self) -> Result<Cow<'_, [u8]>, ParamValueParseError>;
+
+    /// Get the value as a slice
+    fn as_slice(&self) -> Cow<'_, [Value]>;
 
     /// Convert the value's string representation to `T` if possible
     fn parse<T: FromStr>(&self) -> Result<T, T::Err>;
@@ -182,6 +190,17 @@ impl Display for Value {
             Value::Buffer(v) => f.write_str(&String::from_utf8_lossy(v)),
             Value::Empty => f.write_str(""),
             Value::Boolean(v) => v.fmt(f),
+            Value::List(v) => {
+                f.write_str("[ ")?;
+                if let Some(vi) = v.first() {
+                    vi.fmt(f)?;
+                }
+                for vi in v.iter().skip(1) {
+                    f.write_str(", ")?;
+                    vi.fmt(f)?;
+                }
+                f.write_str(" ]")
+            }
         }
     }
 }
@@ -251,6 +270,10 @@ impl Value {
         matches!(self, Self::String(_))
     }
 
+    fn is_list(&self) -> bool {
+        matches!(self, Self::List(_))
+    }
+
     /// Store the value as a floating point number
     pub fn coerce_f64(&mut self) -> Result<(), ParamValueParseError> {
         let value = self.to_f64()?;
@@ -284,9 +307,20 @@ impl Value {
         Ok(())
     }
 
+    /// Store the value as a boolean
     pub fn coerce_bool(&mut self) -> Result<(), ParamValueParseError> {
         let value = self.to_bool()?;
         *self = Self::Boolean(value);
+        Ok(())
+    }
+
+    /// Store the value as a list
+    pub fn coerce_list(&mut self) -> Result<(), ParamValueParseError> {
+        if !self.is_list() {
+            let mut tmp = Self::Empty;
+            core::mem::swap(&mut tmp, self);
+            *self = Self::List([tmp].into());
+        }
         Ok(())
     }
 
@@ -301,6 +335,7 @@ impl Value {
             Value::Buffer(b) => String::from_utf8_lossy(b).parse(),
             Value::Empty => "".parse(),
             Value::Boolean(b) => b.to_string().parse(),
+            Value::List(_) => self.to_string().parse(),
         }
     }
 
@@ -371,6 +406,15 @@ impl Value {
     fn as_ref(&self) -> ValueRef<'_> {
         self.into()
     }
+
+    /// View this [`Value`] as a [`slice`]
+    pub fn as_slice(&self) -> &[Self] {
+        if let Self::List(val) = self {
+            val.as_ref()
+        } else {
+            core::slice::from_ref(self)
+        }
+    }
 }
 
 impl ParamValue for Value {
@@ -422,6 +466,7 @@ impl ParamValue for Value {
             Self::Int(v) => Cow::Owned(v.to_string().into_bytes()),
             Self::Empty => Cow::Borrowed(b""),
             Self::Boolean(v) => Cow::Owned(v.to_string().into_bytes()),
+            Self::List(_) => Cow::Owned(self.to_string().into_bytes()),
         }
     }
 
@@ -437,6 +482,7 @@ impl ParamValue for Value {
             Self::Int(_) => 8,
             Self::Empty => 0,
             Self::Boolean(_) => mem::size_of::<bool>(),
+            Self::List(v) => v.iter().map(|vi| vi.data_len()).sum()
         }
     }
 
@@ -446,6 +492,14 @@ impl ParamValue for Value {
 
     fn to_bool(&self) -> Result<bool, ParamValueParseError> {
         self.to_bool()
+    }
+
+    fn is_list(&self) -> bool {
+        self.is_list()
+    }
+
+    fn as_slice(&self) -> Cow<'_, [Value]> {
+        Cow::Borrowed(self.as_slice())
     }
 }
 
@@ -507,6 +561,9 @@ impl Hash for Value {
             Self::Buffer(v) => v.hash(state),
             Self::Empty => 0u8.hash(state),
             Self::Boolean(v) => v.hash(state),
+            Self::List(v) => {
+                v.iter().for_each(|vi| vi.hash(state));
+            }
         }
     }
 }
@@ -597,6 +654,8 @@ pub enum ValueRef<'a> {
     Empty,
     /// A true/false value
     Boolean(bool),
+    /// A collection of heterogenous [`Value`]
+    List(Cow<'a, [Value]>),
 }
 
 impl Eq for ValueRef<'_> {}
@@ -698,6 +757,17 @@ impl Display for ValueRef<'_> {
             Self::Buffer(v) => f.write_str(&String::from_utf8_lossy(v)),
             Self::Empty => f.write_str(""),
             Self::Boolean(v) => v.fmt(f),
+            Self::List(v) => {
+                f.write_str("[ ")?;
+                if let Some(vi) = v.first() {
+                    vi.fmt(f)?;
+                }
+                for vi in v.iter().skip(1) {
+                    f.write_str(", ")?;
+                    vi.fmt(f)?;
+                }
+                f.write_str(" ]")
+            }
         }
     }
 }
@@ -746,6 +816,10 @@ impl<'a> ValueRef<'a> {
         matches!(self, Self::String(_))
     }
 
+    fn is_list(&self) -> bool {
+        matches!(self, Self::List(_))
+    }
+
     fn to_bool(&self) -> Result<bool, ParamValueParseError> {
         if let Self::Boolean(val) = self {
             Ok(*val)
@@ -762,6 +836,7 @@ impl<'a> ValueRef<'a> {
         }
     }
 
+    /// Store the value as a boolean
     pub fn coerce_bool(&mut self) -> Result<(), ParamValueParseError> {
         let value = self.to_bool()?;
         *self = Self::Boolean(value);
@@ -808,6 +883,25 @@ impl<'a> ValueRef<'a> {
         }
     }
 
+    /// Store the value as a list
+    pub fn coerce_list(&mut self) -> Result<(), ParamValueParseError> {
+        if !self.is_list() {
+            let dup = match self {
+                Self::Boolean(v) => Value::Boolean(*v),
+                Self::Empty => Value::Empty,
+                Self::Float(v) => Value::Float(*v),
+                Self::Int(v) => Value::Int(*v),
+                Self::Buffer(v) => Value::Buffer(v.to_vec().into()),
+                Self::String(v) => {
+                    Value::String(v.to_string())
+                },
+                Self::List(_) => unimplemented!(),
+            };
+            *self = Self::List(Cow::Owned([dup].into()));
+        }
+        Ok(())
+    }
+
     fn parse<T: FromStr>(&self) -> Result<T, T::Err> {
         match self {
             Self::String(s) => s.parse(),
@@ -816,6 +910,7 @@ impl<'a> ValueRef<'a> {
             Self::Buffer(b) => String::from_utf8_lossy(b).parse(),
             Self::Empty => "".parse(),
             Self::Boolean(v) => v.to_string().parse(),
+            Self::List(_) => self.to_string().parse(),
         }
     }
 
@@ -869,6 +964,8 @@ impl<'a> ValueRef<'a> {
             Err(ParamValueParseError::FailedToExtractBuffer)
         }
     }
+
+
 }
 
 impl ParamValue for ValueRef<'_> {
@@ -928,6 +1025,7 @@ impl ParamValue for ValueRef<'_> {
             Self::Int(v) => Cow::Owned(v.to_string().into_bytes()),
             Self::Empty => Cow::Borrowed(b""),
             Self::Boolean(v) => Cow::Owned(v.to_string().into_bytes()),
+            Self::List(_) => Cow::Owned(self.to_string().into_bytes())
         }
     }
 
@@ -943,6 +1041,33 @@ impl ParamValue for ValueRef<'_> {
             Self::Int(_) => 8,
             Self::Empty => 0,
             Self::Boolean(_) => mem::size_of::<bool>(),
+            Self::List(v) => v.iter().map(|vi| vi.data_len()).sum()
+        }
+    }
+
+    fn is_list(&self) -> bool {
+        self.is_list()
+    }
+
+    fn as_slice(&self) -> Cow<'_, [Value]> {
+        match self {
+            Self::List(v) => {
+                Cow::Borrowed(v)
+            },
+            _ => {
+                let dup = match self {
+                    Self::Boolean(v) => Value::Boolean(*v),
+                    Self::Empty => Value::Empty,
+                    Self::Float(v) => Value::Float(*v),
+                    Self::Int(v) => Value::Int(*v),
+                    Self::Buffer(v) => Value::Buffer(v.to_vec().into()),
+                    Self::String(v) => {
+                        Value::String(v.to_string())
+                    },
+                    Self::List(_) => unimplemented!(),
+                };
+                Cow::Owned([dup].into())
+            }
         }
     }
 }
@@ -956,6 +1081,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Buffer(v) => Self::Buffer(Cow::Borrowed(v)),
             Value::Empty => Self::Empty,
             Value::Boolean(v) => Self::Boolean(*v),
+            Value::List(v) => Self::List(Cow::Borrowed(v))
         }
     }
 }
@@ -984,6 +1110,13 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Buffer(v) => Self::Buffer(v.to_vec().into_boxed_slice()),
             ValueRef::Empty => Self::Empty,
             ValueRef::Boolean(v) => Self::Boolean(v),
+            ValueRef::List(v) => {
+                let mut ve = Vec::with_capacity(v.len());
+                for vi in v.iter() {
+                    ve.push(vi.clone())
+                }
+                Self::List(ve.into_boxed_slice())
+            }
         }
     }
 }
@@ -998,6 +1131,7 @@ impl Hash for ValueRef<'_> {
             Self::Buffer(v) => v.hash(state),
             Self::Empty => 0u8.hash(state),
             Self::Boolean(v) => (*v).hash(state),
+            Self::List(v) => v.iter().for_each(|vi| vi.hash(state)),
         }
     }
 }
@@ -1117,6 +1251,13 @@ impl From<Value> for serde_json::Value {
             Value::String(val) => serde_json::Value::String(val),
             Value::Buffer(val) => serde_json::to_value(&val).unwrap(),
             Value::Empty => serde_json::Value::Null,
+            Value::List(val) => {
+                let mut ve = Vec::new();
+                for vi in val {
+                    ve.push(vi.into());
+                }
+                serde_json::Value::Array(ve)
+            }
         }
     }
 }
@@ -1536,6 +1677,14 @@ impl<'a> ParamValue for ParamCow<'a> {
     fn to_bool(&self) -> Result<bool, ParamValueParseError> {
         <ValueRef<'a> as ParamValue>::to_bool(&self.value)
     }
+
+    fn is_list(&self) -> bool {
+        <ValueRef<'a> as ParamValue>::is_list(&self.value)
+    }
+
+    fn as_slice(&self) -> Cow<'_, [Value]> {
+        <ValueRef<'a> as ParamValue>::as_slice(&self.value)
+    }
 }
 
 impl ParamCow<'static> {
@@ -1711,6 +1860,14 @@ impl ParamValue for Param {
 
     fn to_bool(&self) -> Result<bool, ParamValueParseError> {
         <Value as ParamValue>::to_bool(&self.value)
+    }
+
+    fn is_list(&self) -> bool {
+        <Value as ParamValue>::is_list(&self.value)
+    }
+
+    fn as_slice(&self) -> Cow<'_, [Value]> {
+        <Value as ParamValue>::as_slice(&self.value)
     }
 }
 
@@ -2465,6 +2622,9 @@ units![
     Minute, "UO:0000031", b"UO:0000031", "minute", b"minute", UO, 31;
     MZ, "MS:1000040", b"MS:1000040", "m/z", b"m/z", MS, 1000040;
     Nanometer, "UO:0000018", b"UO:0000018", "nanometer", b"nanometer", UO, 18;
+    Micrometer, "UO:0000017", b"UO:0000017", "micrometer", b"micrometer", UO, 17;
+    Millimeter, "UO:0000016", b"UO:0000016", "millimeter", b"millimeter", UO, 16;
+    Centimeter, "UO:0000015", b"UO:0000015", "centimeter", b"centimeter", UO, 15;
     PartsPerMillion, "UO:0000169", b"UO:0000169", "parts per million ", b"parts per million ", UO, 169;
     Pascal, "UO:0000110", b"UO:0000110", "pascal", b"pascal", UO, 110;
     Percent, "UO:0000187", b"UO:0000187", "percent", b"percent", UO, 187;
@@ -2474,6 +2634,10 @@ units![
     Second, "UO:0000010", b"UO:0000010", "second", b"second", UO, 10;
     Volt, "UO:0000218", b"UO:0000218", "volt", b"volt", UO, 218;
     VoltSecondPerSquareCentimeter, "MS:1002814", b"MS:1002814", "volt-second per square centimeter", b"volt-second per square centimeter", MS, 1002814;
+    Hertz, "UO:000106", b"UO:000106", "hertz", b"hertz", UO, 106;
+    Liter, "UO:0000099", b"UO:0000099", "liter", b"liter", UO, 99;
+    Milliliter, "UO:0000098", b"UO:0000098", "milliliter", b"milliliter", UO, 98;
+    Microliter, "UO:0000101", b"UO:0000101", "microliter", b"microliter", UO, 101;
 ];
 
 impl Default for Unit {

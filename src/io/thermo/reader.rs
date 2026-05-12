@@ -991,14 +991,30 @@ pub(crate) mod sealed {
             &self,
             mass_analyzer: MassAnalyzer,
         ) -> u32 {
-            *self
+            self
                 .components_to_instrument_id
                 .get(&mass_analyzer)
+                .copied()
                 .unwrap_or_else(|| {
-                    panic!(
-                        "Failed to map instrument configuration for {:?} from among {:?}",
-                        mass_analyzer, self.components_to_instrument_id,
-                    )
+                    let ignore_unknown_instrument = std::env::var("MZDATA_IGNORE_UNKNOWN_INSTRUMENT").unwrap_or_else(|_| "error".into());
+                    match ignore_unknown_instrument.as_str() {
+                        "ignore" => {
+                            log::error!(
+                                "Failed to map instrument configuration for {:?} from among {:?}, failing over with the first instrument method",
+                                mass_analyzer, self.components_to_instrument_id,
+                            );
+                            0
+                        },
+                        "silent" => {
+                            0
+                        },
+                        "error" | _ => {
+                            panic!(
+                                "Failed to map instrument configuration for {:?} from among {:?}. To allow this with a warning, set env var MZDATA_IGNORE_UNKNOWN_INSTRUMENT=ignore",
+                                mass_analyzer, self.components_to_instrument_id,
+                            )
+                        },
+                    }
                 })
         }
 
@@ -1037,7 +1053,11 @@ pub(crate) mod sealed {
                     charge.len(),
                 );
                 for z in charge.iter() {
-                    array.push(*z as i32).unwrap();
+                    if z.is_infinite() {
+                        array.push(0).unwrap()
+                    } else {
+                        array.push(*z as i32).unwrap();
+                    }
                 }
                 arrays.add(array)
             }
@@ -1083,6 +1103,7 @@ pub(crate) mod sealed {
                     peaks.push(peak);
                 }
             }
+            log::trace!("Collected {} peaks", peaks.len());
             peaks
         }
 
@@ -1135,12 +1156,14 @@ pub(crate) mod sealed {
                     None
                 };
                 if spec.signal_continuity() == SignalContinuity::Centroid {
+                    log::trace!("Populating peak data for {index}");
                     spec.peaks = Some(self.populate_peaks(&data));
                     if let Some(extra) = extra {
                         spec.arrays = Some(self.populate_raw_signal(&data));
                         self.populate_extended_data(spec.arrays.as_mut().unwrap(), &extra);
                     }
                 } else {
+                    log::trace!("Populating array data for {index}");
                     spec.arrays = Some(self.populate_raw_signal(&data));
                     if let Some(extra) = extra {
                         self.populate_extended_data(spec.arrays.as_mut().unwrap(), &extra);

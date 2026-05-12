@@ -20,6 +20,12 @@ use crate::params::{curie_to_num, ControlledVocabulary, Param, ParamCow, Unit};
 use crate::prelude::*;
 use crate::spectrum::{bindata::ArrayRetrievalError, ArrayType};
 
+
+pub(crate) fn decode_latin1_escape(value: &[u8]) -> String {
+    quick_xml::escape::escape(encoding_rs::mem::decode_latin1(value).as_ref()).into()
+}
+
+
 /**
 The different states the [`MzMLReaderType`](crate::io::mzml::MzMLReaderType) can enter while parsing
 different phases of the document. This information is really only
@@ -176,12 +182,18 @@ pub trait CVParamParse: XMLParseBase {
             match attr_parsed {
                 Ok(attr) => match attr.key.as_ref() {
                     b"name" => {
-                        name = Some(attr.unescape_value().unwrap_or_else(|e| {
+                        name = Some(attr.unescape_value().or_else(|_| {
+                            log::debug!("Non-UTF-8 detected in parameter name at {reader_position} in state {state}");
+                            Ok(decode_latin1_escape(&attr.value).into())
+                        }).unwrap_or_else(|e: quick_xml::Error| {
                             panic!("Error decoding CV param name at {}: {}", reader_position, e)
                         }));
                     }
                     b"value" => {
-                        value = Some(attr.unescape_value().unwrap_or_else(|e| {
+                        value = Some(attr.unescape_value().or_else(|_| {
+                            log::debug!("Non-UTF-8 detected in parameter value at {reader_position} in state {state}");
+                            Ok(decode_latin1_escape(&attr.value).into())
+                        }).unwrap_or_else(|e: quick_xml::Error| {
                             panic!(
                                 "Error decoding CV param value at {}: {}",
                                 reader_position, e
@@ -213,7 +225,10 @@ pub trait CVParamParse: XMLParseBase {
                         accession = acc;
                     }
                     b"unitName" => {
-                        let v = attr.unescape_value().unwrap_or_else(|e| {
+                        let v = attr.unescape_value().or_else(|_| {
+                            log::debug!("Non-UTF-8 detected in parameter unit name at {reader_position} in state {state}");
+                            Ok(decode_latin1_escape(&attr.value).into())
+                        }).unwrap_or_else(|e: quick_xml::Error| {
                             panic!(
                                 "Error decoding CV param unit name at {}: {}",
                                 reader_position, e
@@ -260,7 +275,11 @@ pub trait CVParamParse: XMLParseBase {
                     b"name" => {
                         param.name = attr
                             .unescape_value()
-                            .unwrap_or_else(|e| {
+                            .or_else(|_| {
+                                log::debug!("Non-UTF-8 detected in parameter name at {reader_position} in state {state}");
+                                Ok(decode_latin1_escape(&attr.value).into())
+                            })
+                            .unwrap_or_else(|e: quick_xml::Error| {
                                 panic!("Error decoding CV param name at {}: {}", reader_position, e)
                             })
                             .to_string();
@@ -268,7 +287,11 @@ pub trait CVParamParse: XMLParseBase {
                     b"value" => {
                         param.value = attr
                             .unescape_value()
-                            .unwrap_or_else(|e| {
+                            .or_else(|_| {
+                                log::debug!("Non-UTF-8 detected in parameter value at {reader_position} in state {state}");
+                                Ok(decode_latin1_escape(&attr.value).into())
+                            })
+                            .unwrap_or_else(|e: quick_xml::Error| {
                                 panic!(
                                     "Error decoding CV param value at {}: {}",
                                     reader_position, e
@@ -301,7 +324,10 @@ pub trait CVParamParse: XMLParseBase {
                         param.accession = acc;
                     }
                     b"unitName" => {
-                        let v = attr.unescape_value().unwrap_or_else(|e| {
+                        let v = attr.unescape_value().or_else(|_| {
+                            log::debug!("Non-UTF-8 detected in parameter unit name at {reader_position} in state {state}");
+                            Ok(decode_latin1_escape(&attr.value).into())
+                        }).unwrap_or_else(|e: quick_xml::Error| {
                             panic!(
                                 "Error decoding CV param unit name at {}: {}",
                                 reader_position, e
@@ -346,8 +372,10 @@ pub trait CVParamParse: XMLParseBase {
 
 /// SAX-style start/end/text/empty event handlers
 pub trait MzMLSAX {
+    /// Called on opening tag of an XML element
     fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult;
 
+    /// Called on a self-contained tag of an XML element `<... />`
     fn empty_element(
         &mut self,
         event: &BytesStart,
@@ -355,6 +383,7 @@ pub trait MzMLSAX {
         reader_position: usize,
     ) -> ParserResult;
 
+    /// Called on closing tag of an XML element
     fn end_element(&mut self, event: &BytesEnd, state: MzMLParserState) -> ParserResult;
 
     fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult;
@@ -461,8 +490,14 @@ impl IndexedMzMLIndexExtractor {
                             if attr.key.as_ref() == b"idRef" {
                                 self.last_id = attr
                                     .unescape_value()
-                                    .expect("Error decoding idRef")
-                                    .to_string();
+                                    .map(|v| v.to_string())
+                                    .or_else(|_| -> Result<String, quick_xml::Error> {
+                                        log::trace!("Detected non-UTF8 character in idRef");
+                                        Ok(decode_latin1_escape(&attr.value))
+                                    })
+                                    .unwrap_or_else(|e| {
+                                        panic!("Error decoding idRef on offset {e} from bytes {:?}", attr.value)
+                                    });
                             }
                         }
                         Err(err) => {

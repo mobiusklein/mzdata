@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.63.5] - 2026-05-12
+
+### Added
+
+- Add new `List` variant to `Value` and equivalent types, as well as `ParamValue` trait
+- Add modest support for proper handling of endianness in `DataArray`
+- Upgrade to `thermorawfilereader.rs` v0.7.0 which fixes charge states and macOS ARM support
+- Add MSE iterator behavior `SpectrumMSEIterator`  and `into_mse_iterator` for spectrum and ion mobility frame iterators
+
+### Changed
+
+- Upgrade `mzsignal` version to v1.1.9
+- Implementation detail `to_bytes` always uses little endian bytes
+- Upgrade `mzsignal` to v1.1.10
+- Upgrade `reqwest` to v0.13
+
+### Fixed
+
+- Reduce `DataArray` size by 1 byte
+- Convert non-finite charge state values to 0
+
+## [0.63.4] - 2026-03-31
+
+### Added
+
+- Add `ChromatogramType::ElectromagneticRadiationChromatogram`
+- Add additional metric length, hertz, and volume `Unit`
+- Add `Ord` and `Hash` impls to `SpectrumType`
+- Add `is_profile` and `is_centroid` predicates to `SignalContinuity`
+- Add finalized accession codes for Zstd based compression methods
+- Add file-level metadata to the Python API
+- Update `thermorawfilereader` to v0.6.0, add Excedion to the instrument database, add `MZDATA_IGNORE_UNKNOWN_INSTRUMENT` to support ignoring unknown instrument models
+
+### Changed
+
+- Deprecate `main.rs`, point to `mzinfo.rs` example
+
+### Fixed
+
+- Start python bindings, vis wasm
+
+## [0.63.3] - 2025-12-06
+
+### Fixed
+
+- Propagate units in `BinaryArrayMap3D::stack`
+
+## [0.63.2] - 2025-12-03
+
+### Added
+
+- Support latin1 in mzML param names and values too
+
+## [0.63.1] - 2025-12-01
+
+### Added
+
+- Support latin1 characters for identifiers in spectra and chromatograms for mzML (#47)
+
+### Fixed
+
+- Fix trait method name on count_chromatograms for MzMLb reader
+
 ## [0.63.0] - 2025-11-22
 
 ### Added
@@ -960,7 +1023,12 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.63.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.63.5...HEAD
+[0.63.5]: https://github.com/mobiusklein/mzdata/compare/v0.63.4...v0.63.5
+[0.63.4]: https://github.com/mobiusklein/mzdata/compare/v0.63.3...v0.63.4
+[0.63.3]: https://github.com/mobiusklein/mzdata/compare/v0.63.2...v0.63.3
+[0.63.2]: https://github.com/mobiusklein/mzdata/compare/v0.63.1...v0.63.2
+[0.63.1]: https://github.com/mobiusklein/mzdata/compare/v0.63.0...v0.63.1
 [0.63.0]: https://github.com/mobiusklein/mzdata/compare/v0.62.1...v0.63.0
 [0.62.1]: https://github.com/mobiusklein/mzdata/compare/v0.62.0...v0.62.1
 [0.62.0]: https://github.com/mobiusklein/mzdata/compare/v0.61.0...v0.62.0

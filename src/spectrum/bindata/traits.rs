@@ -45,7 +45,18 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         &'lifespan self,
     ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
         match self.view() {
-            Ok(data) => Self::coerce_from(data),
+            Ok(data) => {
+                #[cfg(target_endian = "big")]
+                {
+                    let mut data = Cow::Owned(data.to_vec());
+                    self.dtype().swap_bytes(&mut data)?;
+                    Self::coerce_from(data)
+                }
+                #[cfg(not(target_endian = "big"))]
+                {
+                    Self::coerce_from(data)
+                }
+            },
             Err(err) => Err(err),
         }
     }
@@ -227,6 +238,10 @@ pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
         &'lifespan mut self,
     ) -> Result<&'transient mut [T], ArrayRetrievalError> {
         let view = self.view_mut()?;
+        #[cfg(target_endian = "big")]
+        {
+            log::error!("Mutable view of raw bytes on big endian system is only partially supported.")
+        }
         Self::coerce_from_mut(view)
     }
 
@@ -260,9 +275,21 @@ impl<'a, T: Pod> DataSliceIter<'a, T> {
         if (offset + z) > self.buffer.len() {
             None
         } else {
-            let val = bytemuck::from_bytes(&self.buffer[offset..offset + z]);
-            self.i += 1;
-            Some(*val)
+            let data = &self.buffer[offset..offset + z];
+            #[cfg(target_endian = "big")]
+            {
+                let mut data = data.to_vec();
+                data.reverse();
+                let val = bytemuck::from_bytes(data);
+                self.i += 1;
+                Some(*val)
+            }
+            #[cfg(not(target_endian = "big"))]
+            {
+                let val = bytemuck::from_bytes(data);
+                self.i += 1;
+                Some(*val)
+            }
         }
     }
 }

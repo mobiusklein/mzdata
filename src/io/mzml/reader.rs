@@ -583,6 +583,7 @@ impl<
         D: DeconvolutedCentroidLike + BuildFromArrayMap,
     > MzMLSpectrumBuilder<'inner, C, D>
 {
+    /// Create a new default [`MzMLSpectrumBuilder`] with [`DetailLevel::Full`]
     pub fn new() -> MzMLSpectrumBuilder<'inner, C, D> {
         Self::with_detail_level(DetailLevel::Full)
     }
@@ -591,6 +592,8 @@ impl<
         self.run_level_data_processing = identifier;
     }
 
+    /// Create a new default [`MzMLSpectrumBuilder`] with the specified [`DetailLevel`] to control
+    /// array loading
     pub fn with_detail_level(detail_level: DetailLevel) -> MzMLSpectrumBuilder<'inner, C, D> {
         Self {
             detail_level,
@@ -608,6 +611,7 @@ impl<
         }
     }
 
+    /// Discard all the accumulated data and revert to the default configuration
     pub fn _reset(&mut self) {
         self.params.clear();
         self.acquisition = Acquisition::default();
@@ -623,22 +627,27 @@ impl<
         self.polarity = ScanPolarity::Unknown;
     }
 
+    /// Specify what kind of [`EntryType`] we are parsing. This should be called by the driving parser
     pub fn set_entry_type(&mut self, entry_type: EntryType) {
         self.entry_type = entry_type;
     }
 
+    /// Get the current [`EntryType`] to determine if we're parsing a spectrum or chromatogram element
     pub fn entry_type(&self) -> EntryType {
         self.entry_type
     }
 
+    /// Are we currently parsing a `<spectrum>`?
     pub fn is_spectrum_entry(&self) -> bool {
         matches!(self.entry_type, EntryType::Spectrum)
     }
 
+    /// Are we currently parsing a `<chromatogram>`?
     pub fn is_chromatogram_entry(&self) -> bool {
         matches!(self.entry_type, EntryType::Chromatogram)
     }
 
+    /// Insert a [`Param`] into the entry being built routed by the provided [`MzMLParserState`]
     pub fn fill_param_into(&mut self, param: Param, state: MzMLParserState) {
         match state {
             MzMLParserState::Spectrum => {
@@ -738,7 +747,12 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                     match attr_parsed {
                         Ok(attr) => match attr.key.as_ref() {
                             b"id" => {
-                                self.entry_id = match attr.unescape_value() {
+                                self.entry_id = match attr.unescape_value()
+                                    .map(|v| v.to_string())
+                                    .or_else(|_| -> Result<String, quick_xml::Error> {
+                                        log::trace!("Detected non-UTF8 character in spectrum id");
+                                        Ok(quick_xml::escape::escape(encoding_rs::mem::decode_latin1(&attr.value).as_ref()).into())
+                                    }) {
                                     Ok(value) => value.to_string(),
                                     Err(e) => {
                                         return Err(xml_error!(
@@ -856,18 +870,15 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
-                            match attr.key.as_ref() {
-                                b"dataProcessingRef" => {
-                                    match attr.unescape_value() {
-                                        Ok(v) => {
-                                            self.current_array.set_data_processing_reference(Some(v.into()));
-                                            dp_set = true;
-                                            break;
-                                        },
-                                        Err(msg) => return Err(self.handle_xml_error(msg, state))
-                                    }
+                            if attr.key.as_ref() == b"dataProcessingRef" {
+                                match attr.unescape_value() {
+                                    Ok(v) => {
+                                        self.current_array.set_data_processing_reference(Some(v.into()));
+                                        dp_set = true;
+                                        break;
+                                    },
+                                    Err(msg) => return Err(self.handle_xml_error(msg, state))
                                 }
-                                _ => {}
                             }
                         },
                         Err(msg) => {
@@ -898,8 +909,11 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                             b"id" => {
                                 self.entry_id = attr
                                     .unescape_value()
-                                    .expect("Error decoding id")
-                                    .to_string();
+                                    .map(|v| v.to_string())
+                                    .or_else(|_| -> Result<String, quick_xml::Error> {
+                                        log::trace!("Detected non-UTF8 character in chromatogram id");
+                                        Ok(quick_xml::escape::escape(encoding_rs::mem::decode_latin1(&attr.value).as_ref()).into())
+                                    }).unwrap();
                                 trace!("Stored chromatogram id = {}", self.entry_id);
                             }
                             b"index" => {

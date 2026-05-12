@@ -24,6 +24,12 @@
 //! # Licensing
 //! By using this library, you agree to the [RawFileReader License](https://github.com/thermofisherlsms/RawFileReader/blob/main/License.doc)
 //!
+//! # Instrument configuration database
+//! Like other tooling that works with instrument vendor files, as new instruments are released, information about the model names and their
+//! components takes time to percolate through the ecosystem. If `mzdata` encounters an instrument it doesn't recognize, it won't know how to
+//! fill in the [`InstrumentConfiguration`](crate::meta::InstrumentConfiguration) for that instrument, and will `panic` by default. Set the
+//! `MZDATA_IGNORE_UNKNOWN_INSTRUMENT` environment variable to `ignore` to tell the library to just assume this is the default (empty) instrument
+//! configuration and carry on with a warning, or `silent` to suppress the warning too. Not all APIs may know how to cope with this!
 mod instruments;
 mod reader;
 

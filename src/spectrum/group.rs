@@ -12,13 +12,13 @@ use crate::{
     io::{
         RandomAccessIonMobilityFrameGroupingIterator, RandomAccessIonMobilityFrameIterator,
         RandomAccessSpectrumGroupingIterator, RandomAccessSpectrumIterator, SpectrumAccessError,
-    },
-    prelude::{MSDataFileMetadata, SpectrumLike},
+    }, prelude::{MSDataFileMetadata, SpectrumLike}
 };
 
 use super::{IonMobilityFrameLike, MultiLayerIonMobilityFrame, MultiLayerSpectrum};
 
 mod frame;
+mod mse_iter;
 mod spectrum;
 mod util;
 
@@ -26,6 +26,8 @@ pub use frame::{
     IonMobilityFrameGroup, IonMobilityFrameGroupIntoIter, IonMobilityFrameGroupIter,
     IonMobilityFrameGrouping,
 };
+#[allow(unused)]
+pub use mse_iter::{IonMobilityFrameMSEIterator, SpectrumMSEIterator, IonMobilityFrameMSEIteratorExt, SpectrumMSEIteratorExt};
 pub use spectrum::{SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter, SpectrumGrouping};
 pub(crate) use util::GenerationTracker;
 
@@ -48,8 +50,8 @@ pub struct SpectrumGroupingIterator<
     G: SpectrumGrouping<C, D, S> = SpectrumGroup<C, D, S>,
 > {
     pub source: R,
-    pub queue: VecDeque<S>,
-    pub product_mapping: HashMap<String, Vec<S>>,
+    queue: VecDeque<S>,
+    product_mapping: HashMap<String, Vec<S>>,
     generation_tracker: GenerationTracker,
     buffering: usize,
     highest_ms_level: u8,
@@ -72,6 +74,7 @@ macro_rules! impl_ms_level_switching {
             self.queue.len() >= self.buffering
         }
 
+        /// Add a product ion entry (MS level > 1), updating the precursor-product mapping
         fn add_product(&mut self, scan: S) {
             self.depth += 1;
             if let Some(precursor) = scan.precursor() {
@@ -222,7 +225,40 @@ macro_rules! impl_ms_level_switching {
                 None
             }
         }
+
+        /// Get an immutable view of the queue of entries that haven't been emitted yet
+        pub fn queue(&self) -> &VecDeque<S> {
+            &self.queue
+        }
+
+        /// Get an immutable view of the mapping from precursor to product entry relationships
+        pub fn product_mapping(&self) -> &HashMap<String, Vec<S>> {
+            &self.product_mapping
+        }
+
+        /// Set the maximum number of entries to pass without seeing an MS1 entry before emitting
+        /// a group without a precursor
+        pub fn set_max_ms1_seeking_depth(&mut self, max_ms1_seeking_depth: u32) {
+            self.max_ms1_seeking_depth = max_ms1_seeking_depth;
+        }
+
+        /// Get the maximum number of entries to pass without seeing an MS1 entry before emitting
+        /// a group without a precursor
+        pub fn max_ms1_seeking_depth(&self) -> u32 {
+            self.max_ms1_seeking_depth
+        }
+
+        /// Reset the internal storage as though this iterator hadn't ever been used
+        pub fn clear(&mut self) {
+            self.product_mapping.clear();
+            self.queue.clear();
+            self.generation_tracker.clear();
+            self.generation = 0;
+            self.depth = 0;
+            self.passed_first_ms1 = false;
+        }
     };
+
 }
 
 impl<
@@ -256,14 +292,6 @@ impl<
 
     impl_ms_level_switching!();
 
-    pub fn clear(&mut self) {
-        self.product_mapping.clear();
-        self.queue.clear();
-        self.generation_tracker.clear();
-        self.generation = 0;
-        self.depth = 0;
-        self.passed_first_ms1 = false;
-    }
 
     /**
     Retrieve the next group of spectra from the iterator, buffering all intermediate and
@@ -403,13 +431,13 @@ pub struct IonMobilityFrameGroupingIterator<
     G: IonMobilityFrameGrouping<C, D, S> = IonMobilityFrameGroup<C, D, S>,
 > {
     pub source: R,
-    pub queue: VecDeque<S>,
-    pub product_mapping: HashMap<String, Vec<S>>,
+    queue: VecDeque<S>,
+    product_mapping: HashMap<String, Vec<S>>,
     generation_tracker: GenerationTracker,
     buffering: usize,
     highest_ms_level: u8,
     generation: usize,
-    pub max_ms1_seeking_depth: u32,
+    max_ms1_seeking_depth: u32,
     depth: u32,
     passed_first_ms1: bool,
     phantom: PhantomData<S>,
@@ -463,15 +491,6 @@ impl<
     }
 
     impl_ms_level_switching!();
-
-    pub fn clear(&mut self) {
-        self.product_mapping.clear();
-        self.queue.clear();
-        self.generation_tracker.clear();
-        self.generation = 0;
-        self.depth = 0;
-        self.passed_first_ms1 = false;
-    }
 
     /**
     Retrieve the next group of spectra from the iterator, buffering all intermediate and
@@ -1528,5 +1547,20 @@ mod test {
         let tic = SpectrumLike::<CentroidPeak, DeconvolutedPeak>::peaks(&spec).tic();
         assert!(!tic.is_nan());
         assert!(tic > 0.0);
+    }
+
+    #[test]
+    fn test_mse_iter() -> std::io::Result<()> {
+        let reader = crate::MZReader::open_gzipped_read_seek(std::fs::File::open(
+            "./test/data/5B8egg_500ng_30V450ms18msReal_Ramp3_01.mzML.gz",
+        )?)?;
+
+        let mut iter = reader.into_mse_iterator(1.into(), Default::default());
+        let bat = iter.next().unwrap();
+        assert!(bat.precursor().is_some());
+        assert_eq!(bat.products().len(), 1);
+
+
+        Ok(())
     }
 }

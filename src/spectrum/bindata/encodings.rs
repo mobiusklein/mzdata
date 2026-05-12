@@ -6,7 +6,7 @@ use std::{
 };
 use thiserror::{self, Error};
 
-use num_traits::Num;
+use num_traits::{Num, ToBytes};
 #[cfg(feature = "numpress")]
 use numpress;
 
@@ -17,8 +17,14 @@ use crate::{
 
 pub type Bytes = Vec<u8>;
 
-pub fn to_bytes<T: Pod>(data: &[T]) -> Bytes {
-    bytemuck::cast_slice(data).to_vec()
+/// Convert the values in `data` into an owned buffer of little-endian bytes
+pub fn to_bytes<T: Pod + ToBytes>(data: &[T]) -> Bytes {
+    let n = data.len();
+    let mut buf = Vec::with_capacity(n * size_of::<T>());
+    for v in data {
+        buf.extend_from_slice(v.to_le_bytes().as_ref());
+    }
+    buf
 }
 
 pub fn as_bytes<T: Pod>(data: &[T]) -> &[u8] {
@@ -33,10 +39,6 @@ pub fn vec_as_bytes<T: Pod>(data: Vec<T>) -> Bytes {
     buf
 }
 
-const fn is_target_little_endian() -> bool {
-    u16::from_ne_bytes([1, 0]) == 1
-}
-
 mod byte_rotation {
     use super::*;
 
@@ -49,11 +51,14 @@ mod byte_rotation {
             buffer.reserve(delta);
         }
 
-        if is_target_little_endian() {
+        #[cfg(target_endian = "little")]
+        {
             for i in 0..N {
                 buffer.extend(bytes.iter().map(|b| b[i]))
             }
-        } else {
+        }
+        #[cfg(target_endian = "big")]
+        {
             for i in (0..N).rev() {
                 buffer.extend(bytes.iter().map(|b| b[i]))
             }
@@ -99,13 +104,16 @@ mod byte_rotation {
         buffer.clear();
         buffer.resize(data.len(), 0);
 
-        if is_target_little_endian() {
+        #[cfg(target_endian = "little")]
+        {
             for (i, band) in data.chunks_exact(n_entries).enumerate() {
                 for (j, byte) in band.iter().copied().enumerate() {
                     bytemuck::cast_slice_mut::<_, [u8; N]>(buffer)[j][i] = byte;
                 }
             }
-        } else {
+        }
+        #[cfg(target_endian = "big")]
+        {
             for (i, band) in data.chunks_exact(n_entries).enumerate() {
                 for (j, byte) in band.iter().copied().enumerate() {
                     bytemuck::cast_slice_mut::<_, [u8; N]>(buffer)[j][(N - 1) - i] = byte;
@@ -1083,6 +1091,39 @@ impl BinaryDataArrayType {
             _ => None,
         }
     }
+
+    /// Byte order swap the data stored in
+    pub fn swap_bytes(&self, data: &mut [u8]) -> Result<(), ArrayRetrievalError> {
+        let z = self.size_of();
+        if !(data.len() % z == 0) {
+            return Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        }
+        match z {
+            1 => {
+                data.reverse();
+            }
+            4 => {
+                data.as_chunks_mut::<4>().0.into_iter().for_each(|c| {
+                    *c = u32::from_ne_bytes(*c).swap_bytes().to_ne_bytes();
+                });
+            }
+            8 => {
+                data.as_chunks_mut::<8>().0.into_iter().for_each(|c| {
+                    *c = u64::from_ne_bytes(*c).swap_bytes().to_ne_bytes();
+                });
+                // data.chunks_exact_mut(4).for_each(|c| {
+                //     c.swap(0, 7);
+                //     c.swap(1, 6);
+                //     c.swap(2, 5);
+                //     c.swap(3, 4);
+                // });
+            }
+            x => {
+                data.chunks_exact_mut(x).for_each(|c| c.reverse());
+            }
+        }
+        Ok(())
+    }
 }
 
 /// The range of compression and encoding states that a raw byte buffer
@@ -1109,6 +1150,7 @@ pub enum BinaryCompressionType {
     ZstdDict,
     NumpressLinearZstd,
     NumpressSLOFZstd,
+    NumpressPICZstd,
 }
 
 impl BinaryCompressionType {
@@ -1145,6 +1187,20 @@ impl BinaryCompressionType {
         }
     }
 
+    /// Check if the compressor handles endianess during decoding. Otherwise the data needs to be
+    /// byteswapped to little endianess on big endian systems before use
+    pub const fn is_endian_aware(&self) -> bool {
+        match self {
+            BinaryCompressionType::Zlib |
+            BinaryCompressionType::NoCompression |
+            BinaryCompressionType::DeltaPrediction |
+            BinaryCompressionType::LinearPrediction |
+            BinaryCompressionType::Zstd => false,
+            _ => true,
+
+        }
+    }
+
     pub const fn accession(&self) -> Option<u32> {
         let acc = match self {
             BinaryCompressionType::NoCompression => 1000576,
@@ -1157,11 +1213,12 @@ impl BinaryCompressionType {
             BinaryCompressionType::NumpressPICZlib => 1002747,
             BinaryCompressionType::DeltaPrediction => 1003089,
             BinaryCompressionType::LinearPrediction => 1003090,
-            BinaryCompressionType::NumpressSLOFZstd => 9999994,
-            BinaryCompressionType::NumpressLinearZstd => 9999995,
-            BinaryCompressionType::ZstdDict => 9999996,
-            BinaryCompressionType::Zstd => 9999997,
-            BinaryCompressionType::ShuffleZstd => 9999998,
+            BinaryCompressionType::NumpressSLOFZstd => 1003785,
+            BinaryCompressionType::NumpressLinearZstd => 1003783,
+            BinaryCompressionType::NumpressPICZstd => 1003784,
+            BinaryCompressionType::ZstdDict => 1003782,
+            BinaryCompressionType::Zstd => 1003780,
+            BinaryCompressionType::ShuffleZstd => 1003781,
             BinaryCompressionType::DeltaShuffleZstd => 9999999,
             BinaryCompressionType::Decoded => return None,
         };
@@ -1218,6 +1275,14 @@ impl BinaryCompressionType {
                 } =>
             {
                 Some(BinaryCompressionType::NumpressSLOFZstd)
+            }
+            x if x
+                == CURIE {
+                    controlled_vocabulary: ControlledVocabulary::MS,
+                    accession: BinaryCompressionType::NumpressPICZstd.accession().unwrap(),
+                } =>
+            {
+                Some(BinaryCompressionType::NumpressPICZstd)
             }
             x if x
                 == CURIE {
@@ -1317,6 +1382,15 @@ impl BinaryCompressionType {
             BinaryCompressionType::NumpressLinearZstd => {
                 return Some(ParamCow::const_new(
                     "MS-Numpress linear prediction compression followed by zstd compression",
+                    crate::params::ValueRef::Empty,
+                    self.accession(),
+                    Some(ControlledVocabulary::MS),
+                    Unit::Unknown,
+                ))
+            }
+            BinaryCompressionType::NumpressPICZstd => {
+                return Some(ParamCow::const_new(
+                    "MS-Numpress positive integer compression followed by zstd compression",
                     crate::params::ValueRef::Empty,
                     self.accession(),
                     Some(ControlledVocabulary::MS),
@@ -1605,5 +1679,20 @@ mod test {
         let decoded: Vec<f64> = dictionary_decoding(&encoded).unwrap();
 
         assert_eq!(data, decoded);
+    }
+
+    #[test]
+    fn test_byteswap() {
+        let x = 42u32;
+        let mut bytes_of = x.to_le_bytes();
+        BinaryDataArrayType::Int32.swap_bytes(&mut bytes_of).unwrap();
+        let y1 = u32::from_le_bytes(bytes_of);
+        let y2 = x.swap_bytes();
+        assert_eq!(y1, y2);
+
+        bytes_of = x.to_be_bytes();
+        BinaryDataArrayType::Int32.swap_bytes(&mut bytes_of).unwrap();
+        let y1 = u32::from_le_bytes(bytes_of);
+        assert_eq!(x, y1);
     }
 }
