@@ -1053,7 +1053,11 @@ pub(crate) mod sealed {
                     charge.len(),
                 );
                 for z in charge.iter() {
-                    array.push(*z as i32).unwrap();
+                    if z.is_infinite() {
+                        array.push(0).unwrap()
+                    } else {
+                        array.push(*z as i32).unwrap();
+                    }
                 }
                 arrays.add(array)
             }
@@ -1099,6 +1103,7 @@ pub(crate) mod sealed {
                     peaks.push(peak);
                 }
             }
+            log::trace!("Collected {} peaks", peaks.len());
             peaks
         }
 
@@ -1151,12 +1156,14 @@ pub(crate) mod sealed {
                     None
                 };
                 if spec.signal_continuity() == SignalContinuity::Centroid {
+                    log::trace!("Populating peak data for {index}");
                     spec.peaks = Some(self.populate_peaks(&data));
                     if let Some(extra) = extra {
                         spec.arrays = Some(self.populate_raw_signal(&data));
                         self.populate_extended_data(spec.arrays.as_mut().unwrap(), &extra);
                     }
                 } else {
+                    log::trace!("Populating array data for {index}");
                     spec.arrays = Some(self.populate_raw_signal(&data));
                     if let Some(extra) = extra {
                         self.populate_extended_data(spec.arrays.as_mut().unwrap(), &extra);
