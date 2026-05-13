@@ -6,7 +6,9 @@ use std::convert::TryFrom;
 use std::fmt::Display;
 use std::hash::Hash;
 use std::str::{self, FromStr};
+use std::sync::Arc;
 use std::{io, mem, num};
+
 
 use thiserror::Error;
 
@@ -482,7 +484,7 @@ impl ParamValue for Value {
             Self::Int(_) => 8,
             Self::Empty => 0,
             Self::Boolean(_) => mem::size_of::<bool>(),
-            Self::List(v) => v.iter().map(|vi| vi.data_len()).sum()
+            Self::List(v) => v.iter().map(|vi| vi.data_len()).sum(),
         }
     }
 
@@ -892,9 +894,7 @@ impl<'a> ValueRef<'a> {
                 Self::Float(v) => Value::Float(*v),
                 Self::Int(v) => Value::Int(*v),
                 Self::Buffer(v) => Value::Buffer(v.to_vec().into()),
-                Self::String(v) => {
-                    Value::String(v.to_string())
-                },
+                Self::String(v) => Value::String(v.to_string()),
                 Self::List(_) => unimplemented!(),
             };
             *self = Self::List(Cow::Owned([dup].into()));
@@ -964,8 +964,6 @@ impl<'a> ValueRef<'a> {
             Err(ParamValueParseError::FailedToExtractBuffer)
         }
     }
-
-
 }
 
 impl ParamValue for ValueRef<'_> {
@@ -1025,7 +1023,7 @@ impl ParamValue for ValueRef<'_> {
             Self::Int(v) => Cow::Owned(v.to_string().into_bytes()),
             Self::Empty => Cow::Borrowed(b""),
             Self::Boolean(v) => Cow::Owned(v.to_string().into_bytes()),
-            Self::List(_) => Cow::Owned(self.to_string().into_bytes())
+            Self::List(_) => Cow::Owned(self.to_string().into_bytes()),
         }
     }
 
@@ -1041,7 +1039,7 @@ impl ParamValue for ValueRef<'_> {
             Self::Int(_) => 8,
             Self::Empty => 0,
             Self::Boolean(_) => mem::size_of::<bool>(),
-            Self::List(v) => v.iter().map(|vi| vi.data_len()).sum()
+            Self::List(v) => v.iter().map(|vi| vi.data_len()).sum(),
         }
     }
 
@@ -1051,9 +1049,7 @@ impl ParamValue for ValueRef<'_> {
 
     fn as_slice(&self) -> Cow<'_, [Value]> {
         match self {
-            Self::List(v) => {
-                Cow::Borrowed(v)
-            },
+            Self::List(v) => Cow::Borrowed(v),
             _ => {
                 let dup = match self {
                     Self::Boolean(v) => Value::Boolean(*v),
@@ -1061,9 +1057,7 @@ impl ParamValue for ValueRef<'_> {
                     Self::Float(v) => Value::Float(*v),
                     Self::Int(v) => Value::Int(*v),
                     Self::Buffer(v) => Value::Buffer(v.to_vec().into()),
-                    Self::String(v) => {
-                        Value::String(v.to_string())
-                    },
+                    Self::String(v) => Value::String(v.to_string()),
                     Self::List(_) => unimplemented!(),
                 };
                 Cow::Owned([dup].into())
@@ -1081,7 +1075,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Buffer(v) => Self::Buffer(Cow::Borrowed(v)),
             Value::Empty => Self::Empty,
             Value::Boolean(v) => Self::Boolean(*v),
-            Value::List(v) => Self::List(Cow::Borrowed(v))
+            Value::List(v) => Self::List(Cow::Borrowed(v)),
         }
     }
 }
@@ -1343,13 +1337,172 @@ impl TryFrom<mzcv::ControlledVocabulary> for ControlledVocabulary {
             mzcv::ControlledVocabulary::BTO => Self::BTO,
             mzcv::ControlledVocabulary::PRIDE => Self::PRIDE,
             _ => {
-                return Err(ControlledVocabularyResolutionError::UnknownControlledVocabulary(value.to_string()))
+                return Err(
+                    ControlledVocabularyResolutionError::UnknownControlledVocabulary(
+                        value.to_string(),
+                    ),
+                )
             }
         })
     }
 }
 
+impl From<ControlledVocabulary> for mzcv::ControlledVocabulary {
+    fn from(value: ControlledVocabulary) -> Self {
+        match value {
+            ControlledVocabulary::MS => mzcv::ControlledVocabulary::MS,
+            ControlledVocabulary::UO => mzcv::ControlledVocabulary::UO,
+            ControlledVocabulary::EFO => mzcv::ControlledVocabulary::EFO,
+            ControlledVocabulary::OBI => mzcv::ControlledVocabulary::OBI,
+            ControlledVocabulary::HANCESTRO => mzcv::ControlledVocabulary::HANCESTRO,
+            ControlledVocabulary::BFO => mzcv::ControlledVocabulary::BFO,
+            ControlledVocabulary::NCIT => mzcv::ControlledVocabulary::NCIT,
+            ControlledVocabulary::BTO => mzcv::ControlledVocabulary::BTO,
+            ControlledVocabulary::PRIDE => mzcv::ControlledVocabulary::PRIDE,
+            ControlledVocabulary::Unknown => mzcv::ControlledVocabulary::Unknown,
+        }
+    }
+}
 
+impl TryFrom<mzcv::Curie> for CURIE {
+    type Error = CURIEParsingError;
+    fn try_from(value: mzcv::Curie) -> Result<Self, Self::Error> {
+        Ok(CURIE::new(value.cv.try_into()?, match value.accession {
+            mzcv::AccessionCode::Numeric(v) => v,
+            mzcv::AccessionCode::Alphanumeric(_, _) => "".parse()?,
+        }))
+    }
+}
+
+impl TryFrom<mzcv::OboIdentifier> for CURIE {
+    type Error = CURIEParsingError;
+
+    fn try_from(value: mzcv::OboIdentifier) -> Result<Self, Self::Error> {
+        match mzcv::Curie::try_from(value) {
+            Ok(v) => v.try_into(),
+            Err(e) => {
+                match e {
+                    mzcv::CURIEParsingError::UnknownControlledVocabulary => Err(CURIEParsingError::UnknownControlledVocabulary(ControlledVocabularyResolutionError::UnknownControlledVocabulary("".to_string()))),
+                    mzcv::CURIEParsingError::AccessionParsingError(_) => {
+                        let v = "".parse::<u32>()?;
+                        Ok(CURIE::new(ControlledVocabulary::Unknown, v))
+                    },
+                    mzcv::CURIEParsingError::MissingNamespaceSeparator => Err(CURIEParsingError::MissingNamespaceSeparator),
+                }
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, bincode::Encode, bincode::Decode)]
+pub struct MSTerm {
+    pub name: Box<str>,
+    pub accession: bincode::serde::Compat<CURIE>,
+    pub is_a: Vec<bincode::serde::Compat<CURIE>>,
+    pub synonyms: Vec<Box<str>>,
+    pub relationships: Vec<(Box<str>, Box<str>)>,
+}
+
+impl mzcv::CVData for MSTerm {
+    type Index = CURIE;
+
+    fn index(&self) -> Option<Self::Index> {
+        Some(self.accession.0)
+    }
+
+    fn name(&self) -> Option<std::borrow::Cow<'_, str>> {
+        Some(Cow::Borrowed(self.name.as_ref()))
+    }
+
+    fn synonyms(&self) -> impl Iterator<Item = &str> {
+        self.synonyms.iter().map(|s| s.as_ref())
+    }
+
+    fn parents(&self) -> impl Iterator<Item = &Self::Index> {
+        self.is_a.iter().map(|c| &c.0)
+    }
+
+    fn curie(&self) -> Option<mzcv::Curie> {
+        Some(mzcv::Curie {
+            cv: self.accession.0.controlled_vocabulary().into(),
+            accession: mzcv::AccessionCode::Numeric(self.accession.0.accession_int()),
+        })
+    }
+}
+
+pub struct MSVocabulary {}
+
+impl mzcv::CVSource for MSVocabulary {
+    type Data = MSTerm;
+
+    type Structure = Vec<Arc<Self::Data>>;
+
+    fn cv_name() -> &'static str {
+        "MS"
+    }
+
+    fn files() -> &'static [mzcv::CVFile] {
+        &[mzcv::CVFile {
+            name: "MS",
+            extension: "obo",
+            url: Some("http://purl.obolibrary.org/obo/ms.obo"),
+            compression: mzcv::CVCompression::None,
+        }]
+    }
+
+    fn static_data() -> Option<(mzcv::CVVersion, Self::Structure)> {
+        None
+    }
+
+    fn parse(
+        mut reader: impl Iterator<Item = mzcv::HashBufReader<Box<dyn std::io::Read>, impl sha1::Digest>>,
+    ) -> Result<(mzcv::CVVersion, Self::Structure), Vec<context_error::BoxedError<'static, mzcv::CVError>>> {
+        use context_error::{CreateError as _, FullErrorContent as _, StaticErrorContent as _};
+        let reader = reader.next().unwrap();
+        mzcv::OboOntology::from_raw(reader)
+            .map_err(|e| {
+                vec![
+                    context_error::BoxedError::small(
+                        mzcv::CVError::FileCouldNotBeParsed,
+                        e.get_short_description(),
+                        e.get_long_description(),
+                    )
+                    .add_contexts(e.get_contexts().iter().cloned()),
+                ]
+            })
+            .map(|obo| {
+                let version = obo.version();
+                let terms: Vec<Arc<MSTerm>> = obo.objects
+                        .into_iter()
+                        .filter(|o| o.stanza_type == mzcv::OboStanzaType::Term)
+                        .filter_map(|obj| {
+                            let mut data = MSTerm {
+                                accession: bincode::serde::Compat(obj.id.try_into().ok()?),
+                                name: obj.lines["name"][0].0.clone(),
+                                synonyms: obj
+                                    .synonyms
+                                    .iter()
+                                    .map(|s| s.synonym.clone())
+                                    .collect(),
+                                is_a: Vec::new(),
+                                relationships: Vec::new(),
+                            };
+                            for parent in obj.is_a {
+                                if let Ok(parent_id) = parent.try_into()
+                                {
+                                    data.is_a.push(bincode::serde::Compat(parent_id));
+                                }
+                            }
+                            Some(Arc::new(data))
+                        })
+                        .collect();
+                (
+                    version,
+                    terms,
+                )
+            })
+    }
+}
 
 #[allow(unused)]
 macro_rules! accessioncode {
@@ -1406,9 +1559,11 @@ macro_rules! curie {
         }
     };
     (IMZML:$acc:literal) => {
-        $crate::params::CURIE { controlled_vocabulary: $crate::params::ControlledVocabulary::IMZML, accession: $acc }
+        $crate::params::CURIE {
+            controlled_vocabulary: $crate::params::ControlledVocabulary::IMZML,
+            accession: $acc,
+        }
     };
-
 }
 
 impl CURIE {

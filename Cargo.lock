@@ -2177,9 +2177,9 @@ dependencies = [
 
 [[package]]
 name = "mzcv"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0633680cba2debb8508868126ca7d934c58473fb33ebfff2b9908752f44d550f"
+checksum = "99e0ab574a342656cc5e04ea94cc514b00992e9ed895683ab0b606f5dec0b541"
 dependencies = [
  "bincode",
  "chrono",
@@ -2195,10 +2195,12 @@ version = "0.64.0"
 dependencies = [
  "base16ct",
  "base64-simd",
+ "bincode",
  "bitflags 2.10.0",
  "bytemuck",
  "chrono",
  "clap",
+ "context_error",
  "criterion",
  "encoding_rs",
  "env_logger",
