@@ -127,7 +127,7 @@ crate::cvmap! {
         #[term(cv=MS, accession=1000531, name="software", flags={0}, parents={[]})]
         #[doc="software - Software related to the recording or transformation of spectra."]
         Software,
-        #[term(cv=MS, accession=1000532, name="Xcalibur", flags={7}, parents={["MS:1000693", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        #[term(cv=MS, accession=1000532, name="Xcalibur", flags={7}, parents={["MS:1000693", "MS:1003961", "MS:1001455", "MS:1001456", "MS:1001457"]})]
         #[doc="Xcalibur - Thermo Finnigan software for data acquisition and analysis."]
         Xcalibur,
         #[term(cv=MS, accession=1000533, name="Bioworks", flags={3}, parents={["MS:1000693", "MS:1001456", "MS:1001457"]})]
@@ -178,7 +178,7 @@ crate::cvmap! {
         #[term(cv=MS, accession=1000615, name="ProteoWizard software", flags={3}, parents={["MS:1001456", "MS:1001457"]})]
         #[doc="ProteoWizard software - ProteoWizard software for data processing and analysis. Primarily developed by the labs of P. Malick and D. Tabb."]
         ProteoWizardSoftware,
-        #[term(cv=MS, accession=1000650, name="Proteome Discoverer", flags={3}, parents={["MS:1000693", "MS:1001456", "MS:1001457"]})]
+        #[term(cv=MS, accession=1000650, name="Proteome Discoverer", flags={3}, parents={["MS:1000693", "MS:1003961", "MS:1001456", "MS:1001457"]})]
         #[doc="Proteome Discoverer - Thermo Scientific software for data analysis of peptides and proteins."]
         ProteomeDiscoverer,
         #[term(cv=MS, accession=1000659, name="4000 Series Explorer Software", flags={7}, parents={["MS:1000690", "MS:1001455", "MS:1001456", "MS:1001457"]})]
@@ -559,7 +559,7 @@ crate::cvmap! {
         #[term(cv=MS, accession=1001886, name="SQID", flags={3}, parents={["MS:1001456", "MS:1001457"]})]
         #[doc="SQID - Software for data analysis of peptides and proteins."]
         SQID,
-        #[term(cv=MS, accession=1001912, name="PinPoint", flags={3}, parents={["MS:1000693", "MS:1001456", "MS:1001457"]})]
+        #[term(cv=MS, accession=1001912, name="PinPoint", flags={3}, parents={["MS:1000693", "MS:1003961", "MS:1001456", "MS:1001457"]})]
         #[doc="PinPoint - Thermo Scientific PinPoint SRM analysis software."]
         PinPoint,
         #[term(cv=MS, accession=1001914, name="pymzML", flags={2}, parents={["MS:1001457"]})]
@@ -958,7 +958,7 @@ crate::cvmap! {
         #[term(cv=MS, accession=1002458, name="PeptideShaker", flags={1}, parents={["MS:1001456"]})]
         #[doc="PeptideShaker - PeptideShaker is a software for the interpretation of proteomics identification results."]
         PeptideShaker,
-        #[term(cv=MS, accession=1002524, name="PepFinder", flags={2}, parents={["MS:1001457"]})]
+        #[term(cv=MS, accession=1002524, name="PepFinder", flags={2}, parents={["MS:1003961", "MS:1001457"]})]
         #[doc="PepFinder - Thermo Scientific PepFinder BioPharma analysis software."]
         PepFinder,
         #[term(cv=MS, accession=1002543, name="xiFDR", flags={1}, parents={["MS:1001456"]})]
@@ -1021,7 +1021,7 @@ crate::cvmap! {
         #[term(cv=MS, accession=1002879, name="Progenesis QI", flags={0}, parents={["MS:1002878"]})]
         #[doc="Progenesis QI - Metabolomics analysis software for LC-MS data from Nonlinear Dynamics."]
         ProgenesisQI,
-        #[term(cv=MS, accession=1002880, name="Compound Discoverer", flags={0}, parents={["MS:1002878"]})]
+        #[term(cv=MS, accession=1002880, name="Compound Discoverer", flags={0}, parents={["MS:1003961", "MS:1002878"]})]
         #[doc="Compound Discoverer - Metabolomics analysis software from Thermo Fisher Scientific."]
         CompoundDiscoverer,
         #[term(cv=MS, accession=1002881, name="MyCompoundID", flags={0}, parents={["MS:1002878"]})]
@@ -1138,7 +1138,7 @@ crate::cvmap! {
         #[term(cv=MS, accession=1003118, name="EPIFANY", flags={1}, parents={["MS:1001456", "MS:1000752"]})]
         #[doc="EPIFANY - A Method for Efficient High-Confidence Protein Inference. The tool is part of the OpenMS framework"]
         EPIFANY,
-        #[term(cv=MS, accession=1003141, name="ProSight", flags={1}, parents={["MS:1001456"]})]
+        #[term(cv=MS, accession=1003141, name="ProSight", flags={1}, parents={["MS:1003961", "MS:1001456"]})]
         #[doc="ProSight - ProSight: Database search engine for top-down proteomics."]
         ProSight,
         #[term(cv=MS, accession=1003142, name="TDPortal", flags={1}, parents={["MS:1001456"]})]
@@ -1267,6 +1267,57 @@ crate::cvmap! {
         #[term(cv=MS, accession=1003613, name="InstaNovo+", flags={1}, parents={["MS:1001456"]})]
         #[doc="InstaNovo+ - InstaNovo+ is a deep learning based tool using a Diffusion architecture for de novo peptide sequencing."]
         InstaNovoplus,
+        #[term(cv=MS, accession=1003801, name="AccurateMassSearch", flags={0}, parents={["MS:1000752"]})]
+        #[doc="AccurateMassSearch - OpenMS TOPP tool to assemble metabolite features from singleton mass traces."]
+        AccurateMassSearch,
+        #[term(cv=MS, accession=1003803, name="Ionoptika software", flags={0}, parents={["MS:1000531"]})]
+        #[doc="Ionoptika software - Ionoptika software for data acquisition and analysis."]
+        IonoptikaSoftware,
+        #[term(cv=MS, accession=1003806, name="NeoSIMS", flags={4}, parents={["MS:1001455", "MS:1003803"]})]
+        #[doc="NeoSIMS - Ionoptika software for data acquisition."]
+        NeoSIMS,
+        #[term(cv=MS, accession=1003807, name="Ionoptika Image Analyser", flags={3}, parents={["MS:1001456", "MS:1001457", "MS:1003803"]})]
+        #[doc="Ionoptika Image Analyser - Ionoptika software for image data analysis."]
+        IonoptikaImageAnalyser,
+        #[term(cv=MS, accession=1003808, name="J105 Ionoptika Mass Imager", flags={3}, parents={["MS:1001456", "MS:1001457", "MS:1003803"]})]
+        #[doc="J105 Ionoptika Mass Imager - Ionoptika J105 software for mass spectrometry imaging data analysis."]
+        J105IonoptikaMassImager,
+        #[term(cv=MS, accession=1003809, name="IoDataConverter", flags={2}, parents={["MS:1001457", "MS:1003803"]})]
+        #[doc="IoDataConverter - Ionoptika software for converting Ionoptika data formats to imzML or HDF5."]
+        IoDataConverter,
+        #[term(cv=MS, accession=1003916, name="SpectroSwiss software", flags={0}, parents={["MS:1000531"]})]
+        #[doc="SpectroSwiss software - SpectroSwiss software for mass spectrometry data processing and analysis."]
+        SpectroSwissSoftware,
+        #[term(cv=MS, accession=1003917, name="Peak-by-Peak", flags={3}, parents={["MS:1003916", "MS:1001456", "MS:1001457"]})]
+        #[doc="Peak-by-Peak - SpectroSwiss software for Fourier transform mass spectrometry (FTMS) data processing and analysis, providing advanced workflows including the processing of unreduced, transient data."]
+        PeakByPeak,
+        #[term(cv=MS, accession=1003961, name="Thermo Scientific software", flags={0}, parents={["MS:1000531"]})]
+        #[doc="Thermo Scientific software - Thermo Scientific software for data acquisition and analysis."]
+        ThermoScientificSoftware,
+        #[term(cv=MS, accession=1003962, name="TraceFinder", flags={7}, parents={["MS:1003961", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        #[doc="TraceFinder - Thermo Scientific software for targeted quantitative and screening analysis of LC-MS, GC-MS, and IC-MS data, supporting automated data acquisition, processing, and reporting for diverse workflows."]
+        TraceFinder,
+        #[term(cv=MS, accession=1003963, name="FreeStyle", flags={3}, parents={["MS:1003961", "MS:1001456", "MS:1001457"]})]
+        #[doc="FreeStyle - Thermo Scientific software for interactive qualitative visualization and review of mass spectrometry data, including chromatographic peak detection, spectral library searching, and high-resolution deconvolution."]
+        FreeStyle,
+        #[term(cv=MS, accession=1003964, name="Chromeleon CDS", flags={7}, parents={["MS:1003961", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        #[doc="Chromeleon CDS - Thermo Scientific enterprise chromatography data system with integrated mass spectrometry instrument control and data processing, supporting GC-MS, LC-MS, and IC-MS platforms with GxP/21 CFR Part 11 compliance."]
+        ChromeleonCDS,
+        #[term(cv=MS, accession=1003965, name="Mass Frontier", flags={3}, parents={["MS:1003961", "MS:1001456", "MS:1001457"]})]
+        #[doc="Mass Frontier - Thermo Scientific software for mass spectral interpretation and structural elucidation of small molecules, featuring the HighChem fragmentation library, fragmentation prediction, and spectral tree searching."]
+        MassFrontier,
+        #[term(cv=MS, accession=1003966, name="LipidSearch", flags={3}, parents={["MS:1003961", "MS:1001456", "MS:1001457"]})]
+        #[doc="LipidSearch - Thermo Scientific software for automated identification of lipid molecular species from LC-MS and LC-MS/MS data using a comprehensive database of predicted lipid ion fragments."]
+        LipidSearch,
+        #[term(cv=MS, accession=1003967, name="mzVault", flags={3}, parents={["MS:1003961", "MS:1001456", "MS:1001457"]})]
+        #[doc="mzVault - Thermo Scientific software for offline storage, searching, and management of high-resolution accurate-mass spectral libraries, including curated mzCloud content and user-generated in-house libraries."]
+        MzVault,
+        #[term(cv=MS, accession=1003968, name="SIEVE", flags={3}, parents={["MS:1003961", "MS:1001456", "MS:1001457"]})]
+        #[doc="SIEVE - Thermo Scientific software for label-free differential expression analysis of LC-MS and GC-MS data, providing chromatographic alignment, feature detection, and statistical comparison for proteomics and metabolomics."]
+        SIEVE,
+        #[term(cv=MS, accession=1003969, name="BioPharma Finder", flags={3}, parents={["MS:1003961", "MS:1001456", "MS:1001457"]})]
+        #[doc="BioPharma Finder - Thermo Scientific software for complex biotherapeutic characterization by LC-MS, supporting intact protein analysis, peptide mapping, oligonucleotide analysis, multi-attribute method workflows, and top-down or middle-down approaches."]
+        BioPharmaFinder,
         #[term(cv=MS, accession=4000151, name="MsQuality", flags={1}, parents={["MS:1001456"]})]
         #[doc="MsQuality - MsQuality – an interoperable open-source package for the calculation of standardized quality metrics of mass spectrometry data."]
         MsQuality,
@@ -1274,7 +1325,7 @@ crate::cvmap! {
         #[doc="DIAMetric - DIAMetric is a Data-Independent Acquisition Quality Metric Generator."]
         DIAMetric,
     }
-    //[[[end]]] (sum: mF8JQzpJfO)
+    //[[[end]]] (sum: dbxhwoPX79)
 }
 
 #[cfg(test)]

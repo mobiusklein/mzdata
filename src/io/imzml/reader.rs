@@ -168,8 +168,8 @@ impl ImzmlMetadataBuilder<'_> {
                         // Try to handle as IMS parameter first
                         match MzMLSpectrumBuilder::<CentroidPeak, DeconvolutedPeak>::handle_param(event, reader_position, state) {
                             Ok(param) => {
-                                if param.is_controlled() 
-                                    && param.controlled_vocabulary == Some(ControlledVocabulary::IMS) 
+                                if param.is_controlled()
+                                    && param.controlled_vocabulary == Some(ControlledVocabulary::IMS)
                                 {
                                     // Handle IMS-specific parameters
                                     match param.accession.unwrap() {
@@ -592,7 +592,7 @@ impl<
 
     /// Attempt to open the IBD file based on metadata or by deriving the filename
     fn check_ibd_file(&mut self) -> io::Result<()> {
-            
+
             // Validate UUID if available
             if let Some(expected_uuid) = &self.imzml_metadata.uuid {
                 let mut ibd_uuid_bytes = [0u8; 16];
@@ -606,7 +606,7 @@ impl<
                 }
             }
             // TODO check that the checksum matches if available
-            
+
             Ok(())
         }
 
@@ -745,7 +745,7 @@ impl<
             )
         })?;
         self.imzml_metadata.data_mode = Some(data_mode);
-        
+
         let uuid = imzml_metadata.uuid.ok_or_else(|| {
             MzMLParserError::IncompleteElementError(
                 "Missing required imzML UUID (IMS:1000080)".to_string(),
@@ -753,7 +753,7 @@ impl<
             )
         })?;
         self.imzml_metadata.uuid = Some(uuid);
-        
+
         let checksum = imzml_metadata.ibd_checksum.ok_or_else(|| {
             MzMLParserError::IncompleteElementError(
                 "Missing required imzML IBD checksum".to_string(),
@@ -763,8 +763,8 @@ impl<
         let checksum_for_log = checksum.clone();
         self.imzml_metadata.ibd_checksum = Some(checksum);
         self.imzml_metadata.ibd_checksum_type = imzml_metadata.ibd_checksum_type;
-        
-        log::debug!("Parsed imzML metadata - Mode: {:?}, UUID: {}, Checksum: {}", 
+
+        log::debug!("Parsed imzML metadata - Mode: {:?}, UUID: {}, Checksum: {}",
                    data_mode, uuid, checksum_for_log);
 
         match self.state {
@@ -939,7 +939,7 @@ impl<
             }
             _ => {}
         }
-        
+
         let detail_level = self.detail_level;
         let accumulator = ImzMLSpectrumBuilder::<C, D>::with_detail_level(detail_level);
 
@@ -975,7 +975,7 @@ impl<
                     .and_then(|params| params.iter()
                         .find(|p| p.accession == Some(1000102))  // IMS:1000102 external offset
                         .and_then(|p| p.value.to_u64().ok()));
-                    
+
                 let length_param = array.params.as_ref()
                     .and_then(|params| params.iter()
                         .find(|p| p.accession == Some(1000103))  // IMS:1000103 external array length
@@ -986,7 +986,7 @@ impl<
                     use std::io::{Seek, SeekFrom};
                     self.ibd_handle.seek(SeekFrom::Start(offset))
                         .map_err(|e| MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e))?;
-                    
+
                     match array.compression {
                         // NoCompression in imzML IBD means raw, unencoded bytes of the native dtype
                         BinaryCompressionType::NoCompression | BinaryCompressionType::Decoded => {
@@ -1178,6 +1178,10 @@ impl<
     fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
         self.get_chromatogram_by_index(index)
     }
+
+    fn count_chromatograms(&self) -> usize {
+        self.chromatogram_index.len()
+    }
 }
 
 /// [`ImzMLReaderType`] instances are [`Iterator`]s over [`MultiLayerSpectrum`], like all
@@ -1228,7 +1232,7 @@ impl<
             .stream_position()
             .expect("Failed to save checkpoint");
         self.handle.seek(SeekFrom::Start(byte_offset)).ok()?;
-        // Skip check_stream for now - not implemented  
+        // Skip check_stream for now - not implemented
         self.state = MzMLParserState::Resume;
         let result = self.read_next();
         self.handle.seek(SeekFrom::Start(start))
@@ -1387,7 +1391,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                 .ok_or_else(|| {
                     io::Error::new(io::ErrorKind::InvalidInput, "Source file has no path")
                 })?;
-                
+
             // Derive IBD path from imzML path
             let mut ibd_path = xml_path.with_extension("ibd");
             if !ibd_path.exists() {
@@ -1403,10 +1407,10 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                     ));
                 }
             }
-            
+
             // Open the IBD file
             let ibd_file = fs::File::open(&ibd_path)?;
-            
+
             // Create the reader with both files
             Ok(Self::new(_source, ibd_file))
         }
@@ -1420,10 +1424,10 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
         }
     }
 
-    
+
     fn open_path<P>(path: P) -> io::Result<Self>
         where
-            P: Into<std::path::PathBuf> + Clone, 
+            P: Into<std::path::PathBuf> + Clone,
         {
             let path: std::path::PathBuf = path.into();
             let xml_file = fs::File::open(&path)?;

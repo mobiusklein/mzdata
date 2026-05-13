@@ -1,21 +1,21 @@
 set dotenv-load := true
 
 test-units:
-    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,bruker_tdf
+    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,bruker_tdf,imzml
 
 test-coverage:
-    cargo llvm-cov --lib --tests nextest --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,mzmlb,async,numpress --html
+    cargo llvm-cov --lib --tests nextest --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,imzml --html
 
 alias t := test-units
 
 test-units-more:
-    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,bruker_tdf
+    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,bruker_tdf,imzml
 
 quick-docs:
     cargo doc --no-deps -p mzdata
 
 docs:
-    cargo doc --no-deps --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,thermo,async,proxi,bruker_tdf -p mzdata -p mzsignal -p mzpeaks
+    cargo doc --no-deps --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,thermo,async,proxi,bruker_tdf,imzml -p mzdata -p mzsignal -p mzpeaks
 
 install-mzdata:
     cargo install --path . --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,hdf5_static

@@ -223,22 +223,22 @@ crate::cvmap! {
     ]]]*/
     pub enum MassAnalyzerTerm {
         #[term(cv=MS, accession=1000078, name="axial ejection linear ion trap", flags={0}, parents={["MS:1000291"]})]
-        #[doc="axial ejection linear ion trap - A linear ion trap mass spectrometer where ions are ejected along the axis of the analyzer."]
+        #[doc="axial ejection linear ion trap - A linear ion trap mass analyzer where ions are ejected along the axis of the analyzer."]
         AxialEjectionLinearIonTrap,
-        #[term(cv=MS, accession=1000079, name="fourier transform ion cyclotron resonance mass spectrometer", flags={0}, parents={["MS:1000443"]})]
-        #[doc="fourier transform ion cyclotron resonance mass spectrometer - A mass spectrometer based on the principle of ion cyclotron resonance in which an ion in a magnetic field moves in a circular orbit at a frequency characteristic of its m/z value. Ions are coherently excited to a larger radius orbit using a pulse of radio frequency energy and their image charge is detected on receiver plates as a time domain signal. Fourier transformation of the time domain signal results in a frequency domain signal which is converted to a mass spectrum based in the inverse relationship between frequency and m/z."]
-        FourierTransformIonCyclotronResonanceMassSpectrometer,
+        #[term(cv=MS, accession=1000079, name="fourier transform ion cyclotron resonance", flags={0}, parents={["MS:1000443"]})]
+        #[doc="fourier transform ion cyclotron resonance - A device based on the principle of ion cyclotron resonance in which an ion in a magnetic field moves in a circular orbit at a frequency characteristic of its m/z value. Ions are coherently excited to a larger radius orbit using a pulse of radio frequency energy and their image charge is detected on receiver plates as a time domain signal. Fourier transformation of the time domain signal results in a frequency domain signal which is converted to a mass spectrum based in the inverse relationship between frequency and m/z."]
+        FourierTransformIonCyclotronResonance,
         #[term(cv=MS, accession=1000080, name="magnetic sector", flags={0}, parents={["MS:1000443"]})]
         #[doc="magnetic sector - A device that produces a magnetic field perpendicular to a charged particle beam that deflects the beam to an extent that is proportional to the particle momentum per unit charge. For a monoenergetic beam, the deflection is proportional to m/z."]
         MagneticSector,
         #[term(cv=MS, accession=1000081, name="quadrupole", flags={0}, parents={["MS:1000443"]})]
-        #[doc="quadrupole - A mass spectrometer that consists of four parallel rods whose centers form the corners of a square and whose opposing poles are connected. The voltage applied to the rods is a superposition of a static potential and a sinusoidal radio frequency potential. The motion of an ion in the x and y dimensions is described by the Matthieu equation whose solutions show that ions in a particular m/z range can be transmitted along the z axis."]
+        #[doc="quadrupole - A device that consists of four parallel rods whose centers form the corners of a square and whose opposing poles are connected. The voltage applied to the rods is a superposition of a static potential and a sinusoidal radio frequency potential. The motion of an ion in the x and y dimensions is described by the Matthieu equation whose solutions show that ions in a particular m/z range can be transmitted along the z axis."]
         Quadrupole,
         #[term(cv=MS, accession=1000082, name="quadrupole ion trap", flags={0}, parents={["MS:1000264"]})]
         #[doc="quadrupole ion trap - Quadrupole Ion Trap mass analyzer captures the ions in a three dimensional ion trap and then selectively ejects them by varying the RF and DC potentials."]
         QuadrupoleIonTrap,
         #[term(cv=MS, accession=1000083, name="radial ejection linear ion trap", flags={0}, parents={["MS:1000291"]})]
-        #[doc="radial ejection linear ion trap - A linear ion trap mass spectrometer where ions are ejected along the radius of the analyzer."]
+        #[doc="radial ejection linear ion trap - A linear ion trap mass analyzer where ions are ejected along the radius of the analyzer."]
         RadialEjectionLinearIonTrap,
         #[term(cv=MS, accession=1000084, name="time-of-flight", flags={0}, parents={["MS:1000443"]})]
         #[doc="time-of-flight - Instrument that separates ions by m/z in a field-free region after acceleration to a fixed acceleration energy."]
@@ -249,12 +249,6 @@ crate::cvmap! {
         #[term(cv=MS, accession=1000264, name="ion trap", flags={0}, parents={["MS:1000443"]})]
         #[doc="ion trap - A device for spatially confining ions using electric and magnetic fields alone or in combination."]
         IonTrap,
-        #[term(cv=MS, accession=1000284, name="stored waveform inverse fourier transform", flags={0}, parents={["MS:1000443"]})]
-        #[doc="stored waveform inverse fourier transform - A technique to create excitation waveforms for ions in FT-ICR mass spectrometer or Paul ion trap. An excitation waveform in the time-domain is generated by taking the inverse Fourier transform of an appropriate frequency-domain programmed excitation spectrum, in which the resonance frequencies of ions to be excited are included. This technique may be used for selection of precursor ions in MS2 experiments."]
-        StoredWaveformInverseFourierTransform,
-        #[term(cv=MS, accession=1000288, name="cyclotron", flags={0}, parents={["MS:1000443"]})]
-        #[doc="cyclotron - A device that uses an oscillating electric field and magnetic field to accelerate charged particles."]
-        Cyclotron,
         #[term(cv=MS, accession=1000291, name="linear ion trap", flags={0}, parents={["MS:1000264"]})]
         #[doc="linear ion trap - A two dimensional Paul ion trap in which ions are confined in the axial dimension by means of an electric field at the ends of the trap."]
         LinearIonTrap,
@@ -268,7 +262,7 @@ crate::cvmap! {
         #[doc="asymmetric track lossless time-of-flight analyzer - A TOF-like mass analyzer with asymmetric ion mirrors to direct ions into transversal asymmetric oscillations and ion foil shapes and maintains ion packet for transmission and resolution."]
         AsymmetricTrackLosslessTimeOfFlightAnalyzer,
     }
-    //[[[end]]] (sum: xfYRYQf4J4)
+    //[[[end]]] (sum: XN9qLy7w1T)
 }
 
 crate::cvmap! {
@@ -434,8 +428,20 @@ crate::cvmap! {
         #[term(cv=MS, accession=1003775, name="secondary electrospray ionization", flags={0}, parents={["MS:1000240"]})]
         #[doc="secondary electrospray ionization - Secondary electrospray ionization (SESI) is an atmospheric pressure ionization (API) technique that uses a primary nano-electrospray plume of solvent ions to ionize neutral gaseous molecules in the gas phase via efficient proton transfer reactions. Operating at atmospheric pressure, SESI allows for the sensitive and real-time detection of volatile organic compounds (VOCs) and vapors with minimal sample preparation, making it ideal for applications like breath analysis and environmental monitoring."]
         SecondaryElectrosprayIonization,
+        #[term(cv=MS, accession=1003954, name="argon gas cluster ion beam", flags={0}, parents={["MS:1003959"]})]
+        #[doc="argon gas cluster ion beam - Argon gas cluster ion beam (Ar GCIB) bombardment uses a focused beam of large argon cluster ions, typically \\[Ar500\\]+ to \\[Ar10000\\]+, accelerated to high energies to sputter and generate secondary ions from a surface, enabling molecular depth profiling and imaging of organic and biological materials with reduced subsurface damage compared to monatomic ion beams."]
+        ArgonGasClusterIonBeam,
+        #[term(cv=MS, accession=1003958, name="bismuth liquid metal ion gun", flags={0}, parents={["MS:1003960"]})]
+        #[doc="bismuth liquid metal ion gun - Bismuth liquid metal ion gun (Bi LMIG) bombardment uses a focused beam of bismuth ions emitted from a liquid metal ion source to desorb and ionize molecules from a surface. The LMIG source generates a diversity of monomers and clusters, which are filtered prior to the sample in order to select the specific ionisation characteristics."]
+        BismuthLiquidMetalIonGun,
+        #[term(cv=MS, accession=1003959, name="gas cluster ion beam", flags={0}, parents={["MS:1000446"]})]
+        #[doc="gas cluster ion beam - A gas cluster ion beam (GCIB) is an ion source that generates and accelerates large aggregates of gas atoms or molecules to high energies. The low energy per constituent atom minimizes surface damage and molecular fragmentation, making it highly effective for molecular depth profiling and the analysis of fragile organic and biological materials."]
+        GasClusterIonBeam,
+        #[term(cv=MS, accession=1003960, name="liquid metal ion gun", flags={0}, parents={["MS:1000446"]})]
+        #[doc="liquid metal ion gun - A liquid metal ion gun (LMIG) is an ion source that extracts and ionizes a thin layer of liquid metal from a fine heated needle using a high-voltage electric field. It produces a high-brightness, tightly focused beam of metal ions or clusters, enabling high-resolution imaging and analysis in Secondary Ion Mass Spectrometry (SIMS)."]
+        LiquidMetalIonGun,
     }
-    // [[[end]]] (sum: oHd7VhBpwa)
+    // [[[end]]] (sum: 8FxTQo9CYj)
 }
 
 crate::cvmap! {
@@ -464,13 +470,13 @@ crate::cvmap! {
         #[doc="electrospray inlet - Inlet used for introducing the liquid sample into an electrospray ionization source."]
         ElectrosprayInlet,
         #[term(cv=MS, accession=1000058, name="flow injection analysis", flags={0}, parents={["MS:1000007"]})]
-        #[doc="flow injection analysis - Sample is directly injected or infused into the ionization source."]
+        #[doc="flow injection analysis - A sample introduction method in which a discrete sample aliquot is injected into a continuous carrier solvent stream and transported to the ionization source without separation, producing a transient analytical signal."]
         FlowInjectionAnalysis,
         #[term(cv=MS, accession=1000059, name="inductively coupled plasma", flags={0}, parents={["MS:1000007"]})]
         #[doc="inductively coupled plasma - A gas discharge ion source in which the energy to the plasma is supplied by electromagnetic induction."]
         InductivelyCoupledPlasma,
         #[term(cv=MS, accession=1000060, name="infusion", flags={0}, parents={["MS:1000007"]})]
-        #[doc="infusion - The continuous flow of solution of a sample into the ionization source."]
+        #[doc="infusion - A sample introduction method in which a sample solution is continuously delivered to the ionization source at a constant flow rate without separation."]
         Infusion,
         #[term(cv=MS, accession=1000061, name="jet separator", flags={0}, parents={["MS:1000007"]})]
         #[doc="jet separator - A device that separates carrier gas from gaseous analyte molecules on the basis of diffusivity."]
@@ -503,7 +509,7 @@ crate::cvmap! {
         #[doc="direct insertion probe - A device for introducing a solid or liquid sample into a mass spectrometer ion source for desorption ionization."]
         DirectInsertionProbe,
         #[term(cv=MS, accession=1000249, name="direct liquid introduction", flags={0}, parents={["MS:1000007"]})]
-        #[doc="direct liquid introduction - The delivery of a liquid sample into a mass spectrometer for spray or desorption ionization."]
+        #[doc="direct liquid introduction - A legacy liquid chromatography-mass spectrometry interface in which a minor fraction of the eluate flow is split and introduced through a narrow orifice or diaphragm directly into the ion source, with solvent-mediated chemical ionization. This interface was largely superseded by atmospheric pressure ionization methods."]
         DirectLiquidIntroduction,
         #[term(cv=MS, accession=1000396, name="membrane inlet", flags={0}, parents={["MS:1000007"]})]
         #[doc="membrane inlet - A semi-permeable membrane separator that permits the passage of gas sample directly to the mass spectrometer ion source."]
@@ -512,7 +518,7 @@ crate::cvmap! {
         #[doc="nanospray inlet - Nanospray Inlet."]
         NanosprayInlet,
     }
-    // [[[end]]] (sum: TlXp3x9TQi)
+    // [[[end]]] (sum: vYYlejxMir)
 }
 
 crate::cvmap! {

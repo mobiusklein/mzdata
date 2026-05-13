@@ -2304,11 +2304,11 @@ mod test {
         let comp = config.iter().find_map(|c| c.mass_analyzer()).unwrap();
         assert_eq!(
             comp.name(),
-            "fourier transform ion cyclotron resonance mass spectrometer"
+            "fourier transform ion cyclotron resonance"
         );
         assert_eq!(
             config.components.get(1).unwrap().name(),
-            Some("fourier transform ion cyclotron resonance mass spectrometer")
+            Some("fourier transform ion cyclotron resonance")
         );
 
         let comp = config.iter().find_map(|c| c.detector()).unwrap();

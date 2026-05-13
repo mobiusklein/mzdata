@@ -697,7 +697,7 @@ pub fn instrument_model_to_mass_analyzers(model: InstrumentModelType) -> Vec<Mas
         }
         InstrumentModelType::LTQ_FT | InstrumentModelType::LTQ_FT_Ultra => {
             vec![
-                MassAnalyzerTerm::FourierTransformIonCyclotronResonanceMassSpectrometer,
+                MassAnalyzerTerm::FourierTransformIonCyclotronResonance,
                 MassAnalyzerTerm::LinearIonTrap,
             ]
         }
@@ -1075,7 +1075,7 @@ pub fn create_instrument_configurations(model: InstrumentModelType, source: Comp
             configs.push(InstrumentConfiguration::default());
             let config = configs.last_mut().unwrap();
             config.push(source.clone());
-            analyzer!(config, MassAnalyzerTerm::FourierTransformIonCyclotronResonanceMassSpectrometer);
+            analyzer!(config, MassAnalyzerTerm::FourierTransformIonCyclotronResonance);
             detector!(config, DetectorTypeTerm::InductiveDetector);
 
             configs.push(InstrumentConfiguration::default());
