@@ -70,8 +70,8 @@ release tag: (patch-version) (changelog tag)
     git commit -m "chore: update changelog"
     git tag {{tag}}
 
-    cargo publish
-    cd crates/mzdata-spectra && cargo publish
+    cargo publish --allow-dirty
+    cd crates/mzdata-spectra && cargo publish --allow-dirty
 
 
 patch-version:
