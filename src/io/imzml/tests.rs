@@ -5,6 +5,9 @@ mod test {
     use std::io;
     use crate::prelude::*;
     use crate::io::imzml::{is_imzml, ImzMLReader};
+    #[cfg(feature = "imzml")]
+    use crate::io::mzml::MzMLReader;
+    use crate::meta::MSDataFileMetadata;
 
     #[test]
     fn test_is_imzml_detection() {
@@ -82,4 +85,34 @@ mod test {
         assert_eq!(arr.len(), 8399);
         Ok(())
     }
+
+    #[test]
+    fn test_imzml_scan_settings_processed() -> io::Result<()> {
+        let reader = ImzMLReader::open_path("test/data/imaging/Example_Processed.imzML")?;
+        let settings_list = reader
+            .scan_settings()
+            .expect("ImzMLReader should expose scan_settings");
+        assert_eq!(settings_list.len(), 1, "expected one scanSettings entry");
+
+        let settings = &settings_list[0];
+        assert!(!settings.id.is_empty(), "ScanSettings id should be non-empty");
+        assert!(!settings.params.is_empty(), "ScanSettings params should be non-empty");
+        assert!(settings.source_file_refs.is_empty());
+        assert!(settings.targets.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_mzml_scan_settings_empty() -> io::Result<()> {
+        let reader = MzMLReader::open_path("test/data/small.mzML")?;
+        let settings_list = reader
+            .scan_settings()
+            .expect("MzMLReader should expose scan_settings (even if empty)");
+        assert!(
+            settings_list.is_empty(),
+            "plain mzML should have no scanSettings entries"
+        );
+        Ok(())
+    }
+
 }

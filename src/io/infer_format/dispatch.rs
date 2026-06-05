@@ -1359,6 +1359,33 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "imzml")]
+    fn test_mzreader_imzml_scan_settings_processed() -> io::Result<()> {
+        let reader = MZReader::open_path("test/data/imaging/Example_Processed.imzML")?;
+        let settings_list = reader
+            .scan_settings()
+            .expect("MZReader over imzML should expose scan_settings");
+        assert_eq!(settings_list.len(), 1);
+
+        let settings = &settings_list[0];
+        assert!(!settings.id.is_empty());
+        assert!(!settings.params.is_empty());
+        assert!(settings.source_file_refs.is_empty());
+        assert!(settings.targets.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_mzreader_mzml_scan_settings_empty() -> io::Result<()> {
+        let reader = MZReader::open_path("test/data/small.mzML")?;
+        let settings_list = reader
+            .scan_settings()
+            .expect("MZReader over mzML should expose scan_settings");
+        assert!(settings_list.is_empty());
+        Ok(())
+    }
+
+    #[test]
     fn test_gzipped_read_seek() -> io::Result<()> {
         let stream = fs::File::open("test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz")?;
         let reader: MZReaderType<Box<dyn SeekRead>> = MZReader::<fs::File>::open_read_seek_generic(Box::new(stream) as Box<dyn SeekRead>)?;
