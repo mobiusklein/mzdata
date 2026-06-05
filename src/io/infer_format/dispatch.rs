@@ -745,6 +745,22 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
         msfmt_dispatch!(self, reader, reader.run_description())
     }
 
+    fn run_description_mut(&mut self) -> Option<&mut crate::meta::MassSpectrometryRun> {
+        msfmt_dispatch!(self, reader, reader.run_description_mut())
+    }
+
+    fn scan_settings(&self) -> Option<&Vec<crate::meta::ScanSettings>> {
+        msfmt_dispatch!(self, reader, reader.scan_settings())
+    }
+
+    fn scan_settings_mut(&mut self) -> Option<&mut Vec<crate::meta::ScanSettings>> {
+        msfmt_dispatch!(self, reader, reader.scan_settings_mut())
+    }
+
+    fn set_spectrum_count_hint(&mut self, value: Option<u64>) {
+        msfmt_dispatch!(self, reader, reader.set_spectrum_count_hint(value))
+    }
+
     fn spectrum_count_hint(&self) -> Option<u64> {
         msfmt_dispatch!(self, reader, reader.spectrum_count_hint())
     }

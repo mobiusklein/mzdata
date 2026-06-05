@@ -849,6 +849,7 @@ impl FileMetadataBuilder<'_> {
             b"dataProcessingList" => return Ok(MzMLParserState::DataProcessingList),
             b"dataProcessing" => {
                 let mut dp = DataProcessing::default();
+                let mut has_id = false;
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
@@ -857,12 +858,16 @@ impl FileMetadataBuilder<'_> {
                                     .unescape_value()
                                     .expect("Error decoding id")
                                     .to_string();
+                                has_id = true;
                             }
                         }
                         Err(msg) => {
                             return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
+                }
+                if !has_id {
+                    log::error!("dataProcessing did not have an id attribute");
                 }
                 self.data_processings.push(dp);
                 return Ok(MzMLParserState::DataProcessing);
@@ -898,6 +903,7 @@ impl FileMetadataBuilder<'_> {
                 return Ok(MzMLParserState::ProcessingMethod);
             }
             b"run" => {
+                let mut has_id = false;
                 for attr in event.attributes().flatten() {
                     match attr.key.as_ref() {
                         b"id" => {
@@ -906,6 +912,7 @@ impl FileMetadataBuilder<'_> {
                                     .expect("Error decoding run ID")
                                     .to_string(),
                             );
+                            has_id = true;
                         }
                         b"defaultInstrumentConfigurationRef" => {
                             let value = attr
@@ -934,6 +941,9 @@ impl FileMetadataBuilder<'_> {
                         }
                         _ => {}
                     }
+                }
+                if !has_id {
+                    log::error!("run did not have an id attribute");
                 }
                 return Ok(MzMLParserState::Run);
             }
@@ -965,6 +975,7 @@ impl FileMetadataBuilder<'_> {
             }
             b"scanSettings" => {
                 let mut settings = ScanSettings::default();
+                let mut has_id = false;
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
@@ -973,12 +984,16 @@ impl FileMetadataBuilder<'_> {
                                     .unescape_value()
                                     .expect("Error decoding id")
                                     .to_string();
+                                has_id = true;
                             }
                         }
                         Err(msg) => {
                             return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
+                }
+                if !has_id {
+                    log::error!("scanSettings did not have an id attribute");
                 }
                 self.scan_settings.push(settings);
                 return Ok(MzMLParserState::ScanSettings)
