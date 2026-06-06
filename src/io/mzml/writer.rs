@@ -1805,19 +1805,6 @@ where
             ArrayType::MZArray | ArrayType::IntensityArray | ArrayType::ChargeArray => {
                 self.handle.write_param(&array.name.as_param_const())?
             }
-            ArrayType::TimeArray
-            | ArrayType::TemperatureArray
-            | ArrayType::FlowRateArray
-            | ArrayType::PressureArray
-            | ArrayType::WavelengthArray
-            | ArrayType::SignalToNoiseArray
-            | ArrayType::BaselineArray
-            | ArrayType::IonMobilityArray => self
-                .handle
-                .write_param(&array.name.as_param_with_unit_const(array.unit))?,
-            x if x.is_ion_mobility() => self
-                .handle
-                .write_param(&array.name.as_param_with_unit_const(array.unit))?,
             ArrayType::NonStandardDataArray { name } => {
                 let mut p =
                     self.ms_cv
@@ -1826,7 +1813,9 @@ where
                 self.handle.write_param(&p)?;
             }
             _ => {
-                panic!("Could not determine how to name for {:?}", array.name);
+                self
+                    .handle
+                    .write_param(&array.name.as_param_with_unit_const(array.unit))?
             }
         }
 

@@ -559,6 +559,9 @@ pub enum ArrayType {
     DeconvolutedDriftTimeArray,
     DeconvolutedInverseReducedIonMobilityArray,
 
+    ScanningQuadrupolePositionLowerBoundMZ,
+    ScanningQuadrupolePositionUpperBoundMZ,
+
     BaselineArray,
     ResolutionArray,
     PressureArray,
@@ -780,6 +783,16 @@ impl ArrayType {
                 p.unit = unit.unwrap_or_default();
                 p.into()
             }
+            ArrayType::ScanningQuadrupolePositionLowerBoundMZ => {
+                let mut p = CV.const_param_ident("scanning quadrupole position lower bound m/z array", 1003157);
+                p.unit = unit.unwrap_or_default();
+                p.into()
+            }
+            ArrayType::ScanningQuadrupolePositionUpperBoundMZ => {
+                let mut p = CV.const_param_ident("scanning quadrupole position upper bound m/z array", 1003158);
+                p.unit = unit.unwrap_or_default();
+                p.into()
+            }
             _ => {
                 panic!("Could not determine how to name for array {}", self);
             }
@@ -856,6 +869,16 @@ impl ArrayType {
             ArrayType::PressureArray => CV.const_param_ident("pressure array", 1000821),
             ArrayType::TemperatureArray => CV.const_param_ident("temperature array", 1000822),
             ArrayType::FlowRateArray => CV.const_param_ident("flow rate array", 1000820),
+            ArrayType::ScanningQuadrupolePositionLowerBoundMZ => {
+                let mut p = CV.const_param_ident("scanning quadrupole position lower bound m/z array", 1003157);
+                p.unit = Unit::MZ;
+                p
+            }
+            ArrayType::ScanningQuadrupolePositionUpperBoundMZ => {
+                let mut p = CV.const_param_ident("scanning quadrupole position upper bound m/z array", 1003158);
+                p.unit = Unit::MZ;
+                p
+            }
             _ => {
                 panic!("Could not determine how to name for array");
             }
@@ -924,6 +947,21 @@ impl ArrayType {
                 CV.const_param_ident_unit("temperature array", 1000822, unit)
             }
             ArrayType::FlowRateArray => CV.const_param_ident_unit("flow rate array", 1000820, unit),
+            ArrayType::ScanningQuadrupolePositionLowerBoundMZ => {
+                CV.const_param_ident_unit("scanning quadrupole position lower bound m/z array", 1003157, unit)
+            }
+            ArrayType::ScanningQuadrupolePositionUpperBoundMZ => {
+                CV.const_param_ident_unit("scanning quadrupole position upper bound m/z array", 1003158, unit)
+            }
+            ArrayType::SignalToNoiseArray => {
+                CV.const_param_ident_unit("signal to noise array", 1000517, unit)
+            }
+            ArrayType::WavelengthArray => {
+                CV.const_param_ident_unit("wavelength array", 1000617, unit)
+            }
+            ArrayType::IonMobilityArray => {
+                CV.const_param_ident_unit("ion mobility array", 1002893, unit)
+            }
             _ => {
                 panic!("Could not determine how to name for array");
             }
@@ -998,6 +1036,10 @@ impl ArrayType {
             Self::TemperatureArray
         } else if x == Self::FlowRateArray.as_param_const().curie().unwrap() {
             Self::FlowRateArray
+        } else if x == Self::ScanningQuadrupolePositionLowerBoundMZ.as_param_const().curie().unwrap() {
+            Self::ScanningQuadrupolePositionLowerBoundMZ
+        } else if x == Self::ScanningQuadrupolePositionUpperBoundMZ.as_param_const().curie().unwrap() {
+            Self::ScanningQuadrupolePositionUpperBoundMZ
         } else if x
             == (Self::NonStandardDataArray {
                 name: "".to_string().into(),

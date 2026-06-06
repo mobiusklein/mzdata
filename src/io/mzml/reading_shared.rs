@@ -1305,7 +1305,7 @@ pub fn build_spectrum_index<R: SeekRead>(
         .expect("Failed to restore location");
     spectrum_index.init = true;
     if spectrum_index.is_empty() {
-        warn!("An index was built but no entries were found")
+        warn!("A spectrum index was built but no entries were found")
     }
     offset
 }

@@ -243,6 +243,14 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                         ArrayType::DeconvolutedInverseReducedIonMobilityArray;
                     self.current_array_mut().unit = param.unit();
                 }
+                1003157 => {
+                    self.current_array_mut().name = ArrayType::ScanningQuadrupolePositionLowerBoundMZ;
+                    self.current_array_mut().unit = param.unit();
+                }
+                1003158 => {
+                    self.current_array_mut().name = ArrayType::ScanningQuadrupolePositionUpperBoundMZ;
+                    self.current_array_mut().unit = param.unit();
+                }
                 _ => {
                     self.current_array_mut().add_param(param.into());
                 }
@@ -1270,14 +1278,14 @@ impl<
         Self::with_buffer_capacity_and_detail_level(file, BUFFER_SIZE, DetailLevel::Full)
     }
 
-    pub fn with_buffer_capacity_and_detail_level(
-        file: R,
-        capacity: usize,
-        detail_level: DetailLevel,
+    /// Create a new [`MzMLReaderType`] instance from an [`io::BufReader`] instance directly
+    /// and parses the metadata section of the file.
+    pub fn from_buffered_and_detail_level(
+        file: BufReader<R>,
+        detail_level: DetailLevel
     ) -> MzMLReaderType<R, C, D> {
-        let handle = BufReader::with_capacity(capacity, file);
         let mut inst = MzMLReaderType {
-            handle,
+            handle: file,
             state: MzMLParserState::Start,
             error: None,
             buffer: Bytes::new(),
@@ -1304,6 +1312,18 @@ impl<
             Err(_err) => {}
         }
         inst
+    }
+
+    /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
+    /// provided with an [`io::BufReader`] with the requested buffer size and [`DetailLevel`],
+    /// and parses the metadata section of the file.
+    pub fn with_buffer_capacity_and_detail_level(
+        file: R,
+        capacity: usize,
+        detail_level: DetailLevel,
+    ) -> MzMLReaderType<R, C, D> {
+        let handle = BufReader::with_capacity(capacity, file);
+        Self::from_buffered_and_detail_level(handle, detail_level)
     }
 
     /**Parse the metadata section of the file using [`FileMetadataBuilder`]
