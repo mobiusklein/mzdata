@@ -78,6 +78,11 @@ deconvoluted-feature type. For most work, use `Feature<MZ, IonMobility>` and
 ```rust
 # use std::io;
 # use mzdata::prelude::*;
+# use mzpeaks::{
+#     coordinate::{IonMobility, Mass, MZ},
+#     feature::{ChargedFeature, Feature, FeatureLike},
+#     feature_map::FeatureMap,
+# };
 # fn open_frame_source() -> io::Result<()> {
 let mut reader = mzdata::MZReader::open_path(
     "test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz"
@@ -106,6 +111,11 @@ pattern applies:
 ```rust
 # use std::io;
 # use mzdata::prelude::*;
+# use mzpeaks::{
+#     coordinate::{IonMobility, Mass, MZ},
+#     feature::{ChargedFeature, Feature, FeatureLike},
+#     feature_map::FeatureMap,
+# };
 # fn frame_metadata() -> io::Result<()> {
 # let mut reader = mzdata::MZReader::open_path(
 #     "test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz"
@@ -127,6 +137,11 @@ Random-access retrieval mirrors the spectrum API:
 ```rust
 # use std::io;
 # use mzdata::prelude::*;
+# use mzpeaks::{
+#     coordinate::{IonMobility, Mass, MZ},
+#     feature::{ChargedFeature, Feature, FeatureLike},
+#     feature_map::FeatureMap,
+# };
 # fn frame_access() -> io::Result<()> {
 # let mut reader = mzdata::MZReader::open_path(
 #     "test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz"
@@ -153,6 +168,11 @@ mobility axis of the raw data:
 ```rust
 # use std::io;
 # use mzdata::prelude::*;
+# use mzpeaks::{
+#     coordinate::{IonMobility, Mass, MZ},
+#     feature::{ChargedFeature, Feature, FeatureLike},
+#     feature_map::FeatureMap,
+# };
 # fn im_unit() -> io::Result<()> {
 # let mut reader = mzdata::MZReader::open_path(
 #     "test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz"
@@ -269,6 +289,11 @@ with its MS2 product frames:
 ```rust
 # use std::io;
 # use mzdata::prelude::*;
+# use mzpeaks::{
+#     coordinate::{IonMobility, Mass, MZ},
+#     feature::{ChargedFeature, Feature, FeatureLike},
+#     feature_map::FeatureMap,
+# };
 # fn frame_groups() -> io::Result<()> {
 # let mut reader = mzdata::MZReader::open_path(
 #     "test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz"
@@ -301,7 +326,11 @@ This requires the `mzsignal` feature.
 
 ```ignore
 use std::io;
-
+use mzpeaks::{
+    coordinate::{IonMobility, Mass, MZ},
+    feature::{ChargedFeature, Feature, FeatureLike},
+    feature_map::FeatureMap,
+};
 use mzdata::prelude::*;
 use mzsignal::Tolerance;
 
