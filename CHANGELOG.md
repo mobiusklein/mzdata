@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.64.1] - 2026-06-07
+
+### Added
+
+- Add quadrupole bounds array types
+
+### Documentation
+
+- Update spectrum and ion mobility tutorial
+
 ## [0.64.0] - 2026-06-05
 
 ### Added
@@ -1034,7 +1044,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.64.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.64.1...HEAD
+[0.64.1]: https://github.com/mobiusklein/mzdata/compare/v0.64.0...v0.64.1
 [0.64.0]: https://github.com/mobiusklein/mzdata/compare/v0.63.5...v0.64.0
 [0.63.5]: https://github.com/mobiusklein/mzdata/compare/v0.63.4...v0.63.5
 [0.63.4]: https://github.com/mobiusklein/mzdata/compare/v0.63.3...v0.63.4
