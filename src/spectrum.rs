@@ -62,7 +62,7 @@ pub(crate) mod scan_properties;
 pub(crate) mod spectrum_types;
 pub mod utils;
 
-pub use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray};
+pub use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, BinaryArrayMap3D};
 pub use crate::spectrum::chromatogram::{Chromatogram, ChromatogramLike};
 pub use crate::spectrum::scan_properties::*;
 pub use crate::spectrum::spectrum_types::{
