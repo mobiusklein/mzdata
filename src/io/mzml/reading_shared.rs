@@ -93,6 +93,10 @@ pub enum MzMLParserState {
     SelectedIon,
     Activation,
 
+    ProductList,
+    Product,
+    ProductIsolationWindow,
+
     SpectrumDone,
     SpectrumListDone,
 

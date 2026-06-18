@@ -1616,6 +1616,22 @@ where
         Ok(())
     }
 
+    pub fn write_product(&mut self, product: &Product) -> WriterResult {
+        let mut product_list_tag = bstart!("productList");
+        attrib!("count", "1", product_list_tag);
+        start_event!(self, product_list_tag);
+
+        let product_tag = bstart!("product");
+        self.handle
+            .write_event(Event::Start(product_tag.borrow()))?;
+
+        let iw = &product.isolation_window;
+        self.write_isolation_window(iw)?;
+        end_event!(self, product_tag);
+        end_event!(self, product_list_tag);
+        Ok(())
+    }
+
     pub fn write_precursor(&mut self, precursor: &impl PrecursorSelection) -> WriterResult {
         let mut precursor_list_tag = bstart!("precursorList");
         attrib!("count", "1", precursor_list_tag);
@@ -2118,6 +2134,10 @@ where
 
         if let Some(precursor) = chromatogram.precursor() {
             self.write_precursor(precursor)?;
+        }
+
+        if let Some(product) = chromatogram.product() {
+            self.write_product(product)?;
         }
 
         self.write_binary_data_arrays(&chromatogram.arrays, default_array_len)?;

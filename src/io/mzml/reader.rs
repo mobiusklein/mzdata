@@ -56,6 +56,10 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
 {
     /// Get the last isolation window being constructed
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow;
+
+    fn new_product(&mut self) -> &mut Product;
+    fn product_isolation_window_mut(&mut self) -> &mut IsolationWindow;
+
     /// Get the last scan window being constructed.
     fn scan_window_mut(&mut self) -> &mut ScanWindow;
 
@@ -280,9 +284,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
         };
     }
 
-    /// Put a parameter-like instance into the current [`IsolationWindow`]
-    fn fill_isolation_window(&mut self, param: Param) {
-        let window = self.isolation_window_mut();
+    fn populate_isolation_window(param: Param, window: &mut IsolationWindow) {
         match param.name.as_ref() {
             "isolation window target m/z" => {
                 window.target = param
@@ -357,6 +359,18 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
         }
     }
 
+    /// Put a parameter-like instance into the current [`IsolationWindow`]
+    fn fill_isolation_window(&mut self, param: Param) {
+        let window = self.isolation_window_mut();
+        Self::populate_isolation_window(param, window);
+    }
+
+    /// Put a parameter-like instance into the current [`IsolationWindow`] from a [`Product`]
+    fn fill_product_isolation_window(&mut self, param: Param) {
+        let window = self.product_isolation_window_mut();
+        Self::populate_isolation_window(param, window);
+    }
+
     /// Put a parameter-like instance into the current [`ScanWindow`]
     fn fill_scan_window(&mut self, param: Param) {
         let window = self.scan_window_mut();
@@ -403,7 +417,7 @@ pub struct MzMLSpectrumBuilder<
     pub params: ParamList,
     pub acquisition: Acquisition,
     pub precursor: Vec<Precursor>,
-
+    pub products: Vec<Product>,
     pub arrays: BinaryArrayMap,
     pub current_array: DataArray,
 
@@ -439,6 +453,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> Default for MzMLSpectrumBuild
             has_precursor: Default::default(),
             detail_level: Default::default(),
             instrument_id_map: Default::default(),
+            products: Default::default(),
             run_level_data_processing: None,
             spectrum_data_processing_ref: None,
             reference_param_groups: None,
@@ -521,7 +536,6 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
         };
     }
 
-
     fn borrow_metadata(
         mut self,
         instrument_configurations: &'inner mut IncrementingIdMap,
@@ -567,6 +581,9 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
         if self.has_precursor {
             description.precursor = self.precursor;
         }
+        if !self.products.is_empty() {
+            description.products = self.products;
+        }
 
         chromatogram.arrays = self.arrays;
     }
@@ -582,6 +599,15 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
         } else {
             self.precursor.last_mut().unwrap()
         }
+    }
+
+    fn product_isolation_window_mut(&mut self) -> &mut IsolationWindow {
+        self.products.last_mut().map(|v| &mut v.isolation_window).unwrap()
+    }
+
+    fn new_product(&mut self) -> &mut Product {
+        self.products.push(Product::default());
+        self.products.last_mut().unwrap()
     }
 }
 
@@ -858,8 +884,19 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                 }
                 return Ok(MzMLParserState::Precursor);
             }
+            b"productList" => {
+                return Ok(MzMLParserState::ProductList);
+            }
+            b"product" => {
+                self.new_product();
+                return Ok(MzMLParserState::Product);
+            }
             b"isolationWindow" => {
-                return Ok(MzMLParserState::IsolationWindow);
+                if matches!(state, MzMLParserState::Product) {
+                    return Ok(MzMLParserState::ProductIsolationWindow)
+                } else {
+                    return Ok(MzMLParserState::IsolationWindow);
+                }
             }
             b"selectedIonList" => {
                 return Ok(MzMLParserState::SelectedIonList);
@@ -1045,6 +1082,9 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                             MzMLParserState::IsolationWindow => {
                                 self.fill_isolation_window(param.into());
                             }
+                            MzMLParserState::ProductIsolationWindow => {
+                                self.fill_product_isolation_window(param.into());
+                            }
                             MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
                                 self.fill_selected_ion(param.into());
                             }
@@ -1085,7 +1125,9 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                             MzMLParserState::Precursor | MzMLParserState::PrecursorList => {
                                 warn!("cvParam found for {:?} where none are allowed", &state);
                             }
-                            _ => {}
+                            _ => {
+                                trace!("Skipping parameter found for {state:?}");
+                            }
                         }
                     }
                     Err(err) => return Err(err),
@@ -1107,7 +1149,19 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
             b"scanWindowList" => return Ok(MzMLParserState::Scan),
             b"precursorList" => return Ok(MzMLParserState::Spectrum),
             b"precursor" => return Ok(MzMLParserState::PrecursorList),
-            b"isolationWindow" => return Ok(MzMLParserState::Precursor),
+            b"isolationWindow" => {
+                if matches!(state, MzMLParserState::ProductIsolationWindow) {
+                    return Ok(MzMLParserState::Product)
+                } else {
+                    return Ok(MzMLParserState::Precursor)
+                }
+            },
+            b"product" => {
+                return Ok(MzMLParserState::ProductList)
+            }
+            b"productList" => {
+                return Ok(MzMLParserState::Spectrum)
+            }
             b"selectedIonList" => return Ok(MzMLParserState::Precursor),
             b"selectedIon" => return Ok(MzMLParserState::SelectedIonList),
             b"activation" => return Ok(MzMLParserState::Precursor),
