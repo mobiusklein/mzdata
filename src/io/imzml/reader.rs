@@ -325,6 +325,14 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
         self.inner.isolation_window_mut()
     }
+
+    fn product_isolation_window_mut(&mut self) -> &mut IsolationWindow {
+        self.inner.product_isolation_window_mut()
+    }
+
+    fn new_product(&mut self) -> &mut crate::spectrum::Product {
+        self.inner.new_product()
+    }
 }
 
 impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>

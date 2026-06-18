@@ -854,8 +854,8 @@ impl ChromatogramType {
             1000235 => Self::TotalIonCurrentChromatogram,
             1000628 => Self::BasePeakChromatogram,
             1000627 => Self::SelectedIonCurrentChromatogram,
-            1000472 => Self::SelectedIonMonitoringChromatogram,
-            1000473 => Self::SelectedReactionMonitoringChromatogram,
+            1001472 => Self::SelectedIonMonitoringChromatogram,
+            1001473 => Self::SelectedReactionMonitoringChromatogram,
             1000812 => Self::AbsorptionChromatogram,
             1000813 => Self::EmissionChromatogram,
             1003020 => Self::FlowRateChromatogram,
@@ -918,6 +918,26 @@ impl ChromatogramType {
     }
 }
 
+
+#[derive(Debug, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Product {
+    pub isolation_window: IsolationWindow
+}
+
+impl From<IsolationWindow> for Product {
+    fn from(isolation_window: IsolationWindow) -> Self {
+        Self { isolation_window }
+    }
+}
+
+impl Product {
+    pub fn new(isolation_window: IsolationWindow) -> Self {
+        Self { isolation_window }
+    }
+}
+
+
 /// The set of descriptive metadata that give context for how a chromatogram was
 /// recorded.
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -931,6 +951,7 @@ pub struct ChromatogramDescription {
 
     pub params: ParamList,
     pub precursor: Vec<Precursor>,
+    pub products: Vec<Product>,
 }
 
 impl ChromatogramDescription {
