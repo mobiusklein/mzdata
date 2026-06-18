@@ -1695,12 +1695,18 @@ impl<
 
     /// Read the next spectrum directly. Used to implement iteration.
     pub fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
-        if self.state == MzMLParserState::EOF {
+        if self.state >= MzMLParserState::SpectrumListDone {
             return None;
         }
         let mut spectrum = MultiLayerSpectrum::<C, D>::default();
         match self.read_into(&mut spectrum) {
-            Ok(_sz) => Some(spectrum),
+            Ok(_sz) => {
+                if !matches!(self.state, MzMLParserState::SpectrumDone) {
+                    None
+                } else {
+                    Some(spectrum)
+                }
+            },
             Err(err) => {
                 match err {
                     MzMLParserError::EOF => {},
@@ -2233,6 +2239,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
     fn construct_index_from_stream(&mut self) -> u64 {
         trace!("Constructing index from stream");
         if let Ok(count) = self.read_index_from_end() {
+            trace!("Read {count} index entries from the end of the file");
             count
         } else {
             self.seek(SeekFrom::Start(0)).unwrap();
