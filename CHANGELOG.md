@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.65.0] - 2026-06-18
+
+### Added
+
+- Add missing imports
+- Add Product type and include it in mzML parsing
+
+### Fixed
+
+- When reading an mzML-ish file that contains no spectra, the parser no longer emits a single "dummy" spectrum.
+
 ## [0.64.1] - 2026-06-07
 
 ### Added
@@ -1044,7 +1055,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.64.1...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.65.0...HEAD
+[0.65.0]: https://github.com/mobiusklein/mzdata/compare/v0.64.1...v0.65.0
 [0.64.1]: https://github.com/mobiusklein/mzdata/compare/v0.64.0...v0.64.1
 [0.64.0]: https://github.com/mobiusklein/mzdata/compare/v0.63.5...v0.64.0
 [0.63.5]: https://github.com/mobiusklein/mzdata/compare/v0.63.4...v0.63.5
