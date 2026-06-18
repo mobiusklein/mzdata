@@ -918,10 +918,12 @@ impl ChromatogramType {
     }
 }
 
-
+/// A product ion isolated in lock-step from the precursor, as in selected reaction monitoring (SRM)
+/// or multiple reaction monitoring (MRM).
 #[derive(Debug, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Product {
+    /// The product ion's isolation window.
     pub isolation_window: IsolationWindow
 }
 

@@ -90,6 +90,8 @@ pub trait ChromatogramLike: ParamDescribed {
     /// the data for most other methods on this trait.
     fn description(&self) -> &ChromatogramDescription;
 
+    /// The method to mutably access the chromatogram description itself, which supplies
+    /// the data for most other methods on this trait.
     fn description_mut(&mut self) -> &mut ChromatogramDescription;
 
     /// Access the (first) precursor information, if it exists.
