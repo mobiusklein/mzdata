@@ -19,7 +19,7 @@ fn main() -> io::Result<()> {
 
     info!("Opening {}", path.display());
     let mut reader = MZReader::open_path(path)?;
-
+    info!("{} spectra detected", reader.len());
     let spectrum = match key.as_str() {
         "id" => reader.get_spectrum_by_id(&key_value).unwrap(),
         "index" => reader
