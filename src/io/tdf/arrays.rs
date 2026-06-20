@@ -47,7 +47,14 @@ impl<'a> FrameToArraysMapper<'a> {
         let mut im_dimension = Vec::with_capacity(final_scan - first_scan + 1);
         let mut arrays = Vec::with_capacity(final_scan - first_scan + 1);
 
-        let mut scan_begin = first_scan;
+        // `scan_offsets` is a cumulative prefix-sum into `tof_indices`/`intensities`
+        // (peak OFFSETS), not scan indices. `scan_begin` must therefore start at the
+        // offset of `first_scan`, not at the scan index itself. The two coincide only
+        // when `first_scan == 0` (MS1 / the first window), so every slice with
+        // `first_scan > 0` (all PASEF/DIA MS2 windows) previously read
+        // `tof_indices[first_scan .. scan_offsets[first_scan]]` on its first iteration
+        // — prepending all earlier scans' peaks, stamped with one wrong mobility.
+        let mut scan_begin = self.frame.scan_offsets[first_scan];
         for (i, mut scan_end) in self.frame.scan_offsets[first_scan..final_scan]
             .iter()
             .copied()
