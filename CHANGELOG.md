@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.65.1] - 2026-06-21
+
+### Fixed
+
+- Process_3d_slice mis-slices MS2/DIA frames (duplicates peaks at wrong mobility) (#50)
+* fix(tdf): correct scan-offset slicing in process_3d_slice
+
+scan_offsets holds cumulative peak offsets, not scan indices; seeding
+scan_begin with the scan index first_scan only works when first_scan == 0
+(MS1 / first window). Every PASEF/DIA MS2 window (first_scan > 0) read
+tof_indices[first_scan..scan_offsets[first_scan]] on its first iteration,
+prepending all earlier scans' peaks stamped with one wrong mobility and
+inflating per-frame MS2 peak counts ~1.4-2.0x.
+
+### Removed
+
+- Remove `BuildFromArrayMap` and `BuildArrayMapFrom` requirement for `MultiLayerSpectrum::new`
+
 ## [0.65.0] - 2026-06-18
 
 ### Added
@@ -1055,7 +1073,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.65.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.65.1...HEAD
+[0.65.1]: https://github.com/mobiusklein/mzdata/compare/v0.65.0...v0.65.1
 [0.65.0]: https://github.com/mobiusklein/mzdata/compare/v0.64.1...v0.65.0
 [0.64.1]: https://github.com/mobiusklein/mzdata/compare/v0.64.0...v0.64.1
 [0.64.0]: https://github.com/mobiusklein/mzdata/compare/v0.63.5...v0.64.0
