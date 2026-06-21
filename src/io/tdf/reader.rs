@@ -578,12 +578,18 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 
             let arrays = if !matches!(self.detail_level, DetailLevel::MetadataOnly) {
                 if let Some(pasef) = entry.pasef_msms() {
-                    log::trace!("Extracting {index} as PasefFrameMsMs with range {:?}", pasef.scan_start..pasef.scan_end);
+                    log::trace!(
+                        "Extracting {index} as PasefFrameMsMs with range {:?}",
+                        pasef.scan_start..pasef.scan_end
+                    );
                     let arrays = FrameToArraysMapper::new(&frame, &self.metadata)
                         .process_3d_slice(pasef.scan_start..pasef.scan_end);
                     Some(arrays)
                 } else if let Some(dia_pasef) = entry.dia_window() {
-                    log::trace!("Extracting {index} as DIAFrameMsMsWindow with range {:?}", dia_pasef.scan_start..dia_pasef.scan_end);
+                    log::trace!(
+                        "Extracting {index} as DIAFrameMsMsWindow with range {:?}",
+                        dia_pasef.scan_start..dia_pasef.scan_end
+                    );
                     let arrays = FrameToArraysMapper::new(&frame, &self.metadata)
                         .process_3d_slice(dia_pasef.scan_start..dia_pasef.scan_end);
                     Some(arrays)
@@ -1282,7 +1288,10 @@ impl<
     pub fn consolidate_peaks(
         &self,
         spectrum: &mut MultiLayerSpectrum<CP, DP>,
-    ) -> Result<(), ArrayRetrievalError> where CP: From<CentroidPeak> {
+    ) -> Result<(), ArrayRetrievalError>
+    where
+        CP: From<CentroidPeak>,
+    {
         if let Some(arrays) = spectrum.arrays.as_ref() {
             let arrays = BinaryArrayMap3D::stack(arrays)?;
             spectrum.peaks = Some(consolidate_peaks(
@@ -1638,7 +1647,7 @@ mod test {
     fn test_tdf_frame() -> io::Result<()> {
         let mut reader = TDFFrameReader::new("test/data/diaPASEF.d")
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        eprintln!("{}", reader.len());
+
         let s = reader.get_frame_by_index(0).unwrap();
         assert!(s.features.is_none());
         assert_eq!(s.signal_continuity(), SignalContinuity::Centroid);
@@ -1648,6 +1657,43 @@ mod test {
         assert!(s.features.is_none());
         assert_eq!(s.signal_continuity(), SignalContinuity::Centroid);
         assert_eq!(s.ms_level(), 2);
+
+        // SQL: "SELECT NumPeaks FROM Frames;"
+        let mut expected_peak_counts = vec![205921usize, 9365, 10566, 10908, 54771];
+        let original_peak_counts = expected_peak_counts.clone();
+
+        for frame in reader.iter() {
+            let frame_idx = frame
+                .id()
+                .split(" ")
+                .skip(1)
+                .next()
+                .unwrap()
+                .split_once("=")
+                .unwrap()
+                .1
+                .parse::<usize>()
+                .unwrap()
+                - 1;
+
+            let vals = frame.raw_arrays().unwrap();
+            let vals_flat = vals.unstack().unwrap();
+            let n_flat = vals_flat.mzs().unwrap().len();
+            let n_stacked = vals
+                .arrays
+                .iter()
+                .map(|v| v.mzs().map(|v| v.len()).unwrap_or_default())
+                .sum::<usize>();
+            assert_eq!(n_flat, n_stacked);
+
+            // Assumes non-overlapping PASEF frames
+            assert!(
+                n_flat <= expected_peak_counts[frame_idx],
+                "Failed to count peaks properly: {} peaks out of {} remaining, claiming {n_flat} more",
+                expected_peak_counts[frame_idx], original_peak_counts[frame_idx]
+            );
+            expected_peak_counts[frame_idx] = expected_peak_counts[frame_idx] - n_flat;
+        }
         Ok(())
     }
 }
