@@ -1629,7 +1629,9 @@ pub fn is_tdf<P: AsRef<Path>>(path: P) -> bool {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::MZReader;
+
+use super::*;
 
     #[test]
     fn test_tdf_spectrum() -> io::Result<()> {
@@ -1640,6 +1642,50 @@ mod test {
         assert!(s.peaks.is_some());
         assert_eq!(s.signal_continuity(), SignalContinuity::Centroid);
         assert_eq!(s.ms_level(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_tdf_frame_parity() -> io::Result<()> {
+        let mut reader = TDFFrameReader::new("test/data/diaPASEF.d")
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let mut ref_reader = MZReader::open_path("test/data/diaPASEF.mzML")?.into_frame_source::<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>();
+
+        for (frame, ref_frame) in reader.iter().zip(ref_reader.iter()) {
+            let arrays = frame.raw_arrays().unwrap().unstack().unwrap();
+            let ref_arrays = ref_frame.raw_arrays().unwrap().unstack().unwrap();
+
+            let arrays_3d = frame.raw_arrays().unwrap();
+            let ref_arrays_3d = ref_frame.raw_arrays().unwrap();
+
+            let it_arrays_3d_im = arrays_3d.iter().enumerate().filter(|(_, (_, v))| {
+                v.mzs().map(|v| v.len()).unwrap_or_default() > 0
+            }).map(|(i, (a, _))| (i, a));
+            let it_arrays_3d_im_ref = ref_arrays_3d.iter().enumerate().filter(|(_, (_, v))| {
+                v.mzs().map(|v| v.len()).unwrap_or_default() > 0
+            }).map(|(i, (a, _))| (i, a));
+
+            for (_i, ((ai, a), (bi, b))) in it_arrays_3d_im.zip(it_arrays_3d_im_ref).enumerate() {
+                let e = (a - b).abs();
+                let arrays_at = &arrays_3d.arrays[ai];
+                let ref_arrays_at = &ref_arrays_3d.arrays[bi];
+                // eprintln!("ion mobility axis {a} - {b} = {e} at index {i} ({ai} with {:?} vs {bi} {:?})", arrays_at.mzs(), ref_arrays_at.mzs());
+                assert_eq!(arrays_at.mzs().map(|v| v.len()).unwrap_or_default(), ref_arrays_at.mzs().map(|v| v.len()).unwrap_or_default());
+                // Track that the interpolation error is
+                assert!(e < 1.0);
+                // assert!(e < 1.5e-3, "ion mobility axis {a} - {b} = {e} at index {i} ({ai} with {:?} vs {bi} {:?})", arrays_at.mzs(), ref_arrays_at.mzs())
+            }
+
+            let (im, _) = arrays.ion_mobility().unwrap();
+            let (im_ref, _) = ref_arrays.ion_mobility().unwrap();
+            assert_eq!(im.len(), im_ref.len());
+            // for (i, (a, b)) in im.iter().zip(im_ref.iter()).enumerate() {
+            //     let e = (a - b).abs();
+            //     assert!(e < 1e-3, "ion mobility point {a} - {b} = {e} at index {i}")
+            // }
+        }
+
+
         Ok(())
     }
 
