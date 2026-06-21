@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.65.2] - 2026-06-21
+
+### Fixed
+
+- Label each scan's peaks with its own ion mobility (#51)
+* fix(tdf): label each scan's peaks with its own ion mobility
+
+Follow-up to #50. process_3d_slice took the drift from the loop position
+(convert(i + first_scan)), tagging each scan's peaks with the next scan's
+1/K0. Indexing scans directly labels each peak with its own scan's mobility.
+Peak counts and m/z are unchanged.
+
 ## [0.65.1] - 2026-06-21
 
 ### Fixed
@@ -1073,7 +1085,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.65.1...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.65.2...HEAD
+[0.65.2]: https://github.com/mobiusklein/mzdata/compare/v0.65.1...v0.65.2
 [0.65.1]: https://github.com/mobiusklein/mzdata/compare/v0.65.0...v0.65.1
 [0.65.0]: https://github.com/mobiusklein/mzdata/compare/v0.64.1...v0.65.0
 [0.64.1]: https://github.com/mobiusklein/mzdata/compare/v0.64.0...v0.64.1
