@@ -1629,7 +1629,9 @@ pub fn is_tdf<P: AsRef<Path>>(path: P) -> bool {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::MZReader;
+
+use super::*;
 
     #[test]
     fn test_tdf_spectrum() -> io::Result<()> {
@@ -1640,6 +1642,36 @@ mod test {
         assert!(s.peaks.is_some());
         assert_eq!(s.signal_continuity(), SignalContinuity::Centroid);
         assert_eq!(s.ms_level(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_tdf_frame_parity() -> io::Result<()> {
+        let mut reader = TDFFrameReader::new("test/data/diaPASEF.d")
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let mut ref_reader = MZReader::open_path("test/data/diaPASEF.mzML")?.into_frame_source::<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>();
+
+        let frame = reader.get_frame_by_index(0).unwrap();
+        let ref_frame = ref_reader.get_frame_by_index(0).unwrap();
+
+        let arrays = frame.raw_arrays().unwrap().unstack().unwrap();
+        let ref_arrays = ref_frame.raw_arrays().unwrap().unstack().unwrap();
+
+        let arrays_3d = frame.raw_arrays().unwrap();
+        let ref_arrays_3d = ref_frame.raw_arrays().unwrap();
+
+        for (i, (a, b)) in arrays_3d.ion_mobility_dimension.iter().zip(ref_arrays_3d.ion_mobility_dimension.iter()).enumerate() {
+            let e = (a - b).abs();
+            assert!(e < 1e-3, "ion mobility axis {a} - {b} = {e} at index {i}")
+        }
+
+        let (im, _) = arrays.ion_mobility().unwrap();
+        let (im_ref, _) = ref_arrays.ion_mobility().unwrap();
+        for (i, (a, b)) in im.iter().zip(im_ref.iter()).enumerate() {
+            let e = (a - b).abs();
+            assert!(e < 1e-3, "ion mobility point {a} - {b} = {e} at index {i}")
+        }
+
         Ok(())
     }
 
