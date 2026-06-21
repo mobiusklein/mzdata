@@ -1,6 +1,7 @@
 use mzdata::prelude::{IonMobilityFrameLike, SpectrumLike, ParamDescribed};
+use mzdata::spectrum::bindata::ByteArrayView;
 use mzdata::spectrum::{
-    MultiLayerIonMobilityFrame, MultiLayerSpectrum, SignalContinuity,
+    ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, MultiLayerIonMobilityFrame, MultiLayerSpectrum, SignalContinuity
 };
 use mzdata::io::proxi;
 
@@ -10,8 +11,9 @@ use mzpeaks::{
     CentroidPeak, DeconvolutedPeak, IonMobility, Mass, MZ,
 };
 
+use pyo3::types::{PyDict, PyString};
 use pyo3::prelude::*;
-use numpy::{IntoPyArray, PyArray1, self};
+use numpy::{self, IntoPyArray, PyArray1, ToPyArray};
 
 use crate::params::{PyParam, PyPrecursor, PyScanEvent, find_param};
 
@@ -76,6 +78,36 @@ impl From<MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>> for PySpectrum {
     fn from(inner: MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>) -> Self {
         PySpectrum { inner }
     }
+}
+
+fn data_array_to_pyarray<'py>(data: &DataArray, py: Python<'py>) -> Option<Bound<'py, PyAny>> {
+    match data.dtype() {
+        BinaryDataArrayType::Float64 => {
+            Some(data.to_f64().ok()?.to_pyarray(py).into_any())
+        },
+        BinaryDataArrayType::Float32 => {
+            Some(data.to_f32().ok()?.to_pyarray(py).into_any())
+        },
+        BinaryDataArrayType::Int64 => {
+            Some(data.to_i64().ok()?.to_pyarray(py).into_any())
+        },
+        BinaryDataArrayType::Int32 => {
+            Some(data.to_i32().ok()?.to_pyarray(py).into_any())
+        },
+        BinaryDataArrayType::ASCII | BinaryDataArrayType::Unknown => {
+            Some(data.decode().ok()?.to_pyarray(py).into_any())
+        },
+    }
+}
+
+fn binary_array_map_to_pydict<'py>(arrays: &BinaryArrayMap, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+    let out = PyDict::new(py);
+    for (a, data) in arrays.iter() {
+        let key = a.as_param_const().name;
+        let key = PyString::intern(py, key.as_ref());
+        out.set_item(key, data_array_to_pyarray(data, py))?;
+    }
+    Ok(out)
 }
 
 #[pymethods]
@@ -149,6 +181,15 @@ impl PySpectrum {
     /// Decoded m/z array from the raw binary data, if present.
     fn mz_array<'py>(slf: &'py Bound<'py, Self>) -> Option<Bound<'py, PyArray1<f64>>> {
         slf.borrow().inner.arrays.as_ref().and_then(|a| a.mzs().ok()).map(|cow| cow.to_vec().into_pyarray(slf.py()))
+    }
+
+    fn raw_arrays<'py>(slf: &'py Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
+        let out = PyDict::new(slf.py());
+        if let Some(arrays) = slf.borrow().inner.arrays.as_ref() {
+            binary_array_map_to_pydict(arrays, slf.py())
+        } else {
+            Ok(out)
+        }
     }
 
     /// Decoded intensity array from the raw binary data, if present.
@@ -282,6 +323,15 @@ impl PyIonMobilityFrame {
     #[getter]
     fn id(&self) -> &str {
         self.inner.id()
+    }
+
+    fn raw_arrays<'py>(slf: &'py Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
+        let out = PyDict::new(slf.py());
+        if let Some(arrays) = slf.borrow().inner.arrays.as_ref() {
+            binary_array_map_to_pydict(&arrays.unstack().unwrap(), slf.py())
+        } else {
+            Ok(out)
+        }
     }
 
     #[getter]
