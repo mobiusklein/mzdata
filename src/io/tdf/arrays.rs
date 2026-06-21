@@ -47,7 +47,7 @@ impl<'a> FrameToArraysMapper<'a> {
         let mut im_dimension = Vec::with_capacity(final_scan - first_scan + 1);
         let mut arrays = Vec::with_capacity(final_scan - first_scan + 1);
 
-        let mut scan_begin = first_scan;
+        let mut scan_begin = self.frame.scan_offsets[first_scan];
         for (i, mut scan_end) in self.frame.scan_offsets[first_scan..final_scan]
             .iter()
             .copied()
