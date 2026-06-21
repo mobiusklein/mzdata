@@ -995,6 +995,25 @@ pub struct MultiLayerSpectrum<
     pub deconvoluted_peaks: Option<MassPeakSetType<D>>,
 }
 
+impl<C: CentroidLike, D: DeconvolutedCentroidLike> MultiLayerSpectrum<C, D> {
+    /// Create a new [`MultiLayerSpectrum`] from a [`SpectrumDescription`] and
+    /// any/all/none of the different levels of processing details for signal
+    /// data.
+    pub fn new(
+        description: SpectrumDescription,
+        arrays: Option<BinaryArrayMap>,
+        peaks: Option<MZPeakSetType<C>>,
+        deconvoluted_peaks: Option<MassPeakSetType<D>>,
+    ) -> Self {
+        Self {
+            description,
+            arrays,
+            peaks,
+            deconvoluted_peaks,
+        }
+    }
+}
+
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> Default for MultiLayerSpectrum<C, D> {
     fn default() -> Self {
         Self {
@@ -1060,20 +1079,6 @@ where
     C: BuildFromArrayMap + BuildArrayMapFrom,
     D: BuildFromArrayMap + BuildArrayMapFrom,
 {
-    pub fn new(
-        description: SpectrumDescription,
-        arrays: Option<BinaryArrayMap>,
-        peaks: Option<MZPeakSetType<C>>,
-        deconvoluted_peaks: Option<MassPeakSetType<D>>,
-    ) -> Self {
-        Self {
-            description,
-            arrays,
-            peaks,
-            deconvoluted_peaks,
-        }
-    }
-
     /// Convert a spectrum into a [`CentroidSpectrumType`]
     pub fn into_centroid(self) -> Result<CentroidSpectrumType<C>, SpectrumConversionError> {
         if let Some(peaks) = self.peaks {
@@ -1157,6 +1162,9 @@ where
         }
     }
 
+    /// Construct a [`MultiLayerSpectrum`] with `description` and a [`PeakDataLevel`] containing
+    /// at most *one* of the data modalities. This is convenient for reconstructing a spectrum
+    /// from its parts.
     pub fn from_peaks_data_levels_and_description(
         peaks: PeakDataLevel<C, D>,
         description: SpectrumDescription,
