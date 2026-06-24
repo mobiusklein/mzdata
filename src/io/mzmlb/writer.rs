@@ -792,7 +792,7 @@ where
             .write_param_list(chromatogram.params().iter())?;
 
         if let Some(precursor) = chromatogram.precursor() {
-            self.mzml_writer.write_precursor(precursor)?;
+            self.mzml_writer.write_precursor(core::slice::from_ref(precursor).into_iter())?;
         }
         self.write_binary_data_arrays(
             &chromatogram.arrays,

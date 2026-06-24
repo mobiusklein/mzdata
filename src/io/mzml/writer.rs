@@ -1632,23 +1632,26 @@ where
         Ok(())
     }
 
-    pub fn write_precursor(&mut self, precursor: &impl PrecursorSelection) -> WriterResult {
+    pub fn write_precursor<'a, I: Iterator<Item=&'a (impl PrecursorSelection + 'a)> + ExactSizeIterator>(&mut self, precursors: I) -> WriterResult {
         let mut precursor_list_tag = bstart!("precursorList");
-        attrib!("count", "1", precursor_list_tag);
+        let n = precursors.len().to_string();
+        attrib!("count", n, precursor_list_tag);
         start_event!(self, precursor_list_tag);
 
-        let mut precursor_tag = bstart!("precursor");
-        if let Some(prec_id) = precursor.precursor_id() {
-            attrib!("spectrumRef", prec_id, precursor_tag);
-        }
-        self.handle
-            .write_event(Event::Start(precursor_tag.borrow()))?;
+        for precursor in precursors {
+            let mut precursor_tag = bstart!("precursor");
+            if let Some(prec_id) = precursor.precursor_id() {
+                attrib!("spectrumRef", prec_id, precursor_tag);
+            }
+            self.handle
+                .write_event(Event::Start(precursor_tag.borrow()))?;
 
-        let iw = precursor.isolation_window();
-        self.write_isolation_window(iw)?;
-        self.write_selected_ions(precursor)?;
-        self.write_activation(precursor)?;
-        end_event!(self, precursor_tag);
+            let iw = precursor.isolation_window();
+            self.write_isolation_window(iw)?;
+            self.write_selected_ions(precursor)?;
+            self.write_activation(precursor)?;
+            end_event!(self, precursor_tag);
+        }
         end_event!(self, precursor_list_tag);
         Ok(())
     }
@@ -1662,10 +1665,14 @@ where
         spectrum: &S,
     ) -> WriterResult {
         let ms_level = spectrum.ms_level();
-        match ms_level {
-            1 => self.handle.write_param(&MS1_SPECTRUM)?,
-            x if x > 1 => self.handle.write_param(&MSN_SPECTRUM)?,
-            _ => {}
+        if let Some(spt) = spectrum.spectrum_type() {
+            self.handle.write_param(&spt.to_param())?
+        } else {
+            match ms_level {
+                1 => self.handle.write_param(&MS1_SPECTRUM)?,
+                x if x > 1 => self.handle.write_param(&MSN_SPECTRUM)?,
+                _ => {}
+            }
         }
         self.write_param(&self.ms_cv.const_param(
             "ms level",
@@ -1976,9 +1983,7 @@ where
         self.write_signal_properties(spectrum)?;
 
         self.write_scan_list(spectrum.acquisition())?;
-        for precursor in spectrum.precursor_iter() {
-            self.write_precursor(precursor)?;
-        }
+        self.write_precursor(spectrum.precursor_iter())?;
         Ok(())
     }
 
@@ -2133,7 +2138,7 @@ where
         self.write_param_list(chromatogram.params().iter())?;
 
         if let Some(precursor) = chromatogram.precursor() {
-            self.write_precursor(precursor)?;
+            self.write_precursor(core::slice::from_ref(precursor).into_iter())?;
         }
 
         if let Some(product) = chromatogram.product() {

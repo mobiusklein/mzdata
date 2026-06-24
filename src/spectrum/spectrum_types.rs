@@ -65,9 +65,14 @@ pub trait SpectrumLike<
     }
 
     /// Iterate over all precursors of the spectrum
-    fn precursor_iter(&self) -> impl Iterator<Item = &Precursor> {
+    fn precursor_iter(&self) -> impl Iterator<Item = &Precursor> + ExactSizeIterator {
         let desc = self.description();
         desc.precursor.iter()
+    }
+
+    /// The number of precursor levels recorded
+    fn precursor_count(&self) -> usize {
+        self.description().precursor.len()
     }
 
     /// Mutably access the (first) precursor information, if it exists
@@ -77,7 +82,7 @@ pub trait SpectrumLike<
     }
 
     /// Iterate over all precursors of the spectrum mutably
-    fn precursor_iter_mut(&mut self) -> impl Iterator<Item = &mut Precursor> {
+    fn precursor_iter_mut(&mut self) -> impl Iterator<Item = &mut Precursor> + ExactSizeIterator {
         let desc = self.description_mut();
         desc.precursor.iter_mut()
     }
