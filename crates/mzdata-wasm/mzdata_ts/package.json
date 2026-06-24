@@ -1,0 +1,39 @@
+{
+  "name": "mzdata",
+  "version": "0.1.0",
+  "description": "create an app to consume rust-generated wasm packages",
+  "main": "dist/mzdata.js",
+  "module": "dist/mzdata.js",
+  "types": "dist/mzdata.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/mzdata.js",
+      "types": "./dist/mzdata.d.ts"
+    }
+  },
+  "type": "module",
+  "keywords": [
+    "webassembly",
+    "wasm",
+    "rust",
+    "webpack"
+  ],
+  "author": "mobiusklein@gmail.com",
+  "license": "(MIT OR Apache-2.0)",
+  "dependencies": {
+    "mzdata-wasm": "file:../pkg"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.2",
+    "vite": "^6.0.5",
+    "rollup-plugin-dts": "^6.4.1",
+    "vite-plugin-top-level-await": "^1.4.4",
+    "vite-plugin-wasm": "^3.4.1",
+    "vite-plugin-dts": "^4.5.4"
+  }
+}

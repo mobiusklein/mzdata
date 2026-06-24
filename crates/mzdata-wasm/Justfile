@@ -1,0 +1,8 @@
+wasm:
+    wasm-pack build --target bundler
+
+wasm-dev:
+    wasm-pack build --dev --target bundler
+
+lib:
+    cd lib && npm install . && npm run build
