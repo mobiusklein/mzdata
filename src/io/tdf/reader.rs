@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap, io, iter::FusedIterator, marker::PhantomData, ops::Range, path::Path,
-    sync::Arc,
+    collections::HashMap, io, iter::FusedIterator, marker::PhantomData, ops::Range, path::{Path, PathBuf}, sync::Arc,
 };
 
 use chrono::DateTime;
@@ -37,9 +36,9 @@ use identity_hash::BuildIdentityHasher;
 use rusqlite::Error;
 
 use timsrust::{
-    converters::ConvertableDomain,
-    readers::{FrameReader, FrameReaderError, MetadataReader},
-    Metadata, TimsRustError,
+    TimsRustError, TimsTofFrameReaderError, TimsTofPathError, core::{Converter, ScanIndex}, tdf::{
+        FrameReaderError, Metadata
+    },
 };
 
 pub use super::arrays::FrameToArraysMapper;
@@ -145,8 +144,10 @@ pub struct TDFFrameReaderType<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
 > {
-    metadata: timsrust::Metadata,
-    frame_reader: timsrust::readers::FrameReader,
+    path: PathBuf,
+    handle: timsrust::TimsTofPath,
+    metadata: timsrust::tdf::Metadata,
+    frame_reader: timsrust::tdf::TdfFrameReader,
     tdf_reader: RawTDFSQLReader,
     entry_index: Vec<IndexExtry>,
     index: usize,
@@ -182,7 +183,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     /// # Errors
     /// This may fail if any of the component files fails to match the expected schema
     /// or layout.
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, timsrust::TimsRustError> {
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, TimsRustError> {
         Self::new_with_detail_level(path, DetailLevel::Full)
     }
 
@@ -195,21 +196,35 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     pub fn new_with_detail_level<P: AsRef<Path>>(
         path: P,
         detail_level: DetailLevel,
-    ) -> Result<Self, timsrust::TimsRustError> {
+    ) -> Result<Self, TimsRustError> {
         let path = path.as_ref();
         let tdf_path = path.join("analysis.tdf");
         if !tdf_path.exists() {
-            return Err(timsrust::TimsRustError::FrameReaderError(
+            return Err(TimsRustError::FrameReaderError(
                 FrameReaderError::FileNotFound(tdf_path.display().to_string()),
             ));
         }
 
-        let metadata = MetadataReader::new(&tdf_path)?;
-        let frame_reader = FrameReader::new(path)?;
+        let handle = timsrust::TimsTofPath::new(path.to_string_lossy())?;
+        let frame_reader = match handle.frame_reader() {
+            Ok(v) => v,
+            Err(e) => {
+                Err(match e {
+                    TimsTofFrameReaderError::FrameReaderError(e) => TimsRustError::FrameReaderError(e),
+                    TimsTofFrameReaderError::NotSupported => TimsRustError::TimsTofPathError(TimsTofPathError::IO(io::Error::other(TimsTofFrameReaderError::NotSupported))),
+                })?
+            },
+        };
+        let metadata = timsrust::tdf::Metadata::new(&handle)?;
+
+
+
         let tdf_reader = RawTDFSQLReader::new(&tdf_path)
-            .map_err(|e| TimsRustError::FrameReaderError(FrameReaderError::SqlError(e.into())))?;
+            .map_err(|e| TimsRustError::TimsTofPathError(TimsTofPathError::IO(io::Error::other(e))))?;
 
         let mut this = Self {
+            path: path.to_path_buf(),
+            handle,
             metadata,
             frame_reader,
             tdf_reader,
@@ -231,7 +246,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         };
 
         this.build_index()
-            .map_err(|e| TimsRustError::FrameReaderError(FrameReaderError::SqlError(e.into())))?;
+            .map_err(|e| TimsTofPathError::IO(io::Error::other(e).into()))?;
         this.build_metadata().unwrap();
 
         Ok(this)
@@ -536,7 +551,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                     consolidate_peaks(
                         &arrays,
                         &(0..arrays.ion_mobility_dimension.len() as u32),
-                        &self.metadata,
+                        &self.handle,
                         error_tolerance,
                     )
                     .ok()
@@ -565,15 +580,15 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             // `timsrust` uses base-zero indexing, but frame IDs start at 1
             let frame = self
                 .frame_reader
-                .get(entry.frame.id.saturating_sub(1))
+                .get_frame(entry.frame.id.saturating_sub(1))
                 .inspect_err(|e| {
                     log::error!("Failed to read frame {index}: {e}");
-                })?;
+                }).map_err(|e| TimsRustError::FrameReaderError(e.into()))?;
 
-            let mut descr = frame_to_description(&self.metadata, entry, None);
+            let mut descr = frame_to_description(&self.metadata, &self.handle, entry, None);
 
             if let Some(parent_entry) = entry.parent_index.and_then(|i| self.entry_index.get(i)) {
-                descr.precursor = index_to_precursor(entry, &self.metadata, parent_entry);
+                descr.precursor = index_to_precursor(entry, &self.handle, parent_entry);
             }
 
             let arrays = if !matches!(self.detail_level, DetailLevel::MetadataOnly) {
@@ -582,7 +597,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                         "Extracting {index} as PasefFrameMsMs with range {:?}",
                         pasef.scan_start..pasef.scan_end
                     );
-                    let arrays = FrameToArraysMapper::new(&frame, &self.metadata)
+                    let arrays = FrameToArraysMapper::new(&frame, &self.handle)
                         .process_3d_slice(pasef.scan_start..pasef.scan_end);
                     Some(arrays)
                 } else if let Some(dia_pasef) = entry.dia_window() {
@@ -590,11 +605,11 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                         "Extracting {index} as DIAFrameMsMsWindow with range {:?}",
                         dia_pasef.scan_start..dia_pasef.scan_end
                     );
-                    let arrays = FrameToArraysMapper::new(&frame, &self.metadata)
+                    let arrays = FrameToArraysMapper::new(&frame, &self.handle)
                         .process_3d_slice(dia_pasef.scan_start..dia_pasef.scan_end);
                     Some(arrays)
                 } else {
-                    Some(FrameToArraysMapper::new(&frame, &self.metadata).process_3d_slice(..))
+                    Some(FrameToArraysMapper::new(&frame, &self.handle).process_3d_slice(..))
                 }
             } else {
                 None
@@ -609,15 +624,14 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 
     pub fn get_trace_reader(&self) -> Result<ChromatographyData, TimsRustError> {
         let path = self
-            .metadata
             .path
             .parent()
             .expect(".tdf file did not have an enclosing directory")
             .join(super::sql::ChromatographyData::FILE_NAME);
+
+
         let handle = super::sql::ChromatographyData::new(&path).map_err(|e| {
-            TimsRustError::MetadataReaderError(timsrust::readers::MetadataReaderError::SqlError(
-                e.into(),
-            ))
+            TimsRustError::TimsTofPathError(TimsTofPathError::IO(io::Error::other(e)))
         })?;
         Ok(handle)
     }
@@ -656,7 +670,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             );
         }
 
-        let mut sf = SourceFile::from_path(&self.metadata.path)?;
+        let mut sf = SourceFile::from_path(&self.path)?;
         sf.file_format = Some(MassSpectrometerFileFormatTerm::BrukerTDF.into());
         sf.id_format = Some(NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat.into());
         #[cfg(not(debug_assertions))]
@@ -666,14 +680,13 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             checksum_file(&self.metadata.path)?,
         ));
         sf.id = self
-            .metadata
             .path
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "analysis_tdf".into());
         descr.source_files.push(sf);
 
-        let tdf_bin = self.metadata.path.with_extension("tdf_bin");
+        let tdf_bin = self.path.with_extension("tdf_bin");
         if tdf_bin.exists() {
             let mut sf = SourceFile::from_path(&tdf_bin)?;
             sf.file_format = Some(MassSpectrometerFileFormatTerm::BrukerTDF.into());
@@ -827,7 +840,6 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     ) -> MassSpectrometryRun {
         let sf = file_description.source_files.first().unwrap();
         let run_id = self
-            .metadata
             .path
             .parent()
             .map(|s| s.as_os_str().to_string_lossy().to_string());
@@ -883,7 +895,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     }
 
     fn source_file_name(&self) -> Option<&str> {
-        self.metadata.path.to_str()
+        self.path.to_str()
     }
 }
 
@@ -1049,6 +1061,8 @@ impl<
         let view = self.into_frame_reader();
 
         Ok(TDFFrameReaderType {
+            path: view.path,
+            handle: view.handle,
             tdf_reader: view.tdf_reader,
             metadata: view.metadata,
             frame_reader: view.frame_reader,
@@ -1297,7 +1311,7 @@ impl<
             spectrum.peaks = Some(consolidate_peaks(
                 &arrays,
                 &(0..arrays.ion_mobility_dimension.len() as u32),
-                &self.frame_reader.metadata,
+                &self.frame_reader.handle,
                 self.peak_merging_tolerance,
             )?);
         };
@@ -1370,7 +1384,7 @@ pub type TDFSpectrumReader = TDFSpectrumReaderType<
 
 fn index_to_precursor(
     index_entry: &IndexExtry,
-    metadata: &Metadata,
+    handle: &timsrust::TimsTofPath,
     parent_entry: &IndexExtry,
 ) -> Vec<Precursor> {
     if let Some(prec) = index_entry.precursor() {
@@ -1385,7 +1399,9 @@ fn index_to_precursor(
             ..Default::default()
         };
 
-        let im = metadata.im_converter.convert(prec.scan_average);
+        let idx = ScanIndex::from(prec.scan_average as u16);
+        let im: f64 = handle.im_converter().unwrap().convert(idx).into();
+
 
         let p = inverse_reduce_ion_mobility_param(im);
         ion.add_param(p);
@@ -1425,9 +1441,8 @@ fn index_to_precursor(
             charge: None,
             ..Default::default()
         };
-        let im = metadata
-            .im_converter
-            .convert((dia_window.scan_end + dia_window.scan_start) as f64 / 2.0);
+        let idx = ScanIndex::from(((dia_window.scan_end + dia_window.scan_start) as f64 / 2.0) as u16);
+        let im: f64 = handle.im_converter().unwrap().convert(idx).into();
 
         let p = inverse_reduce_ion_mobility_param(im);
         ion.add_param(p);
@@ -1466,6 +1481,7 @@ fn index_to_precursor(
 
 fn frame_to_description(
     metadata: &Metadata,
+    handle: &timsrust::TimsTofPath,
     index_entry: &IndexExtry,
     frame_slice: Option<Range<u32>>,
 ) -> IonMobilityFrameDescription {
@@ -1493,28 +1509,35 @@ fn frame_to_description(
             .build(),
     );
 
+    let im_conv = handle.im_converter().unwrap();
+    let low_mz: f64 = metadata.lower_mz().into();
+    let hi_mz: f64 = metadata.upper_mz().into();
     let mut scan = ScanEvent::new(
         index_entry.frame.time / 60.0,
         index_entry.frame.accumulation_time,
+
         vec![ScanWindow {
-            lower_bound: metadata.lower_mz as f32,
-            upper_bound: metadata.upper_mz as f32,
+            lower_bound: low_mz as f32,
+            upper_bound: hi_mz as f32,
         }],
         0,
         None,
     );
 
     if let Some(scan_range) = frame_slice.as_ref() {
-        let im = (metadata.im_converter.convert(scan_range.start)
-            + metadata.im_converter.convert(scan_range.end))
-            / 2.0;
+        let start_idx = ScanIndex::from(scan_range.start as u16);
+        let end_idx = ScanIndex::from(scan_range.end as u16);
+
+        let start_im: f64 = im_conv.convert(start_idx).into();
+        let end_im: f64 = im_conv.convert(end_idx).into();
+        let im = (start_im + end_im) / 2.0;
         let p = inverse_reduce_ion_mobility_param(im);
         scan.add_param(p);
     }
 
     if let Some(pasef) = index_entry.pasef_msms() {
-        let im_low = metadata.im_converter.convert(pasef.scan_start as u32);
-        let im_high = metadata.im_converter.convert(pasef.scan_end as u32);
+        let im_low: f64 = im_conv.convert(ScanIndex::from(pasef.scan_start as u16)).into();
+        let im_high: f64 = im_conv.convert(ScanIndex::from(pasef.scan_end as u16)).into();
 
         descr.add_param(
             Param::new_key_value("ion mobility lower limit", im_low)
@@ -1531,8 +1554,8 @@ fn frame_to_description(
     }
 
     if let Some(pasef) = index_entry.dia_window() {
-        let im_low = metadata.im_converter.convert(pasef.scan_start as u32);
-        let im_high = metadata.im_converter.convert(pasef.scan_end as u32);
+        let im_low: f64 = im_conv.convert(ScanIndex::from(pasef.scan_start as u16)).into();
+        let im_high: f64 = im_conv.convert(ScanIndex::from(pasef.scan_end as u16)).into();
 
         descr.add_param(
             Param::new_key_value("ion mobility lower limit", im_low)
@@ -1621,10 +1644,17 @@ pub fn is_tdf<P: AsRef<Path>>(path: P) -> bool {
         return false;
     }
 
-    if MetadataReader::new(tdf_path).is_err() {
-        return false;
+    match timsrust::TimsTofPath::new(path.to_string_lossy()) {
+        Ok(v) => {
+            if Metadata::new(v).is_err() {
+                return false;
+            }
+            true
+        },
+        Err(_) => return false
     }
-    true
+
+
 }
 
 #[cfg(test)]

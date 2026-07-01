@@ -4,7 +4,7 @@ use std::{
 };
 
 use mzpeaks::{feature::Feature, IonMobility, MZPeakSetType, MZ};
-use timsrust::{converters::ConvertableDomain, Metadata};
+use timsrust::core::{Converter, Frame, Im, ScanIndex};
 
 use crate::{
     mzpeaks::{CentroidPeak, PeakSet},
@@ -19,16 +19,19 @@ use crate::{
 use mzsignal::feature_mapping::{FeatureGraphBuilder, IMMSMapExtracter};
 
 pub struct FrameToArraysMapper<'a> {
-    frame: &'a timsrust::Frame,
-    metadata: &'a Metadata,
+    frame: &'a Frame,
+    handle: &'a timsrust::TimsTofPath
 }
 
 impl<'a> FrameToArraysMapper<'a> {
-    pub fn new(frame: &'a timsrust::Frame, metadata: &'a Metadata) -> Self {
-        Self { frame, metadata }
+    pub fn new(frame: &'a timsrust::core::Frame, handle: &'a timsrust::TimsTofPath) -> Self {
+        Self { frame, handle }
     }
 
     pub fn process_3d_slice(&self, iv: impl RangeBounds<usize>) -> BinaryArrayMap3D {
+        let ions = self.frame.ions();
+        let scan_offsets = ions.scan_offsets();
+
         // `scan_offsets` is a cumulative prefix-sum of peak OFFSETS into
         // tof_indices/intensities (length `n_scan_rows + 1`, last entry = total
         // peak count); scan `k`'s peaks are tof_indices[scan_offsets[k] ..
@@ -38,7 +41,8 @@ impl<'a> FrameToArraysMapper<'a> {
         // scan's mobility. Index scans directly so each is read once and labelled
         // with its own mobility. (The end-bound mapping is also restored to the
         // conventional half-open meaning; the selected peak set is unchanged.)
-        let n_scan_rows = self.frame.scan_offsets.len() - 1;
+
+        let n_scan_rows = scan_offsets.len() - 1;
 
         let first_scan = match iv.start_bound() {
             std::ops::Bound::Included(i) => *i,
@@ -57,10 +61,14 @@ impl<'a> FrameToArraysMapper<'a> {
         let span = final_scan.saturating_sub(first_scan);
         let mut im_dimension = Vec::with_capacity(span);
         let mut arrays = Vec::with_capacity(span);
+        let tof_indices = ions.tof_indices();
+        let intensities = ions.intensities();
+        let mz_converter = self.handle.mz_converter().unwrap();
+        let im_converter = self.handle.im_converter().unwrap();
 
         for scan in first_scan..final_scan {
-            let begin = self.frame.scan_offsets[scan];
-            let end = self.frame.scan_offsets[scan + 1].min(self.frame.tof_indices.len());
+            let begin = scan_offsets[scan];
+            let end = scan_offsets[scan + 1].min(tof_indices.len());
             let width = end.saturating_sub(begin);
 
             let mut mz_array_bytes: Vec<u8> =
@@ -68,15 +76,17 @@ impl<'a> FrameToArraysMapper<'a> {
             let mut intensity_array_bytes: Vec<u8> =
                 Vec::with_capacity(width * BinaryDataArrayType::Float32.size_of());
 
-            self.frame.tof_indices[begin..end].iter().for_each(|tof_idx| {
+            tof_indices[begin..end].iter().for_each(|tof_idx| {
+                let v: f64 = mz_converter.convert(*tof_idx).into();
                 mz_array_bytes
-                    .extend_from_slice(&self.metadata.mz_converter.convert(*tof_idx).to_le_bytes())
+                    .extend_from_slice(&v.to_le_bytes())
             });
-            self.frame.intensities[begin..end].iter().for_each(|intensity| {
-                intensity_array_bytes.extend_from_slice(&((*intensity as u64) as f32).to_le_bytes())
+            intensities[begin..end].iter().for_each(|intensity| {
+                intensity_array_bytes.extend_from_slice(&(u32::from(*intensity) as f32).to_le_bytes())
             });
-            let drift = self.metadata.im_converter.convert(scan as u32);
-            im_dimension.push(drift);
+            let scan_idx = ScanIndex::from(scan as u16);
+            let drift: Im = im_converter.convert(scan_idx);
+            im_dimension.push(drift.into());
 
             let mut mz_array = DataArray::wrap(
                 &ArrayType::MZArray,
@@ -115,14 +125,17 @@ impl<'a> FrameToArraysMapper<'a> {
 pub fn consolidate_peaks<CP: CentroidLike + From<CentroidPeak>>(
     arrays: &BinaryArrayMap3D,
     scan_range: &Range<u32>,
-    metadata: &Metadata,
+    handle: &timsrust::TimsTofPath,
     error_tolerance: Tolerance,
 ) -> Result<MZPeakSetType<CP>, ArrayRetrievalError> {
+    let im_converter = handle.im_converter().unwrap();
     let peaks: Result<Vec<_>, ArrayRetrievalError> = scan_range
         .clone()
         .rev()
         .map(|i| -> Result<(f64, PeakSet), ArrayRetrievalError> {
-            let im = metadata.im_converter.convert(i);
+            let idx = ScanIndex::from(i as u16);
+            let im: Im = im_converter.convert(idx);
+            let im = im.into();
             if let Some(arrays_point) = arrays.get_ion_mobility(im) {
                 let mzs = arrays_point.mzs()?;
                 let intens = arrays_point.intensities()?;
