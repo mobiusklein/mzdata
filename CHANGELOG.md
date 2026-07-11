@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.65.3] - 2026-07-11
+
+### Changed
+
+- Require `precursor_iter` be an `ExactSizeIterator`
+
+### Fixed
+
+- Fix `thermo` precursor_id/spectrumRef value (GH #52)
+
 ## [0.65.2] - 2026-06-21
 
 ### Fixed
@@ -1085,7 +1095,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.65.2...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.65.3...HEAD
+[0.65.3]: https://github.com/mobiusklein/mzdata/compare/v0.65.2...v0.65.3
 [0.65.2]: https://github.com/mobiusklein/mzdata/compare/v0.65.1...v0.65.2
 [0.65.1]: https://github.com/mobiusklein/mzdata/compare/v0.65.0...v0.65.1
 [0.65.0]: https://github.com/mobiusklein/mzdata/compare/v0.64.1...v0.65.0
