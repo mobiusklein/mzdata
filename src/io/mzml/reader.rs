@@ -2547,7 +2547,7 @@ mod test {
         let mut index = IndexedMzMLIndexExtractor::new();
         if let Ok(offset) = index.find_offset_from_reader(&mut f) {
             if let Some(offset) = offset {
-                assert_eq!(offset, 5116653);
+                assert_eq!(offset, 3417691);
             } else {
                 panic!("Failed to parse offset from element")
             }
@@ -2698,7 +2698,7 @@ mod test {
             .for_each(|(_, v)| {
                 assert!(matches!(
                     v.compression,
-                    BinaryCompressionType::NoCompression
+                    BinaryCompressionType::Zlib
                 ));
             });
 
@@ -2712,7 +2712,7 @@ mod test {
             .for_each(|(_, v)| {
                 assert!(matches!(
                     v.compression,
-                    BinaryCompressionType::NoCompression
+                    BinaryCompressionType::Zlib
                 ));
                 assert!(v.data.is_empty());
             });

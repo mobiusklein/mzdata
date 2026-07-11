@@ -97,15 +97,15 @@ const SOURCE_FILE_ID: & str = "RAW1";
 pub(crate) mod sealed {
     use std::path::Path;
 
-    use crate::spectrum::bindata::to_bytes;
+    use crate::spectrum::{IsolationWindowState, bindata::to_bytes};
 
     use super::*;
     use thermorawfilereader::{
         schema::{
-            AcquisitionT, DissociationMethod, Polarity, PrecursorT, SpectrumData, SpectrumMode,
+            AcquisitionT, DissociationMethod, Polarity, PrecursorT, SpectrumMode,
         },
         ExtendedSpectrumData, FileDescription as ThermoFileDescription, IonizationMode,
-        MassAnalyzer, RawFileReader,
+        MassAnalyzer, RawFileReader, OwnedSpectrumData,
     };
 
     /**
@@ -216,26 +216,22 @@ pub(crate) mod sealed {
         pub fn get_data_arrays_for(&mut self, index: usize, centroiding: bool, extra_data: bool) -> Option<BinaryArrayMap> {
             let data = self.handle.get_spectrum_data(index, centroiding)?;
             let mut arrays = BinaryArrayMap::default();
-
-            let view = data.raw_view();
-
-            if let Some(mz) = view.mz() {
-                let buffer = mz.bytes();
-                let mz_array = DataArray::wrap(
+            if !data.is_empty() {
+                let (mz_bytes, intensity_bytes) = data.into_le_bytes();
+                let mut mz_array = DataArray::wrap(
                     &ArrayType::MZArray,
                     BinaryDataArrayType::Float64,
-                    buffer.to_vec(),
+                    mz_bytes,
                 );
-                arrays.add(mz_array)
-            }
+                mz_array.unit = Unit::MZ;
+                arrays.add(mz_array);
 
-            if let Some(intensity) = view.intensity() {
-                let buffer = intensity.bytes();
-                let intensity_array = DataArray::wrap(
+                let mut intensity_array = DataArray::wrap(
                     &ArrayType::IntensityArray,
                     BinaryDataArrayType::Float32,
-                    buffer.to_vec(),
+                    intensity_bytes
                 );
+                intensity_array.unit = Unit::DetectorCounts;
                 arrays.add(intensity_array);
             }
 
@@ -920,6 +916,7 @@ pub(crate) mod sealed {
             iso_window.lower_bound = vwin.lower() as f32;
             iso_window.target = vwin.target() as f32;
             iso_window.upper_bound = vwin.upper() as f32;
+            iso_window.flags = IsolationWindowState::Complete;
 
             precursor.precursor_id = Some(make_native_id(vprec.parent_index()));
         }
@@ -1018,33 +1015,6 @@ pub(crate) mod sealed {
                 })
         }
 
-        fn populate_raw_signal(&self, data: &SpectrumData) -> BinaryArrayMap {
-            let mut arrays = BinaryArrayMap::default();
-
-            if let Some(mz) = data.mz() {
-                let buffer = mz.bytes();
-                let mut mz_array = DataArray::wrap(
-                    &ArrayType::MZArray,
-                    BinaryDataArrayType::Float64,
-                    buffer.to_vec(),
-                );
-                mz_array.unit = Unit::MZ;
-                arrays.add(mz_array)
-            }
-
-            if let Some(intensity) = data.intensity() {
-                let buffer = intensity.bytes();
-                let mut intensity_array = DataArray::wrap(
-                    &ArrayType::IntensityArray,
-                    BinaryDataArrayType::Float32,
-                    buffer.to_vec(),
-                );
-                intensity_array.unit = Unit::DetectorCounts;
-                arrays.add(intensity_array);
-            }
-            arrays
-        }
-
         fn populate_extended_data(&self, arrays: &mut BinaryArrayMap, data: &ExtendedSpectrumData) {
             if let Some(charge) = data.charge() {
                 let mut array = DataArray::from_name_type_size(
@@ -1095,24 +1065,60 @@ pub(crate) mod sealed {
             }
         }
 
-        fn populate_peaks(&self, data: &SpectrumData) -> PeakSetVec<C, MZ> {
-            let mut peaks = PeakSetVec::empty();
-            if let (Some(mz), Some(intensity)) = (data.mz(), data.intensity()) {
-                for (mz_i, intensity_i) in mz.iter().zip(intensity) {
-                    let peak = C::from(CentroidPeak::new(mz_i, intensity_i, 0));
-                    peaks.push(peak);
-                }
+        fn populate_data_arrays(&self, data: OwnedSpectrumData) -> BinaryArrayMap {
+            let mut arrays = BinaryArrayMap::default();
+            if !data.is_empty() {
+                let (mz_bytes, intensity_bytes) = data.into_le_bytes();
+                let mut mz_array = DataArray::wrap(
+                    &ArrayType::MZArray,
+                    BinaryDataArrayType::Float64,
+                    mz_bytes,
+                );
+                mz_array.unit = Unit::MZ;
+                arrays.add(mz_array);
+
+                let mut intensity_array = DataArray::wrap(
+                    &ArrayType::IntensityArray,
+                    BinaryDataArrayType::Float32,
+                    intensity_bytes
+                );
+                intensity_array.unit = Unit::DetectorCounts;
+                arrays.add(intensity_array);
+            } else {
+                let mut mz_array = DataArray::wrap(
+                    &ArrayType::MZArray,
+                    BinaryDataArrayType::Float64,
+                    Vec::new(),
+                );
+                mz_array.unit = Unit::MZ;
+                arrays.add(mz_array);
+
+                let mut intensity_array = DataArray::wrap(
+                    &ArrayType::IntensityArray,
+                    BinaryDataArrayType::Float32,
+                    Vec::new()
+                );
+                intensity_array.unit = Unit::DetectorCounts;
+                arrays.add(intensity_array);
+            }
+            arrays
+        }
+
+        fn populate_peaks_owned(&self, data: OwnedSpectrumData) -> PeakSetVec<C, MZ> {
+            let n = data.len();
+            let mut peaks = Vec::with_capacity(n);
+            // TODO: is there a way to find out if we can directly construct `C`, possibly
+            // with extra data arrays loaded?
+            for (mz, int) in data.iter() {
+                let peak = C::from(CentroidPeak::new(mz, int, 0));
+                peaks.push(peak);
             }
             log::trace!("Collected {} peaks", peaks.len());
-            peaks
+            peaks.into()
         }
 
         pub(crate) fn get_spectrum(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
-            if matches!(self.detail_level, DetailLevel::MetadataOnly) {
-                self.handle.set_signal_loading(false);
-            } else {
-                self.handle.set_signal_loading(true);
-            }
+            self.handle.set_signal_loading(false);
             let raw = self.handle.get(index)?;
             let view = raw.view();
 
@@ -1149,24 +1155,25 @@ pub(crate) mod sealed {
                 }
             }
 
-            if let Some(data) = view.data() {
-                let extra: Option<ExtendedSpectrumData> = if self.load_extended_spectrum_data {
-                    self.handle.get_extended_spectrum_data(index, false)
-                } else {
-                    None
-                };
-                if spec.signal_continuity() == SignalContinuity::Centroid {
-                    log::trace!("Populating peak data for {index}");
-                    spec.peaks = Some(self.populate_peaks(&data));
-                    if let Some(extra) = extra {
-                        spec.arrays = Some(self.populate_raw_signal(&data));
-                        self.populate_extended_data(spec.arrays.as_mut().unwrap(), &extra);
-                    }
-                } else {
-                    log::trace!("Populating array data for {index}");
-                    spec.arrays = Some(self.populate_raw_signal(&data));
-                    if let Some(extra) = extra {
-                        self.populate_extended_data(spec.arrays.as_mut().unwrap(), &extra);
+            if !matches!(self.detail_level, DetailLevel::MetadataOnly) {
+                if let Some(data) = self.handle.get_spectrum_data(index, self.get_centroiding()) {
+                    if spec.signal_continuity() == SignalContinuity::Centroid {
+                        log::trace!("Populating peak data for {index}");
+                        spec.peaks = Some(self.populate_peaks_owned(data));
+                        if self.load_extended_spectrum_data {
+                            let mut arrays = BinaryArrayMap::new();
+                            let data = self.handle.get_extended_spectrum_data(index, true)?;
+                            self.populate_extended_data(&mut arrays, &data);
+                            spec.arrays = Some(arrays);
+                        }
+                    } else {
+                        log::trace!("Populating array data for {index}");
+                        let mut arrays = self.populate_data_arrays(data);
+                        if self.load_extended_spectrum_data {
+                            let data = self.handle.get_extended_spectrum_data(index, true)?;
+                            self.populate_extended_data(&mut arrays, &data);
+                        }
+                        spec.arrays = Some(arrays);
                     }
                 }
             }
@@ -1630,6 +1637,12 @@ mod test {
                 s.start_time() - r.start_time()
             );
             if s.ms_level() == 2 {
+                let prec_s = s.precursor().unwrap();
+                let prec_r = r.precursor().unwrap();
+                assert_eq!(prec_r.precursor_id, prec_s.precursor_id);
+                assert_eq!(prec_r.activation, prec_s.activation);
+                assert_eq!(prec_r.isolation_window, prec_s.isolation_window);
+
                 let ps = s.precursor().unwrap().ion().unwrap();
                 let pr = r.precursor().unwrap().ion().unwrap();
                 assert!(
@@ -1643,30 +1656,47 @@ mod test {
             }
         });
 
-        let s1 = &spectra[0];
-        let r1 = &ref_spectra[0];
+        for i in [0, 1, 3, 5, 10, 20, 30] {
+            let s1 = &spectra[i];
+            let r1 = &ref_spectra[i];
 
-        let as1 = s1.raw_arrays().unwrap();
-        let ar1 = r1.raw_arrays().unwrap();
+            if s1.raw_arrays().is_some() {
+                let as1 = s1.raw_arrays().unwrap();
+                let ar1 = r1.raw_arrays().unwrap();
 
-        assert_eq!(as1.mzs().unwrap().len(), ar1.mzs().unwrap().len());
-        as1.mzs()
-            .unwrap()
-            .iter()
-            .enumerate()
-            .zip(ar1.mzs().unwrap().iter())
-            .for_each(|((i, s), r)| {
-                assert!((s - r).abs() < 1e-3, "[{i}]{s} - {r} = {}", s - r);
-            });
-        assert_eq!(as1.intensities().unwrap().len(), as1.mzs().unwrap().len());
-        as1.intensities()
-            .unwrap()
-            .iter()
-            .enumerate()
-            .zip(ar1.intensities().unwrap().iter())
-            .for_each(|((i, s), r)| {
-                assert!((s - r).abs() < 1e-3, "[{i}]{s} - {r} = {}", s - r);
-            });
+                assert_eq!(as1.mzs().unwrap().len(), ar1.mzs().unwrap().len());
+                as1.mzs()
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                    .zip(ar1.mzs().unwrap().iter())
+                    .for_each(|((i, s), r)| {
+                        assert!((s - r).abs() < 1e-3, "[{i}]{s} - {r} = {}", s - r);
+                    });
+                assert_eq!(as1.intensities().unwrap().len(), as1.mzs().unwrap().len());
+                as1.intensities()
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                    .zip(ar1.intensities().unwrap().iter())
+                    .for_each(|((i, s), r)| {
+                        assert!((s - r).abs() < 1e-3, "[{i}]{s} - {r} = {}", s - r);
+                    });
+            }
+            else {
+                for (i, (a, b)) in s1.peaks().iter().zip(r1.peaks().iter()).enumerate() {
+                    let e = a.mz - b.mz;
+                    assert!(
+                        e.abs() < 1e-3, "[{i}]{} - {} = {e}", a.mz, b.mz
+                    );
+                    let e = a.intensity - b.intensity;
+                    assert!(
+                        e.abs() < 1e-3, "[{i}]{} - {} = {e}", a.intensity, b.intensity
+                    );
+                }
+            }
+        }
+
         Ok(())
     }
 
