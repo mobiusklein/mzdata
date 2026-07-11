@@ -31,7 +31,7 @@ web-sys = { version = "0.3.76", features = [
     "ReadableStream",
 ] }
 
-mzdata = { path = "../../", version = "0.65.2", default-features = false, features = [
+mzdata = { path = "../../", version = "0.65.4", default-features = false, features = [
     "mzml",
     "mgf",
     "imzml",
