@@ -160,7 +160,7 @@ impl<
      */
     async fn parse_metadata(&mut self) -> Result<(), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let mut accumulator = FileMetadataBuilder {
             instrument_id_map: Some(&mut self.instrument_id_map),
             ..Default::default()
@@ -207,7 +207,7 @@ impl<
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
-                    match accumulator.empty_element(e, self.state, reader.buffer_position()) {
+                    match accumulator.empty_element(e, self.state, reader.buffer_position() as usize) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -221,10 +221,10 @@ impl<
                     break;
                 }
                 Err(err) => match &err {
-                    XMLError::EndEventMismatch {
+                    XMLError::IllFormed(quick_xml::errors::IllFormedError::MismatchedEndTag {
                         expected,
                         found: _found,
-                    } => {
+                    }) => {
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
@@ -291,7 +291,7 @@ impl<
         mut accumulator: MzMLSpectrumBuilder<'a, C, D>,
     ) -> Result<(usize, MzMLSpectrumBuilder<'a, C, D>), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         accumulator.instrument_id_map = Some(&mut self.instrument_id_map);
         if let Some(val) = self.run.default_data_processing_id.as_ref() {
             accumulator.set_run_data_processing(Some(val.clone().into()));
@@ -346,7 +346,7 @@ impl<
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
-                    match accumulator.empty_element(e, self.state, reader.buffer_position()) {
+                    match accumulator.empty_element(e, self.state, reader.buffer_position() as usize) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -362,10 +362,10 @@ impl<
                     break;
                 }
                 Err(err) => match &err {
-                    XMLError::EndEventMismatch {
+                    XMLError::IllFormed(quick_xml::errors::IllFormedError::MismatchedEndTag {
                         expected,
                         found: _found,
-                    } => {
+                    }) => {
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
@@ -592,7 +592,7 @@ impl IndexedMzMLIndexExtractor {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"idRef" {
                                 self.last_id = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding idRef")
                                     .to_string();
                             }
@@ -609,7 +609,7 @@ impl IndexedMzMLIndexExtractor {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"name" {
                                 let index_name = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding idRef")
                                     .to_string();
                                 match index_name.as_ref() {
@@ -656,8 +656,10 @@ impl IndexedMzMLIndexExtractor {
     ) -> Result<IndexParserState, XMLError> {
         match state {
             IndexParserState::SpectrumIndexList => {
-                let bin = event
-                    .unescape()
+                let decoded = event
+                    .decode()
+                    .expect("Failed to decode spectrum offset");
+                let bin = quick_xml::escape::unescape(&decoded)
                     .expect("Failed to unescape spectrum offset");
                 if let Ok(offset) = bin.parse::<u64>() {
                     if !self.last_id.is_empty() {
@@ -669,8 +671,10 @@ impl IndexedMzMLIndexExtractor {
                 }
             }
             IndexParserState::ChromatogramIndexList => {
-                let bin = event
-                    .unescape()
+                let decoded = event
+                    .decode()
+                    .expect("Failed to decode chromatogram offset");
+                let bin = quick_xml::escape::unescape(&decoded)
                     .expect("Failed to unescape chromatogram offset");
                 if let Ok(offset) = bin.parse::<u64>() {
                     if !self.last_id.is_empty() {
@@ -739,7 +743,7 @@ impl<
             .expect("Failed to seek to the index offset");
 
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
 
         loop {
             match reader.read_event_into_async(&mut self.buffer).await {

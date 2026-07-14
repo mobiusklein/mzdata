@@ -91,7 +91,7 @@ pub fn is_imzml(buffer: &[u8]) -> bool {
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 if attr.key.as_ref() == b"id" {
-                                    if let Ok(value) = attr.unescape_value() {
+                                    if let Ok(value) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                                         if value.as_ref() == "IMS" {
                                             return true;
                                         }
@@ -622,7 +622,7 @@ impl<
      */
     fn parse_metadata(&mut self) -> Result<(), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let mut accumulator = ImzmlMetadataBuilder {
             mzml_metadata_builder: FileMetadataBuilder {
                 instrument_id_map: Some(&mut self.instrument_id_map),
@@ -676,7 +676,7 @@ impl<
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
-                    match accumulator.empty_element(e, self.state, reader.buffer_position()) {
+                    match accumulator.empty_element(e, self.state, reader.buffer_position() as usize) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -690,10 +690,10 @@ impl<
                     break;
                 }
                 Err(err) => match &err {
-                    XMLError::EndEventMismatch {
+                    XMLError::IllFormed(quick_xml::errors::IllFormedError::MismatchedEndTag {
                         expected,
                         found: _found,
-                    } => {
+                    }) => {
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
@@ -800,7 +800,7 @@ impl<
         }
 
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         accumulator = accumulator.borrow_metadata(&mut self.instrument_id_map, &mut self.reference_param_groups);
         accumulator.set_run_data_processing(self.run.default_data_processing_id.clone().map(|v| v.into_boxed_str()));
         let mut offset: usize = 0;
@@ -855,7 +855,7 @@ impl<
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
-                    match accumulator.empty_element(e, self.state, reader.buffer_position()) {
+                    match accumulator.empty_element(e, self.state, reader.buffer_position() as usize) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -868,10 +868,10 @@ impl<
                     break;
                 }
                 Err(err) => match &err {
-                    XMLError::EndEventMismatch {
+                    XMLError::IllFormed(quick_xml::errors::IllFormedError::MismatchedEndTag {
                         expected,
                         found: _found,
-                    } => {
+                    }) => {
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
@@ -1049,7 +1049,7 @@ impl<
             Err(err) => return Err(MzMLParserError::IOError(self.state, err)),
         };
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let matched_tag = match reader.read_event_into(&mut self.buffer) {
             Ok(event) => match event {
                 Event::Start(ref e) => {

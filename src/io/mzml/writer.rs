@@ -49,7 +49,7 @@ macro_rules! attrib {
         let value = $value.as_bytes();
         // Because quick_xml::escape does not escape newlines
         let decoded = unsafe { std::str::from_utf8_unchecked(&value) };
-        let escaped_value = escape::escape(&decoded);
+        let escaped_value = escape::escape(decoded);
         $elt.push_attribute((key, escaped_value.as_bytes()));
     }};
 }

@@ -781,7 +781,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                     match attr_parsed {
                         Ok(attr) => match attr.key.as_ref() {
                             b"id" => {
-                                self.entry_id = match attr.unescape_value()
+                                self.entry_id = match attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .map(|v| v.to_string())
                                     .or_else(|_| -> Result<String, quick_xml::Error> {
                                         log::trace!("Detected non-UTF8 character in spectrum id");
@@ -833,10 +833,10 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                     .instrument_id_map
                                     .as_mut()
                                     .expect("An instrument ID map was not provided")
-                                    .get(&attr.unescape_value().expect("Error decoding id"));
+                                    .get(&attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).expect("Error decoding id"));
                             } else if attr.key.as_ref() == b"spectrumRef" {
                                 let sref =
-                                    attr.unescape_value().expect("Error decoding spectrumRef");
+                                    attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).expect("Error decoding spectrumRef");
                                 scan_event.spectrum_reference = Some(sref.into());
                             }
                         }
@@ -871,7 +871,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                         Ok(attr) => {
                             if attr.key.as_ref() == b"spectrumRef" {
                                 self.precursor_mut().precursor_id = Some(
-                                    attr.unescape_value()
+                                    attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                         .expect("Error decoding id")
                                         .to_string(),
                                 );
@@ -916,7 +916,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"dataProcessingRef" {
-                                match attr.unescape_value() {
+                                match attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                                     Ok(v) => {
                                         self.current_array.set_data_processing_reference(Some(v.into()));
                                         dp_set = true;
@@ -953,7 +953,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                         Ok(attr) => match attr.key.as_ref() {
                             b"id" => {
                                 self.entry_id = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .map(|v| v.to_string())
                                     .or_else(|_| -> Result<String, quick_xml::Error> {
                                         log::trace!("Detected non-UTF8 character in chromatogram id");
@@ -995,7 +995,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                         Ok(attr) => {
                             if attr.key.as_ref() == b"ref" {
                                 let group_id = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding reference group")
                                     .to_string();
                                 if let Some(ref_param_groups) = self.reference_param_groups {
@@ -1190,9 +1190,11 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
 
     fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult {
         if state == MzMLParserState::Binary && self.detail_level != DetailLevel::MetadataOnly {
-            let bin = event
-                .unescape()
-                .map_err(|e| MzMLParserError::XMLError(state, e))?;
+            let decoded = event
+                .decode()
+                .map_err(|e| MzMLParserError::XMLError(state, e.into()))?;
+            let bin = quick_xml::escape::unescape(&decoded)
+                .map_err(|e| MzMLParserError::XMLError(state, e.into()))?;
             self.current_array.data = Bytes::from(bin.as_bytes());
         }
         Ok(state)
@@ -1384,7 +1386,7 @@ impl<
      */
     fn parse_metadata(&mut self) -> Result<(), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let mut accumulator = FileMetadataBuilder {
             instrument_id_map: Some(&mut self.instrument_id_map),
             ..Default::default()
@@ -1435,7 +1437,7 @@ impl<
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
-                    match accumulator.empty_element(e, self.state, reader.buffer_position()) {
+                    match accumulator.empty_element(e, self.state, reader.buffer_position() as usize) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -1449,10 +1451,10 @@ impl<
                     break;
                 }
                 Err(err) => match &err {
-                    XMLError::EndEventMismatch {
+                    XMLError::IllFormed(quick_xml::errors::IllFormedError::MismatchedEndTag {
                         expected,
                         found: _found,
-                    } => {
+                    }) => {
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
@@ -1524,7 +1526,7 @@ impl<
         }
 
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let mut accumulator = accumulator
             .borrow_metadata(&mut self.instrument_id_map, &self.reference_param_groups);
         accumulator.set_run_data_processing(self.run.default_data_processing_id.clone().map(|v| v.into_boxed_str()));
@@ -1580,7 +1582,7 @@ impl<
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
-                    match accumulator.empty_element(e, self.state, reader.buffer_position()) {
+                    match accumulator.empty_element(e, self.state, reader.buffer_position() as usize) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -1593,10 +1595,10 @@ impl<
                     break;
                 }
                 Err(err) => match &err {
-                    XMLError::EndEventMismatch {
+                    XMLError::IllFormed(quick_xml::errors::IllFormedError::MismatchedEndTag {
                         expected,
                         found: _found,
-                    } => {
+                    }) => {
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
@@ -1772,7 +1774,7 @@ impl<
             Err(err) => return Err(MzMLParserError::IOError(self.state, err)),
         };
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let matched_tag = match reader.read_event_into(&mut self.buffer) {
             Ok(event) => match event {
                 Event::Start(ref e) => {
@@ -2175,7 +2177,7 @@ impl<
             .expect("Failed to seek to the index offset");
 
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
 
         loop {
             match reader.read_event_into(&mut self.buffer) {
