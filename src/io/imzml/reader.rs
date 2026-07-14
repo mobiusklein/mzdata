@@ -112,7 +112,7 @@ pub fn is_imzml(buffer: &[u8]) -> bool {
             Ok(Event::Eof) => return false,
             Ok(_) => {}
             Err(e) => {
-                log::warn!("XML parsing error while checking for imzML format: {}", e);
+                log::debug!("XML parsing error while checking for imzML format: {}", e);
                 return false;
             }
         }
