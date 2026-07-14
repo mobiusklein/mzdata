@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.65.4] - 2026-07-14
+
+### Fixed
+
+- IndexedmzML `fileChecksum` is now SHA-1 as required by the XSD, no longer MD5
+
+### Removed
+
+- Upgrade quick-xml 0.30 -> 0.41 (RUSTSEC-2026-0194) (#53)
+Clears RUSTSEC-2026-0194 (quadratic run time when checking a start tag
+for duplicate attribute names), which is reachable here: every
+BytesStart::attributes() call in the mzML/imzML reading path uses the
+default checked iterator (.with_checks(false) is never used), so a
+crafted mzML/imzML file with a start tag carrying a large number of
+attributes can pin a parsing thread for minutes (per the advisory's own
+measurements). RUSTSEC-2026-0195 (unbounded NsReader namespace
+allocation) does not apply - this crate never uses NsReader, only the
+plain Reader.
+
+API changes needed for the bump:
+- escape::escape() no longer accepts a `&&str` (one macro fix in
+  writer.rs's attrib! macro, which accounts for the bulk of the diff
+  once the compiler stops cascading past it).
+- Reader::trim_text() moved to Reader::config_mut().trim_text().
+- BytesText::unescape() was removed; replaced with
+  decode() + escape::unescape(), which is what unescape() did
+  internally (decode via the reader's Decoder, then unescape XML
+  entities) - same behavior, no shortcut taken.
+- Attribute::unescape_value() is deprecated in favor of
+  normalized_value(XmlVersion::Implicit1_0), which is what
+  unescape_value() delegates to internally - so this is a like-for-like
+  swap, not a behavior change.
+- Error::EndEventMismatch moved under
+  Error::IllFormed(IllFormedError::MismatchedEndTag { .. }); field
+  names/types are unchanged.
+- Reader::buffer_position() changed from usize to u64; added casts at
+  the two call sites that need it.
+
 ## [0.65.3] - 2026-07-11
 
 ### Changed
@@ -1095,7 +1133,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.65.3...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.65.4...HEAD
+[0.65.4]: https://github.com/mobiusklein/mzdata/compare/v0.65.3...v0.65.4
 [0.65.3]: https://github.com/mobiusklein/mzdata/compare/v0.65.2...v0.65.3
 [0.65.2]: https://github.com/mobiusklein/mzdata/compare/v0.65.1...v0.65.2
 [0.65.1]: https://github.com/mobiusklein/mzdata/compare/v0.65.0...v0.65.1
