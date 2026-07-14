@@ -9,8 +9,6 @@ use std::path;
 use std::path::PathBuf;
 
 #[cfg(feature = "checksum")]
-use md5::{Context as MD5Context, Digest};
-#[cfg(feature = "checksum")]
 use sha1::{self, Digest as _};
 
 type ByteBuffer = io::Cursor<Vec<u8>>;
@@ -282,29 +280,29 @@ pub fn checksum_file(path: &PathBuf) -> io::Result<String> {
         }
         checksum.update(&buf[..i]);
     }
-    let x = base16ct::lower::encode_string(&checksum.finalize());
+    let x = format!("{:x}", &checksum.finalize());
     Ok(x)
 }
 
 #[cfg(feature = "checksum")]
-/// A writable stream that keeps a running MD5 checksum of all bytes
+/// A writable stream that keeps a running SHA-1 checksum of all bytes
 #[derive(Clone)]
-pub(crate) struct MD5HashingStream<T: io::Write> {
+pub(crate) struct SHA1HashingStream<T: io::Write> {
     pub stream: T,
-    pub context: MD5Context,
+    pub context: sha1::Sha1,
 }
 
 #[cfg(feature = "checksum")]
-impl<T: io::Write> MD5HashingStream<T> {
-    pub fn new(file: T) -> MD5HashingStream<T> {
+impl<T: io::Write> SHA1HashingStream<T> {
+    pub fn new(file: T) -> SHA1HashingStream<T> {
         Self {
             stream: file,
-            context: MD5Context::new(),
+            context: sha1::Sha1::new(),
         }
     }
 
-    pub fn compute(&self) -> Digest {
-        self.context.clone().compute()
+    pub fn compute(&self) -> sha1::Sha1 {
+        self.context.clone()
     }
 
     pub fn get_mut(&mut self) -> &mut T {
@@ -316,10 +314,11 @@ impl<T: io::Write> MD5HashingStream<T> {
     }
 }
 
+
 #[cfg(feature = "checksum")]
-impl<T: io::Write> io::Write for MD5HashingStream<T> {
+impl<T: io::Write> io::Write for SHA1HashingStream<T> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.context.consume(buf);
+        self.context.update(buf);
         self.stream.write(buf)
     }
 
@@ -329,7 +328,7 @@ impl<T: io::Write> io::Write for MD5HashingStream<T> {
 }
 
 #[cfg(feature = "checksum")]
-impl<T: io::Seek + io::Write> io::Seek for MD5HashingStream<T> {
+impl<T: io::Seek + io::Write> io::Seek for SHA1HashingStream<T> {
     fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
         self.stream.seek(pos)
     }

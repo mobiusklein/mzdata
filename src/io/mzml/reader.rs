@@ -1688,6 +1688,7 @@ impl<
             Err(err) => {
                 match &err {
                     MzMLParserError::EOF => {},
+                    MzMLParserError::IncompleteElementError(_err, MzMLParserState::Resume) => {}
                     err => log::error!("Error while reading mzML spectrum: {err}")
                 };
                 Err(err)

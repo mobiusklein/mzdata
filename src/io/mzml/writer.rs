@@ -6,6 +6,7 @@ use std::{io, mem};
 
 use log::warn;
 use mzpeaks::feature::FeatureLike;
+use sha1::Digest;
 use thiserror::Error;
 
 use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, IonMobility, KnownCharge, Mass, MZ};
@@ -15,7 +16,7 @@ use quick_xml::{Error as XMLError, Writer};
 
 use super::super::offset_index::OffsetIndex;
 use super::super::traits::SpectrumWriter;
-use super::super::utils::MD5HashingStream;
+use super::super::utils::SHA1HashingStream;
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
@@ -181,12 +182,12 @@ impl From<MzMLWriterError> for io::Error {
 pub type WriterResult = Result<(), MzMLWriterError>;
 
 struct ByteCountingStream<W: io::Write> {
-    stream: BufWriter<MD5HashingStream<W>>,
+    stream: BufWriter<SHA1HashingStream<W>>,
     bytes_written: u64,
 }
 
 impl<W: io::Write> ByteCountingStream<W> {
-    pub fn new(stream: BufWriter<MD5HashingStream<W>>) -> Self {
+    pub fn new(stream: BufWriter<SHA1HashingStream<W>>) -> Self {
         Self {
             stream,
             bytes_written: 0,
@@ -197,7 +198,7 @@ impl<W: io::Write> ByteCountingStream<W> {
         self.bytes_written
     }
 
-    pub fn checksum(&self) -> md5::Digest {
+    pub fn checksum(&self) -> sha1::Sha1 {
         self.stream.get_ref().compute()
     }
 
@@ -236,7 +237,7 @@ impl<W: io::Write> InnerXMLWriter<W> {
     pub fn new(file: W) -> InnerXMLWriter<W> {
         let handle = ByteCountingStream::new(BufWriter::with_capacity(
             BUFFER_SIZE,
-            MD5HashingStream::new(file),
+            SHA1HashingStream::new(file),
         ));
         Self {
             handle: Writer::new_with_indent(handle, b' ', 2),
@@ -245,7 +246,8 @@ impl<W: io::Write> InnerXMLWriter<W> {
 
     pub fn digest(&mut self) -> String {
         let digest = self.handle.get_ref().checksum();
-        format!("{:x}", digest)
+        let f = digest.finalize();
+        format!("{:x}", f)
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
