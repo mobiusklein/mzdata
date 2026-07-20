@@ -1,0 +1,118 @@
+name: Release pymzdata
+
+# Build the crates/pymzdata wheels + sdist and publish them to PyPI, so downstreams users can
+# `pip install pymzdata` without a Rust toolchain. Mirrors the maturin-action layout used by the
+# ms2rescore-rs, with two crate-specific  additions: the `-m crates/pymzdata/Cargo.toml` manifest
+# (pymzdata is a sub-crate) and a cmake install for the zlib-ng-compat mzdata feature.
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MANIFEST: crates/pymzdata/Cargo.toml
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter -m ${{ env.MANIFEST }}
+          sccache: "true"
+          manylinux: auto
+          # pymzdata pulls the zlib-ng-compat mzdata feature; its libz-ng-sys build needs cmake.
+          before-script-linux: command -v cmake >/dev/null || (yum install -y cmake || dnf install -y cmake || (apt-get update && apt-get install -y cmake))
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.target }}
+          path: dist
+
+  windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x64, x86]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          architecture: ${{ matrix.target }}
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter -m ${{ env.MANIFEST }}
+          sccache: "true"
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-${{ matrix.target }}
+          path: dist
+
+  macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter -m ${{ env.MANIFEST }}
+          sccache: "true"
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.target }}
+          path: dist
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist -m ${{ env.MANIFEST }}
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [linux, windows, macos, sdist]
+    # Trusted Publishing (OIDC): configure a PyPI publisher for this repo + workflow. Swap for
+    # `MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}` if you publish with a token instead.
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - name: Publish to PyPI
+        uses: PyO3/maturin-action@v1
+        with:
+          command: upload
+          args: --non-interactive --skip-existing wheels-*/*
