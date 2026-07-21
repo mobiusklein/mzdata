@@ -4,7 +4,9 @@ build-backend = "maturin"
 
 [project]
 name = "pymzdata"
-requires-python = ">=3.8"
+# The binding is built abi3-py39, so 3.9 is the real minimum.
+requires-python = ">=3.9"
+license = "Apache-2.0"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
