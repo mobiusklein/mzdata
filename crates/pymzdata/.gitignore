@@ -70,3 +70,7 @@ docs/_build/
 
 # Pyenv
 .python-version
+
+# Track the Python test suite (the repo-wide *.py ignore would otherwise hide it).
+!tests/
+!tests/*.py

@@ -219,7 +219,12 @@ impl PyMZReader {
 
     /// Convert this reader to an IMMZReader for ion mobility frame access.
     ///
-    /// Raises ``RuntimeError`` if the file does not contain ion mobility data.
+    /// This *consumes* the reader: the underlying file reader is moved into the returned
+    /// ``IMMZReader``, leaving this ``MZReader`` closed (``closed()`` becomes ``True`` and any
+    /// further use raises ``RuntimeError``).
+    ///
+    /// Raises ``RuntimeError`` if the reader is already closed, or if the file does not contain ion
+    /// mobility data.
     fn into_frame_reader(&mut self) -> PyResult<PyIMMZReader> {
         let inner = self.inner.take().ok_or_else(|| {
             PyRuntimeError::new_err("Reader is already closed")

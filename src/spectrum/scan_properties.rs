@@ -84,7 +84,7 @@ impl IsolationWindow {
 
     pub fn contains<F: Float>(&self, point: F) -> bool {
         let point = point.to_f32().unwrap();
-        self.lower_bound <= point && self.upper_bound <= point
+        self.lower_bound <= point && point <= self.upper_bound
     }
 
     pub fn is_empty(&self) -> bool {
@@ -120,7 +120,7 @@ impl ScanWindow {
 
     pub fn contains<F: Float>(&self, point: F) -> bool {
         let point = point.to_f32().unwrap();
-        self.lower_bound <= point && self.upper_bound <= point
+        self.lower_bound <= point && point <= self.upper_bound
     }
 
     pub fn is_empty(&self) -> bool {
@@ -971,3 +971,33 @@ impl ChromatogramDescription {
 }
 
 impl_param_described!(ChromatogramDescription);
+
+#[cfg(test)]
+mod contains_tests {
+    use super::*;
+
+    // Regression tests for the isolation/scan-window `contains` membership check. A prior bug used
+    // `lower <= point && upper <= point`, which wrongly excluded interior points and wrongly included
+    // points above the window; `contains` must be an inclusive `[lower, upper]` test.
+
+    #[test]
+    fn isolation_window_contains_is_inclusive_range() {
+        let window = IsolationWindow::around(810.789, 1.0); // [809.789, 811.789]
+        assert!(window.contains(window.target), "target must be inside");
+        assert!(window.contains(window.lower_bound), "lower bound is inclusive");
+        assert!(window.contains(window.upper_bound), "upper bound is inclusive");
+        assert!(window.contains(810.0_f64), "interior point");
+        assert!(!window.contains(809.0_f64), "below the lower bound");
+        assert!(!window.contains(812.0_f64), "above the upper bound");
+    }
+
+    #[test]
+    fn scan_window_contains_is_inclusive_range() {
+        let window = ScanWindow::new(200.0, 2000.0);
+        assert!(window.contains(1100.0_f64), "interior point");
+        assert!(window.contains(200.0_f64), "lower bound is inclusive");
+        assert!(window.contains(2000.0_f64), "upper bound is inclusive");
+        assert!(!window.contains(199.0_f64), "below the lower bound");
+        assert!(!window.contains(2500.0_f64), "above the upper bound (the old bug returned true here)");
+    }
+}
