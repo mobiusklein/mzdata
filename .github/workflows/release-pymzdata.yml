@@ -2,8 +2,8 @@ name: Release pymzdata
 
 # Build the crates/pymzdata wheels + sdist and publish them to PyPI, so downstreams users can
 # `pip install pymzdata` without a Rust toolchain. Mirrors the maturin-action layout used by the
-# ms2rescore-rs, with two crate-specific  additions: the `-m crates/pymzdata/Cargo.toml` manifest
-# (pymzdata is a sub-crate) and a cmake install for the zlib-ng-compat mzdata feature.
+# ms2rescore-rs, with one crate-specific addition: the `-m crates/pymzdata/Cargo.toml` manifest
+# (pymzdata is a sub-crate). mzdata uses the pure-Rust zlib-rs backend, so no C toolchain is needed.
 on:
   release:
     types: [created]
@@ -33,8 +33,6 @@ jobs:
           args: --release --out dist --find-interpreter -m ${{ env.MANIFEST }}
           sccache: "true"
           manylinux: auto
-          # pymzdata pulls the zlib-ng-compat mzdata feature; its libz-ng-sys build needs cmake.
-          before-script-linux: command -v cmake >/dev/null || (yum install -y cmake || dnf install -y cmake || (apt-get update && apt-get install -y cmake))
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
