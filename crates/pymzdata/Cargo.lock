@@ -108,12 +108,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "base16ct"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf"
-
-[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -585,9 +579,9 @@ dependencies = [
 
 [[package]]
 name = "dotnetrawfilereader-sys"
-version = "0.7.0"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93e8a6b7baa7128720283bf0667d10297e3d5d78e537ff7cfa07b56a4e89ff2e"
+checksum = "54656bb5cfcee01b9e2b8b3d624252f8275c415e3ac8ff965166e7b4a2da07f0"
 dependencies = [
  "include_dir",
  "netcorehost",
@@ -705,7 +699,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
- "libz-sys",
  "miniz_oxide",
  "zlib-rs",
 ]
@@ -1350,19 +1343,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libz-sys"
-version = "1.1.24"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4735e9cbde5aac84a5ce588f6b23a90b9b0b528f6c5a8db8a4aff300463a0839"
-dependencies = [
- "cc",
- "cmake",
- "libc",
- "pkg-config",
- "vcpkg",
-]
-
-[[package]]
 name = "linreg"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1432,12 +1412,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "md5"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
-
-[[package]]
 name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1481,9 +1455,8 @@ dependencies = [
 
 [[package]]
 name = "mzdata"
-version = "0.65.3"
+version = "0.65.4"
 dependencies = [
- "base16ct",
  "base64-simd",
  "bitflags",
  "bytemuck",
@@ -1493,7 +1466,6 @@ dependencies = [
  "identity-hash",
  "indexmap 2.13.0",
  "log",
- "md5",
  "memchr",
  "mzpeaks",
  "mzsignal",
@@ -1856,7 +1828,7 @@ dependencies = [
 
 [[package]]
 name = "pymzdata"
-version = "0.65.2"
+version = "0.65.4"
 dependencies = [
  "mzdata",
  "mzpeaks",
@@ -1926,9 +1898,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.30.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eff6510e86862b57b210fd8cbe8ed3f0d7d600b9c2863cd4549a2e033c66e956"
+checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
 dependencies = [
  "memchr",
  "serde",
@@ -2666,9 +2638,9 @@ dependencies = [
 
 [[package]]
 name = "thermorawfilereader"
-version = "0.7.0"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "515cbeb0de35e3f4dd2b9ab682f37bd613cfde6e38f60d1156986554c695a69c"
+checksum = "2274064550a7cc2d9081e191e2f91bee5058f9e0e9bb7cb272ad6c714dad1522"
 dependencies = [
  "bytemuck",
  "dotnetrawfilereader-sys",

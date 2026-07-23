@@ -76,7 +76,7 @@ jobs:
           python -m pip install 'pytest>=7' 'numpy>=1.21' 'pyteomics>=4.6' 'lxml>=4.9' 'psims>=1.3'
       - name: Run Python tests
         working-directory: crates/pymzdata
-        run: python -m pytest
+        run: python -m pytest crates/pymzdata/
 
   test-spectra-subset:
     name: mzdata-spectra

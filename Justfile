@@ -30,6 +30,10 @@ update-cv:
 update-cv-terms:
     cog -c -r -U src/meta/software.rs src/meta/instrument.rs src/meta/file_description.rs src/io/mzml/writer.rs src/meta/activation.rs
 
+pytest:
+    maturin develop -m "./crates/pymzdata/Cargo.toml"
+    pytest -v -s ./crates/pymzdata/
+
 changelog version:
     #!/usr/bin/env python
 
