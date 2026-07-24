@@ -85,8 +85,6 @@ patch-version:
 
 
     ref_toml = "Cargo.toml"
-    target_toml = "crates/mzdata-spectra/Cargo.toml"
-
     pattern = re.compile(r"^version\s*=\s*\"(.+?)\"")
     dep_pattern = re.compile(r"version\s*=\s*\"(.+?)\"")
 
@@ -97,20 +95,29 @@ patch-version:
             if match := pattern.match(line):
                 version = match.string
                 break
+    if version is None:
+        sys.stderr.write("Failed to resolve reference mzdata version")
+        if not version:
+            raise ValueError("Version not found in reference")
+    else:
+        sys.stderr.write(f"mzdata version = {version}")
 
-    if not version:
-        raise ValueError("Version not found in reference")
+    target_toml_files = ["./crates/mzdata-spectra/Cargo.toml", "./crates/pymzdata/Cargo.toml", "./crates/mzdata-wasm/Cargo.toml"]
+    for target_toml in target_toml_files:
+        print(f"Updating {target_toml}")
+        buffer = []
+        with open(target_toml) as fh:
+            for line in fh:
+                if pattern.match(line):
+                    line = version
+                if line.startswith("mzdata"):
+                    line_before = line
+                    line = dep_pattern.sub(version.strip(), line)
+                    mat_before = dep_pattern.search(line_before)
+                    mat_after = dep_pattern.search(line)
+                    print(mat_before, "=>", mat_after)
 
+                buffer.append(line.strip())
 
-    buffer = []
-    with open(target_toml) as fh:
-        for line in fh:
-            if pattern.match(line):
-                line = version
-            if line.startswith("mzdata"):
-                line = dep_pattern.sub(version.strip(), line)
-
-            buffer.append(line.strip())
-
-    with open(target_toml, 'w') as fh:
-        fh.write('\n'.join(buffer))
+        with open(target_toml, 'w') as fh:
+            fh.write('\n'.join(buffer))
