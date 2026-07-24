@@ -5,4 +5,4 @@ wasm-dev:
     wasm-pack build --dev --target bundler
 
 lib:
-    cd lib && npm install . && npm run build
+    cd mzdata_ts && npm install . && npm run build

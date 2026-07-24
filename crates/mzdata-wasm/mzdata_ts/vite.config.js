@@ -20,5 +20,5 @@ export default defineConfig({
       formats: ["es"]
     },
   },
-  plugins: [wasm(), topLevelAwait(), ],
+  plugins: [wasm(), topLevelAwait(), dtsPlugin({ rollupTypes: true, bundledPackages: ["mzdata-wasm"] })],
 });
