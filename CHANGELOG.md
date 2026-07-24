@@ -1133,7 +1133,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.65.4...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.65.5...HEAD
+[0.65.5]: https://github.com/mobiusklein/mzdata/compare/v0.65.4...v0.65.5
 [0.65.4]: https://github.com/mobiusklein/mzdata/compare/v0.65.4...v0.65.4
 [0.65.4]: https://github.com/mobiusklein/mzdata/compare/v0.65.3...v0.65.4
 [0.65.3]: https://github.com/mobiusklein/mzdata/compare/v0.65.2...v0.65.3
