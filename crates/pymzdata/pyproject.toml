@@ -4,6 +4,8 @@ build-backend = "maturin"
 
 [project]
 name = "pymzdata"
+description = "Python bindings for reading mass spectrometry data with mzdata"
+readme = "README.md"
 # The binding is built abi3-py39, so 3.9 is the real minimum.
 requires-python = ">=3.9"
 license = "Apache-2.0"
@@ -13,6 +15,11 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/mobiusklein/mzdata"
+Repository = "https://github.com/mobiusklein/mzdata"
+Issues = "https://github.com/mobiusklein/mzdata/issues"
 
 [project.optional-dependencies]
 # `pip install pymzdata[test]` to run the Python test suite. numpy is needed to use the returned peak
