@@ -20,7 +20,7 @@ imzml = []
 
 [dependencies]
 pyo3 = { version = "0.28.0", features = ["extension-module", "abi3-py39", "serde"] }
-mzdata = { path = "../../", version = "0.65.4", default-features = false, features = ["mzml", "mgf", "nalgebra", "bruker_tdf", "thermo", "zlib-ng-compat", "proxi", "imzml"] }
+mzdata = { path = "../../", version = "0.65.4", default-features = false, features = ["mzml", "mgf", "nalgebra", "bruker_tdf", "thermo", "zlib-rs", "proxi", "imzml"] }
 mzpeaks = { version = ">=1.0.6,<1.1.0" }
 numpy = "0.28.0"
 serde-pyobject = "0.8.0"
