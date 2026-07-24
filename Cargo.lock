@@ -2216,7 +2216,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata"
-version = "0.65.4"
+version = "0.65.5"
 dependencies = [
  "base64-simd",
  "bitflags 2.13.0",
