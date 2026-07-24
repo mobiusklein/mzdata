@@ -92,8 +92,9 @@ impl PyDetailLevel {
 
 /// A file-based mass spectrometry reader.
 ///
-/// Supports mzML, MGF, Thermo RAW, and Bruker TDF formats. Use as a context
-/// manager (``with`` block) for automatic resource cleanup.
+/// Supports mzML (including indexed mzML), MGF, Bruker TDF, and imzML formats.
+/// Thermo RAW is supported when its native runtime dependencies are available.
+/// Use as a context manager (``with`` block) for automatic resource cleanup.
 ///
 /// Example::
 ///

@@ -4,6 +4,22 @@
 
 A Rust library for reading mass spectrometry data file formats.
 
+## Python bindings
+
+Python bindings are available as [pymzdata](https://pypi.org/project/pymzdata/).
+Install them with:
+
+```console
+pip install pymzdata
+```
+
+`pymzdata` provides Python 3.9+ access to mass spectrometry files through
+`MZReader`, including iteration, random spectrum access, metadata, and NumPy peak
+arrays. It supports mzML and indexed mzML, MGF, Bruker TDF, and imzML files.
+Thermo RAW files also require their native runtime dependencies. See the
+[pymzdata README](crates/pymzdata/README.md) for an example and ion-mobility frame
+access.
+
 ## Quickstart
 ```rust
 use std::fs;
