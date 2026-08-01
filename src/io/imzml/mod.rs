@@ -3,7 +3,7 @@
 //!
 //! **Requires the `imzml` feature**
 //!
-//! imzML is based on mzML but stores binary data in an external `.ibd` file instead of 
+//! imzML is based on mzML but stores binary data in an external `.ibd` file instead of
 //! embedding it as base64 encoded data in the XML. This allows for more efficient storage
 //! of large imaging datasets.
 //!
@@ -21,7 +21,7 @@
 
 pub mod reader;
 
-pub use reader::{ImzMLReaderType, ImzMLReader, is_imzml};
+pub use reader::{is_imzml, ImzMLReader, ImzMLReaderType};
 
 // Re-export UUID for convenience
 pub use uuid::Uuid;

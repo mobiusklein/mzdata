@@ -5,7 +5,7 @@ use mzdata::io::MZReader;
 use mzdata::prelude::*;
 
 fn main() -> io::Result<()> {
-        env_logger::init();
+    env_logger::init();
     let mut args = env::args().skip(1);
 
     let path = path::PathBuf::from(args.next().expect("Please pass an MS data file path"));
@@ -30,7 +30,7 @@ fn main() -> io::Result<()> {
         }
     };
 
-    println!("ID: {}; Index: {};", chrom.id(), chrom.index(), );
+    println!("ID: {}; Index: {};", chrom.id(), chrom.index(),);
     println!("Type: {:?}", chrom.chromatogram_type());
     if let Some(product) = chrom.product() {
         println!("Product: {:?}", product);

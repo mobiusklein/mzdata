@@ -2,12 +2,12 @@
 
 #[cfg(test)]
 mod test {
-    use std::io;
-    use crate::prelude::*;
     use crate::io::imzml::{is_imzml, ImzMLReader};
     #[cfg(feature = "imzml")]
     use crate::io::mzml::MzMLReader;
     use crate::meta::MSDataFileMetadata;
+    use crate::prelude::*;
+    use std::io;
 
     #[test]
     fn test_is_imzml_detection() {
@@ -62,9 +62,13 @@ mod test {
         let spec = reader.get_spectrum_by_index(0).unwrap();
         let acq = spec.acquisition();
         let event = &acq.scans[0];
-        let x = event.get_param_by_curie(&crate::curie!(IMS:1000050)).unwrap();
+        let x = event
+            .get_param_by_curie(&crate::curie!(IMS:1000050))
+            .unwrap();
         assert_eq!(x.to_i64(), Ok(1));
-        let y = event.get_param_by_curie(&crate::curie!(IMS:1000051)).unwrap();
+        let y = event
+            .get_param_by_curie(&crate::curie!(IMS:1000051))
+            .unwrap();
         assert_eq!(y.to_i64(), Ok(1));
 
         let arrays = spec.raw_arrays().unwrap();
@@ -75,9 +79,13 @@ mod test {
         let spec = reader.get_spectrum_by_index(0).unwrap();
         let acq = spec.acquisition();
         let event = &acq.scans[0];
-        let x = event.get_param_by_curie(&crate::curie!(IMS:1000050)).unwrap();
+        let x = event
+            .get_param_by_curie(&crate::curie!(IMS:1000050))
+            .unwrap();
         assert_eq!(x.to_i64(), Ok(1));
-        let y = event.get_param_by_curie(&crate::curie!(IMS:1000051)).unwrap();
+        let y = event
+            .get_param_by_curie(&crate::curie!(IMS:1000051))
+            .unwrap();
         assert_eq!(y.to_i64(), Ok(1));
 
         let arrays = spec.raw_arrays().unwrap();
@@ -95,8 +103,14 @@ mod test {
         assert_eq!(settings_list.len(), 1, "expected one scanSettings entry");
 
         let settings = &settings_list[0];
-        assert!(!settings.id.is_empty(), "ScanSettings id should be non-empty");
-        assert!(!settings.params.is_empty(), "ScanSettings params should be non-empty");
+        assert!(
+            !settings.id.is_empty(),
+            "ScanSettings id should be non-empty"
+        );
+        assert!(
+            !settings.params.is_empty(),
+            "ScanSettings params should be non-empty"
+        );
         assert!(settings.source_file_refs.is_empty());
         assert!(settings.targets.is_empty());
         Ok(())
@@ -114,5 +128,4 @@ mod test {
         );
         Ok(())
     }
-
 }

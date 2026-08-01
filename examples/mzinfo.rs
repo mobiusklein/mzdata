@@ -26,7 +26,7 @@ struct MSDataFileSummary {
     pub peak_mode_table: HashMap<SignalContinuity, usize>,
     pub has_ion_mobility: bool,
     pub spectrum_types: HashMap<Option<SpectrumType>, usize>,
-    pub chromatogram_types: HashMap<ChromatogramType, usize>
+    pub chromatogram_types: HashMap<ChromatogramType, usize>,
 }
 
 impl Default for MSDataFileSummary {
@@ -119,11 +119,10 @@ impl MSDataFileSummary {
         let start = time::Instant::now();
         let (sender, receiver) = sync_channel(2usize.pow(12));
         let read_handle = spawn(move || {
-            reader.into_iter()
+            reader
+                .into_iter()
                 .enumerate()
-                .for_each(|(i, scan)| {
-                    sender.send((i, scan)).unwrap()
-                });
+                .for_each(|(i, scan)| sender.send((i, scan)).unwrap());
         });
         let i = receiver.iter().fold(0, |_, (i, scan)| {
             if i % 10000 == 0 && i > 0 {
@@ -141,12 +140,18 @@ impl MSDataFileSummary {
         read_handle.join().unwrap();
         let end = time::Instant::now();
         let elapsed = end - start;
-        println!("{:0.3} seconds elapsed, handled {i} spectra", elapsed.as_secs_f64());
+        println!(
+            "{:0.3} seconds elapsed, handled {i} spectra",
+            elapsed.as_secs_f64()
+        );
     }
 
     pub fn scan_chromatograms<R: ChromatogramSource + Send + 'static>(&mut self, reader: &mut R) {
         for chrom in reader.iter_chromatograms() {
-            *self.chromatogram_types.entry(chrom.chromatogram_type()).or_default() += 1;
+            *self
+                .chromatogram_types
+                .entry(chrom.chromatogram_type())
+                .or_default() += 1;
         }
     }
 
@@ -164,7 +169,9 @@ impl MSDataFileSummary {
         let mut spec_types: Vec<(_, _)> = self.spectrum_types.iter().collect();
         spec_types.sort_by(|a, b| a.0.cmp(b.0));
 
-        if spec_types.iter().any(|v| v.0.is_some_and(|v| v != SpectrumType::MS1Spectrum && v != SpectrumType::MSnSpectrum)) {
+        if spec_types.iter().any(|v| {
+            v.0.is_some_and(|v| v != SpectrumType::MS1Spectrum && v != SpectrumType::MSnSpectrum)
+        }) {
             println!("Spectrum types:");
             for (level, count) in spec_types.iter() {
                 if let Some(level) = level {

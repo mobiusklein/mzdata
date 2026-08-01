@@ -1,24 +1,20 @@
-import sys
 import gzip
-import json
 import io
 import itertools
+import json
 import re
-
+import sys
 from enum import IntFlag
-from typing import Tuple, Dict, Set, List
 
 import fastobo
+from fastobo.doc import OboDoc
+from fastobo.id import PrefixedIdent
 from fastobo.term import (
-    TermFrame,
+    DefClause,
     IsAClause,
     NameClause,
-    DefClause,
+    TermFrame,
 )
-
-from fastobo.doc import OboDoc
-
-from fastobo.id import PrefixedIdent
 
 ACQUISITION_SW = PrefixedIdent("MS", "1001455")
 ANALYSIS_SW = PrefixedIdent("MS", "1001456")
@@ -33,7 +29,7 @@ class SoftwareType(IntFlag):
     Acquisition = 0b00000100
 
 
-def collect_software_types(cv: OboDoc) -> Tuple[Set[PrefixedIdent], Dict[PrefixedIdent, TermFrame]]:
+def collect_software_types(cv: OboDoc) -> tuple[set[PrefixedIdent], dict[PrefixedIdent, TermFrame]]:
     term: TermFrame
     id_to_clause = {}
     software_ids = {
@@ -42,9 +38,8 @@ def collect_software_types(cv: OboDoc) -> Tuple[Set[PrefixedIdent], Dict[Prefixe
     for term in itertools.chain(cv, cv):
         id_to_clause[term.id] = term
         for clause in term:
-            if isinstance(clause, IsAClause):
-                if clause.term in software_ids:
-                    software_ids.add(term.id)
+            if isinstance(clause, IsAClause) and clause.term in software_ids:
+                software_ids.add(term.id)
     return software_ids, id_to_clause
 
 def format_name(match: re.Match) -> str:
@@ -84,6 +79,8 @@ def make_entry_for(term: TermFrame):
         vname = vname.replace("+", "plus")
     if "!" in vname:
         vname = vname.replace("!", "_")
+    if "π" in vname:
+        vname = vname.replace("π", "pi")
 
     vname: str = segment_pattern.sub(format_name, vname.replace(" ", "_").replace("software", "Software"))
     vname: str = vname[0].upper() + vname[1:]
@@ -97,7 +94,7 @@ def make_entry_for(term: TermFrame):
     {vname},"""
 
 
-def generate_term_enum(terms: List[TermFrame]):
+def generate_term_enum(terms: list[TermFrame]):
     buffer = io.StringIO()
     buffer.write("pub enum SoftwareTerm {")
     for term in terms:
@@ -107,11 +104,12 @@ def generate_term_enum(terms: List[TermFrame]):
 
 
 def main():
-    cv: OboDoc = fastobo.load(gzip.open("./cv/psi-ms.obo.gz"))
-    software_ids, id_to_clause = collect_software_types(cv)
-    sw_terms = list(map(id_to_clause.get, sorted(software_ids)))
-    text = generate_term_enum(sw_terms).encode('utf8')
-    sys.stdout.buffer.write(text)
+    with gzip.open("./cv/psi-ms.obo.gz") as handle:
+        cv: OboDoc = fastobo.load(handle)
+        software_ids, id_to_clause = collect_software_types(cv)
+        sw_terms = list(map(id_to_clause.get, sorted(software_ids)))
+        text = generate_term_enum(sw_terms).encode('utf8')
+        sys.stdout.buffer.write(text)
 
 
 if __name__ == "__main__":

@@ -772,8 +772,8 @@ where
     buf = subprocess.check_output(['python', 'cv/extract_cv_metadata.py', 'data-version']).decode('utf8').strip()
     cog.outl(f'const PSIMS_VERSION: &\'static str = "{buf}";')
     ]]]*/
-    const PSIMS_VERSION: &'static str = "4.1.249";
-    //[[[end]]] (sum: 0urYpgQYsM)
+    const PSIMS_VERSION: &'static str = "4.1.258";
+    //[[[end]]] (sum: wieBjCKlng)
     const UNIT_VERSION: &'static str = "releases/2020-03-10";
 
     pub const fn get_indent_size() -> u64 {
