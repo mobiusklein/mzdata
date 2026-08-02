@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="/dist/mzdata.js" type="module"></script>
+    <script type="module">
+        import * as mzdata from "./dist/mzdata.js"
+        window.mzdata = mzdata;
+    </script>
+</head>
+<body>
+    <input id="file-in" name="file-in" type="file" />
+    <script>
+        const fileInput = document.querySelector("#file-in")
+    </script>
+</body>
+</html>

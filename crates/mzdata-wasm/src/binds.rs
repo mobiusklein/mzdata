@@ -15,7 +15,6 @@ use wasm_bindgen::prelude::*;
 use mzpeaks::{
     feature::{Feature, SimpleFeature, ChargedFeature},
     peak::MZPoint,
-    prelude::*,
     CentroidPeak, DeconvolutedPeak, IonMobility, Time, Tolerance, MZ, Mass
 };
 

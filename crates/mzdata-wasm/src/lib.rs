@@ -11,8 +11,7 @@ mod blobio;
 // mod worker_reader;
 pub mod asyncio;
 
-pub use asyncio::{test_reader, WebReaderAsyncRead};
-pub use blobio::test_reader_blob;
+pub use blobio::{WebIO, read_all};
 pub use binds::*;
 pub use mem_reader::{MemWebIMMZReader as WebIMMZReader, MemWebMZReader as WebMZReader};
 

@@ -1,45 +1,33 @@
-use std::{future::Future, io, pin::Pin, task::Poll};
+use std::{fmt::Debug, future::Future, io, pin::Pin, task::Poll};
 
-use futures::{io::AsyncRead, lock::Mutex, AsyncReadExt, FutureExt};
-use tokio::io::AsyncRead as TokioAsyncRead;
-use gloo_file::futures::read_as_bytes;
-use js_sys::Number;
-use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
+use futures::{AsyncReadExt, AsyncSeek, FutureExt, io::AsyncRead, lock::Mutex};
+use gloo_file::{
+    FileReadError,
+    callbacks::{FileReader, read_as_bytes as read_as_bytes_cb},
+    futures::read_as_bytes,
+};
+use js_sys::Uint8Array;
+use tokio::io::{AsyncRead as TokioAsyncRead, AsyncSeek as TokioAsyncSeek};
+use wasm_bindgen::{JsValue, prelude::*};
 use web_sys::{Blob, File};
 
+#[derive(Debug, Clone)]
 pub enum BufferHandle {
-    Blob(Blob),
-    File(File),
+    Blob(gloo_file::Blob),
+    File(gloo_file::File),
 }
 
 impl From<Blob> for BufferHandle {
     fn from(value: Blob) -> Self {
-        Self::Blob(value)
+        Self::Blob(gloo_file::Blob::from(value))
     }
 }
 
 impl From<File> for BufferHandle {
     fn from(value: File) -> Self {
-        Self::File(value)
+        Self::File(gloo_file::File::from(value))
     }
 }
-
-fn f64_to_u64_safe(val: f64) -> Option<u64> {
-    if 0.0 <= val && val <= Number::MAX_SAFE_INTEGER {
-        Some(val as u64)
-    } else {
-        None
-    }
-}
-
-// fn u64_to_f64(val: u64) -> Option<f64> {
-//     let val = val as f64;
-//     if val <= Number::MAX_SAFE_INTEGER {
-//         Some(val)
-//     } else {
-//         None
-//     }
-// }
 
 impl BufferHandle {
     pub fn size(&self) -> u64 {
@@ -47,21 +35,129 @@ impl BufferHandle {
             BufferHandle::Blob(handle) => handle.size(),
             BufferHandle::File(handle) => handle.size(),
         };
-        f64_to_u64_safe(val).expect("Could not convert buffer size to valid integer")
+        val
+    }
+
+    pub fn slice(&self, start: u64, end: u64) -> Self {
+        match self {
+            Self::Blob(handle) => Self::Blob(handle.slice(start, end)),
+            Self::File(handle) => Self::File(handle.slice(start, end)),
+        }
     }
 
     pub fn slice_with_f64_and_f64(&self, start: f64, end: f64) -> Result<Blob, JsValue> {
         match self {
-            BufferHandle::Blob(handle) => handle.slice_with_f64_and_f64(start, end),
-            BufferHandle::File(handle) => handle.slice_with_f64_and_f64(start, end),
+            BufferHandle::Blob(handle) => {
+                let inner: &web_sys::Blob = handle.as_ref();
+                inner.slice_with_f64_and_f64(start, end)
+            }
+            BufferHandle::File(handle) => {
+                let inner: &web_sys::File = handle.as_ref();
+                inner.slice_with_f64_and_f64(start, end)
+            }
+        }
+    }
+
+    pub fn read(self) -> impl Future<Output = Result<Vec<u8>, FileReadError>> {
+        match self {
+            BufferHandle::Blob(blob) => read_as_bytes(&blob),
+            BufferHandle::File(file) => read_as_bytes(&file),
+        }
+    }
+
+    pub fn read_callback<F>(&self, callback: F) -> FileReader
+    where
+        F: FnOnce(Result<Vec<u8>, FileReadError>) + 'static,
+    {
+        match self {
+            BufferHandle::Blob(blob) => read_as_bytes_cb(blob, callback),
+            BufferHandle::File(file) => read_as_bytes_cb(file, callback),
+        }
+    }
+}
+
+enum State {
+    Idle(Option<Vec<u8>>),
+    Busy(
+        (
+            Operation,
+            Vec<u8>,
+            Option<Pin<Box<dyn Future<Output = Result<Result<Vec<u8>, FileReadError>, futures::channel::oneshot::Canceled>>>>>,
+        ),
+    ),
+}
+
+impl Debug for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Idle(arg0) => f.debug_tuple("Idle").field(arg0).finish(),
+            Self::Busy(arg0) => f
+                .debug_tuple("Busy")
+                .field(&arg0.0)
+                .field(&arg0.1)
+                .field(&if arg0.2.is_some() { "<callback>" } else { "-" })
+                .finish(),
+        }
+    }
+}
+
+#[derive(Debug)]
+enum Operation {
+    Read,
+}
+
+#[derive(Debug)]
+struct Inner {
+    state: State,
+    pos: u64,
+}
+
+#[derive(Debug)]
+#[wasm_bindgen]
+pub struct WebIO {
+    handle: BufferHandle,
+    position: u64,
+    state: Mutex<Inner>,
+}
+
+impl Clone for WebIO {
+    fn clone(&self) -> Self {
+        let state = Inner {
+            pos: self.position,
+            state: State::Idle(None),
+        };
+        Self {
+            handle: self.handle.clone(),
+            position: self.position.clone(),
+            state: Mutex::new(state),
         }
     }
 }
 
 #[wasm_bindgen]
-pub struct WebIO {
-    handle: BufferHandle,
-    position: u64,
+impl WebIO {
+    pub fn blob(blob: web_sys::Blob) -> Self {
+        Self::new(blob)
+    }
+
+    pub fn file(file: web_sys::File) -> Self {
+        Self::new(file)
+    }
+
+    #[wasm_bindgen(getter, js_name = "size")]
+    pub fn js_size(&self) -> u64 {
+        self.size()
+    }
+
+    pub async fn read(&mut self, n: usize) -> Result<Uint8Array, JsError> {
+        let mut data = vec![0u8; n];
+        let result = <Self as AsyncReadExt>::read(self, &mut data).await;
+        let v = match result {
+            Ok(_z) => Ok(Uint8Array::new_from_slice(&data)),
+            Err(e) => Err(JsError::from(e)),
+        };
+        v
+    }
 }
 
 impl WebIO {
@@ -69,6 +165,10 @@ impl WebIO {
         Self {
             handle: handle.into(),
             position: 0,
+            state: Mutex::new(Inner {
+                state: State::Idle(None),
+                pos: 0,
+            }),
         }
     }
 
@@ -88,7 +188,45 @@ impl WebIO {
         Ok(blob)
     }
 
-    pub async fn read(&mut self, buffer: &mut [u8]) -> Result<u64, JsValue> {
+    pub fn set_position(&mut self, pos: io::SeekFrom) {
+        let size = self.handle.size();
+        match pos {
+            io::SeekFrom::Start(offset) => {
+                if offset > size {
+                    self.position = size;
+                } else {
+                    self.position = offset;
+                }
+            }
+            io::SeekFrom::End(offset) => {
+                let offset_u = offset.unsigned_abs();
+                if offset < 0 {
+                    if offset_u > size {
+                        self.position = 0;
+                    } else {
+                        self.position = size - offset_u
+                    }
+                } else {
+                    self.position = size;
+                }
+            }
+            io::SeekFrom::Current(offset) => {
+                let offset_u = offset.unsigned_abs();
+                if offset < 0 {
+                    if offset_u > self.position {
+                        self.position = 0;
+                    } else {
+                        self.position = self.position - offset_u
+                    }
+                } else {
+                    self.position = size;
+                }
+            }
+        }
+        self.state.get_mut().pos = self.position;
+    }
+
+    pub async fn read_direct(&mut self, buffer: &mut [u8]) -> Result<u64, JsValue> {
         let n_bytes_total = self.handle.size();
         let n_bytes_remaining = n_bytes_total - self.position;
         let bytes_to_read = (buffer.len() as u64).min(n_bytes_remaining);
@@ -109,187 +247,145 @@ impl WebIO {
     }
 }
 
-enum State {
-    Idle(Option<Vec<u8>>),
-    Busy(Pin<Box<dyn Future<Output = Result<Vec<u8>, gloo_file::FileReadError>>>>),
-    Complete,
-}
-
-struct Inner {
-    state: Option<State>,
-}
-
-impl Inner {}
-
-pub struct WebReaderAsyncRead {
-    stream_reader: WebIO,
-    inner: Mutex<Inner>,
-}
-
-impl WebReaderAsyncRead {
-    pub fn new(stream_reader: WebIO) -> Self {
-        Self { stream_reader, inner: Mutex::new(Inner { state: Some(State::Idle(None))}) }
-    }
-}
-
-impl AsyncRead for WebReaderAsyncRead {
-    fn poll_read(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &mut [u8],
-    ) -> std::task::Poll<std::io::Result<usize>> {
-        let me = self.get_mut();
-        let inner = me.inner.get_mut();
-
-        loop {
-            let state = inner.state.take().unwrap();
-
-            match state {
-                State::Idle(bytes_mut) => {
-                    if let Some(bytes_read) = bytes_mut {
-                        buf.copy_from_slice(&bytes_read);
-                        inner.state = Some(State::Idle(None));
-                        return Poll::Ready(Ok(bytes_read.len()));
-                    } else {
-                        let blob = match me.stream_reader.slice(buf.len()) {
-                            Ok(blob) => gloo_file::Blob::from(blob),
-                            Err(e) => {
-                                return Poll::Ready(Err(io::Error::new(
-                                    io::ErrorKind::Other,
-                                    e.as_string().unwrap(),
-                                )))
-                            }
-                        };
-                        let t = read_as_bytes(&blob).boxed_local();
-                        inner.state = Some(State::Busy(t))
-                    }
-                }
-                State::Busy(mut js_future) => {
-                    log::info!("Busy, polling future");
-                    let j = js_future.as_mut().poll(cx);
-                    match j {
-                        Poll::Ready(read) => match read {
-                            Ok(data) => {
-                                log::info!("Read successful: {}", data.len());
-                                me.stream_reader.position += data.len() as u64;
-                                inner.state = Some(State::Idle(Some(data)));
-                            }
-                            Err(e) => {
-                                log::info!("Read Failed: {e}");
-                                let err = match e {
-                                    gloo_file::FileReadError::AbortedEarly => {
-                                        io::Error::new(io::ErrorKind::ConnectionAborted, e)
-                                    }
-                                    gloo_file::FileReadError::NotFound(_) => {
-                                        io::Error::new(io::ErrorKind::NotFound, e)
-                                    }
-                                    gloo_file::FileReadError::NotReadable(_) => {
-                                        io::Error::new(io::ErrorKind::Unsupported, e)
-                                    }
-                                    gloo_file::FileReadError::Security(_) => {
-                                        io::Error::new(io::ErrorKind::ConnectionRefused, e)
-                                    }
-                                };
-                                inner.state = Some(State::Complete);
-                                return Poll::Ready(Err(err));
-                            }
-                        },
-                        Poll::Pending => {
-                            inner.state = Some(State::Busy(js_future));
-                        }
-                    }
-                }
-                State::Complete => {
-                    inner.state = Some(State::Complete);
-                    return Poll::Ready(Ok(0));
-                }
-            }
-        }
-    }
-}
-
-
-impl TokioAsyncRead for WebReaderAsyncRead {
+impl AsyncRead for WebIO {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
         let me = self.get_mut();
-        let inner = me.inner.get_mut();
-
-        loop {
-            let state = inner.state.take().unwrap();
-
-            match state {
-                State::Idle(bytes_mut) => {
-                    if let Some(bytes_read) = bytes_mut {
-                        buf.initialize_unfilled().copy_from_slice(&bytes_read);
-                        inner.state = Some(State::Idle(None));
-                        return Poll::Ready(Ok(()));
-                    } else {
-                        let blob = match me.stream_reader.slice(buf.capacity()) {
-                            Ok(blob) => gloo_file::Blob::from(blob),
-                            Err(e) => {
-                                return Poll::Ready(Err(io::Error::new(
-                                    io::ErrorKind::Other,
-                                    e.as_string().unwrap(),
-                                )))
-                            }
-                        };
-                        let t = read_as_bytes(&blob).boxed_local();
-                        inner.state = Some(State::Busy(t))
-                    }
-                }
-                State::Busy(mut js_future) => {
-                    log::info!("Busy, polling future");
-                    let j = js_future.as_mut().poll(cx);
-                    match j {
-                        Poll::Ready(read) => match read {
-                            Ok(data) => {
-                                log::info!("Read successful: {}", data.len());
-                                me.stream_reader.position += data.len() as u64;
-                                inner.state = Some(State::Idle(Some(data)));
-                            }
-                            Err(e) => {
-                                log::info!("Read unsuccessful: {}", e);
-                                let err = match e {
-                                    gloo_file::FileReadError::AbortedEarly => {
-                                        io::Error::new(io::ErrorKind::ConnectionAborted, e)
-                                    }
-                                    gloo_file::FileReadError::NotFound(_) => {
-                                        io::Error::new(io::ErrorKind::NotFound, e)
-                                    }
-                                    gloo_file::FileReadError::NotReadable(_) => {
-                                        io::Error::new(io::ErrorKind::Unsupported, e)
-                                    }
-                                    gloo_file::FileReadError::Security(_) => {
-                                        io::Error::new(io::ErrorKind::ConnectionRefused, e)
-                                    }
-                                };
-                                inner.state = Some(State::Complete);
-                                return Poll::Ready(Err(err));
-                            }
-                        }
-                        Poll::Pending => {
-                            inner.state = Some(State::Busy(js_future));
+        if let Some(mut inner) = me.state.try_lock() {
+            log::info!("Polling read, state: {:?}", inner.state);
+            match &mut inner.state {
+                State::Idle(items) => {
+                    if let Some(readbuf) = items.take() {
+                        log::info!("Found buffer");
+                        if !readbuf.is_empty() || buf.len() == 0 {
+                            buf.copy_from_slice(&readbuf);
+                            return Poll::Ready(Ok(readbuf.len()));
                         }
                     }
+                    log::info!("In idle branch, no buffer");
+                    let v = me.handle.slice(me.position, me.position + buf.len() as u64);
+                    log::info!("Slicing {}-{}", me.position, me.position + buf.len() as u64);
+                    let (send, recv) = futures::channel::oneshot::channel();
+                    let task = async move || {
+                        log::info!("In callback");
+                        let buf = v.read().await;
+                        log::info!("Read completed in callback");
+                        send.send(buf).unwrap();
+                    };
+                    log::info!("Spawning the task locally");
+                    wasm_bindgen_futures::spawn_local(task());
+                    log::info!("Updating state to busy");
+                    inner.state = State::Busy((Operation::Read, Vec::new(), Some(Box::pin(recv))));
+                    log::info!("Returning pending");
+                    Poll::Pending
                 }
-                State::Complete => {
-                    inner.state = Some(State::Complete);
-                    return Poll::Ready(Ok(()));
-                }
+                State::Busy((_op, _opbuf, task)) => match Pin::new(task.as_mut().unwrap()).poll(cx) {
+                    Poll::Ready(value) => {
+                        match value {
+                            Ok(value) => {
+                                log::info!("In busy branch, buffer read: {value:?}");
+                                let value = value.map_err(|e| io::Error::other(e))?;
+                                buf.copy_from_slice(&value);
+                                me.position += value.len() as u64;
+                                inner.pos += value.len() as u64;
+                                inner.state = State::Idle(None);
+                                Poll::Ready(Ok(value.len()))
+                            },
+                            Err(futures::channel::oneshot::Canceled) => {
+                                inner.state = State::Idle(None);
+                                Poll::Ready(Err(io::Error::new(io::ErrorKind::ConnectionAborted, "The read operation was cancelled")))
+                            }
+                        }
+                    }
+                    Poll::Pending => Poll::Pending,
+                },
             }
+        } else {
+            log::info!("State locked, pending");
+            Poll::Pending
         }
     }
 }
 
+impl AsyncSeek for WebIO {
+    fn poll_seek(
+        mut self: Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        pos: io::SeekFrom,
+    ) -> Poll<io::Result<u64>> {
+        self.set_position(pos);
+        Poll::Ready(Ok(self.position))
+    }
+}
+
+impl TokioAsyncSeek for WebIO {
+    fn start_seek(self: Pin<&mut Self>, position: io::SeekFrom) -> io::Result<()> {
+        let me = self.get_mut();
+        let inner = me.state.get_mut();
+        match &mut inner.state {
+            State::Idle(_) => {
+                me.set_position(position);
+                Ok(())
+            }
+            State::Busy((op, _buf, _task)) => Err(io::Error::new(
+                io::ErrorKind::ResourceBusy,
+                format!("WebIO is currently executing another operation {op:?}"),
+            )),
+        }
+    }
+
+    fn poll_complete(
+        self: Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> Poll<io::Result<u64>> {
+        Poll::Ready(Ok(self.position))
+    }
+}
 
 #[wasm_bindgen]
-pub async fn test_reader_blob(stream_reader: File) -> String {
-    let mut handle = WebReaderAsyncRead::new(WebIO::new(stream_reader));
-    let mut buf = String::new();
-    handle.read_to_string(&mut buf).await.unwrap();
+pub async fn read_all(handle: &mut WebIO) -> Vec<u8> {
+    let mut buf = Vec::new();
+    handle.read_to_end(&mut buf).await.unwrap();
     buf
 }
+
+// impl TokioAsyncRead for WebIO {
+//     fn poll_read(
+//         self: Pin<&mut Self>,
+//         cx: &mut std::task::Context<'_>,
+//         buf: &mut tokio::io::ReadBuf<'_>,
+//     ) -> Poll<io::Result<()>> {
+//         let me = self.get_mut();
+//         let inner = me.state.get_mut();
+//         match &mut inner.state {
+//             State::Idle(items) => {
+//                 if let Some(readbuf) = items.take() {
+//                     if !readbuf.is_empty() || buf.capacity() == 0 {
+//                         buf.put_slice(&readbuf);
+//                         return Poll::Ready(Ok(()));
+//                     }
+//                 }
+//                 let v = me
+//                     .handle
+//                     .slice(me.position, me.position + buf.capacity() as u64);
+//                 let task = v.read().boxed_local();
+//                 inner.state = State::Busy((Operation::Read, Vec::new(), Some(task)));
+//                 Poll::Pending
+//             }
+//             State::Busy((_op, _opbuf, task)) => match Pin::new(task.as_mut().unwrap()).poll(cx) {
+//                 Poll::Ready(value) => {
+//                     let value = value.map_err(|e| io::Error::other(e))?;
+//                     buf.put_slice(&value);
+//                     me.position += value.len() as u64;
+//                     inner.pos += value.len() as u64;
+//                     inner.state = State::Idle(None);
+//                     Poll::Ready(Ok(()))
+//                 }
+//                 Poll::Pending => Poll::Pending,
+//             },
+//         }
+//     }
+// }
