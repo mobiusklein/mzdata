@@ -255,6 +255,9 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                     self.current_array_mut().name = ArrayType::ScanningQuadrupolePositionUpperBoundMZ;
                     self.current_array_mut().unit = param.unit();
                 }
+                1003870 => {
+                    self.current_array_mut().name = ArrayType::IndexArray;
+                }
                 _ => {
                     self.current_array_mut().add_param(param.into());
                 }
