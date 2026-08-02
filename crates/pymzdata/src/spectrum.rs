@@ -1,7 +1,7 @@
 use mzdata::prelude::{IonMobilityFrameLike, SpectrumLike, ParamDescribed};
 use mzdata::spectrum::bindata::ByteArrayView;
 use mzdata::spectrum::{
-    ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, MultiLayerIonMobilityFrame, MultiLayerSpectrum, SignalContinuity
+    BinaryArrayMap, BinaryDataArrayType, DataArray, MultiLayerIonMobilityFrame, MultiLayerSpectrum, SignalContinuity
 };
 use mzdata::io::proxi;
 
@@ -183,6 +183,7 @@ impl PySpectrum {
         slf.borrow().inner.arrays.as_ref().and_then(|a| a.mzs().ok()).map(|cow| cow.to_vec().into_pyarray(slf.py()))
     }
 
+    /// Decide all raw data arrays in the spectrum. If only centroids are available, this may be empty
     fn raw_arrays<'py>(slf: &'py Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
         let out = PyDict::new(slf.py());
         if let Some(arrays) = slf.borrow().inner.arrays.as_ref() {
@@ -201,7 +202,7 @@ impl PySpectrum {
             .map(|cow| cow.to_vec().into_pyarray(slf.py()))
     }
 
-    /// Centroid peaks as a list of `(mz, intensity)` tuples.
+    /// Centroid peaks as a `(mz, intensity)` tuple of arrays.
     fn centroid_peaks<'py>(slf: &'py Bound<'py, Self>) -> Option<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f32>>)> {
         if let Some(peaks) = slf.borrow().inner.peaks.as_ref() {
             let mut mzs = Vec::with_capacity(peaks.len());
@@ -218,7 +219,7 @@ impl PySpectrum {
         }
     }
 
-    /// Deconvoluted peaks as a list of `(mz, intensity, charge)` tuples.
+    /// Deconvoluted peaks as a `(mz, intensity, charge)` tuple of arrays.
     fn deconvoluted_peaks<'py>(slf: &'py Bound<'py, Self>) -> Option<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f32>>, Bound<'py, PyArray1<i32>>)> {
         if let Some(peaks) = slf.borrow().inner.deconvoluted_peaks.as_ref() {
             let mut mzs = Vec::with_capacity(peaks.len());
@@ -325,6 +326,7 @@ impl PyIonMobilityFrame {
         self.inner.id()
     }
 
+    /// Decide all raw data arrays in the frame. If only centroids are available, this may be empty
     fn raw_arrays<'py>(slf: &'py Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
         let out = PyDict::new(slf.py());
         if let Some(arrays) = slf.borrow().inner.arrays.as_ref() {

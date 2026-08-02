@@ -196,6 +196,13 @@ impl PyMZReader {
             .map(|s| s.into()))
     }
 
+    /// Reset the reader, returning the stream to the starting position, if possible.
+    fn reset(&mut self) -> PyResult<()> {
+        self.require_open()?;
+        self.inner.as_mut().map(|r| r.reset());
+        Ok(())
+    }
+
     // ---- Detail level property --------------------------------------------
 
     /// The detail level used when loading spectra.
@@ -424,6 +431,13 @@ impl PyIMMZReader {
     }
 
     // ---- Random access ----------------------------------------------------
+
+    /// Reset the reader, returning the stream to the starting position, if possible.
+    fn reset(&mut self) -> PyResult<()> {
+        self.require_open()?;
+        self.inner.as_mut().map(|r| r.reset());
+        Ok(())
+    }
 
     /// Retrieve a frame by its native ID string.
     fn get_by_id(&mut self, id: &str) -> PyResult<Option<PyIonMobilityFrame>> {
