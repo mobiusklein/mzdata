@@ -1,6 +1,10 @@
 use std::{fmt::Debug, future::Future, io, pin::Pin, task::Poll};
 
-use futures::{AsyncReadExt, AsyncSeek, FutureExt, io::AsyncRead, lock::Mutex};
+use futures::{
+    AsyncReadExt, AsyncSeek, FutureExt,
+    io::AsyncRead,
+    lock::{Mutex, MutexGuard},
+};
 use gloo_file::{
     FileReadError,
     callbacks::{FileReader, read_as_bytes as read_as_bytes_cb},
@@ -82,7 +86,18 @@ enum State {
         (
             Operation,
             Vec<u8>,
-            Option<Pin<Box<dyn Future<Output = Result<Result<Vec<u8>, FileReadError>, futures::channel::oneshot::Canceled>>>>>,
+            Option<
+                Pin<
+                    Box<
+                        dyn Future<
+                            Output = Result<
+                                Result<Vec<u8>, FileReadError>,
+                                futures::channel::oneshot::Canceled,
+                            >,
+                        >,
+                    >,
+                >,
+            >,
         ),
     ),
 }
@@ -247,6 +262,20 @@ impl WebIO {
     }
 }
 
+fn update_state_futures(
+    me_position: &mut u64,
+    inner: &mut MutexGuard<'_, Inner>,
+    buf: &mut [u8],
+    value: Result<Vec<u8>, FileReadError>,
+) -> io::Result<usize> {
+    let value = value.map_err(|e| io::Error::other(e))?;
+    buf[0..value.len()].copy_from_slice(&value);
+    *me_position += value.len() as u64;
+    inner.pos += value.len() as u64;
+    inner.state = State::Idle(None);
+    Ok(value.len())
+}
+
 impl AsyncRead for WebIO {
     fn poll_read(
         self: Pin<&mut Self>,
@@ -255,56 +284,69 @@ impl AsyncRead for WebIO {
     ) -> Poll<io::Result<usize>> {
         let me = self.get_mut();
         if let Some(mut inner) = me.state.try_lock() {
-            log::info!("Polling read, state: {:?}", inner.state);
             match &mut inner.state {
                 State::Idle(items) => {
                     if let Some(readbuf) = items.take() {
-                        log::info!("Found buffer");
                         if !readbuf.is_empty() || buf.len() == 0 {
                             buf.copy_from_slice(&readbuf);
                             return Poll::Ready(Ok(readbuf.len()));
                         }
                     }
-                    log::info!("In idle branch, no buffer");
                     let v = me.handle.slice(me.position, me.position + buf.len() as u64);
-                    log::info!("Slicing {}-{}", me.position, me.position + buf.len() as u64);
                     let (send, recv) = futures::channel::oneshot::channel();
                     let task = async move || {
-                        log::info!("In callback");
                         let buf = v.read().await;
-                        log::info!("Read completed in callback");
                         send.send(buf).unwrap();
                     };
-                    log::info!("Spawning the task locally");
-                    wasm_bindgen_futures::spawn_local(task());
-                    log::info!("Updating state to busy");
-                    inner.state = State::Busy((Operation::Read, Vec::new(), Some(Box::pin(recv))));
-                    log::info!("Returning pending");
+                    let job = Box::pin(task());
+                    let mut recv_box = Box::pin(recv);
+                    wasm_bindgen_futures::spawn_local(job);
+                    match recv_box.poll_unpin(cx) {
+                        Poll::Ready(resp) => match resp {
+                            Ok(value) => {
+                                return Poll::Ready(update_state_futures(
+                                    &mut me.position,
+                                    &mut inner,
+                                    buf,
+                                    value,
+                                ));
+                            }
+                            Err(_canceled) => {
+                                inner.state = State::Idle(None);
+                                return Poll::Ready(Err(io::Error::new(
+                                    io::ErrorKind::ConnectionAborted,
+                                    "The read operation was cancelled",
+                                )));
+                            }
+                        },
+                        Poll::Pending => {}
+                    }
+                    inner.state = State::Busy((Operation::Read, Vec::new(), Some(recv_box)));
                     Poll::Pending
                 }
-                State::Busy((_op, _opbuf, task)) => match Pin::new(task.as_mut().unwrap()).poll(cx) {
-                    Poll::Ready(value) => {
-                        match value {
-                            Ok(value) => {
-                                log::info!("In busy branch, buffer read: {value:?}");
-                                let value = value.map_err(|e| io::Error::other(e))?;
-                                buf.copy_from_slice(&value);
-                                me.position += value.len() as u64;
-                                inner.pos += value.len() as u64;
-                                inner.state = State::Idle(None);
-                                Poll::Ready(Ok(value.len()))
-                            },
-                            Err(futures::channel::oneshot::Canceled) => {
-                                inner.state = State::Idle(None);
-                                Poll::Ready(Err(io::Error::new(io::ErrorKind::ConnectionAborted, "The read operation was cancelled")))
-                            }
+                State::Busy((_op, _opbuf, task)) => match Pin::new(task.as_mut().unwrap()).poll(cx)
+                {
+                    Poll::Ready(value) => match value {
+                        Ok(value) => {
+                            Poll::Ready(update_state_futures(
+                                &mut me.position,
+                                &mut inner,
+                                buf,
+                                value,
+                            ))
                         }
-                    }
+                        Err(futures::channel::oneshot::Canceled) => {
+                            inner.state = State::Idle(None);
+                            Poll::Ready(Err(io::Error::new(
+                                io::ErrorKind::ConnectionAborted,
+                                "The read operation was cancelled",
+                            )))
+                        }
+                    },
                     Poll::Pending => Poll::Pending,
                 },
             }
         } else {
-            log::info!("State locked, pending");
             Poll::Pending
         }
     }
@@ -352,40 +394,86 @@ pub async fn read_all(handle: &mut WebIO) -> Vec<u8> {
     buf
 }
 
-// impl TokioAsyncRead for WebIO {
-//     fn poll_read(
-//         self: Pin<&mut Self>,
-//         cx: &mut std::task::Context<'_>,
-//         buf: &mut tokio::io::ReadBuf<'_>,
-//     ) -> Poll<io::Result<()>> {
-//         let me = self.get_mut();
-//         let inner = me.state.get_mut();
-//         match &mut inner.state {
-//             State::Idle(items) => {
-//                 if let Some(readbuf) = items.take() {
-//                     if !readbuf.is_empty() || buf.capacity() == 0 {
-//                         buf.put_slice(&readbuf);
-//                         return Poll::Ready(Ok(()));
-//                     }
-//                 }
-//                 let v = me
-//                     .handle
-//                     .slice(me.position, me.position + buf.capacity() as u64);
-//                 let task = v.read().boxed_local();
-//                 inner.state = State::Busy((Operation::Read, Vec::new(), Some(task)));
-//                 Poll::Pending
-//             }
-//             State::Busy((_op, _opbuf, task)) => match Pin::new(task.as_mut().unwrap()).poll(cx) {
-//                 Poll::Ready(value) => {
-//                     let value = value.map_err(|e| io::Error::other(e))?;
-//                     buf.put_slice(&value);
-//                     me.position += value.len() as u64;
-//                     inner.pos += value.len() as u64;
-//                     inner.state = State::Idle(None);
-//                     Poll::Ready(Ok(()))
-//                 }
-//                 Poll::Pending => Poll::Pending,
-//             },
-//         }
-//     }
-// }
+fn update_state_tokio(
+    me_position: &mut u64,
+    inner: &mut MutexGuard<'_, Inner>,
+    buf: &mut tokio::io::ReadBuf<'_>,
+    value: Result<Vec<u8>, FileReadError>,
+) -> Result<(), io::Error> {
+    let value = value.map_err(|e| io::Error::other(e))?;
+    buf.put_slice(&value);
+    *me_position += value.len() as u64;
+    inner.pos += value.len() as u64;
+    inner.state = State::Idle(None);
+    return Ok(());
+}
+
+impl TokioAsyncRead for WebIO {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let me = self.get_mut();
+        if let Some(mut inner) = me.state.try_lock() {
+            match &mut inner.state {
+                State::Idle(items) => {
+                    if let Some(readbuf) = items.take() {
+                        if !readbuf.is_empty() || buf.capacity() == 0 {
+                            buf.put_slice(&readbuf);
+                            return Poll::Ready(Ok(()));
+                        }
+                    }
+                    let v = me
+                        .handle
+                        .slice(me.position, me.position + buf.capacity() as u64);
+                    let (send, recv) = futures::channel::oneshot::channel();
+                    let task = async move || {
+                        let buf = v.read().await;
+                        send.send(buf).unwrap();
+                    };
+                    let job = Box::pin(task());
+                    let mut recv_box = Box::pin(recv);
+                    wasm_bindgen_futures::spawn_local(job);
+                    match recv_box.poll_unpin(cx) {
+                        Poll::Ready(resp) => match resp {
+                            Ok(value) => {
+                                update_state_tokio(&mut me.position, &mut inner, buf, value)?;
+                                return Poll::Ready(Ok(()));
+                            }
+                            Err(_canceled) => {
+                                inner.state = State::Idle(None);
+                                return Poll::Ready(Err(io::Error::new(
+                                    io::ErrorKind::ConnectionAborted,
+                                    "The read operation was cancelled",
+                                )));
+                            }
+                        },
+                        Poll::Pending => {}
+                    }
+                    inner.state = State::Busy((Operation::Read, Vec::new(), Some(recv_box)));
+                    Poll::Pending
+                }
+                State::Busy((_op, _opbuf, task)) => match Pin::new(task.as_mut().unwrap()).poll(cx)
+                {
+                    Poll::Ready(value) => match value {
+                        Ok(value) => {
+                            update_state_tokio(&mut me.position, &mut inner, buf, value)?;
+                            Poll::Ready(Ok(()))
+                        }
+                        Err(futures::channel::oneshot::Canceled) => {
+                            inner.state = State::Idle(None);
+                            Poll::Ready(Err(io::Error::new(
+                                io::ErrorKind::ConnectionAborted,
+                                "The read operation was cancelled",
+                            )))
+                        }
+                    },
+                    Poll::Pending => Poll::Pending,
+                },
+            }
+        } else {
+            Poll::Pending
+        }
+    }
+}
