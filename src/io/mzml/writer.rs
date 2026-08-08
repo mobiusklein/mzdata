@@ -6,6 +6,7 @@ use std::{io, mem};
 
 use log::warn;
 use mzpeaks::feature::FeatureLike;
+use sha1::Digest;
 use thiserror::Error;
 
 use mzpeaks::{CentroidLike, DeconvolutedCentroidLike, IonMobility, KnownCharge, Mass, MZ};
@@ -15,7 +16,7 @@ use quick_xml::{Error as XMLError, Writer};
 
 use super::super::offset_index::OffsetIndex;
 use super::super::traits::SpectrumWriter;
-use super::super::utils::MD5HashingStream;
+use super::super::utils::SHA1HashingStream;
 
 use mzpeaks::{CentroidPeak, DeconvolutedPeak};
 
@@ -49,7 +50,7 @@ macro_rules! attrib {
         let value = $value.as_bytes();
         // Because quick_xml::escape does not escape newlines
         let decoded = unsafe { std::str::from_utf8_unchecked(&value) };
-        let escaped_value = escape::escape(&decoded);
+        let escaped_value = escape::escape(decoded);
         $elt.push_attribute((key, escaped_value.as_bytes()));
     }};
 }
@@ -181,12 +182,12 @@ impl From<MzMLWriterError> for io::Error {
 pub type WriterResult = Result<(), MzMLWriterError>;
 
 struct ByteCountingStream<W: io::Write> {
-    stream: BufWriter<MD5HashingStream<W>>,
+    stream: BufWriter<SHA1HashingStream<W>>,
     bytes_written: u64,
 }
 
 impl<W: io::Write> ByteCountingStream<W> {
-    pub fn new(stream: BufWriter<MD5HashingStream<W>>) -> Self {
+    pub fn new(stream: BufWriter<SHA1HashingStream<W>>) -> Self {
         Self {
             stream,
             bytes_written: 0,
@@ -197,7 +198,7 @@ impl<W: io::Write> ByteCountingStream<W> {
         self.bytes_written
     }
 
-    pub fn checksum(&self) -> md5::Digest {
+    pub fn checksum(&self) -> sha1::Sha1 {
         self.stream.get_ref().compute()
     }
 
@@ -236,7 +237,7 @@ impl<W: io::Write> InnerXMLWriter<W> {
     pub fn new(file: W) -> InnerXMLWriter<W> {
         let handle = ByteCountingStream::new(BufWriter::with_capacity(
             BUFFER_SIZE,
-            MD5HashingStream::new(file),
+            SHA1HashingStream::new(file),
         ));
         Self {
             handle: Writer::new_with_indent(handle, b' ', 2),
@@ -245,7 +246,8 @@ impl<W: io::Write> InnerXMLWriter<W> {
 
     pub fn digest(&mut self) -> String {
         let digest = self.handle.get_ref().checksum();
-        format!("{:x}", digest)
+        let f = digest.finalize();
+        format!("{:x}", f)
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
@@ -770,8 +772,8 @@ where
     buf = subprocess.check_output(['python', 'cv/extract_cv_metadata.py', 'data-version']).decode('utf8').strip()
     cog.outl(f'const PSIMS_VERSION: &\'static str = "{buf}";')
     ]]]*/
-    const PSIMS_VERSION: &'static str = "4.1.247";
-    //[[[end]]] (sum: o5rYUg3IBX)
+    const PSIMS_VERSION: &'static str = "4.1.258";
+    //[[[end]]] (sum: wieBjCKlng)
     const UNIT_VERSION: &'static str = "releases/2020-03-10";
 
     pub const fn get_indent_size() -> u64 {
@@ -1616,23 +1618,42 @@ where
         Ok(())
     }
 
-    pub fn write_precursor(&mut self, precursor: &impl PrecursorSelection) -> WriterResult {
+    pub fn write_product(&mut self, product: &Product) -> WriterResult {
+        let mut product_list_tag = bstart!("productList");
+        attrib!("count", "1", product_list_tag);
+        start_event!(self, product_list_tag);
+
+        let product_tag = bstart!("product");
+        self.handle
+            .write_event(Event::Start(product_tag.borrow()))?;
+
+        let iw = &product.isolation_window;
+        self.write_isolation_window(iw)?;
+        end_event!(self, product_tag);
+        end_event!(self, product_list_tag);
+        Ok(())
+    }
+
+    pub fn write_precursor<'a, I: Iterator<Item=&'a (impl PrecursorSelection + 'a)> + ExactSizeIterator>(&mut self, precursors: I) -> WriterResult {
         let mut precursor_list_tag = bstart!("precursorList");
-        attrib!("count", "1", precursor_list_tag);
+        let n = precursors.len().to_string();
+        attrib!("count", n, precursor_list_tag);
         start_event!(self, precursor_list_tag);
 
-        let mut precursor_tag = bstart!("precursor");
-        if let Some(prec_id) = precursor.precursor_id() {
-            attrib!("spectrumRef", prec_id, precursor_tag);
-        }
-        self.handle
-            .write_event(Event::Start(precursor_tag.borrow()))?;
+        for precursor in precursors {
+            let mut precursor_tag = bstart!("precursor");
+            if let Some(prec_id) = precursor.precursor_id() {
+                attrib!("spectrumRef", prec_id, precursor_tag);
+            }
+            self.handle
+                .write_event(Event::Start(precursor_tag.borrow()))?;
 
-        let iw = precursor.isolation_window();
-        self.write_isolation_window(iw)?;
-        self.write_selected_ions(precursor)?;
-        self.write_activation(precursor)?;
-        end_event!(self, precursor_tag);
+            let iw = precursor.isolation_window();
+            self.write_isolation_window(iw)?;
+            self.write_selected_ions(precursor)?;
+            self.write_activation(precursor)?;
+            end_event!(self, precursor_tag);
+        }
         end_event!(self, precursor_list_tag);
         Ok(())
     }
@@ -1646,10 +1667,14 @@ where
         spectrum: &S,
     ) -> WriterResult {
         let ms_level = spectrum.ms_level();
-        match ms_level {
-            1 => self.handle.write_param(&MS1_SPECTRUM)?,
-            x if x > 1 => self.handle.write_param(&MSN_SPECTRUM)?,
-            _ => {}
+        if let Some(spt) = spectrum.spectrum_type() {
+            self.handle.write_param(&spt.to_param())?
+        } else {
+            match ms_level {
+                1 => self.handle.write_param(&MS1_SPECTRUM)?,
+                x if x > 1 => self.handle.write_param(&MSN_SPECTRUM)?,
+                _ => {}
+            }
         }
         self.write_param(&self.ms_cv.const_param(
             "ms level",
@@ -1805,19 +1830,6 @@ where
             ArrayType::MZArray | ArrayType::IntensityArray | ArrayType::ChargeArray => {
                 self.handle.write_param(&array.name.as_param_const())?
             }
-            ArrayType::TimeArray
-            | ArrayType::TemperatureArray
-            | ArrayType::FlowRateArray
-            | ArrayType::PressureArray
-            | ArrayType::WavelengthArray
-            | ArrayType::SignalToNoiseArray
-            | ArrayType::BaselineArray
-            | ArrayType::IonMobilityArray => self
-                .handle
-                .write_param(&array.name.as_param_with_unit_const(array.unit))?,
-            x if x.is_ion_mobility() => self
-                .handle
-                .write_param(&array.name.as_param_with_unit_const(array.unit))?,
             ArrayType::NonStandardDataArray { name } => {
                 let mut p =
                     self.ms_cv
@@ -1826,7 +1838,9 @@ where
                 self.handle.write_param(&p)?;
             }
             _ => {
-                panic!("Could not determine how to name for {:?}", array.name);
+                self
+                    .handle
+                    .write_param(&array.name.as_param_with_unit_const(array.unit))?
             }
         }
 
@@ -1971,9 +1985,7 @@ where
         self.write_signal_properties(spectrum)?;
 
         self.write_scan_list(spectrum.acquisition())?;
-        for precursor in spectrum.precursor_iter() {
-            self.write_precursor(precursor)?;
-        }
+        self.write_precursor(spectrum.precursor_iter())?;
         Ok(())
     }
 
@@ -2128,7 +2140,11 @@ where
         self.write_param_list(chromatogram.params().iter())?;
 
         if let Some(precursor) = chromatogram.precursor() {
-            self.write_precursor(precursor)?;
+            self.write_precursor(core::slice::from_ref(precursor).into_iter())?;
+        }
+
+        if let Some(product) = chromatogram.product() {
+            self.write_product(product)?;
         }
 
         self.write_binary_data_arrays(&chromatogram.arrays, default_array_len)?;

@@ -132,7 +132,11 @@ impl<R: SpectrumSource> MSnTargetTrackingIterator<R> {
                     })
                     .sum();
                 if hits == 0 {
-                    let p = SelectionTargetSpecification::new(mz, prec.ion().and_then(|i| i.charge()), t - 0.5..t + 0.5);
+                    let p = SelectionTargetSpecification::new(
+                        mz,
+                        prec.ion().and_then(|i| i.charge()),
+                        t - 0.5..t + 0.5,
+                    );
                     // eprintln!("Added {p:?}");
                     self.targets.push_back(p);
                     1

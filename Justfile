@@ -1,21 +1,21 @@
 set dotenv-load := true
 
 test-units:
-    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,bruker_tdf
+    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,bruker_tdf,imzml
 
 test-coverage:
-    cargo llvm-cov --lib --tests nextest --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,mzmlb,async,numpress --html
+    cargo llvm-cov --lib --tests nextest --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,imzml --html
 
 alias t := test-units
 
 test-units-more:
-    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,bruker_tdf
+    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,bruker_tdf,imzml
 
 quick-docs:
     cargo doc --no-deps -p mzdata
 
 docs:
-    cargo doc --no-deps --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,thermo,async,proxi,bruker_tdf -p mzdata -p mzsignal -p mzpeaks
+    cargo doc --no-deps --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,proxi,bruker_tdf,imzml -p mzdata -p mzsignal -p mzpeaks
 
 install-mzdata:
     cargo install --path . --features nalgebra,parallelism,mzsignal,mzmlb,zlib-ng-compat,hdf5_static
@@ -29,6 +29,10 @@ update-cv:
 
 update-cv-terms:
     cog -c -r -U src/meta/software.rs src/meta/instrument.rs src/meta/file_description.rs src/io/mzml/writer.rs src/meta/activation.rs
+
+pytest:
+    maturin develop -m "./crates/pymzdata/Cargo.toml"
+    pytest -v -s ./crates/pymzdata/
 
 changelog version:
     #!/usr/bin/env python
@@ -70,8 +74,8 @@ release tag: (patch-version) (changelog tag)
     git commit -m "chore: update changelog"
     git tag {{tag}}
 
-    cargo publish
-    cd crates/mzdata-spectra && cargo publish
+    cargo publish --allow-dirty
+    cd crates/mzdata-spectra && cargo publish --allow-dirty
 
 
 patch-version:
@@ -81,8 +85,6 @@ patch-version:
 
 
     ref_toml = "Cargo.toml"
-    target_toml = "crates/mzdata-spectra/Cargo.toml"
-
     pattern = re.compile(r"^version\s*=\s*\"(.+?)\"")
     dep_pattern = re.compile(r"version\s*=\s*\"(.+?)\"")
 
@@ -93,20 +95,29 @@ patch-version:
             if match := pattern.match(line):
                 version = match.string
                 break
+    if version is None:
+        sys.stderr.write("Failed to resolve reference mzdata version")
+        if not version:
+            raise ValueError("Version not found in reference")
+    else:
+        sys.stderr.write(f"mzdata version = {version}")
 
-    if not version:
-        raise ValueError("Version not found in reference")
+    target_toml_files = ["./crates/mzdata-spectra/Cargo.toml", "./crates/pymzdata/Cargo.toml", "./crates/mzdata-wasm/Cargo.toml"]
+    for target_toml in target_toml_files:
+        print(f"Updating {target_toml}")
+        buffer = []
+        with open(target_toml) as fh:
+            for line in fh:
+                if pattern.match(line):
+                    line = version
+                if line.startswith("mzdata"):
+                    line_before = line
+                    line = dep_pattern.sub(version.strip(), line)
+                    mat_before = dep_pattern.search(line_before)
+                    mat_after = dep_pattern.search(line)
+                    print(mat_before, "=>", mat_after)
 
+                buffer.append(line.strip())
 
-    buffer = []
-    with open(target_toml) as fh:
-        for line in fh:
-            if pattern.match(line):
-                line = version
-            if line.startswith("mzdata"):
-                line = dep_pattern.sub(version.strip(), line)
-
-            buffer.append(line.strip())
-
-    with open(target_toml, 'w') as fh:
-        fh.write('\n'.join(buffer))
+        with open(target_toml, 'w') as fh:
+            fh.write('\n'.join(buffer))

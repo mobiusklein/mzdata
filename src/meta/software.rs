@@ -1318,6 +1318,51 @@ crate::cvmap! {
         #[term(cv=MS, accession=1003969, name="BioPharma Finder", flags={3}, parents={["MS:1003961", "MS:1001456", "MS:1001457"]})]
         #[doc="BioPharma Finder - Thermo Scientific software for complex biotherapeutic characterization by LC-MS, supporting intact protein analysis, peptide mapping, oligonucleotide analysis, multi-attribute method workflows, and top-down or middle-down approaches."]
         BioPharmaFinder,
+        #[term(cv=MS, accession=1003977, name="Monocle", flags={2}, parents={["MS:1001457"]})]
+        #[doc="Monocle - A software program for converting Thermo Scientific RAW file format to mzXML, mzML, or CSV with improved monoisotopic mass estimation. Monocle was originally developed at the Gygi Lab at Harvard Medical School."]
+        Monocle,
+        #[term(cv=MS, accession=1003996, name="DeepNovo", flags={1}, parents={["MS:1001456", "MS:1001949"]})]
+        #[doc="DeepNovo - DeepNovo is a deep-learning based de novo peptide sequencer for DDA."]
+        DeepNovo,
+        #[term(cv=MS, accession=1003997, name="DeepNovo-DIA", flags={1}, parents={["MS:1001456", "MS:1001949"]})]
+        #[doc="DeepNovo-DIA - DeepNovo is a deep-learning based de novo peptide sequencer for DDA and DIA."]
+        DeepNovoDIA,
+        #[term(cv=MS, accession=1003998, name="PointNovo", flags={1}, parents={["MS:1001456"]})]
+        #[doc="PointNovo - PointNovo is neural network based de novo peptide sequencing model."]
+        PointNovo,
+        #[term(cv=MS, accession=1003999, name="PGPointNovo", flags={1}, parents={["MS:1001456"]})]
+        #[doc="PGPointNovo - PGPointNovo is a modification of PointNovo that allows parallel processing and a better optimization strategy."]
+        PGPointNovo,
+        #[term(cv=MS, accession=1004000, name="BiATNovo", flags={1}, parents={["MS:1001456"]})]
+        #[doc="BiATNovo - BiATNovo an attention based bidirectional de novo peptide sequencing software."]
+        BiATNovo,
+        #[term(cv=MS, accession=1004001, name="NovoB", flags={1}, parents={["MS:1001456"]})]
+        #[doc="NovoB - NovoB a transformer based bidirectional de novo peptide sequencing software."]
+        NovoB,
+        #[term(cv=MS, accession=1004002, name="PepNet", flags={1}, parents={["MS:1001456"]})]
+        #[doc="PepNet - PepNet a convolutional neural network de novo peptide sequencing software."]
+        PepNet,
+        #[term(cv=MS, accession=1004003, name="π-HelixNovo", flags={1}, parents={["MS:1001456"]})]
+        #[doc="π-HelixNovo - π-HelixNovo a transformer based de novo peptide sequencing software."]
+        PiHelixNovo,
+        #[term(cv=MS, accession=1004004, name="π-PrimeNovo", flags={1}, parents={["MS:1001456"]})]
+        #[doc="π-PrimeNovo - π-PrimeNovo a non-autoregressive de novo peptide sequencing software."]
+        PiPrimeNovo,
+        #[term(cv=MS, accession=1004005, name="PowerNovo", flags={1}, parents={["MS:1001456"]})]
+        #[doc="PowerNovo - PowerNovo a BERT and transformer ensemble de novo peptide sequencing software."]
+        PowerNovo,
+        #[term(cv=MS, accession=1004006, name="pUniFind", flags={1}, parents={["MS:1001456"]})]
+        #[doc="pUniFind - pUniFind a open modification de novo peptide sequencing and rescoring software."]
+        PUniFind,
+        #[term(cv=MS, accession=1004007, name="Sage", flags={1}, parents={["MS:1001456", "MS:1001139"]})]
+        #[doc="Sage - A database search based peptide identification software with retention time prediction, quantification, rescoring, and false discovery rate control."]
+        Sage,
+        #[term(cv=MS, accession=1004009, name="ProteoScape", flags={1}, parents={["MS:1001456", "MS:1000692"]})]
+        #[doc="ProteoScape - Bruker ProteoScape is a GPU-powered platform delivering parallel computing capabilities and real-time database search results for bottom-up proteomics."]
+        ProteoScape,
+        #[term(cv=MS, accession=1004010, name="Stitch", flags={1}, parents={["MS:1001456"]})]
+        #[doc="Stitch - Template-based assembly of PSMs for de novo protein sequencing."]
+        Stitch,
         #[term(cv=MS, accession=4000151, name="MsQuality", flags={1}, parents={["MS:1001456"]})]
         #[doc="MsQuality - MsQuality – an interoperable open-source package for the calculation of standardized quality metrics of mass spectrometry data."]
         MsQuality,
@@ -1325,7 +1370,7 @@ crate::cvmap! {
         #[doc="DIAMetric - DIAMetric is a Data-Independent Acquisition Quality Metric Generator."]
         DIAMetric,
     }
-    //[[[end]]] (sum: dbxhwoPX79)
+    //[[[end]]] (sum: IqKqt5F23c)
 }
 
 #[cfg(test)]

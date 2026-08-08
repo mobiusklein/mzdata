@@ -364,6 +364,18 @@ macro_rules! delegate_impl_metadata_trait {
             let step = $impl;
             step.source_file_name()
         }
+
+        fn scan_settings(&self) -> Option<&Vec<$crate::meta::ScanSettings>> {
+            let $self = self;
+            let step = $impl;
+            step.scan_settings()
+        }
+
+        fn scan_settings_mut(&mut self) -> Option<&mut Vec<$crate::meta::ScanSettings>> {
+            let $self = self;
+            let step = $mut_impl;
+            step.scan_settings_mut()
+        }
     };
     ($src:tt, extended) => {
         $crate::delegate_impl_metadata_trait($src);

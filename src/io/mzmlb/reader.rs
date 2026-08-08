@@ -680,6 +680,14 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
         self.inner.fill_binary_data_array(param)
     }
 
+    fn product_isolation_window_mut(&mut self) -> &mut IsolationWindow {
+        self.inner.product_isolation_window_mut()
+    }
+
+    fn new_product(&mut self) -> &mut crate::spectrum::Product {
+        self.inner.new_product()
+    }
+
     fn borrow_metadata(
         mut self,
         instrument_configurations: &'a mut IncrementingIdMap,

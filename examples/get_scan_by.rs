@@ -19,7 +19,7 @@ fn main() -> io::Result<()> {
 
     info!("Opening {}", path.display());
     let mut reader = MZReader::open_path(path)?;
-
+    info!("{} spectra detected", reader.len());
     let spectrum = match key.as_str() {
         "id" => reader.get_spectrum_by_id(&key_value).unwrap(),
         "index" => reader
@@ -34,8 +34,19 @@ fn main() -> io::Result<()> {
     };
 
     // dbg!(spectrum);
-    println!("ID: {}; Index: {}; Time: {}", spectrum.id(), spectrum.index(), spectrum.start_time());
-    println!("Num data points: {}", spectrum.raw_arrays().and_then(|r| Some(r.mzs().ok()?.len())).unwrap_or_default());
+    println!(
+        "ID: {}; Index: {}; Time: {}",
+        spectrum.id(),
+        spectrum.index(),
+        spectrum.start_time()
+    );
+    println!(
+        "Num data points: {}",
+        spectrum
+            .raw_arrays()
+            .and_then(|r| Some(r.mzs().ok()?.len()))
+            .unwrap_or_default()
+    );
     if spectrum.signal_continuity().is_centroid() && spectrum.raw_arrays().is_none() {
         println!("Num peaks: {}", spectrum.peaks().len());
     }

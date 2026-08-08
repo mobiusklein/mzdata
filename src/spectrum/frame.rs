@@ -209,9 +209,14 @@ pub trait IonMobilityFrameLike<
     }
 
     /// Iterate over all precursors of the frame
-    fn precursor_iter(&self) -> impl Iterator<Item = &Precursor> {
+    fn precursor_iter(&self) -> impl Iterator<Item = &Precursor> + ExactSizeIterator {
         let desc = self.description();
         desc.precursor.iter()
+    }
+
+    /// The number of precursor levels recorded
+    fn precursor_count(&self) -> usize {
+        self.description().precursor.len()
     }
 
     /// Mutably access the precursor information, if it exists
@@ -225,7 +230,7 @@ pub trait IonMobilityFrameLike<
     }
 
     /// Iterate over all precursors of the frame mutably
-    fn precursor_iter_mut(&mut self) -> impl Iterator<Item = &mut Precursor> {
+    fn precursor_iter_mut(&mut self) -> impl Iterator<Item = &mut Precursor> + ExactSizeIterator {
         let desc = self.description_mut();
         desc.precursor.iter_mut()
     }
@@ -281,20 +286,34 @@ pub trait IonMobilityFrameLike<
 
     /// Access a description of how raw the signal is, whether a
     /// profile spectrum is available or only centroids are present.
+    ///
+    /// This is the m/z continuity. Ion mobility continuity should always
+    /// profile for ion mobility frames.
     #[inline]
     fn signal_continuity(&self) -> SignalContinuity {
         self.description().signal_continuity
     }
 
+    /// Access a description of the spectrum polarity
     #[inline]
     fn polarity(&self) -> ScanPolarity {
         self.description().polarity
     }
 
+    /// Obtain a reference to the [`BinaryArrayMap3D`] if one is available for the feature
+    /// information. This may not be the most refined version of the feature signal if
+    /// it has been processed further.
     fn raw_arrays(&'_ self) -> Option<&'_ BinaryArrayMap3D>;
 
+    /// Retrieve the most processed representation of the ion mobility frame's signal
     fn features(&self) -> RefFeatureDataLevel<'_, C, D>;
 
+    /// Consume the ion mobility frame, decomposing it into the [`IonMobilityFrameDescription`] and an owning
+    /// [`FeatureDataLevel`].
+    ///
+    /// # See also
+    /// [`IonMobilityFrameLike::features`]
+    /// [`IonMobilityFrameLike::description`]
     fn into_features_and_parts(self) -> (FeatureDataLevel<C, D>, IonMobilityFrameDescription);
 }
 
@@ -367,6 +386,9 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge>
     MultiLayerIonMobilityFrame<C, D>
 {
+    /// Create a new [`MultiLayerIonMobilityFrame`] from a [`IonMobilityFrameDescription`] and
+    /// any/all/none of the different levels of processing details for signal
+    /// data.
     pub fn new(
         arrays: Option<BinaryArrayMap3D>,
         features: Option<FeatureMap<MZ, IonMobility, C>>,

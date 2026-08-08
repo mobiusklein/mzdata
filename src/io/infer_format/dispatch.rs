@@ -745,6 +745,22 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
         msfmt_dispatch!(self, reader, reader.run_description())
     }
 
+    fn run_description_mut(&mut self) -> Option<&mut crate::meta::MassSpectrometryRun> {
+        msfmt_dispatch!(self, reader, reader.run_description_mut())
+    }
+
+    fn scan_settings(&self) -> Option<&Vec<crate::meta::ScanSettings>> {
+        msfmt_dispatch!(self, reader, reader.scan_settings())
+    }
+
+    fn scan_settings_mut(&mut self) -> Option<&mut Vec<crate::meta::ScanSettings>> {
+        msfmt_dispatch!(self, reader, reader.scan_settings_mut())
+    }
+
+    fn set_spectrum_count_hint(&mut self, value: Option<u64>) {
+        msfmt_dispatch!(self, reader, reader.set_spectrum_count_hint(value))
+    }
+
     fn spectrum_count_hint(&self) -> Option<u64> {
         msfmt_dispatch!(self, reader, reader.spectrum_count_hint())
     }
@@ -1339,6 +1355,33 @@ mod test {
             let s = reader.get_spectrum_by_index(0).unwrap();
             assert!(s.has_ion_mobility_dimension());
         }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "imzml")]
+    fn test_mzreader_imzml_scan_settings_processed() -> io::Result<()> {
+        let reader = MZReader::open_path("test/data/imaging/Example_Processed.imzML")?;
+        let settings_list = reader
+            .scan_settings()
+            .expect("MZReader over imzML should expose scan_settings");
+        assert_eq!(settings_list.len(), 1);
+
+        let settings = &settings_list[0];
+        assert!(!settings.id.is_empty());
+        assert!(!settings.params.is_empty());
+        assert!(settings.source_file_refs.is_empty());
+        assert!(settings.targets.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_mzreader_mzml_scan_settings_empty() -> io::Result<()> {
+        let reader = MZReader::open_path("test/data/small.mzML")?;
+        let settings_list = reader
+            .scan_settings()
+            .expect("MZReader over mzML should expose scan_settings");
+        assert!(settings_list.is_empty());
         Ok(())
     }
 

@@ -93,6 +93,10 @@ pub enum MzMLParserState {
     SelectedIon,
     Activation,
 
+    ProductList,
+    Product,
+    ProductIsolationWindow,
+
     SpectrumDone,
     SpectrumListDone,
 
@@ -182,7 +186,7 @@ pub trait CVParamParse: XMLParseBase {
             match attr_parsed {
                 Ok(attr) => match attr.key.as_ref() {
                     b"name" => {
-                        name = Some(attr.unescape_value().or_else(|_| {
+                        name = Some(attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).or_else(|_| {
                             log::debug!("Non-UTF-8 detected in parameter name at {reader_position} in state {state}");
                             Ok(decode_latin1_escape(&attr.value).into())
                         }).unwrap_or_else(|e: quick_xml::Error| {
@@ -190,7 +194,7 @@ pub trait CVParamParse: XMLParseBase {
                         }));
                     }
                     b"value" => {
-                        value = Some(attr.unescape_value().or_else(|_| {
+                        value = Some(attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).or_else(|_| {
                             log::debug!("Non-UTF-8 detected in parameter value at {reader_position} in state {state}");
                             Ok(decode_latin1_escape(&attr.value).into())
                         }).unwrap_or_else(|e: quick_xml::Error| {
@@ -201,7 +205,7 @@ pub trait CVParamParse: XMLParseBase {
                         }));
                     }
                     b"cvRef" => {
-                        let cv_id = attr.unescape_value().unwrap_or_else(|e| {
+                        let cv_id = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).unwrap_or_else(|e| {
                             panic!(
                                 "Error decoding CV param reference at {}: {}",
                                 reader_position, e
@@ -215,7 +219,7 @@ pub trait CVParamParse: XMLParseBase {
                             .as_option();
                     }
                     b"accession" => {
-                        let v = attr.unescape_value().unwrap_or_else(|e| {
+                        let v = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).unwrap_or_else(|e| {
                             panic!(
                                 "Error decoding CV param accession at {}: {}",
                                 reader_position, e
@@ -225,7 +229,7 @@ pub trait CVParamParse: XMLParseBase {
                         accession = acc;
                     }
                     b"unitName" => {
-                        let v = attr.unescape_value().or_else(|_| {
+                        let v = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).or_else(|_| {
                             log::debug!("Non-UTF-8 detected in parameter unit name at {reader_position} in state {state}");
                             Ok(decode_latin1_escape(&attr.value).into())
                         }).unwrap_or_else(|e: quick_xml::Error| {
@@ -237,7 +241,7 @@ pub trait CVParamParse: XMLParseBase {
                         unit = Unit::from_name(&v);
                     }
                     b"unitAccession" => {
-                        let v = attr.unescape_value().unwrap_or_else(|e| {
+                        let v = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).unwrap_or_else(|e| {
                             panic!(
                                 "Error decoding CV param unit name at {}: {}",
                                 reader_position, e
@@ -274,7 +278,7 @@ pub trait CVParamParse: XMLParseBase {
                 Ok(attr) => match attr.key.as_ref() {
                     b"name" => {
                         param.name = attr
-                            .unescape_value()
+                            .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                             .or_else(|_| {
                                 log::debug!("Non-UTF-8 detected in parameter name at {reader_position} in state {state}");
                                 Ok(decode_latin1_escape(&attr.value).into())
@@ -286,7 +290,7 @@ pub trait CVParamParse: XMLParseBase {
                     }
                     b"value" => {
                         param.value = attr
-                            .unescape_value()
+                            .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                             .or_else(|_| {
                                 log::debug!("Non-UTF-8 detected in parameter value at {reader_position} in state {state}");
                                 Ok(decode_latin1_escape(&attr.value).into())
@@ -300,7 +304,7 @@ pub trait CVParamParse: XMLParseBase {
                             .into();
                     }
                     b"cvRef" => {
-                        let cv_id = attr.unescape_value().unwrap_or_else(|e| {
+                        let cv_id = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).unwrap_or_else(|e| {
                             panic!(
                                 "Error decoding CV param reference at {}: {}",
                                 reader_position, e
@@ -314,7 +318,7 @@ pub trait CVParamParse: XMLParseBase {
                             .as_option();
                     }
                     b"accession" => {
-                        let v = attr.unescape_value().unwrap_or_else(|e| {
+                        let v = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).unwrap_or_else(|e| {
                             panic!(
                                 "Error decoding CV param accession at {}: {}",
                                 reader_position, e
@@ -324,7 +328,7 @@ pub trait CVParamParse: XMLParseBase {
                         param.accession = acc;
                     }
                     b"unitName" => {
-                        let v = attr.unescape_value().or_else(|_| {
+                        let v = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).or_else(|_| {
                             log::debug!("Non-UTF-8 detected in parameter unit name at {reader_position} in state {state}");
                             Ok(decode_latin1_escape(&attr.value).into())
                         }).unwrap_or_else(|e: quick_xml::Error| {
@@ -336,7 +340,7 @@ pub trait CVParamParse: XMLParseBase {
                         unit_name = Some(Unit::from_name(&v));
                     }
                     b"unitAccession" => {
-                        let v = attr.unescape_value().unwrap_or_else(|e| {
+                        let v = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).unwrap_or_else(|e| {
                             panic!(
                                 "Error decoding CV param unit name at {}: {}",
                                 reader_position, e
@@ -489,7 +493,7 @@ impl IndexedMzMLIndexExtractor {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"idRef" {
                                 self.last_id = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .map(|v| v.to_string())
                                     .or_else(|_| -> Result<String, quick_xml::Error> {
                                         log::trace!("Detected non-UTF8 character in idRef");
@@ -512,7 +516,7 @@ impl IndexedMzMLIndexExtractor {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"name" {
                                 let index_name = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding idRef")
                                     .to_string();
                                 match index_name.as_ref() {
@@ -563,8 +567,10 @@ impl IndexedMzMLIndexExtractor {
     ) -> Result<IndexParserState, XMLError> {
         match state {
             IndexParserState::SpectrumIndexList => {
-                let bin = event
-                    .unescape()
+                let decoded = event
+                    .decode()
+                    .expect("Failed to decode spectrum offset");
+                let bin = quick_xml::escape::unescape(&decoded)
                     .expect("Failed to unescape spectrum offset");
                 if let Ok(offset) = bin.parse::<u64>() {
                     if !self.last_id.is_empty() {
@@ -576,8 +582,10 @@ impl IndexedMzMLIndexExtractor {
                 }
             }
             IndexParserState::ChromatogramIndexList => {
-                let bin = event
-                    .unescape()
+                let decoded = event
+                    .decode()
+                    .expect("Failed to decode chromatogram offset");
+                let bin = quick_xml::escape::unescape(&decoded)
                     .expect("Failed to unescape chromatogram offset");
                 if let Ok(offset) = bin.parse::<u64>() {
                     if !self.last_id.is_empty() {
@@ -636,17 +644,17 @@ impl FileMetadataBuilder<'_> {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"id" {
                                 source_file.id = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding id")
                                     .to_string();
                             } else if attr.key.as_ref() == b"name" {
                                 source_file.name = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding name")
                                     .to_string();
                             } else if attr.key.as_ref() == b"location" {
                                 source_file.location = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding location")
                                     .to_string();
                             }
@@ -667,12 +675,12 @@ impl FileMetadataBuilder<'_> {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"id" {
                                 software.id = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding id")
                                     .to_string();
                             } else if attr.key.as_ref() == b"version" {
                                 software.version = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding version")
                                     .to_string();
                             }
@@ -694,7 +702,7 @@ impl FileMetadataBuilder<'_> {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"id" {
                                 let key = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding id")
                                     .to_string();
                                 self.reference_param_groups.entry(key.clone()).or_default();
@@ -722,7 +730,7 @@ impl FileMetadataBuilder<'_> {
                                     .as_mut()
                                     .expect("An instrument ID map was not provided")
                                     .get(
-                                        attr.unescape_value().expect("Error decoding id").as_ref(),
+                                        attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).expect("Error decoding id").as_ref(),
                                     );
                             }
                         }
@@ -745,7 +753,7 @@ impl FileMetadataBuilder<'_> {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"order" {
                                 source.order = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding order")
                                     .parse()
                                     .expect("Failed to parse integer from `order`");
@@ -773,7 +781,7 @@ impl FileMetadataBuilder<'_> {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"order" {
                                 analyzer.order = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding order")
                                     .parse()
                                     .expect("Failed to parse integer from `order`");
@@ -801,7 +809,7 @@ impl FileMetadataBuilder<'_> {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"order" {
                                 detector.order = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding order")
                                     .parse()
                                     .expect("Failed to parse integer from `order`");
@@ -827,12 +835,12 @@ impl FileMetadataBuilder<'_> {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"id" {
                                 sample.id = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding id")
                                     .to_string();
                             } else if attr.key.as_ref() == b"name" {
                                 sample.name = Some(
-                                    attr.unescape_value()
+                                    attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                         .expect("Error decoding name")
                                         .to_string(),
                                 );
@@ -849,20 +857,25 @@ impl FileMetadataBuilder<'_> {
             b"dataProcessingList" => return Ok(MzMLParserState::DataProcessingList),
             b"dataProcessing" => {
                 let mut dp = DataProcessing::default();
+                let mut has_id = false;
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"id" {
                                 dp.id = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding id")
                                     .to_string();
+                                has_id = true;
                             }
                         }
                         Err(msg) => {
                             return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
+                }
+                if !has_id {
+                    log::error!("dataProcessing did not have an id attribute");
                 }
                 self.data_processings.push(dp);
                 return Ok(MzMLParserState::DataProcessing);
@@ -874,13 +887,13 @@ impl FileMetadataBuilder<'_> {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"order" {
                                 method.order = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding order")
                                     .parse()
                                     .expect("Failed to parse order");
                             } else if attr.key.as_ref() == b"softwareRef" {
                                 method.software_reference = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding softwareRef")
                                     .to_string();
                             }
@@ -898,32 +911,34 @@ impl FileMetadataBuilder<'_> {
                 return Ok(MzMLParserState::ProcessingMethod);
             }
             b"run" => {
+                let mut has_id = false;
                 for attr in event.attributes().flatten() {
                     match attr.key.as_ref() {
                         b"id" => {
                             self.run_id = Some(
-                                attr.unescape_value()
+                                attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding run ID")
                                     .to_string(),
                             );
+                            has_id = true;
                         }
                         b"defaultInstrumentConfigurationRef" => {
                             let value = attr
-                                .unescape_value()
+                                .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                 .expect("Error decoding default instrument configuration ID");
                             self.default_instrument_config =
                                 self.instrument_id_map.as_mut().map(|m| m.get(&value));
                         }
                         b"defaultSourceFileRef" => {
                             self.default_source_file = Some(
-                                attr.unescape_value()
+                                attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding default source file reference")
                                     .to_string(),
                             );
                         }
                         b"startTimeStamp" => {
                             let val = attr
-                                .unescape_value()
+                                .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                 .expect("Error decoding start timestamp");
                             let val = DateTime::parse_from_rfc3339(&val).inspect_err(
                                 |&e| {
@@ -935,13 +950,16 @@ impl FileMetadataBuilder<'_> {
                         _ => {}
                     }
                 }
+                if !has_id {
+                    log::error!("run did not have an id attribute");
+                }
                 return Ok(MzMLParserState::Run);
             }
             b"spectrumList" => {
                 for attr in event.attributes().flatten() {
                     match attr.key.as_ref() {
                         b"count" => {
-                            self.num_spectra = attr.unescape_value()
+                            self.num_spectra = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding spectrum list size")
                                     .parse()
                                     .map_err(|e| {
@@ -951,7 +969,7 @@ impl FileMetadataBuilder<'_> {
                         }
                         b"defaultDataProcessingRef" => {
                             let value = attr
-                                .unescape_value()
+                                .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                 .expect("Error decoding default instrument configuration ID");
                             self.default_data_processing = Some(value.to_string())
                         }
@@ -965,20 +983,25 @@ impl FileMetadataBuilder<'_> {
             }
             b"scanSettings" => {
                 let mut settings = ScanSettings::default();
+                let mut has_id = false;
                 for attr_parsed in event.attributes() {
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"id" {
                                 settings.id = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding id")
                                     .to_string();
+                                has_id = true;
                             }
                         }
                         Err(msg) => {
                             return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
+                }
+                if !has_id {
+                    log::error!("scanSettings did not have an id attribute");
                 }
                 self.scan_settings.push(settings);
                 return Ok(MzMLParserState::ScanSettings)
@@ -1084,7 +1107,7 @@ impl FileMetadataBuilder<'_> {
                             Ok(attr) => {
                                 if attr.key.as_ref() == b"ref" {
                                     ic.software_reference = attr
-                                        .unescape_value()
+                                        .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                         .expect("Error decoding software reference")
                                         .to_string();
                                 }
@@ -1102,7 +1125,7 @@ impl FileMetadataBuilder<'_> {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"ref" {
                                 let group_id = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding reference group")
                                     .to_string();
 
@@ -1132,7 +1155,7 @@ impl FileMetadataBuilder<'_> {
                             Ok(attr) => {
                                 if attr.key.as_ref() == b"ref" {
                                     settings.source_file_refs.push(attr
-                                        .unescape_value()
+                                        .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                         .expect("Error decoding software reference")
                                         .to_string());
                                 }
@@ -1242,7 +1265,7 @@ pub fn build_spectrum_index<R: SeekRead>(
     handle.seek(SeekFrom::Start(0))
         .expect("Failed to reset stream to beginning");
     let mut reader = Reader::from_reader(&mut *handle);
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     loop {
         match reader.read_event_into(buffer) {
             Ok(Event::Start(ref e)) => {
@@ -1254,13 +1277,13 @@ pub fn build_spectrum_index<R: SeekRead>(
                             Ok(attr) => {
                                 if attr.key.as_ref() == b"id" {
                                     let scan_id = attr
-                                        .unescape_value()
+                                        .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                         .expect("Error decoding spectrum id in streaming index")
                                         .to_string();
                                     // This count is off by 2 because somehow the < and > bytes are removed?
                                     spectrum_index.insert(
                                         scan_id,
-                                        (reader.buffer_position() - e.len() - 2) as u64,
+                                        reader.buffer_position() - e.len() as u64 - 2,
                                     );
                                     break;
                                 };
@@ -1283,14 +1306,14 @@ pub fn build_spectrum_index<R: SeekRead>(
         };
         buffer.clear();
     }
-    let offset = reader.buffer_position() as u64;
+    let offset = reader.buffer_position();
     trace!("Ended indexing scan at offset {offset}. Restoring starting position {start}");
     handle
         .seek(SeekFrom::Start(start))
         .expect("Failed to restore location");
     spectrum_index.init = true;
     if spectrum_index.is_empty() {
-        warn!("An index was built but no entries were found")
+        warn!("A spectrum index was built but no entries were found")
     }
     offset
 }

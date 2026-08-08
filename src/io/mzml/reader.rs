@@ -56,6 +56,10 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
 {
     /// Get the last isolation window being constructed
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow;
+
+    fn new_product(&mut self) -> &mut Product;
+    fn product_isolation_window_mut(&mut self) -> &mut IsolationWindow;
+
     /// Get the last scan window being constructed.
     fn scan_window_mut(&mut self) -> &mut ScanWindow;
 
@@ -243,6 +247,17 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                         ArrayType::DeconvolutedInverseReducedIonMobilityArray;
                     self.current_array_mut().unit = param.unit();
                 }
+                1003157 => {
+                    self.current_array_mut().name = ArrayType::ScanningQuadrupolePositionLowerBoundMZ;
+                    self.current_array_mut().unit = param.unit();
+                }
+                1003158 => {
+                    self.current_array_mut().name = ArrayType::ScanningQuadrupolePositionUpperBoundMZ;
+                    self.current_array_mut().unit = param.unit();
+                }
+                1003870 => {
+                    self.current_array_mut().name = ArrayType::IndexArray;
+                }
                 _ => {
                     self.current_array_mut().add_param(param.into());
                 }
@@ -272,9 +287,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
         };
     }
 
-    /// Put a parameter-like instance into the current [`IsolationWindow`]
-    fn fill_isolation_window(&mut self, param: Param) {
-        let window = self.isolation_window_mut();
+    fn populate_isolation_window(param: Param, window: &mut IsolationWindow) {
         match param.name.as_ref() {
             "isolation window target m/z" => {
                 window.target = param
@@ -349,6 +362,18 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
         }
     }
 
+    /// Put a parameter-like instance into the current [`IsolationWindow`]
+    fn fill_isolation_window(&mut self, param: Param) {
+        let window = self.isolation_window_mut();
+        Self::populate_isolation_window(param, window);
+    }
+
+    /// Put a parameter-like instance into the current [`IsolationWindow`] from a [`Product`]
+    fn fill_product_isolation_window(&mut self, param: Param) {
+        let window = self.product_isolation_window_mut();
+        Self::populate_isolation_window(param, window);
+    }
+
     /// Put a parameter-like instance into the current [`ScanWindow`]
     fn fill_scan_window(&mut self, param: Param) {
         let window = self.scan_window_mut();
@@ -395,7 +420,7 @@ pub struct MzMLSpectrumBuilder<
     pub params: ParamList,
     pub acquisition: Acquisition,
     pub precursor: Vec<Precursor>,
-
+    pub products: Vec<Product>,
     pub arrays: BinaryArrayMap,
     pub current_array: DataArray,
 
@@ -431,6 +456,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> Default for MzMLSpectrumBuild
             has_precursor: Default::default(),
             detail_level: Default::default(),
             instrument_id_map: Default::default(),
+            products: Default::default(),
             run_level_data_processing: None,
             spectrum_data_processing_ref: None,
             reference_param_groups: None,
@@ -513,7 +539,6 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
         };
     }
 
-
     fn borrow_metadata(
         mut self,
         instrument_configurations: &'inner mut IncrementingIdMap,
@@ -559,6 +584,9 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
         if self.has_precursor {
             description.precursor = self.precursor;
         }
+        if !self.products.is_empty() {
+            description.products = self.products;
+        }
 
         chromatogram.arrays = self.arrays;
     }
@@ -574,6 +602,15 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
         } else {
             self.precursor.last_mut().unwrap()
         }
+    }
+
+    fn product_isolation_window_mut(&mut self) -> &mut IsolationWindow {
+        self.products.last_mut().map(|v| &mut v.isolation_window).unwrap()
+    }
+
+    fn new_product(&mut self) -> &mut Product {
+        self.products.push(Product::default());
+        self.products.last_mut().unwrap()
     }
 }
 
@@ -747,7 +784,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                     match attr_parsed {
                         Ok(attr) => match attr.key.as_ref() {
                             b"id" => {
-                                self.entry_id = match attr.unescape_value()
+                                self.entry_id = match attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .map(|v| v.to_string())
                                     .or_else(|_| -> Result<String, quick_xml::Error> {
                                         log::trace!("Detected non-UTF8 character in spectrum id");
@@ -799,10 +836,10 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                                     .instrument_id_map
                                     .as_mut()
                                     .expect("An instrument ID map was not provided")
-                                    .get(&attr.unescape_value().expect("Error decoding id"));
+                                    .get(&attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).expect("Error decoding id"));
                             } else if attr.key.as_ref() == b"spectrumRef" {
                                 let sref =
-                                    attr.unescape_value().expect("Error decoding spectrumRef");
+                                    attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).expect("Error decoding spectrumRef");
                                 scan_event.spectrum_reference = Some(sref.into());
                             }
                         }
@@ -837,7 +874,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                         Ok(attr) => {
                             if attr.key.as_ref() == b"spectrumRef" {
                                 self.precursor_mut().precursor_id = Some(
-                                    attr.unescape_value()
+                                    attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                         .expect("Error decoding id")
                                         .to_string(),
                                 );
@@ -850,8 +887,19 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                 }
                 return Ok(MzMLParserState::Precursor);
             }
+            b"productList" => {
+                return Ok(MzMLParserState::ProductList);
+            }
+            b"product" => {
+                self.new_product();
+                return Ok(MzMLParserState::Product);
+            }
             b"isolationWindow" => {
-                return Ok(MzMLParserState::IsolationWindow);
+                if matches!(state, MzMLParserState::Product) {
+                    return Ok(MzMLParserState::ProductIsolationWindow)
+                } else {
+                    return Ok(MzMLParserState::IsolationWindow);
+                }
             }
             b"selectedIonList" => {
                 return Ok(MzMLParserState::SelectedIonList);
@@ -871,7 +919,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                     match attr_parsed {
                         Ok(attr) => {
                             if attr.key.as_ref() == b"dataProcessingRef" {
-                                match attr.unescape_value() {
+                                match attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                                     Ok(v) => {
                                         self.current_array.set_data_processing_reference(Some(v.into()));
                                         dp_set = true;
@@ -908,7 +956,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                         Ok(attr) => match attr.key.as_ref() {
                             b"id" => {
                                 self.entry_id = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .map(|v| v.to_string())
                                     .or_else(|_| -> Result<String, quick_xml::Error> {
                                         log::trace!("Detected non-UTF8 character in chromatogram id");
@@ -950,7 +998,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                         Ok(attr) => {
                             if attr.key.as_ref() == b"ref" {
                                 let group_id = attr
-                                    .unescape_value()
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                                     .expect("Error decoding reference group")
                                     .to_string();
                                 if let Some(ref_param_groups) = self.reference_param_groups {
@@ -1037,6 +1085,9 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                             MzMLParserState::IsolationWindow => {
                                 self.fill_isolation_window(param.into());
                             }
+                            MzMLParserState::ProductIsolationWindow => {
+                                self.fill_product_isolation_window(param.into());
+                            }
                             MzMLParserState::SelectedIon | MzMLParserState::SelectedIonList => {
                                 self.fill_selected_ion(param.into());
                             }
@@ -1077,7 +1128,9 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                             MzMLParserState::Precursor | MzMLParserState::PrecursorList => {
                                 warn!("cvParam found for {:?} where none are allowed", &state);
                             }
-                            _ => {}
+                            _ => {
+                                trace!("Skipping parameter found for {state:?}");
+                            }
                         }
                     }
                     Err(err) => return Err(err),
@@ -1099,7 +1152,19 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
             b"scanWindowList" => return Ok(MzMLParserState::Scan),
             b"precursorList" => return Ok(MzMLParserState::Spectrum),
             b"precursor" => return Ok(MzMLParserState::PrecursorList),
-            b"isolationWindow" => return Ok(MzMLParserState::Precursor),
+            b"isolationWindow" => {
+                if matches!(state, MzMLParserState::ProductIsolationWindow) {
+                    return Ok(MzMLParserState::Product)
+                } else {
+                    return Ok(MzMLParserState::Precursor)
+                }
+            },
+            b"product" => {
+                return Ok(MzMLParserState::ProductList)
+            }
+            b"productList" => {
+                return Ok(MzMLParserState::Spectrum)
+            }
             b"selectedIonList" => return Ok(MzMLParserState::Precursor),
             b"selectedIon" => return Ok(MzMLParserState::SelectedIonList),
             b"activation" => return Ok(MzMLParserState::Precursor),
@@ -1128,9 +1193,11 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
 
     fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult {
         if state == MzMLParserState::Binary && self.detail_level != DetailLevel::MetadataOnly {
-            let bin = event
-                .unescape()
-                .map_err(|e| MzMLParserError::XMLError(state, e))?;
+            let decoded = event
+                .decode()
+                .map_err(|e| MzMLParserError::XMLError(state, e.into()))?;
+            let bin = quick_xml::escape::unescape(&decoded)
+                .map_err(|e| MzMLParserError::XMLError(state, e.into()))?;
             self.current_array.data = Bytes::from(bin.as_bytes());
         }
         Ok(state)
@@ -1270,14 +1337,14 @@ impl<
         Self::with_buffer_capacity_and_detail_level(file, BUFFER_SIZE, DetailLevel::Full)
     }
 
-    pub fn with_buffer_capacity_and_detail_level(
-        file: R,
-        capacity: usize,
-        detail_level: DetailLevel,
+    /// Create a new [`MzMLReaderType`] instance from an [`io::BufReader`] instance directly
+    /// and parses the metadata section of the file.
+    pub fn from_buffered_and_detail_level(
+        file: BufReader<R>,
+        detail_level: DetailLevel
     ) -> MzMLReaderType<R, C, D> {
-        let handle = BufReader::with_capacity(capacity, file);
         let mut inst = MzMLReaderType {
-            handle,
+            handle: file,
             state: MzMLParserState::Start,
             error: None,
             buffer: Bytes::new(),
@@ -1306,11 +1373,23 @@ impl<
         inst
     }
 
+    /// Create a new [`MzMLReaderType`] instance, wrapping the [`io::Read`] handle
+    /// provided with an [`io::BufReader`] with the requested buffer size and [`DetailLevel`],
+    /// and parses the metadata section of the file.
+    pub fn with_buffer_capacity_and_detail_level(
+        file: R,
+        capacity: usize,
+        detail_level: DetailLevel,
+    ) -> MzMLReaderType<R, C, D> {
+        let handle = BufReader::with_capacity(capacity, file);
+        Self::from_buffered_and_detail_level(handle, detail_level)
+    }
+
     /**Parse the metadata section of the file using [`FileMetadataBuilder`]
      */
     fn parse_metadata(&mut self) -> Result<(), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let mut accumulator = FileMetadataBuilder {
             instrument_id_map: Some(&mut self.instrument_id_map),
             ..Default::default()
@@ -1361,7 +1440,7 @@ impl<
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
-                    match accumulator.empty_element(e, self.state, reader.buffer_position()) {
+                    match accumulator.empty_element(e, self.state, reader.buffer_position() as usize) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -1375,10 +1454,10 @@ impl<
                     break;
                 }
                 Err(err) => match &err {
-                    XMLError::EndEventMismatch {
+                    XMLError::IllFormed(quick_xml::errors::IllFormedError::MismatchedEndTag {
                         expected,
                         found: _found,
-                    } => {
+                    }) => {
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
@@ -1450,7 +1529,7 @@ impl<
         }
 
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let mut accumulator = accumulator
             .borrow_metadata(&mut self.instrument_id_map, &self.reference_param_groups);
         accumulator.set_run_data_processing(self.run.default_data_processing_id.clone().map(|v| v.into_boxed_str()));
@@ -1506,7 +1585,7 @@ impl<
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
-                    match accumulator.empty_element(e, self.state, reader.buffer_position()) {
+                    match accumulator.empty_element(e, self.state, reader.buffer_position() as usize) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -1519,10 +1598,10 @@ impl<
                     break;
                 }
                 Err(err) => match &err {
-                    XMLError::EndEventMismatch {
+                    XMLError::IllFormed(quick_xml::errors::IllFormedError::MismatchedEndTag {
                         expected,
                         found: _found,
-                    } => {
+                    }) => {
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
@@ -1612,6 +1691,7 @@ impl<
             Err(err) => {
                 match &err {
                     MzMLParserError::EOF => {},
+                    MzMLParserError::IncompleteElementError(_err, MzMLParserState::Resume) => {}
                     err => log::error!("Error while reading mzML spectrum: {err}")
                 };
                 Err(err)
@@ -1621,12 +1701,18 @@ impl<
 
     /// Read the next spectrum directly. Used to implement iteration.
     pub fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
-        if self.state == MzMLParserState::EOF {
+        if self.state >= MzMLParserState::SpectrumListDone {
             return None;
         }
         let mut spectrum = MultiLayerSpectrum::<C, D>::default();
         match self.read_into(&mut spectrum) {
-            Ok(_sz) => Some(spectrum),
+            Ok(_sz) => {
+                if !matches!(self.state, MzMLParserState::SpectrumDone) {
+                    None
+                } else {
+                    Some(spectrum)
+                }
+            },
             Err(err) => {
                 match err {
                     MzMLParserError::EOF => {},
@@ -1692,7 +1778,7 @@ impl<
             Err(err) => return Err(MzMLParserError::IOError(self.state, err)),
         };
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let matched_tag = match reader.read_event_into(&mut self.buffer) {
             Ok(event) => match event {
                 Event::Start(ref e) => {
@@ -2095,7 +2181,7 @@ impl<
             .expect("Failed to seek to the index offset");
 
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
 
         loop {
             match reader.read_event_into(&mut self.buffer) {
@@ -2159,6 +2245,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
     fn construct_index_from_stream(&mut self) -> u64 {
         trace!("Constructing index from stream");
         if let Ok(count) = self.read_index_from_end() {
+            trace!("Read {count} index entries from the end of the file");
             count
         } else {
             self.seek(SeekFrom::Start(0)).unwrap();
@@ -2304,11 +2391,11 @@ mod test {
         let comp = config.iter().find_map(|c| c.mass_analyzer()).unwrap();
         assert_eq!(
             comp.name(),
-            "fourier transform ion cyclotron resonance mass spectrometer"
+            "fourier transform ion cyclotron resonance"
         );
         assert_eq!(
             config.components.get(1).unwrap().name(),
-            Some("fourier transform ion cyclotron resonance mass spectrometer")
+            Some("fourier transform ion cyclotron resonance")
         );
 
         let comp = config.iter().find_map(|c| c.detector()).unwrap();
@@ -2466,7 +2553,7 @@ mod test {
         let mut index = IndexedMzMLIndexExtractor::new();
         if let Ok(offset) = index.find_offset_from_reader(&mut f) {
             if let Some(offset) = offset {
-                assert_eq!(offset, 5116653);
+                assert_eq!(offset, 3417691);
             } else {
                 panic!("Failed to parse offset from element")
             }
@@ -2617,7 +2704,7 @@ mod test {
             .for_each(|(_, v)| {
                 assert!(matches!(
                     v.compression,
-                    BinaryCompressionType::NoCompression
+                    BinaryCompressionType::Zlib
                 ));
             });
 
@@ -2631,7 +2718,7 @@ mod test {
             .for_each(|(_, v)| {
                 assert!(matches!(
                     v.compression,
-                    BinaryCompressionType::NoCompression
+                    BinaryCompressionType::Zlib
                 ));
                 assert!(v.data.is_empty());
             });

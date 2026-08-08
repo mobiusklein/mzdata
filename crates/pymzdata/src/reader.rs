@@ -92,8 +92,9 @@ impl PyDetailLevel {
 
 /// A file-based mass spectrometry reader.
 ///
-/// Supports mzML, MGF, Thermo RAW, and Bruker TDF formats. Use as a context
-/// manager (``with`` block) for automatic resource cleanup.
+/// Supports mzML (including indexed mzML), MGF, Bruker TDF, and imzML formats.
+/// Thermo RAW is supported when its native runtime dependencies are available.
+/// Use as a context manager (``with`` block) for automatic resource cleanup.
 ///
 /// Example::
 ///
@@ -195,6 +196,13 @@ impl PyMZReader {
             .map(|s| s.into()))
     }
 
+    /// Reset the reader, returning the stream to the starting position, if possible.
+    fn reset(&mut self) -> PyResult<()> {
+        self.require_open()?;
+        self.inner.as_mut().map(|r| r.reset());
+        Ok(())
+    }
+
     // ---- Detail level property --------------------------------------------
 
     /// The detail level used when loading spectra.
@@ -219,7 +227,12 @@ impl PyMZReader {
 
     /// Convert this reader to an IMMZReader for ion mobility frame access.
     ///
-    /// Raises ``RuntimeError`` if the file does not contain ion mobility data.
+    /// This *consumes* the reader: the underlying file reader is moved into the returned
+    /// ``IMMZReader``, leaving this ``MZReader`` closed (``closed()`` becomes ``True`` and any
+    /// further use raises ``RuntimeError``).
+    ///
+    /// Raises ``RuntimeError`` if the reader is already closed, or if the file does not contain ion
+    /// mobility data.
     fn into_frame_reader(&mut self) -> PyResult<PyIMMZReader> {
         let inner = self.inner.take().ok_or_else(|| {
             PyRuntimeError::new_err("Reader is already closed")
@@ -418,6 +431,13 @@ impl PyIMMZReader {
     }
 
     // ---- Random access ----------------------------------------------------
+
+    /// Reset the reader, returning the stream to the starting position, if possible.
+    fn reset(&mut self) -> PyResult<()> {
+        self.require_open()?;
+        self.inner.as_mut().map(|r| r.reset());
+        Ok(())
+    }
 
     /// Retrieve a frame by its native ID string.
     fn get_by_id(&mut self, id: &str) -> PyResult<Option<PyIonMobilityFrame>> {

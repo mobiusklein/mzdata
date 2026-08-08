@@ -2,7 +2,11 @@ use std::any::Any;
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
-use std::sync::{mpsc::sync_channel, Arc, atomic::{AtomicU64, Ordering as AtomicOrdering}};
+use std::sync::{
+    atomic::{AtomicU64, Ordering as AtomicOrdering},
+    mpsc::sync_channel,
+    Arc,
+};
 use std::thread;
 use std::time;
 
@@ -32,9 +36,11 @@ fn compression_parser(compression: &str) -> Result<BinaryCompressionType, String
         compression.to_string()
     };
 
-    BinaryCompressionType::COMPRESSION_METHODS.iter().find(|x| {
-        x.as_param().unwrap().name() == compression
-    }).copied().ok_or_else(|| compression.to_string())
+    BinaryCompressionType::COMPRESSION_METHODS
+        .iter()
+        .find(|x| x.as_param().unwrap().name() == compression)
+        .copied()
+        .ok_or_else(|| compression.to_string())
 }
 
 #[derive(Debug, Clone, Parser)]
@@ -44,7 +50,7 @@ pub struct MZConvert {
     #[arg()]
     pub outpath: String,
 
-    #[arg(short='b', long, default_value_t=8192)]
+    #[arg(short = 'b', long, default_value_t = 8192)]
     pub buffer_size: usize,
 
     #[arg(long, value_parser=compression_parser, default_value="zlib compression")]
@@ -91,7 +97,7 @@ impl MZConvert {
         mut writer: W,
     ) -> io::Result<()> {
         let (send, recv) = sync_channel(self.buffer_size);
-        let buffered= Arc::new(AtomicU64::default());
+        let buffered = Arc::new(AtomicU64::default());
         let buffered_w = Arc::clone(&buffered);
         let reader_handle = thread::spawn(move || {
             reader.enumerate().for_each(|(i, s)| {
@@ -111,9 +117,10 @@ impl MZConvert {
             for s in recv.iter() {
                 let i = s.index();
                 buffered_w.fetch_sub(1, AtomicOrdering::SeqCst);
-                writer.write_owned(s).inspect_err(|e| {
-                    log::error!("Failed to write spectrum {i}: {e}")
-                }).unwrap();
+                writer
+                    .write_owned(s)
+                    .inspect_err(|e| log::error!("Failed to write spectrum {i}: {e}"))
+                    .unwrap();
             }
             writer.close().unwrap();
         });
@@ -190,7 +197,6 @@ impl MZConvert {
                     self.ion_mobility_compression,
                 );
             }
-
         }
     }
 }
@@ -251,7 +257,7 @@ impl MassSpectrometryReadWriteProcess<CentroidPeak, DeconvolutedPeak> for MZConv
                 Default::default()
             } else {
                 info!("Computing checksum for {}", pb.display());
-                
+
                 checksum_file(&pb)?
             };
             let has_already = reader

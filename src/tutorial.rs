@@ -2,3 +2,4 @@
 pub mod reading;
 pub mod writing;
 pub mod spectrum;
+pub mod ion_mobility;

@@ -202,6 +202,8 @@ you want to use.
 
 #### Using `mz_read!`
 
+**NOTE**: This method is not recommended for anything other than throw-away code. It does not interact with feature flags nicely.
+
 When you don't _need_ to keep the reader around beyond the current scope, the [`mz_read!`](crate::mz_read) macro can substantially simplify. It is like [`MZReader`], but without the trivial dispatch overhead, provided that the reader instance only lives as long as the enclosing scope:
 
 ```rust

@@ -1,15 +1,15 @@
 use std::{
     collections::HashMap,
+    fs,
     io::{self, BufReader, Read, Seek, SeekFrom},
     marker::PhantomData,
-    mem, fs
+    mem,
 };
 
 use log::{trace, warn};
 use quick_xml::{
     events::{BytesEnd, BytesStart, BytesText, Event},
-    Error as XMLError,
-    Reader,
+    Error as XMLError, Reader,
 };
 use uuid::Uuid;
 
@@ -19,24 +19,26 @@ use filename;
 use crate::{
     io::{
         mzml::{
-            CVParamParse, EntryType, FileMetadataBuilder, IncrementingIdMap, MzMLParserError, MzMLParserState, MzMLSAX, MzMLSpectrumBuilder, ParserResult, SpectrumBuilding
-        }, utils::DetailLevel, OffsetIndex
+            CVParamParse, EntryType, FileMetadataBuilder, IncrementingIdMap, MzMLParserError,
+            MzMLParserState, MzMLSAX, MzMLSpectrumBuilder, ParserResult, SpectrumBuilding,
+        },
+        utils::DetailLevel,
+        OffsetIndex,
     },
     meta::{
-        DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun,
-        Sample, ScanSettings, Software,
+        DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample,
+        ScanSettings, Software,
     },
     params::{ControlledVocabulary, Param, ParamValue},
     prelude::*,
     spectrum::{
-        bindata::{BuildFromArrayMap, BinaryCompressionType, ArrayType},
+        bindata::{ArrayType, BinaryCompressionType, BuildFromArrayMap},
         chromatogram::Chromatogram,
         spectrum_types::MultiLayerSpectrum,
         IsolationWindow, Precursor, ScanWindow, SelectedIon,
     },
 };
 use mzpeaks::{prelude::*, CentroidPeak, DeconvolutedPeak};
-
 
 /// Represents the two data storage modes in imzML
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,7 +49,6 @@ pub enum IbdDataMode {
     Processed,
     Unknown,
 }
-
 
 #[derive(Debug, Default)]
 pub struct ImzMLFileMetadata {
@@ -68,7 +69,6 @@ pub struct DataRangeQuery {
     pub length: usize,
     pub encoded_length: Option<usize>,
 }
-
 
 /// Check if the buffer contains an imzML file by looking for the IMS controlled vocabulary
 /// There isn't AFAIK a formal mechanism to identify imzML files other than the presence of
@@ -91,7 +91,9 @@ pub fn is_imzml(buffer: &[u8]) -> bool {
                         for attr in e.attributes() {
                             if let Ok(attr) = attr {
                                 if attr.key.as_ref() == b"id" {
-                                    if let Ok(value) = attr.unescape_value() {
+                                    if let Ok(value) =
+                                        attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                    {
                                         if value.as_ref() == "IMS" {
                                             return true;
                                         }
@@ -112,7 +114,7 @@ pub fn is_imzml(buffer: &[u8]) -> bool {
             Ok(Event::Eof) => return false,
             Ok(_) => {}
             Err(e) => {
-                log::warn!("XML parsing error while checking for imzML format: {}", e);
+                log::debug!("XML parsing error while checking for imzML format: {}", e);
                 return false;
             }
         }
@@ -166,63 +168,98 @@ impl ImzmlMetadataBuilder<'_> {
                 match &state {
                     MzMLParserState::FileContents => {
                         // Try to handle as IMS parameter first
-                        match MzMLSpectrumBuilder::<CentroidPeak, DeconvolutedPeak>::handle_param(event, reader_position, state) {
+                        match MzMLSpectrumBuilder::<CentroidPeak, DeconvolutedPeak>::handle_param(
+                            event,
+                            reader_position,
+                            state,
+                        ) {
                             Ok(param) => {
-                                if param.is_controlled() 
-                                    && param.controlled_vocabulary == Some(ControlledVocabulary::IMS) 
+                                if param.is_controlled()
+                                    && param.controlled_vocabulary
+                                        == Some(ControlledVocabulary::IMS)
                                 {
                                     // Handle IMS-specific parameters
                                     match param.accession.unwrap() {
                                         1000080 => {
                                             // Handle UUID...
-                                            let uuid_string = param.value.as_str().trim_matches(|c| c == '{' || c == '}').to_string();
+                                            let uuid_string = param
+                                                .value
+                                                .as_str()
+                                                .trim_matches(|c| c == '{' || c == '}')
+                                                .to_string();
                                             match Uuid::parse_str(&uuid_string) {
                                                 Ok(uuid) => self.imzml_metadata.uuid = Some(uuid),
-                                                Err(e) => warn!("Failed to parse UUID '{}': {}", uuid_string, e),
+                                                Err(e) => warn!(
+                                                    "Failed to parse UUID '{}': {}",
+                                                    uuid_string, e
+                                                ),
                                             }
                                         }
                                         1000031 => {
-                                            self.imzml_metadata.data_mode = Some(IbdDataMode::Processed);
+                                            self.imzml_metadata.data_mode =
+                                                Some(IbdDataMode::Processed);
                                         }
                                         1000030 => {
-                                            self.imzml_metadata.data_mode = Some(IbdDataMode::Continuous);
+                                            self.imzml_metadata.data_mode =
+                                                Some(IbdDataMode::Continuous);
                                         }
                                         1000090 => {
-                                            self.imzml_metadata.ibd_checksum = Some(param.value.to_string());
-                                            self.imzml_metadata.ibd_checksum_type = Some("MD5".to_string());
+                                            self.imzml_metadata.ibd_checksum =
+                                                Some(param.value.to_string());
+                                            self.imzml_metadata.ibd_checksum_type =
+                                                Some("MD5".to_string());
                                         }
                                         1000091 => {
-                                            self.imzml_metadata.ibd_checksum = Some(param.value.to_string());
-                                            self.imzml_metadata.ibd_checksum_type = Some("SHA1".to_string());
+                                            self.imzml_metadata.ibd_checksum =
+                                                Some(param.value.to_string());
+                                            self.imzml_metadata.ibd_checksum_type =
+                                                Some("SHA1".to_string());
                                         }
                                         1000092 => {
-                                            self.imzml_metadata.ibd_checksum = Some(param.value.to_string());
-                                            self.imzml_metadata.ibd_checksum_type = Some("SHA256".to_string());
+                                            self.imzml_metadata.ibd_checksum =
+                                                Some(param.value.to_string());
+                                            self.imzml_metadata.ibd_checksum_type =
+                                                Some("SHA256".to_string());
                                         }
                                         1000070 => {
-                                            self.imzml_metadata.ibd_file_name = Some(param.value.to_string());
+                                            self.imzml_metadata.ibd_file_name =
+                                                Some(param.value.to_string());
                                         }
                                         _ => {
                                             // Other IMS parameters - delegate to base builder
-                                            return self.mzml_metadata_builder.empty_element(event, state, reader_position);
+                                            return self.mzml_metadata_builder.empty_element(
+                                                event,
+                                                state,
+                                                reader_position,
+                                            );
                                         }
                                     }
                                     return Ok(state);
                                 } else {
                                     // Non-IMS parameters - delegate to base builder
-                                    return self.mzml_metadata_builder.empty_element(event, state, reader_position);
+                                    return self.mzml_metadata_builder.empty_element(
+                                        event,
+                                        state,
+                                        reader_position,
+                                    );
                                 }
                             }
                             Err(err) => return Err(err),
                         }
                     }
                     _ => {
-                        return self.mzml_metadata_builder.empty_element(event, state, reader_position);
+                        return self.mzml_metadata_builder.empty_element(
+                            event,
+                            state,
+                            reader_position,
+                        );
                     }
                 }
             }
             _ => {
-                return self.mzml_metadata_builder.empty_element(event, state, reader_position);
+                return self
+                    .mzml_metadata_builder
+                    .empty_element(event, state, reader_position);
             }
         }
     }
@@ -266,7 +303,6 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
     pub fn set_entry_type(&mut self, entry_type: EntryType) {
         self.inner.set_entry_type(entry_type)
     }
-
 }
 
 impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap>
@@ -284,13 +320,14 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
         self.inner.set_run_data_processing(run_data_processing);
     }
 
-
     fn borrow_metadata(
         mut self,
         instrument_id_map: &'a mut IncrementingIdMap,
         reference_param_groups: &'a HashMap<String, Vec<Param>>,
     ) -> Self {
-        self.inner = self.inner.borrow_metadata(instrument_id_map, reference_param_groups);
+        self.inner = self
+            .inner
+            .borrow_metadata(instrument_id_map, reference_param_groups);
         self
     }
 
@@ -324,6 +361,14 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
 
     fn isolation_window_mut(&mut self) -> &mut IsolationWindow {
         self.inner.isolation_window_mut()
+    }
+
+    fn product_isolation_window_mut(&mut self) -> &mut IsolationWindow {
+        self.inner.product_isolation_window_mut()
+    }
+
+    fn new_product(&mut self) -> &mut crate::spectrum::Product {
+        self.inner.new_product()
     }
 }
 
@@ -415,9 +460,7 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
         let elt_name = event.name();
         match elt_name.as_ref() {
             b"binaryDataArray" => {
-                if self.current_ibd_param.offset == 0
-                    && self.current_ibd_param.length == 0
-                {
+                if self.current_ibd_param.offset == 0 && self.current_ibd_param.length == 0 {
                     return Err(MzMLParserError::IncompleteElementError(
                         "The external data offset and length were missing".to_owned(),
                         MzMLParserState::BinaryDataArray,
@@ -428,7 +471,7 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
                 let array = self.inner.current_array_mut();
 
                 // Store IBD info as parameters in the array with proper IMS CV tagging
-                use crate::params::{Param, ControlledVocabulary};
+                use crate::params::{ControlledVocabulary, Param};
                 if array.params.is_none() {
                     array.params = Some(Box::new(Vec::new()));
                 }
@@ -460,11 +503,11 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
                     );
                 }
                 if matches!(array.name, ArrayType::Unknown) {
-                        return Err(MzMLParserError::IncompleteElementError(
+                    return Err(MzMLParserError::IncompleteElementError(
                             format!("Binary data array type was not specified. Array has unit {:?} but no array type cvParam (MS:1000514 for m/z or MS:1000515 for intensity)", array.unit),
                             MzMLParserState::BinaryDataArray,
                         ));
-                    };
+                };
                 // Don't read IBD data here - just store the metadata
             }
             _ => {}
@@ -473,11 +516,7 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
         self.inner.end_element(event, state)
     }
 
-    fn text(
-        &mut self,
-        event: &BytesText,
-        state: MzMLParserState,
-    ) -> ParserResult {
+    fn text(&mut self, event: &BytesText, state: MzMLParserState) -> ParserResult {
         // For imzML, binary data comes from IBD file, not XML content
         // Skip any text content in <binary> tags
         if state == MzMLParserState::Binary {
@@ -588,33 +627,30 @@ impl<
         inst
     }
 
-
-
     /// Attempt to open the IBD file based on metadata or by deriving the filename
     fn check_ibd_file(&mut self) -> io::Result<()> {
-            
-            // Validate UUID if available
-            if let Some(expected_uuid) = &self.imzml_metadata.uuid {
-                let mut ibd_uuid_bytes = [0u8; 16];
-                self.ibd_handle.read_exact(&mut ibd_uuid_bytes)?;
-                let ibd_uuid = Uuid::from_bytes(ibd_uuid_bytes);
-                if *expected_uuid != ibd_uuid {
-                    warn!(
-                        "UUID mismatch between imzML ({}) and IBD ({})",
-                        expected_uuid, ibd_uuid
-                    );
-                }
+        // Validate UUID if available
+        if let Some(expected_uuid) = &self.imzml_metadata.uuid {
+            let mut ibd_uuid_bytes = [0u8; 16];
+            self.ibd_handle.read_exact(&mut ibd_uuid_bytes)?;
+            let ibd_uuid = Uuid::from_bytes(ibd_uuid_bytes);
+            if *expected_uuid != ibd_uuid {
+                warn!(
+                    "UUID mismatch between imzML ({}) and IBD ({})",
+                    expected_uuid, ibd_uuid
+                );
             }
-            // TODO check that the checksum matches if available
-            
-            Ok(())
         }
+        // TODO check that the checksum matches if available
+
+        Ok(())
+    }
 
     /**Parse the metadata section of the file using [`ImzmlMetadataBuilder`]
      */
     fn parse_metadata(&mut self) -> Result<(), MzMLParserError> {
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let mut accumulator = ImzmlMetadataBuilder {
             mzml_metadata_builder: FileMetadataBuilder {
                 instrument_id_map: Some(&mut self.instrument_id_map),
@@ -668,7 +704,11 @@ impl<
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
-                    match accumulator.empty_element(e, self.state, reader.buffer_position()) {
+                    match accumulator.empty_element(
+                        e,
+                        self.state,
+                        reader.buffer_position() as usize,
+                    ) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -682,10 +722,10 @@ impl<
                     break;
                 }
                 Err(err) => match &err {
-                    XMLError::EndEventMismatch {
+                    XMLError::IllFormed(quick_xml::errors::IllFormedError::MismatchedEndTag {
                         expected,
                         found: _found,
-                    } => {
+                    }) => {
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
@@ -728,12 +768,13 @@ impl<
         self.reference_param_groups = accumulator.mzml_metadata_builder.reference_param_groups;
         self.scan_settings = accumulator.mzml_metadata_builder.scan_settings;
         self.run.id = accumulator.mzml_metadata_builder.run_id;
-        self.run.default_instrument_id = accumulator.mzml_metadata_builder.default_instrument_config;
+        self.run.default_instrument_id =
+            accumulator.mzml_metadata_builder.default_instrument_config;
         self.run.default_source_file_id = accumulator.mzml_metadata_builder.default_source_file;
         self.run.start_time = accumulator.mzml_metadata_builder.start_timestamp;
-        self.run.default_data_processing_id = accumulator.mzml_metadata_builder.default_data_processing;
+        self.run.default_data_processing_id =
+            accumulator.mzml_metadata_builder.default_data_processing;
         self.num_spectra = accumulator.mzml_metadata_builder.num_spectra;
-
 
         let imzml_metadata = accumulator.imzml_metadata;
 
@@ -745,7 +786,7 @@ impl<
             )
         })?;
         self.imzml_metadata.data_mode = Some(data_mode);
-        
+
         let uuid = imzml_metadata.uuid.ok_or_else(|| {
             MzMLParserError::IncompleteElementError(
                 "Missing required imzML UUID (IMS:1000080)".to_string(),
@@ -753,7 +794,7 @@ impl<
             )
         })?;
         self.imzml_metadata.uuid = Some(uuid);
-        
+
         let checksum = imzml_metadata.ibd_checksum.ok_or_else(|| {
             MzMLParserError::IncompleteElementError(
                 "Missing required imzML IBD checksum".to_string(),
@@ -763,9 +804,13 @@ impl<
         let checksum_for_log = checksum.clone();
         self.imzml_metadata.ibd_checksum = Some(checksum);
         self.imzml_metadata.ibd_checksum_type = imzml_metadata.ibd_checksum_type;
-        
-        log::debug!("Parsed imzML metadata - Mode: {:?}, UUID: {}, Checksum: {}", 
-                   data_mode, uuid, checksum_for_log);
+
+        log::debug!(
+            "Parsed imzML metadata - Mode: {:?}, UUID: {}, Checksum: {}",
+            data_mode,
+            uuid,
+            checksum_for_log
+        );
 
         match self.state {
             MzMLParserState::SpectrumDone | MzMLParserState::ChromatogramDone => Ok(()),
@@ -792,9 +837,17 @@ impl<
         }
 
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
-        accumulator = accumulator.borrow_metadata(&mut self.instrument_id_map, &mut self.reference_param_groups);
-        accumulator.set_run_data_processing(self.run.default_data_processing_id.clone().map(|v| v.into_boxed_str()));
+        reader.config_mut().trim_text(true);
+        accumulator = accumulator.borrow_metadata(
+            &mut self.instrument_id_map,
+            &mut self.reference_param_groups,
+        );
+        accumulator.set_run_data_processing(
+            self.run
+                .default_data_processing_id
+                .clone()
+                .map(|v| v.into_boxed_str()),
+        );
         let mut offset: usize = 0;
 
         macro_rules! err_state {
@@ -847,7 +900,11 @@ impl<
                     };
                 }
                 Ok(Event::Empty(ref e)) => {
-                    match accumulator.empty_element(e, self.state, reader.buffer_position()) {
+                    match accumulator.empty_element(
+                        e,
+                        self.state,
+                        reader.buffer_position() as usize,
+                    ) {
                         Ok(state) => {
                             self.state = state;
                         }
@@ -860,10 +917,10 @@ impl<
                     break;
                 }
                 Err(err) => match &err {
-                    XMLError::EndEventMismatch {
+                    XMLError::IllFormed(quick_xml::errors::IllFormedError::MismatchedEndTag {
                         expected,
                         found: _found,
-                    } => {
+                    }) => {
                         if expected.is_empty() && self.state == MzMLParserState::Resume {
                             continue;
                         } else {
@@ -910,9 +967,7 @@ impl<
                 );
                 Ok((accumulator, offset))
             }
-            MzMLParserState::EOF => {
-                Err(MzMLParserError::EOF)
-            }
+            MzMLParserState::EOF => Err(MzMLParserError::EOF),
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
@@ -939,10 +994,9 @@ impl<
             }
             _ => {}
         }
-        
+
         let detail_level = self.detail_level;
         let accumulator = ImzMLSpectrumBuilder::<C, D>::with_detail_level(detail_level);
-
 
         match self._parse_into(accumulator) {
             Ok((accumulator, sz)) => {
@@ -959,42 +1013,51 @@ impl<
             }
             Err(err) => {
                 match &err {
-                    MzMLParserError::EOF => {},
-                    err => log::error!("Error while reading ImzML spectrum: {err}")
+                    MzMLParserError::EOF => {}
+                    err => log::error!("Error while reading ImzML spectrum: {err}"),
                 };
                 Err(err)
-            },
+            }
         }
     }
 
-    fn load_ibd_arrays(&mut self, spectrum: &mut MultiLayerSpectrum<C, D>) -> Result<(), MzMLParserError> {
+    fn load_ibd_arrays(
+        &mut self,
+        spectrum: &mut MultiLayerSpectrum<C, D>,
+    ) -> Result<(), MzMLParserError> {
         if let Some(ref mut arrays) = spectrum.arrays {
             for array in arrays.byte_buffer_map.values_mut() {
                 // Look for IBD parameters we stored during parsing
-                let offset_param = array.params.as_ref()
-                    .and_then(|params| params.iter()
-                        .find(|p| p.accession == Some(1000102))  // IMS:1000102 external offset
-                        .and_then(|p| p.value.to_u64().ok()));
-                    
-                let length_param = array.params.as_ref()
-                    .and_then(|params| params.iter()
-                        .find(|p| p.accession == Some(1000103))  // IMS:1000103 external array length
-                        .and_then(|p| p.value.to_u64().ok()));
+                let offset_param = array.params.as_ref().and_then(|params| {
+                    params
+                        .iter()
+                        .find(|p| p.accession == Some(1000102)) // IMS:1000102 external offset
+                        .and_then(|p| p.value.to_u64().ok())
+                });
+
+                let length_param = array.params.as_ref().and_then(|params| {
+                    params
+                        .iter()
+                        .find(|p| p.accession == Some(1000103)) // IMS:1000103 external array length
+                        .and_then(|p| p.value.to_u64().ok())
+                });
 
                 if let (Some(offset), Some(length)) = (offset_param, length_param) {
                     // Read from IBD file
                     use std::io::{Seek, SeekFrom};
-                    self.ibd_handle.seek(SeekFrom::Start(offset))
-                        .map_err(|e| MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e))?;
-                    
+                    self.ibd_handle.seek(SeekFrom::Start(offset)).map_err(|e| {
+                        MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e)
+                    })?;
+
                     match array.compression {
                         // NoCompression in imzML IBD means raw, unencoded bytes of the native dtype
                         BinaryCompressionType::NoCompression | BinaryCompressionType::Decoded => {
                             let elem_size = array.dtype.size_of();
                             let total_bytes = (length as usize) * elem_size;
                             let mut buffer = vec![0u8; total_bytes];
-                            self.ibd_handle.read_exact(&mut buffer)
-                                .map_err(|e| MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e))?;
+                            self.ibd_handle.read_exact(&mut buffer).map_err(|e| {
+                                MzMLParserError::IOError(MzMLParserState::BinaryDataArray, e)
+                            })?;
                             array.data = buffer.into();
                             array.compression = BinaryCompressionType::Decoded;
                         }
@@ -1002,7 +1065,10 @@ impl<
                         // For now this should be considered a TODO rather than trying something technically incorrect.
                         other => {
                             return Err(MzMLParserError::IncompleteElementError(
-                                format!("Unsupported compression type {:?} for imzML IBD data", other),
+                                format!(
+                                    "Unsupported compression type {:?} for imzML IBD data",
+                                    other
+                                ),
                                 MzMLParserState::BinaryDataArray,
                             ));
                         }
@@ -1023,7 +1089,7 @@ impl<
             Ok(_sz) => Some(spectrum),
             Err(err) => {
                 match err {
-                    MzMLParserError::EOF => {},
+                    MzMLParserError::EOF => {}
                     err => {
                         trace!("Failed to read next spectrum: {err}");
                     }
@@ -1041,7 +1107,7 @@ impl<
             Err(err) => return Err(MzMLParserError::IOError(self.state, err)),
         };
         let mut reader = Reader::from_reader(&mut self.handle);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let matched_tag = match reader.read_event_into(&mut self.buffer) {
             Ok(event) => match event {
                 Event::Start(ref e) => {
@@ -1116,10 +1182,9 @@ impl<
             Err(err) => {
                 log::error!("Error while reading mzML chromatogram: {err}");
                 Err(err)
-            },
+            }
         }
     }
-
 
     pub fn get_chromatogram_by_id(&mut self, id: &str) -> Option<Chromatogram> {
         let offset = self.chromatogram_index.get(id)?;
@@ -1178,13 +1243,21 @@ impl<
     fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
         self.get_chromatogram_by_index(index)
     }
+
+    fn count_chromatograms(&self) -> usize {
+        self.chromatogram_index.len()
+    }
 }
 
 /// [`ImzMLReaderType`] instances are [`Iterator`]s over [`MultiLayerSpectrum`], like all
 /// file format readers. This involves advancing the position of the internal imzML file
 /// reader in-place without seeking.
-impl<R: Read + Seek, S: Read + Seek, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFromArrayMap> Iterator
-    for ImzMLReaderType<R, S, C, D>
+impl<
+        R: Read + Seek,
+        S: Read + Seek,
+        C: CentroidLike + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + BuildFromArrayMap,
+    > Iterator for ImzMLReaderType<R, S, C, D>
 {
     type Item = MultiLayerSpectrum<C, D>;
 
@@ -1209,12 +1282,14 @@ impl<
             .handle
             .stream_position()
             .expect("Failed to save checkpoint");
-        self.handle.seek(SeekFrom::Start(offset))
+        self.handle
+            .seek(SeekFrom::Start(offset))
             .expect("Failed to move seek to offset");
         // Skip check_stream for now - not implemented
         self.state = MzMLParserState::Resume;
         let result = self.read_next();
-        self.handle.seek(SeekFrom::Start(start))
+        self.handle
+            .seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
         result
     }
@@ -1228,10 +1303,11 @@ impl<
             .stream_position()
             .expect("Failed to save checkpoint");
         self.handle.seek(SeekFrom::Start(byte_offset)).ok()?;
-        // Skip check_stream for now - not implemented  
+        // Skip check_stream for now - not implemented
         self.state = MzMLParserState::Resume;
         let result = self.read_next();
-        self.handle.seek(SeekFrom::Start(start))
+        self.handle
+            .seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
         result
     }
@@ -1239,7 +1315,8 @@ impl<
     /// Return the data stream to the beginning
     fn reset(&mut self) {
         self.state = MzMLParserState::Resume;
-        self.handle.seek(SeekFrom::Start(0))
+        self.handle
+            .seek(SeekFrom::Start(0))
             .expect("Failed to reset file stream");
     }
 
@@ -1325,7 +1402,7 @@ impl<
         crate::io::mzml::build_spectrum_index(
             &mut self.handle,
             &mut self.spectrum_index,
-            &mut self.buffer
+            &mut self.buffer,
         )
     }
 }
@@ -1383,11 +1460,10 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
         #[cfg(feature = "filename")]
         {
             // Get the path from the file using the filename crate
-            let xml_path = filename::file_name(&_source)
-                .ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::InvalidInput, "Source file has no path")
-                })?;
-                
+            let xml_path = filename::file_name(&_source).ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidInput, "Source file has no path")
+            })?;
+
             // Derive IBD path from imzML path
             let mut ibd_path = xml_path.with_extension("ibd");
             if !ibd_path.exists() {
@@ -1403,10 +1479,10 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
                     ));
                 }
             }
-            
+
             // Open the IBD file
             let ibd_file = fs::File::open(&ibd_path)?;
-            
+
             // Create the reader with both files
             Ok(Self::new(_source, ibd_file))
         }
@@ -1420,32 +1496,30 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
         }
     }
 
-    
     fn open_path<P>(path: P) -> io::Result<Self>
-        where
-            P: Into<std::path::PathBuf> + Clone, 
-        {
-            let path: std::path::PathBuf = path.into();
-            let xml_file = fs::File::open(&path)?;
-            let mut ibd_path = path.with_extension("ibd");
-            if !ibd_path.exists() {
-                ibd_path = path.with_extension("IBD");
-            }
-            let ibd_file = fs::File::open(&ibd_path)?;
-            let reader = ImzMLReaderType::new(xml_file, ibd_file);
-            // Index is already built in the constructor
-            Ok(reader)
+    where
+        P: Into<std::path::PathBuf> + Clone,
+    {
+        let path: std::path::PathBuf = path.into();
+        let xml_file = fs::File::open(&path)?;
+        let mut ibd_path = path.with_extension("ibd");
+        if !ibd_path.exists() {
+            ibd_path = path.with_extension("IBD");
         }
+        let ibd_file = fs::File::open(&ibd_path)?;
+        let reader = ImzMLReaderType::new(xml_file, ibd_file);
+        // Index is already built in the constructor
+        Ok(reader)
+    }
 
     fn construct_index_from_stream(&mut self) -> u64 {
         // Index should already be constructed during metadata parsing
         self.spectrum_index.len() as u64
     }
-
 }
 
-impl<R: Read + Seek, S: Read + Seek, C: CentroidLike, D: DeconvolutedCentroidLike> MSDataFileMetadata
-    for ImzMLReaderType<R, S, C, D>
+impl<R: Read + Seek, S: Read + Seek, C: CentroidLike, D: DeconvolutedCentroidLike>
+    MSDataFileMetadata for ImzMLReaderType<R, S, C, D>
 {
     crate::impl_metadata_trait!();
 

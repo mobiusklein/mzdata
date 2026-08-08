@@ -2,6 +2,7 @@ use std::borrow::{Borrow, Cow};
 
 use super::bindata::{ArrayRetrievalError, ArrayType, BinaryArrayMap, ByteArrayView};
 use crate::params::{Param, ParamDescribed};
+use crate::spectrum::Product;
 use crate::spectrum::scan_properties::{
     ChromatogramDescription, ChromatogramType, Precursor, ScanPolarity,
 };
@@ -89,6 +90,8 @@ pub trait ChromatogramLike: ParamDescribed {
     /// the data for most other methods on this trait.
     fn description(&self) -> &ChromatogramDescription;
 
+    /// The method to mutably access the chromatogram description itself, which supplies
+    /// the data for most other methods on this trait.
     fn description_mut(&mut self) -> &mut ChromatogramDescription;
 
     /// Access the (first) precursor information, if it exists.
@@ -96,6 +99,12 @@ pub trait ChromatogramLike: ParamDescribed {
     fn precursor(&self) -> Option<&Precursor> {
         let desc = self.description();
         desc.precursor.first()
+    }
+
+    /// Access the (first) product, if it exists
+    fn product(&self) -> Option<&Product> {
+        let desc = self.description();
+        desc.products.first()
     }
 
     /// Iterate over all precursors of the chromatogram
@@ -108,6 +117,12 @@ pub trait ChromatogramLike: ParamDescribed {
     fn precursor_mut(&mut self) -> Option<&mut Precursor> {
         let desc = self.description_mut();
         desc.precursor.first_mut()
+    }
+
+    /// Mutably access the (first) product, if it exists
+    fn product_mut(&mut self) -> Option<&mut Product> {
+        let desc = self.description_mut();
+        desc.products.first_mut()
     }
 
     /// Iterate over all precursors of the chromatogram mutably

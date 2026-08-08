@@ -84,7 +84,7 @@ impl IsolationWindow {
 
     pub fn contains<F: Float>(&self, point: F) -> bool {
         let point = point.to_f32().unwrap();
-        self.lower_bound <= point && self.upper_bound <= point
+        self.lower_bound <= point && point <= self.upper_bound
     }
 
     pub fn is_empty(&self) -> bool {
@@ -120,7 +120,7 @@ impl ScanWindow {
 
     pub fn contains<F: Float>(&self, point: F) -> bool {
         let point = point.to_f32().unwrap();
-        self.lower_bound <= point && self.upper_bound <= point
+        self.lower_bound <= point && point <= self.upper_bound
     }
 
     pub fn is_empty(&self) -> bool {
@@ -854,8 +854,8 @@ impl ChromatogramType {
             1000235 => Self::TotalIonCurrentChromatogram,
             1000628 => Self::BasePeakChromatogram,
             1000627 => Self::SelectedIonCurrentChromatogram,
-            1000472 => Self::SelectedIonMonitoringChromatogram,
-            1000473 => Self::SelectedReactionMonitoringChromatogram,
+            1001472 => Self::SelectedIonMonitoringChromatogram,
+            1001473 => Self::SelectedReactionMonitoringChromatogram,
             1000812 => Self::AbsorptionChromatogram,
             1000813 => Self::EmissionChromatogram,
             1003020 => Self::FlowRateChromatogram,
@@ -918,6 +918,28 @@ impl ChromatogramType {
     }
 }
 
+/// A product ion isolated in lock-step from the precursor, as in selected reaction monitoring (SRM)
+/// or multiple reaction monitoring (MRM).
+#[derive(Debug, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Product {
+    /// The product ion's isolation window.
+    pub isolation_window: IsolationWindow
+}
+
+impl From<IsolationWindow> for Product {
+    fn from(isolation_window: IsolationWindow) -> Self {
+        Self { isolation_window }
+    }
+}
+
+impl Product {
+    pub fn new(isolation_window: IsolationWindow) -> Self {
+        Self { isolation_window }
+    }
+}
+
+
 /// The set of descriptive metadata that give context for how a chromatogram was
 /// recorded.
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -931,6 +953,7 @@ pub struct ChromatogramDescription {
 
     pub params: ParamList,
     pub precursor: Vec<Precursor>,
+    pub products: Vec<Product>,
 }
 
 impl ChromatogramDescription {
@@ -948,3 +971,33 @@ impl ChromatogramDescription {
 }
 
 impl_param_described!(ChromatogramDescription);
+
+#[cfg(test)]
+mod contains_tests {
+    use super::*;
+
+    // Regression tests for the isolation/scan-window `contains` membership check. A prior bug used
+    // `lower <= point && upper <= point`, which wrongly excluded interior points and wrongly included
+    // points above the window; `contains` must be an inclusive `[lower, upper]` test.
+
+    #[test]
+    fn isolation_window_contains_is_inclusive_range() {
+        let window = IsolationWindow::around(810.789, 1.0); // [809.789, 811.789]
+        assert!(window.contains(window.target), "target must be inside");
+        assert!(window.contains(window.lower_bound), "lower bound is inclusive");
+        assert!(window.contains(window.upper_bound), "upper bound is inclusive");
+        assert!(window.contains(810.0_f64), "interior point");
+        assert!(!window.contains(809.0_f64), "below the lower bound");
+        assert!(!window.contains(812.0_f64), "above the upper bound");
+    }
+
+    #[test]
+    fn scan_window_contains_is_inclusive_range() {
+        let window = ScanWindow::new(200.0, 2000.0);
+        assert!(window.contains(1100.0_f64), "interior point");
+        assert!(window.contains(200.0_f64), "lower bound is inclusive");
+        assert!(window.contains(2000.0_f64), "upper bound is inclusive");
+        assert!(!window.contains(199.0_f64), "below the lower bound");
+        assert!(!window.contains(2500.0_f64), "above the upper bound (the old bug returned true here)");
+    }
+}
