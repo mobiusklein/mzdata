@@ -204,7 +204,7 @@ impl ExternalDataRegistry {
     ) -> Result<(), hdf5::Error> {
         let dtype = dataset.dtype()?;
         let sel: Selection = (start..end).into();
-        let mztype: BinaryDataArrayType = type_descr_to_binary_data_array_type(dtype);
+        let mztype: BinaryDataArrayType = h5_type_to_binary_array_data_type(dtype);
         match mztype {
             BinaryDataArrayType::Unknown => todo!(),
             BinaryDataArrayType::Float64 => {

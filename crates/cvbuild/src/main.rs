@@ -38,11 +38,13 @@ fn main() -> io::Result<()> {
     log::info!("Writing {} items to {}", cv.len(), outfile.display());
     cv.save_to_cache_at(&outfile).unwrap();
     let buf = fs::read(&outfile)?;
+    log::info!("{} bytes uncompressed", buf.len());
     let level = flate2::Compression::best();
     let mut compress = flate2::Compress::new(level, true);
     let mut outbuf = Vec::new();
-    outbuf.reserve(buf.len());
+    outbuf.reserve(buf.len() * 2);
     compress.compress_vec(&buf, &mut outbuf, flate2::FlushCompress::Sync)?;
+    log::info!("{} bytes compressed", outbuf.len());
     fs::write(&outfile, outbuf)?;
     Ok(())
 }

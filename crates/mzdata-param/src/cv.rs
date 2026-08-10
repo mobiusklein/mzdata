@@ -457,7 +457,7 @@ impl mzcv::CVSource for MSVocabulary {
             let mut decoder = flate2::Decompress::new(true);
             let buf = include_bytes!("ms.dat");
             let mut outbuf = Vec::new();
-            outbuf.reserve(buf.len());
+            outbuf.reserve(buf.len() * 10);
             decoder
                 .decompress_vec(buf, &mut outbuf, flate2::FlushDecompress::Sync)
                 .unwrap();

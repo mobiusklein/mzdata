@@ -57,25 +57,25 @@ pub(crate) fn binary_array_data_type_to_descriptor(value: &BinaryDataArrayType) 
 
 pub(crate) fn h5_type_to_binary_array_data_type(value: hdf5::Datatype) -> BinaryDataArrayType {
     match value.size() {
-        1 => Self::ASCII,
+        1 => BinaryDataArrayType::ASCII,
         4 => {
             if value.is::<i32>() {
-                Self::Int32
+                BinaryDataArrayType::Int32
             } else if value.is::<f32>() {
-                Self::Float32
+                BinaryDataArrayType::Float32
             } else {
-                Self::Unknown
+                BinaryDataArrayType::Unknown
             }
         }
         8 => {
             if value.is::<i64>() {
-                Self::Int64
+                BinaryDataArrayType::Int64
             } else if value.is::<f64>() {
-                Self::Float64
+                BinaryDataArrayType::Float64
             } else {
-                Self::Unknown
+                BinaryDataArrayType::Unknown
             }
         }
-        _ => Self::Unknown,
+        _ => BinaryDataArrayType::Unknown,
     }
 }

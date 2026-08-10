@@ -253,6 +253,7 @@ members = [
     "crates/mzdata-param",
     "crates/mzdata-meta",
     "crates/mzdata-bindata",
+    "crates/mzdata-spectra",
 ]
 
 exclude = ["crates/pymzdata"]
