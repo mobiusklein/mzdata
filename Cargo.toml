@@ -255,6 +255,8 @@ members = [
     "crates/mzdata-bindata",
 ]
 
+exclude = ["crates/pymzdata"]
+
 [workspace.package]
 
 version = "0.65.6"

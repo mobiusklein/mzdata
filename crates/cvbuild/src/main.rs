@@ -1,7 +1,7 @@
 use std::{io, fs, path, env};
 
 use mzdata_param::MSVocabulary;
-use mzcv::{CVIndex, CVSource, HashBufReader};
+use mzcv::{CVIndex, CVSource, CVStructure, HashBufReader};
 
 
 fn main() -> io::Result<()> {
@@ -23,6 +23,7 @@ fn main() -> io::Result<()> {
     };
 
     let (ver, data, errs) = MSVocabulary::parse([cv_reader].into_iter()).unwrap();
+    log::info!("Read {:?}/{} with {} items", ver.version, ver.hash_hex(), data.len());
     if !errs.is_empty() {
         for e in errs {
             log::error!("Failed to parse: {e}")
@@ -31,8 +32,17 @@ fn main() -> io::Result<()> {
     }
 
     let mut cv = CVIndex::<MSVocabulary>::empty();
-    cv.update(ver, data).unwrap();
 
-    cv.save_to_file_at(&outfile).unwrap();
+    cv.update_from_structure(ver, data).unwrap();
+
+    log::info!("Writing {} items to {}", cv.len(), outfile.display());
+    cv.save_to_cache_at(&outfile).unwrap();
+    let buf = fs::read(&outfile)?;
+    let level = flate2::Compression::best();
+    let mut compress = flate2::Compress::new(level, true);
+    let mut outbuf = Vec::new();
+    outbuf.reserve(buf.len());
+    compress.compress_vec(&buf, &mut outbuf, flate2::FlushCompress::Sync)?;
+    fs::write(&outfile, outbuf)?;
     Ok(())
 }

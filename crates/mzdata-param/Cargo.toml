@@ -18,7 +18,7 @@ static_data = ["cv"]
 
 imzml = []
 
-cv = ["dep:mzcv", "serde", "checksum", "dep:context_error", "dep:bincode", "serde/rc"]
+cv = ["dep:mzcv", "serde", "checksum", "dep:context_error", "dep:bincode", "serde/rc", "dep:flate2"]
 
 
 [dependencies]
@@ -26,7 +26,7 @@ cv = ["dep:mzcv", "serde", "checksum", "dep:context_error", "dep:bincode", "serd
 log = {workspace = true}
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
-
+flate2 = { workspace = true, optional = true }
 thiserror = { workspace = true }
 
 # Checksums and hashing

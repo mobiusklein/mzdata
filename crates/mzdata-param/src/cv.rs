@@ -103,10 +103,14 @@ pub struct MSTerm {
 
 impl MSTerm {
     #[inline(always)]
-    pub fn accession(&self) -> CURIE { self.accession.0 }
+    pub fn accession(&self) -> CURIE {
+        self.accession.0
+    }
 
     #[inline(always)]
-    pub fn curie(&self) -> CURIE { self.accession() }
+    pub fn curie(&self) -> CURIE {
+        self.accession()
+    }
 
     #[inline(always)]
     pub fn parents(&self) -> impl ExactSizeIterator<Item = &CURIE> + '_ {
@@ -161,9 +165,7 @@ impl CVData for MSTerm {
 #[derive(Debug)]
 pub struct MSVocabulary();
 
-
 static MS: OnceLock<mzcv::CVIndex<MSVocabulary>> = OnceLock::new();
-
 
 impl MSVocabulary {
     /// Get the version metadata of the vocabulary
@@ -227,7 +229,10 @@ impl MSVocabulary {
     /// This follows the `is_a` OBO relationship.
     pub fn children_of(curie: CURIE) -> Option<&'static [Compat<CURIE>]> {
         let cv = Self::init();
-        cv.data().child_map().get(&Compat(curie)).map(|v| v.as_slice())
+        cv.data()
+            .child_map()
+            .get(&Compat(curie))
+            .map(|v| v.as_slice())
     }
 
     /// Test if `child` is derived from `parent` along a transitive `is_a` relationship
@@ -243,7 +248,7 @@ impl MSVocabulary {
 
         let parent = Compat(parent);
         if child_term.parents.contains(&parent) {
-            return true
+            return true;
         }
 
         let mut seen = HashSet::new();
@@ -255,7 +260,7 @@ impl MSVocabulary {
             if let Some(term) = cv.get_by_index(&index) {
                 for of in term.parents() {
                     if *of == parent.0 {
-                        return true
+                        return true;
                     }
                     if seen.contains(of) {
                         continue;
@@ -291,7 +296,6 @@ impl MSVocabulary {
     }
 }
 
-
 fn convert_stanza_to_msterm(obj: mzcv::OboStanza) -> Option<Arc<MSTerm>> {
     let mut data = MSTerm {
         accession: bincode::serde::Compat(obj.id.try_into().ok()?),
@@ -324,15 +328,19 @@ fn convert_stanza_to_msterm(obj: mzcv::OboStanza) -> Option<Arc<MSTerm>> {
     Some(Arc::new(data))
 }
 
-
 #[derive(Debug, bincode::Encode, bincode::Decode)]
-pub struct VocabularyData<T: CVData> where T::Index: Serialize + for<'a> Deserialize<'a> {
+pub struct VocabularyData<T: CVData>
+where
+    T::Index: Serialize + for<'a> Deserialize<'a>,
+{
     terms: Vec<Arc<T>>,
-    child_map: HashMap<Compat<T::Index>, Vec<Compat<T::Index>>>
+    child_map: HashMap<Compat<T::Index>, Vec<Compat<T::Index>>>,
 }
 
-
-impl<T: CVData> IntoIterator for VocabularyData<T> where T::Index: Serialize + for<'a> Deserialize<'a> {
+impl<T: CVData> IntoIterator for VocabularyData<T>
+where
+    T::Index: Serialize + for<'a> Deserialize<'a>,
+{
     type Item = Arc<T>;
 
     type IntoIter = std::vec::IntoIter<Self::Item>;
@@ -342,19 +350,26 @@ impl<T: CVData> IntoIterator for VocabularyData<T> where T::Index: Serialize + f
     }
 }
 
-
-impl<T: CVData> Default for VocabularyData<T> where T::Index: Serialize + for<'a> Deserialize<'a> {
+impl<T: CVData> Default for VocabularyData<T>
+where
+    T::Index: Serialize + for<'a> Deserialize<'a>,
+{
     fn default() -> Self {
         Self {
             terms: Vec::default(),
-            child_map: HashMap::default()
+            child_map: HashMap::default(),
         }
     }
 }
 
-
-impl<T: CVData> VocabularyData<T> where T::Index: Serialize + for<'a> Deserialize<'a> {
-    pub fn new(terms: Vec<Arc<T>>, child_map: HashMap<Compat<T::Index>, Vec<Compat<T::Index>>>) -> Self {
+impl<T: CVData> VocabularyData<T>
+where
+    T::Index: Serialize + for<'a> Deserialize<'a>,
+{
+    pub fn new(
+        terms: Vec<Arc<T>>,
+        child_map: HashMap<Compat<T::Index>, Vec<Compat<T::Index>>>,
+    ) -> Self {
         Self { terms, child_map }
     }
 
@@ -367,8 +382,10 @@ impl<T: CVData> VocabularyData<T> where T::Index: Serialize + for<'a> Deserializ
     }
 }
 
-
-impl<T: CVData> CVStructure<T> for VocabularyData<T> where T::Index: Serialize + for<'a> Deserialize<'a> {
+impl<T: CVData> CVStructure<T> for VocabularyData<T>
+where
+    T::Index: Serialize + for<'a> Deserialize<'a>,
+{
     fn is_empty(&self) -> bool {
         self.terms.is_empty()
     }
@@ -389,7 +406,7 @@ impl<T: CVData> CVStructure<T> for VocabularyData<T> where T::Index: Serialize +
     }
 
     fn iter_data(&self) -> Self::IterData<'_> {
-        self.terms.iter_data()
+        self.terms.iter().cloned()
     }
 
     fn add(&mut self, data: std::sync::Arc<T>) {
@@ -404,15 +421,16 @@ impl<T: CVData> CVStructure<T> for VocabularyData<T> where T::Index: Serialize +
         self.terms.remove(index);
     }
 
-    type IterIndexed<'a>  = <Vec<Arc<T>> as CVStructure<T>>::IterIndexed<'a>
+    type IterIndexed<'a>
+        = <Vec<Arc<T>> as CVStructure<T>>::IterIndexed<'a>
     where
         Self: 'a;
 
-    type IterData<'a>  = <Vec<Arc<T>> as CVStructure<T>>::IterData<'a>
+    type IterData<'a>
+        = <Vec<Arc<T>> as CVStructure<T>>::IterData<'a>
     where
         Self: 'a;
 }
-
 
 impl mzcv::CVSource for MSVocabulary {
     type Data = MSTerm;
@@ -436,10 +454,17 @@ impl mzcv::CVSource for MSVocabulary {
         #[cfg(feature = "static_data")]
         {
             use bincode::config::Configuration;
+            let mut decoder = flate2::Decompress::new(true);
+            let buf = include_bytes!("ms.dat");
+            let mut outbuf = Vec::new();
+            outbuf.reserve(buf.len());
+            decoder
+                .decompress_vec(buf, &mut outbuf, flate2::FlushDecompress::Sync)
+                .unwrap();
             let (cache, _z) = bincode::decode_from_slice::<
                 (mzcv::CVVersion, Self::Structure),
                 Configuration,
-            >(include_bytes!("ms.dat"), Default::default())
+            >(&outbuf, Default::default())
             .unwrap();
             Some(cache)
         }
@@ -479,10 +504,14 @@ impl mzcv::CVSource for MSVocabulary {
             .filter_map(convert_stanza_to_msterm)
             .collect();
 
-        let mut child_map: HashMap<Compat<CURIE>, Vec<Compat<CURIE>>> = HashMap::with_capacity(terms.len());
+        let mut child_map: HashMap<Compat<CURIE>, Vec<Compat<CURIE>>> =
+            HashMap::with_capacity(terms.len());
         for term in terms.iter() {
             for parent in term.parents.iter() {
-                child_map.entry(parent.clone()).or_default().push(term.accession.clone());
+                child_map
+                    .entry(parent.clone())
+                    .or_default()
+                    .push(term.accession.clone());
             }
         }
 
@@ -491,30 +520,37 @@ impl mzcv::CVSource for MSVocabulary {
     }
 }
 
-
 pub trait CVTraversal<T: CVSource> {
-
     /// Helper method to mirror [`mzcv::CVIndex::get_by_index`]
     fn get_by_index(&self, key: <T::Data as CVData>::Index) -> Option<Arc<T::Data>>;
 
-    fn child_map(&self) -> &HashMap<Compat<<T::Data as CVData>::Index>, Vec<Compat<<T::Data as CVData>::Index>>>;
+    fn child_map(
+        &self,
+    ) -> &HashMap<Compat<<T::Data as CVData>::Index>, Vec<Compat<<T::Data as CVData>::Index>>>;
 
     /// Get the immediate children of this term
     ///
     /// This follows the `is_a` OBO relationship.
-    fn children_of(&self, curie: <T::Data as CVData>::Index) -> Option<&'_ [Compat<<T::Data as CVData>::Index>]>;
-
+    fn children_of(
+        &self,
+        curie: <T::Data as CVData>::Index,
+    ) -> Option<&'_ [Compat<<T::Data as CVData>::Index>]>;
 
     /// Get the immediate parents of this term
     ///
     /// This follows the `is_a` OBO relationship.
-    fn parents_of(&self, curie: <T::Data as CVData>::Index) -> Option<HashSet<Compat<<T::Data as CVData>::Index>>>;
-
+    fn parents_of(
+        &self,
+        curie: <T::Data as CVData>::Index,
+    ) -> Option<HashSet<Compat<<T::Data as CVData>::Index>>>;
 
     /// Get all parents of this term, recursively querying the graph
     ///
     /// This follows the `is_a` OBO relationship.
-    fn parents_of_recursive(&self, curie: <T::Data as CVData>::Index) -> HashSet<Compat<<T::Data as CVData>::Index>> {
+    fn parents_of_recursive(
+        &self,
+        curie: <T::Data as CVData>::Index,
+    ) -> HashSet<Compat<<T::Data as CVData>::Index>> {
         let mut acc: HashSet<Compat<<<T as CVSource>::Data as CVData>::Index>> = HashSet::new();
         let mut queue = VecDeque::from([Compat(curie.clone())]);
         while !queue.is_empty() {
@@ -537,7 +573,10 @@ pub trait CVTraversal<T: CVSource> {
     /// Get all children of this term, recursively querying the graph
     ///
     /// This follows the `is_a` OBO relationship.
-    fn children_of_recursive(&self, curie: <T::Data as CVData>::Index) -> HashSet<Compat<<T::Data as CVData>::Index>> {
+    fn children_of_recursive(
+        &self,
+        curie: <T::Data as CVData>::Index,
+    ) -> HashSet<Compat<<T::Data as CVData>::Index>> {
         let cv = self;
         let mut acc = HashSet::new();
         let mut queue = VecDeque::from([Compat(curie.clone())]);
@@ -558,7 +597,11 @@ pub trait CVTraversal<T: CVSource> {
     }
 
     /// Test if `child` is derived from `parent` along a transitive `is_a` relationship
-    fn is_child_of(&self, child: <T::Data as CVData>::Index, parent: <T::Data as CVData>::Index) -> bool {
+    fn is_child_of(
+        &self,
+        child: <T::Data as CVData>::Index,
+        parent: <T::Data as CVData>::Index,
+    ) -> bool {
         let cv = self;
 
         let child_term = match cv.get_by_index(child) {
@@ -570,7 +613,7 @@ pub trait CVTraversal<T: CVSource> {
 
         let parent = Compat(parent);
         if child_term.parents().any(|v| *v == parent.0) {
-            return true
+            return true;
         }
 
         let mut seen = HashSet::new();
@@ -582,7 +625,7 @@ pub trait CVTraversal<T: CVSource> {
             if let Some(term) = cv.get_by_index(index) {
                 for of in term.parents() {
                     if *of == parent.0 {
-                        return true
+                        return true;
                     }
                     if seen.contains(of) {
                         continue;
@@ -595,22 +638,34 @@ pub trait CVTraversal<T: CVSource> {
     }
 }
 
-
 impl CVTraversal<MSVocabulary> for CVIndex<MSVocabulary> {
-    fn child_map(&self) -> &HashMap<Compat<<MSTerm as CVData>::Index>, Vec<Compat<<MSTerm as CVData>::Index>>> {
+    fn child_map(
+        &self,
+    ) -> &HashMap<Compat<<MSTerm as CVData>::Index>, Vec<Compat<<MSTerm as CVData>::Index>>> {
         self.data().child_map()
     }
 
-    fn children_of(&self, curie: CURIE) -> Option<&'_ [Compat<<<MSVocabulary as CVSource>::Data as CVData>::Index>]> {
+    fn children_of(
+        &self,
+        curie: CURIE,
+    ) -> Option<&'_ [Compat<<<MSVocabulary as CVSource>::Data as CVData>::Index>]> {
         let state = self.data();
         state.child_map().get(&Compat(curie)).map(|v| &**v)
     }
 
-    fn parents_of(&self, curie: CURIE) -> Option<HashSet<Compat<<<MSVocabulary as CVSource>::Data as CVData>::Index>>> {
-        self.get_by_index(&curie).as_ref().map(|v| v.parents.clone())
+    fn parents_of(
+        &self,
+        curie: CURIE,
+    ) -> Option<HashSet<Compat<<<MSVocabulary as CVSource>::Data as CVData>::Index>>> {
+        self.get_by_index(&curie)
+            .as_ref()
+            .map(|v| v.parents.clone())
     }
 
-    fn get_by_index(&self, key: <<MSVocabulary as CVSource>::Data as CVData>::Index) -> Option<Arc<<MSVocabulary as CVSource>::Data>> {
+    fn get_by_index(
+        &self,
+        key: <<MSVocabulary as CVSource>::Data as CVData>::Index,
+    ) -> Option<Arc<<MSVocabulary as CVSource>::Data>> {
         self.get_by_index(&key)
     }
 }
