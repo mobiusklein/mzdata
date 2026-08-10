@@ -8,7 +8,9 @@ use mzpeaks::{
     MZ,
 };
 
-use crate::{params::Unit, utils::{mass_charge_ratio, neutral_mass}};
+use mzdata_param::Unit;
+
+use crate::{utils::{mass_charge_ratio, neutral_mass}};
 
 use super::{
     array::DataArray,

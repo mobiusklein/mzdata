@@ -1,0 +1,38 @@
+[package]
+name = "mzdata-param"
+version = { workspace = true }
+edition = "2024"
+
+include = ["src/**/*", "test/**/*", "examples/**/*", "README.md"]
+
+[features]
+
+checksum = ["dep:sha1", "dep:hex"]
+
+serde = [
+    "dep:serde",
+    "dep:serde_json",
+]
+
+static_data = ["cv"]
+
+imzml = []
+
+cv = ["dep:mzcv", "serde", "checksum", "dep:context_error", "dep:bincode", "serde/rc"]
+
+
+[dependencies]
+
+log = {workspace = true}
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+thiserror = { workspace = true }
+
+# Checksums and hashing
+sha1 = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+
+mzcv = { workspace = true, optional = true }
+bincode = { workspace = true, optional = true}
+context_error = { workspace = true, optional = true }

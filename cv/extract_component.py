@@ -1,20 +1,16 @@
 import argparse
 import gzip
-import json
 import io
 import itertools
+import json
 import re
-
-from enum import IntFlag
 import sys
-from typing import Tuple, Dict, Set, List
+from enum import IntFlag
 
 import fastobo
-from fastobo.term import TermFrame, IsAClause, NameClause, RelationshipClause, DefClause
-
 from fastobo.doc import OboDoc
-
 from fastobo.id import PrefixedIdent
+from fastobo.term import DefClause, IsAClause, NameClause, RelationshipClause, TermFrame
 
 segment_pattern = re.compile(r"(_[a-zA-Z])")
 
@@ -84,7 +80,7 @@ def make_parser():
 def collect_components(
     cv: OboDoc,
     base_term: PrefixedIdent
-) -> Tuple[Set[PrefixedIdent], Dict[PrefixedIdent, TermFrame]]:
+) -> tuple[set[PrefixedIdent], dict[PrefixedIdent, TermFrame]]:
     term: TermFrame
     id_to_clause = {}
     component_ids = {base_term}
@@ -92,8 +88,7 @@ def collect_components(
     for term in itertools.chain(cv, cv):
         id_to_clause[term.id] = term
         for clause in term:
-            if isinstance(clause, IsAClause):
-                if clause.term in component_ids:
+            if isinstance(clause, IsAClause) and clause.term in component_ids:
                     component_ids.add(term.id)
     return component_ids, id_to_clause
 
@@ -107,8 +102,7 @@ def find_name(term: TermFrame):
         if isinstance(clause, NameClause):
             name = str(clause.name)
             return name
-    else:
-        raise LookupError(f"Term name not found for {term.id!s}")
+    raise LookupError(f"Term name not found for {term.id!s}")
 
 
 def make_entry_for(term: TermFrame):
@@ -121,9 +115,8 @@ def make_entry_for(term: TermFrame):
             name = str(clause.name)
         if isinstance(clause, IsAClause):
             parents.append(str(clause.term))
-        if isinstance(clause, RelationshipClause):
-            if str(clause.typedef) == 'has_value_type':
-                flags |= xsd_to_type[str(clause.term)]
+        if isinstance(clause, RelationshipClause) and str(clause.typedef) == 'has_value_type':
+            flags |= xsd_to_type[str(clause.term)]
         if isinstance(clause, DefClause):
             descr = re.sub(
                 r"(\[|\])",
@@ -157,7 +150,7 @@ def make_entry_for(term: TermFrame):
     {vname},"""
 
 
-def generate_term_enum(terms: List[TermFrame], type_name: str):
+def generate_term_enum(terms: list[TermFrame], type_name: str):
     buffer = io.StringIO()
     buffer.write("pub enum $Term {".replace("$", type_name))
     for term in terms:
@@ -178,7 +171,9 @@ def main():
         term = COMPONENT_TO_TERM[component]
         type_name = COMPONENT_TO_ENUM[component]
 
-    cv: OboDoc = fastobo.load(gzip.open("./cv/psi-ms.obo.gz"))
+    with gzip.open("./cv/psi-ms.obo.gz") as fh:
+        cv: OboDoc = fastobo.load(fh)
+
     component_ids, id_to_clause = collect_components(cv, term)
     if type_name is None:
         t = find_name(id_to_clause[term])

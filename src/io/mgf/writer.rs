@@ -17,7 +17,7 @@ use crate::meta::{
     MassSpectrometryRun, Sample, Software,
 };
 use crate::params::{
-    ControlledVocabulary, ParamDescribed, ParamLike, ParamValue as _, CURIE,
+    ControlledVocabulary, ParamDescribed, ParamLike, CURIE,
 };
 
 use crate::spectrum::{

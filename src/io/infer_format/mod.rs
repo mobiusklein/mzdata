@@ -8,7 +8,7 @@ pub use dispatch::{AsyncMZReaderType, AsyncMZReader, AsyncMZReaderBuilder};
 
 
 
-pub use inference::{infer_from_path, infer_from_stream, infer_format, MassSpectrometryFormat};
+pub use inference::{infer_from_path, infer_from_stream, infer_format, MassSpectrometryFormat, _SourceFileExt};
 
 pub use pipeline::{MassSpectrometryReadWriteProcess, Source, Sink};
 

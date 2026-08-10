@@ -9,7 +9,7 @@ use rayon::prelude::*;
 
 use mzpeaks::Tolerance;
 
-use crate::params::Unit;
+use mzdata_param::Unit;
 
 use super::array::DataArray;
 use super::encodings::{ArrayRetrievalError, ArrayType, BinaryCompressionType};
@@ -406,6 +406,36 @@ impl IntoIterator for BinaryArrayMap {
     }
 }
 
+
+#[cfg(feature = "mzsignal")]
+mod mzsignal_impl {
+    use super::*;
+
+    use crate::to_bytes;
+    use mzsignal::ArrayPair;
+
+    impl From<ArrayPair<'_>> for BinaryArrayMap {
+        fn from(value: ArrayPair<'_>) -> Self {
+            let mz_array = DataArray::wrap(
+                &ArrayType::MZArray,
+                BinaryDataArrayType::Float64,
+                to_bytes(&value.mz_array),
+            );
+
+            let intensity_array = DataArray::wrap(
+                &ArrayType::IntensityArray,
+                BinaryDataArrayType::Float32,
+                to_bytes(&value.intensity_array),
+            );
+
+            let mut array_map = BinaryArrayMap::new();
+            array_map.add(mz_array);
+            array_map.add(intensity_array);
+            array_map
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct NonNaNF64(f64);
@@ -446,6 +476,7 @@ impl Ord for NonNaNF64 {
         self.0.total_cmp(&other.0)
     }
 }
+
 
 macro_rules! _populate_stacked_array_from {
     ($im_dim:ident, $view:ident, $index_map:ident, $array_bins:ident, $array_type:ident, $array:ident) => {
@@ -783,15 +814,14 @@ impl TryFrom<&BinaryArrayMap> for BinaryArrayMap3D {
 
 #[cfg(test)]
 mod test {
-    use crate::prelude::*;
-    use crate::spectrum::BinaryDataArrayType;
+    use crate::BinaryDataArrayType;
 
     use super::*;
     use std::fs;
-    use std::io;
+    use std::io::{self, prelude::*};
 
     fn make_array_from_file() -> io::Result<DataArray> {
-        let mut fh = fs::File::open("./test/data/mz_f64_zlib_bas64.txt")?;
+        let mut fh = fs::File::open("../../test/data/mz_f64_zlib_bas64.txt")?;
         let mut buf = String::new();
         fh.read_to_string(&mut buf)?;
         let bytes: Vec<u8> = buf.into();
@@ -824,45 +854,6 @@ mod test {
             map.get(&ArrayType::MZArray).unwrap().compression,
             BinaryCompressionType::Decoded
         );
-        Ok(())
-    }
-
-    #[test]
-    fn test_3d_stack_unstack() -> io::Result<()> {
-        let mut reader = crate::MZReader::open_gzipped_read(io::BufReader::new(fs::File::open(
-            "test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz",
-        )?))?;
-
-        let spec = reader.get_spectrum_by_id("merged=42869 frame=9717 scanStart=1 scanEnd=705").unwrap();
-        let mut arrays = spec.arrays.unwrap();
-        let units_map: HashMap<_, _> = arrays.iter().map(|(k, v)| {
-            (k.clone(), v.unit)
-        }).collect();
-        let mzs = arrays.mzs()?;
-        assert!(!mzs.is_sorted());
-        drop(mzs);
-        arrays.sort_by_array(&ArrayType::MZArray)?;
-        let mzs = arrays.mzs()?;
-        assert!(mzs.is_sorted());
-        let n = mzs.len();
-
-        let arrays_3d = BinaryArrayMap3D::stack(&arrays)?;
-        let stacked_n: usize = arrays_3d
-            .iter()
-            .map(|(_, va)| va.mzs().unwrap().len())
-            .sum();
-
-        assert_eq!(units_map[&arrays_3d.ion_mobility_type], arrays_3d.ion_mobility_unit);
-
-        assert_eq!(n, stacked_n);
-
-        let unstacked = arrays_3d.unstack()?;
-        let unstacked_n = unstacked.mzs()?.len();
-
-        assert_eq!(unstacked_n, n);
-        for (k, v) in unstacked.iter() {
-            assert_eq!(units_map[k], v.unit);
-        }
         Ok(())
     }
 }

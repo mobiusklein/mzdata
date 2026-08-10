@@ -217,3 +217,44 @@ pub fn infer_format<P: Into<path::PathBuf>>(path: P) -> io::Result<(MassSpectrom
         _ => Ok((format, is_gzipped)),
     }
 }
+
+
+pub trait _SourceFileExt: Sized {
+
+    fn _new_path(name: String, location: String, file_format: Option<Param>) -> Self;
+
+    /// Create a new [`SourceFile`] from a path.
+    ///
+    /// This function makes a minimal effort to infer information about the file,
+    /// using [`infer_format`] to populate [`SourceFile::file_format`]
+    fn from_path<P: AsRef<path::Path>>(path: P) -> io::Result<Self> {
+        let path = path.as_ref();
+        let format = infer_format(path)
+            .ok()
+            .and_then(|(format, _)| format.as_param());
+        let inst = Self::_new_path(
+            path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default(),
+            path
+                .canonicalize()?
+                .parent()
+                .map(|s| format!("file://{}", s.to_string_lossy()))
+                .unwrap_or_else(|| "file://".to_string()),
+            format,
+        );
+        Ok(inst)
+    }
+}
+
+impl _SourceFileExt for crate::meta::SourceFile {
+    fn _new_path(name: String, location: String, file_format: Option<Param>) -> Self {
+        Self {
+            name,
+            location,
+            file_format,
+            ..Default::default()
+        }
+    }
+}

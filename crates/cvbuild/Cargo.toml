@@ -1,0 +1,17 @@
+[package]
+name = "cvbuild"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+bincode = "2.0.1"
+mzcv = "0.3.0"
+serde = "1.0.229"
+sha1 = "0.11.0"
+
+flate2 = { workspace = true }
+
+mzdata-param = { workspace = true, features = ["serde", "checksum", "cv"] }
+log = { workspace = true}
+pretty_env_logger = "0.5.0"

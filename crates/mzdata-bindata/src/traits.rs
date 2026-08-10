@@ -5,7 +5,7 @@ use std::borrow::Cow;
 
 use bytemuck::Pod;
 use num_traits::{AsPrimitive, Num};
-use crate::params::Unit;
+use mzdata_param::Unit;
 
 use super::encodings::{ArrayRetrievalError, BinaryDataArrayType, Bytes};
 use super::ArrayType;

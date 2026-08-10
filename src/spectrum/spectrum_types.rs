@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::{borrow::Cow, ops::Index};
 
+use mzdata_param::curie;
 use mzpeaks::Mass;
 use thiserror::Error;
 
@@ -18,16 +19,16 @@ use mzsignal::{
 };
 
 use crate::params::{ParamDescribed, Unit, Value};
-#[allow(unused)]
-use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType};
+use crate::spectrum::bindata::{
+    ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryDataArrayType, BuildArrayMapFrom,
+    BuildFromArrayMap, DataArray,
+};
+
 use crate::spectrum::peaks::{PeakDataLevel, RefPeakDataLevel, SpectrumSummary};
 use crate::spectrum::scan_properties::{
     Acquisition, IonMobilityMeasure, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
 };
 
-use super::bindata::{ArrayRetrievalError, BuildArrayMapFrom, BuildFromArrayMap};
-#[allow(unused)]
-use super::DataArray;
 use super::HasIonMobility;
 
 /// A blanket trait that ties together all the assumed behaviors of an m/z coordinate centroid peak
@@ -796,10 +797,15 @@ impl<C: CentroidLike> CentroidSpectrumType<C> {
     where
         C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
         D1: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-        C: BuildArrayMapFrom
+        C: BuildArrayMapFrom,
     {
         let arrays = C::as_arrays(self.peaks.as_slice());
-        Ok(MultiLayerSpectrum::new(self.description, Some(arrays), None, None))
+        Ok(MultiLayerSpectrum::new(
+            self.description,
+            Some(arrays),
+            None,
+            None,
+        ))
     }
 }
 
@@ -892,7 +898,7 @@ impl<D: DeconvolutedCentroidLike> DeconvolutedSpectrumType<D> {
     where
         C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
         D1: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
-        D: BuildArrayMapFrom
+        D: BuildArrayMapFrom,
     {
         let arrays = D::as_arrays(self.deconvoluted_peaks.as_slice());
         MultiLayerSpectrum::new(self.description, Some(arrays), None, None)
@@ -1202,7 +1208,7 @@ where
         C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
         D1: DeconvolutedCentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
         C: BuildArrayMapFrom,
-        D: BuildArrayMapFrom
+        D: BuildArrayMapFrom,
     {
         let arrays = if let Some(peaks) = self.deconvoluted_peaks {
             D::as_arrays(peaks.as_slice())
@@ -1327,18 +1333,16 @@ where
             if let Some(arrays) = self.arrays.as_ref() {
                 let peak_data: PeakDataLevel<C, D> = PeakDataLevel::try_from(arrays)?;
                 match peak_data {
-                    PeakDataLevel::Missing => {
-                        Ok(RefPeakDataLevel::Missing)
-                    },
+                    PeakDataLevel::Missing => Ok(RefPeakDataLevel::Missing),
                     PeakDataLevel::RawData(_) => panic!("not possible"),
                     PeakDataLevel::Centroid(peak_set_vec) => {
                         self.peaks = Some(peak_set_vec);
                         Ok(self.peaks())
-                    },
+                    }
                     PeakDataLevel::Deconvoluted(peak_set_vec) => {
                         self.deconvoluted_peaks = Some(peak_set_vec);
                         Ok(self.peaks())
-                    },
+                    }
                 }
             } else {
                 Ok(self.peaks())
@@ -1605,12 +1609,14 @@ where
 
 #[cfg(all(test, feature = "mzml"))]
 mod test {
-    use std::io;
+    use std::collections::HashMap;
+    use std::{fs, io};
 
     use super::*;
     use crate::io::mzml::MzMLReader;
     use crate::io::DetailLevel;
     use crate::prelude::*;
+    use crate::spectrum::BinaryArrayMap3D;
 
     #[test_log::test]
     fn test_peakdata_lazy() -> io::Result<()> {
@@ -1650,7 +1656,10 @@ mod test {
 
     #[allow(unused)]
     fn test_spectrum_behavior<T: SpectrumLike>(spec: &T) {
-        assert_eq!(spec.spectrum_type(), Some(crate::meta::SpectrumType::MS1Spectrum));
+        assert_eq!(
+            spec.spectrum_type(),
+            Some(crate::meta::SpectrumType::MS1Spectrum)
+        );
         behaviors!(spec);
     }
 
@@ -1764,5 +1773,47 @@ mod test {
         duplicate.pick_peaks(1.0).unwrap();
         let peak = duplicate.peaks.as_ref().unwrap().base_peak().unwrap();
         eprintln!("{}", peak);
+    }
+
+    #[test]
+    fn test_3d_stack_unstack() -> io::Result<()> {
+        let mut reader = crate::MZReader::open_gzipped_read(io::BufReader::new(fs::File::open(
+            "test/data/20200204_BU_8B8egg_1ug_uL_7charges_60_min_Slot2-11_1_244.mzML.gz",
+        )?))?;
+
+        let spec = reader
+            .get_spectrum_by_id("merged=42869 frame=9717 scanStart=1 scanEnd=705")
+            .unwrap();
+        let mut arrays = spec.arrays.unwrap();
+        let units_map: HashMap<_, _> = arrays.iter().map(|(k, v)| (k.clone(), v.unit)).collect();
+        let mzs = arrays.mzs()?;
+        assert!(!mzs.is_sorted());
+        drop(mzs);
+        arrays.sort_by_array(&ArrayType::MZArray)?;
+        let mzs = arrays.mzs()?;
+        assert!(mzs.is_sorted());
+        let n = mzs.len();
+
+        let arrays_3d = BinaryArrayMap3D::stack(&arrays)?;
+        let stacked_n: usize = arrays_3d
+            .iter()
+            .map(|(_, va)| va.mzs().unwrap().len())
+            .sum();
+
+        assert_eq!(
+            units_map[&arrays_3d.ion_mobility_type],
+            arrays_3d.ion_mobility_unit
+        );
+
+        assert_eq!(n, stacked_n);
+
+        let unstacked = arrays_3d.unstack()?;
+        let unstacked_n = unstacked.mzs()?.len();
+
+        assert_eq!(unstacked_n, n);
+        for (k, v) in unstacked.iter() {
+            assert_eq!(units_map[k], v.unit);
+        }
+        Ok(())
     }
 }

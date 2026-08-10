@@ -615,27 +615,6 @@ mod mzsignal_impl {
 
     const FWHM_DEFAULT: f32 = 0.01;
 
-    impl From<ArrayPair<'_>> for BinaryArrayMap {
-        fn from(value: ArrayPair<'_>) -> Self {
-            let mz_array = DataArray::wrap(
-                &ArrayType::MZArray,
-                BinaryDataArrayType::Float64,
-                to_bytes(&value.mz_array),
-            );
-
-            let intensity_array = DataArray::wrap(
-                &ArrayType::IntensityArray,
-                BinaryDataArrayType::Float32,
-                to_bytes(&value.intensity_array),
-            );
-
-            let mut array_map = BinaryArrayMap::new();
-            array_map.add(mz_array);
-            array_map.add(intensity_array);
-            array_map
-        }
-    }
-
     /// Average a series of [`SpectrumLike`] together. The supplied dx will be used to [`reprofile`]
     /// centroid spectra. The resulting [`ArrayPair`] can be made into a [`BinaryArrayMap`] using
     /// `.into()`. Which in turn can be used to create a new [`MultiLayerSpectrum`] or

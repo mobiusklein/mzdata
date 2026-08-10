@@ -10,7 +10,7 @@ use flate2::write::{ZlibDecoder, ZlibEncoder};
 use flate2::Compression;
 use num_traits::ToBytes;
 
-use crate::params::{ParamList, Unit};
+use mzdata_param::{ParamList, Unit};
 
 use super::encodings::{
     to_bytes, ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType,
@@ -1064,7 +1064,7 @@ impl<'transient, 'lifespan: 'transient> ByteArrayViewMut<'transient, 'lifespan> 
     }
 }
 
-impl_param_described_deferred!(DataArray);
+mzdata_param::impl_param_described_deferred!(DataArray);
 
 /// Represent a slice of a [`DataArray`] that manages offsets and decoding automatically.
 #[derive(Clone, Debug)]
@@ -1124,7 +1124,7 @@ mod test {
     use super::DataArray;
 
     fn make_array_from_file() -> io::Result<DataArray> {
-        let mut fh = fs::File::open("./test/data/mz_f64_zlib_bas64.txt")?;
+        let mut fh = fs::File::open("../../test/data/mz_f64_zlib_bas64.txt")?;
         let mut buf = String::new();
         fh.read_to_string(&mut buf)?;
         let bytes: Vec<u8> = buf.into();
@@ -1139,7 +1139,7 @@ mod test {
 
     #[cfg(feature = "zstd")]
     fn make_array_from_file_im_zstd() -> io::Result<DataArray> {
-        let mut fh = fs::File::open("test/data/im_f64_zstd_base64.txt")?;
+        let mut fh = fs::File::open("../../test/data/im_f64_zstd_base64.txt")?;
         let mut buf = String::new();
         fh.read_to_string(&mut buf)?;
         let bytes: Vec<u8> = buf.into();

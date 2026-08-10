@@ -8,10 +8,7 @@ use mzpeaks::{
     IndexType, MZPeakSetType, MassPeakSetType,
 };
 
-use super::bindata::ArrayRetrievalError;
-use super::BinaryArrayMap;
-use crate::prelude::BuildFromArrayMap;
-use crate::spectrum::bindata::ArraysAvailable;
+use super::bindata::{ArrayRetrievalError, BinaryArrayMap, BuildFromArrayMap, ArraysAvailable};
 use crate::utils::mass_charge_ratio;
 
 trait SummaryOps {

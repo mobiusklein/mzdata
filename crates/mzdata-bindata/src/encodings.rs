@@ -1,19 +1,18 @@
 use bytemuck::{self, Pod};
+
 use std::{
     fmt::Display,
     io,
     ops::{AddAssign, Mul},
 };
-use thiserror::{self, Error};
 
+use thiserror::{self, Error};
 use num_traits::{Num, ToBytes};
+
 #[cfg(feature = "numpress")]
 use numpress;
 
-use crate::{
-    params::{ControlledVocabulary, ParamCow, Unit, CURIE},
-    Param,
-};
+use mzdata_param::{curie, Param, ControlledVocabulary, ParamCow, Unit, CURIE, ValueRef};
 
 pub type Bytes = Vec<u8>;
 
@@ -1117,7 +1116,7 @@ impl BinaryDataArrayType {
         if let Some(curie) = self.curie() {
             Some(ParamCow::const_new(
                 name,
-                crate::params::ValueRef::Empty,
+                ValueRef::Empty,
                 Some(curie.accession),
                 Some(curie.controlled_vocabulary),
                 Unit::Unknown,
@@ -1215,6 +1214,7 @@ impl BinaryCompressionType {
     pub const COMPRESSION_METHODS: &[Self] = &[
         Self::NoCompression,
         Self::Zlib,
+
         #[cfg(feature = "numpress")]
         Self::NumpressLinear,
         #[cfg(feature = "numpress")]
@@ -1223,6 +1223,7 @@ impl BinaryCompressionType {
         Self::NumpressSLOF,
         #[cfg(feature = "numpress")]
         Self::NumpressSLOFZlib,
+
         #[cfg(feature = "zstd")]
         Self::Zstd,
         #[cfg(feature = "zstd")]
@@ -1231,6 +1232,7 @@ impl BinaryCompressionType {
         Self::DeltaShuffleZstd,
         #[cfg(feature = "zstd")]
         Self::ZstdDict,
+
         #[cfg(all(feature = "zstd", feature = "numpress"))]
         Self::NumpressLinearZstd,
         #[cfg(all(feature = "zstd", feature = "numpress"))]
@@ -1431,7 +1433,7 @@ impl BinaryCompressionType {
             BinaryCompressionType::NumpressSLOFZstd => {
                 return Some(ParamCow::const_new(
                     "MS-Numpress short logged float compression followed by zstd compression",
-                    crate::params::ValueRef::Empty,
+                    ValueRef::Empty,
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
@@ -1440,7 +1442,7 @@ impl BinaryCompressionType {
             BinaryCompressionType::NumpressLinearZstd => {
                 return Some(ParamCow::const_new(
                     "MS-Numpress linear prediction compression followed by zstd compression",
-                    crate::params::ValueRef::Empty,
+                    ValueRef::Empty,
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
@@ -1449,7 +1451,7 @@ impl BinaryCompressionType {
             BinaryCompressionType::NumpressPICZstd => {
                 return Some(ParamCow::const_new(
                     "MS-Numpress positive integer compression followed by zstd compression",
-                    crate::params::ValueRef::Empty,
+                    ValueRef::Empty,
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
@@ -1458,7 +1460,7 @@ impl BinaryCompressionType {
             BinaryCompressionType::ZstdDict => {
                 return Some(ParamCow::const_new(
                     "dict-zstd compression",
-                    crate::params::ValueRef::Empty,
+                    ValueRef::Empty,
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
@@ -1467,7 +1469,7 @@ impl BinaryCompressionType {
             BinaryCompressionType::Zstd => {
                 return Some(ParamCow::const_new(
                     "zstd compression",
-                    crate::params::ValueRef::Empty,
+                    ValueRef::Empty,
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
@@ -1476,7 +1478,7 @@ impl BinaryCompressionType {
             BinaryCompressionType::ShuffleZstd => {
                 return Some(ParamCow::const_new(
                     "byte-shuffle-zstd compression",
-                    crate::params::ValueRef::Empty,
+                    ValueRef::Empty,
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,
@@ -1485,7 +1487,7 @@ impl BinaryCompressionType {
             BinaryCompressionType::DeltaShuffleZstd => {
                 return Some(ParamCow::const_new(
                     "delta-byte-shuffle-zstd compression",
-                    crate::params::ValueRef::Empty,
+                    ValueRef::Empty,
                     self.accession(),
                     Some(ControlledVocabulary::MS),
                     Unit::Unknown,

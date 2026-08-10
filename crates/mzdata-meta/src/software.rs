@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use crate::params::{ControlledVocabulary, ParamList};
-use crate::{impl_param_described, Param};
+use crate::params::{ControlledVocabulary, ParamList, Param};
+use crate::impl_param_described;
 
 /// A piece of software that was associated with the acquisition, transformation or otherwise
 /// processing of mass spectrometry data.

@@ -152,3 +152,6 @@ pub use mzpeaks;
 
 #[cfg(feature = "mzsignal")]
 pub use mzsignal;
+
+pub use mzdata_param::{curie, impl_param_described, impl_param_described_deferred, find_param_method};
+pub use mzdata_meta::{impl_metadata_trait, delegate_impl_metadata_trait};

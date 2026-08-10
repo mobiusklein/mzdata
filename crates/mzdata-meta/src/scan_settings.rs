@@ -25,7 +25,7 @@ impl ParamDescribed for ScanSettings {
         &self.params
     }
 
-    fn params_mut(&mut self) -> &mut crate::ParamList {
+    fn params_mut(&mut self) -> &mut crate::params::ParamList {
         &mut self.params
     }
 }

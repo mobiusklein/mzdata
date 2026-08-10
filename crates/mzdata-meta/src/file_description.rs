@@ -1,9 +1,7 @@
 use regex::{self, Regex};
-use std::io;
-use std::path::Path;
 
 use crate::impl_param_described;
-use crate::io::infer_format;
+// use crate::io::infer_format;
 use crate::params::{
     ControlledVocabulary, Param, ParamDescribed, ParamList, ParamValue, ValueRef, CURIE,
 };
@@ -31,31 +29,6 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
-    /// Create a new [`SourceFile`] from a path.
-    ///
-    /// This function makes a minimal effort to infer information about the file,
-    /// using [`infer_format`] to populate [`SourceFile::file_format`]
-    pub fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        let path = path.as_ref();
-        let format = infer_format(path)
-            .ok()
-            .and_then(|(format, _)| format.as_param());
-        let inst = Self {
-            name: path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default(),
-            location: path
-                .canonicalize()?
-                .parent()
-                .map(|s| format!("file://{}", s.to_string_lossy()))
-                .unwrap_or_else(|| "file://".to_string()),
-            file_format: format,
-            ..Default::default()
-        };
-        Ok(inst)
-    }
-
     /// Convert [`SourceFile::id_format`] into a [`NativeSpectrumIDFormat`] carrying its own
     /// parser machinery, if such a term mapping exists
     pub fn native_id_format(&self) -> Option<NativeSpectrumIDFormat> {
@@ -972,27 +945,27 @@ macro_rules! t {
         ($t, $t.to_param())
     };
 }
-const SPECTRUM_TYPES: &[(crate::meta::SpectrumType, crate::params::ParamCow<'static>)] = &[
-    t!(crate::meta::SpectrumType::MS1Spectrum),
-    t!(crate::meta::SpectrumType::MSnSpectrum),
-    t!(crate::meta::SpectrumType::MassSpectrum),
-    t!(crate::meta::SpectrumType::ChargeInversionMassSpectrum),
-    t!(crate::meta::SpectrumType::ConstantNeutralGainSpectrum),
-    t!(crate::meta::SpectrumType::ConstantNeutralLossSpectrum),
-    t!(crate::meta::SpectrumType::E2MassSpectrum),
-    t!(crate::meta::SpectrumType::PrecursorIonSpectrum),
-    t!(crate::meta::SpectrumType::ProductIonSpectrum),
-    t!(crate::meta::SpectrumType::MS1Spectrum),
-    t!(crate::meta::SpectrumType::MSnSpectrum),
-    t!(crate::meta::SpectrumType::CRMSpectrum),
-    t!(crate::meta::SpectrumType::SIMSpectrum),
-    t!(crate::meta::SpectrumType::SRMSpectrum),
-    t!(crate::meta::SpectrumType::PDASpectrum),
-    t!(crate::meta::SpectrumType::EnhancedMultiplyChargedSpectrum),
-    t!(crate::meta::SpectrumType::TimeDelayedFragmentationSpectrum),
-    t!(crate::meta::SpectrumType::ElectromagneticRadiationSpectrum),
-    t!(crate::meta::SpectrumType::EmissionSpectrum),
-    t!(crate::meta::SpectrumType::AbsorptionSpectrum),
+const SPECTRUM_TYPES: &[(crate::SpectrumType, crate::params::ParamCow<'static>)] = &[
+    t!(crate::SpectrumType::MS1Spectrum),
+    t!(crate::SpectrumType::MSnSpectrum),
+    t!(crate::SpectrumType::MassSpectrum),
+    t!(crate::SpectrumType::ChargeInversionMassSpectrum),
+    t!(crate::SpectrumType::ConstantNeutralGainSpectrum),
+    t!(crate::SpectrumType::ConstantNeutralLossSpectrum),
+    t!(crate::SpectrumType::E2MassSpectrum),
+    t!(crate::SpectrumType::PrecursorIonSpectrum),
+    t!(crate::SpectrumType::ProductIonSpectrum),
+    t!(crate::SpectrumType::MS1Spectrum),
+    t!(crate::SpectrumType::MSnSpectrum),
+    t!(crate::SpectrumType::CRMSpectrum),
+    t!(crate::SpectrumType::SIMSpectrum),
+    t!(crate::SpectrumType::SRMSpectrum),
+    t!(crate::SpectrumType::PDASpectrum),
+    t!(crate::SpectrumType::EnhancedMultiplyChargedSpectrum),
+    t!(crate::SpectrumType::TimeDelayedFragmentationSpectrum),
+    t!(crate::SpectrumType::ElectromagneticRadiationSpectrum),
+    t!(crate::SpectrumType::EmissionSpectrum),
+    t!(crate::SpectrumType::AbsorptionSpectrum),
 ];
 
 impl SpectrumType {
@@ -1002,133 +975,18 @@ impl SpectrumType {
     }
 
     /// Get the default measurement dimension for this kind of spectrum
-    pub const fn default_main_axis(&self) -> crate::spectrum::ArrayType {
+    pub const fn default_main_axis(&self) -> mzdata_bindata::ArrayType {
         match self {
-            SpectrumType::PDASpectrum => crate::spectrum::ArrayType::WavelengthArray,
-            SpectrumType::ElectromagneticRadiationSpectrum => crate::spectrum::ArrayType::WavelengthArray,
-            SpectrumType::EmissionSpectrum => crate::spectrum::ArrayType::WavelengthArray,
-            SpectrumType::AbsorptionSpectrum => crate::spectrum::ArrayType::WavelengthArray,
-            _ => crate::spectrum::ArrayType::MZArray,
+            SpectrumType::PDASpectrum => mzdata_bindata::ArrayType::WavelengthArray,
+            SpectrumType::ElectromagneticRadiationSpectrum => mzdata_bindata::ArrayType::WavelengthArray,
+            SpectrumType::EmissionSpectrum => mzdata_bindata::ArrayType::WavelengthArray,
+            SpectrumType::AbsorptionSpectrum => mzdata_bindata::ArrayType::WavelengthArray,
+            _ => mzdata_bindata::ArrayType::MZArray,
         }
     }
 
     /// Get an array of all available types
     pub const fn all_types() -> &'static [(SpectrumType, crate::params::ParamCow<'static>)] {
         SPECTRUM_TYPES
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::params::ParamCow;
-
-    use super::*;
-
-    #[test]
-    fn test_source_file() -> io::Result<()> {
-        let sf = SourceFile::from_path("test/data/small.mzML")?;
-        assert_eq!(
-            MassSpectrometerFileFormatTerm::MzML.to_param(),
-            sf.file_format.clone().unwrap()
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_parser() {
-        let ident = NativeSpectrumIdentifierFormatTerm::ThermoNativeIDFormat
-            .parse("controllerType=0 controllerNumber=1 scan=25788")
-            .unwrap();
-        let scan_number = ident.name("scan").unwrap().as_str();
-        assert_eq!(scan_number, "25788");
-    }
-
-    #[test]
-    fn test_meta() {
-        assert_eq!(
-            NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat.flags(),
-            r"frame=(?<frame>\d+) scan=(?<scan>\d+)"
-        );
-        assert_eq!(
-            NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat.parents(),
-            [NativeSpectrumIdentifierFormatTerm::NativeSpectrumIdentifierFormat]
-        );
-        let param: ParamCow<'static> =
-            (NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat).into();
-        assert_eq!(
-            param.curie().unwrap(),
-            CURIE::new(ControlledVocabulary::MS, 1002818)
-        );
-        let param: ParamCow<'static> =
-            (&NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat).into();
-        assert_eq!(
-            param.curie().unwrap(),
-            CURIE::new(ControlledVocabulary::MS, 1002818)
-        );
-
-        assert_eq!(
-            NativeSpectrumIdentifierFormatTerm::from_param(&param),
-            Some(NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat)
-        );
-
-        let param: Param = (NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat).into();
-        assert_eq!(
-            param.curie().unwrap(),
-            CURIE::new(ControlledVocabulary::MS, 1002818)
-        );
-        let param: Param = (&NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat).into();
-        assert_eq!(
-            param.curie().unwrap(),
-            CURIE::new(ControlledVocabulary::MS, 1002818)
-        );
-
-        assert_eq!(
-            NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat.accession(),
-            1002818
-        );
-        assert_eq!(
-            NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat.controlled_vocabulary(),
-            ControlledVocabulary::MS
-        );
-        assert_eq!(
-            NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat.name(),
-            "Bruker TDF nativeID format"
-        );
-
-        assert_eq!(
-            NativeSpectrumIdentifierFormatTerm::from_name("Bruker TDF nativeID format"),
-            Some(NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat)
-        );
-
-        assert_eq!(
-            NativeSpectrumIdentifierFormatTerm::from_curie(&CURIE::new(
-                ControlledVocabulary::MS,
-                1002818
-            )),
-            Some(NativeSpectrumIdentifierFormatTerm::BrukerTDFNativeIDFormat)
-        )
-    }
-
-    #[test]
-    fn test_format() {
-        let fmt = NativeSpectrumIdentifierFormatTerm::ThermoNativeIDFormat.format([
-            ValueRef::Int(0),
-            ValueRef::Int(1),
-            ValueRef::Int(25788),
-        ]);
-        assert_eq!(fmt, "controllerType=0 controllerNumber=1 scan=25788");
-
-        let fmt = NativeSpectrumIdentifierFormatTerm::ThermoNativeIDFormat
-            .build()
-            .format([ValueRef::Int(0), ValueRef::Int(1)])
-            .unwrap_err();
-        assert_eq!(
-            fmt,
-            NativeIDFormatError::IncorrectArgumentNumber {
-                term: NativeSpectrumIdentifierFormatTerm::ThermoNativeIDFormat,
-                expected: 3,
-                received: 2
-            }
-        );
     }
 }

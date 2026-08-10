@@ -25,7 +25,7 @@ use crate::meta::{
     ComponentType, DataProcessing, FileDescription, InstrumentConfiguration, MSDataFileMetadata, MassSpectrometryRun, Sample, ScanSettings, Software
 };
 use crate::params::{
-    AccessionIntCode, ControlledVocabulary, Param, ParamCow, ParamDescribed, ParamDescribedRead,
+    AccessionIntCode, ControlledVocabulary, Param, ParamCow, ParamDescribed,
     ParamLike, ParamValue, Unit, ValueRef,
 };
 use crate::spectrum::bindata::{
@@ -246,8 +246,9 @@ impl<W: io::Write> InnerXMLWriter<W> {
 
     pub fn digest(&mut self) -> String {
         let digest = self.handle.get_ref().checksum();
+
         let f = digest.finalize();
-        format!("{:x}", f)
+        hex::encode(f)
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
@@ -2035,13 +2036,11 @@ where
         self.write_spectrum_descriptors(spectrum, &summary_metrics)?;
 
         let tic = spectrum
-            .params()
             .get_param_by_curie(&curie!(MS:1000285))
             .map(|p| p.to_f32().unwrap())
             .unwrap_or_else(|| spectrum.peaks().tic());
 
         let bpi = spectrum
-            .params()
             .get_param_by_curie(&curie!(MS:1000505))
             .map(|p| p.to_f32().unwrap())
             .unwrap_or_else(|| spectrum.peaks().base_peak().intensity);

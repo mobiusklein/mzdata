@@ -30,7 +30,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --features nalgebra,parallelism,async,mzsignal,thermo,numpress,bruker_tdf -- --nocapture --show-output
+          args: --workspace --features nalgebra,parallelism,async,mzsignal,thermo,numpress,bruker_tdf -- --nocapture --show-output
 
   test-remote:
     name: PROXI Test Suite
@@ -52,7 +52,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --features async,proxi,proxi-async -- --nocapture --show-output
+          args: --workspace --features async,proxi,proxi-async -- --nocapture --show-output
 
   test-pymzdata:
     name: pymzdata Python Test Suite
@@ -119,4 +119,4 @@ jobs:
           uses: actions-rs/cargo@v1
           with:
             command: test
-            args: --features async_partial -- --nocapture --show-output
+            args: --workspace --features async_partial -- --nocapture --show-output

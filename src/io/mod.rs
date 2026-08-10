@@ -22,6 +22,7 @@ pub(crate) mod compression;
 pub use crate::io::infer_format::{
     infer_format, infer_from_path, infer_from_stream, IMMZReaderType, MZReader, MZReaderBuilder,
     MZReaderType, MassSpectrometryFormat, MassSpectrometryReadWriteProcess, Sink, Source,
+    _SourceFileExt,
 };
 
 #[cfg(feature = "mgf")]

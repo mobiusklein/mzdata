@@ -3,10 +3,9 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::meta::ScanSettings;
 
 use super::{
-    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software,
+    DataProcessing, FileDescription, InstrumentConfiguration, MassSpectrometryRun, Sample, Software, ScanSettings
 };
 
 /// Mass spectrometry data files have several facets of descriptive metadata
@@ -221,54 +220,54 @@ macro_rules! impl_metadata_trait {
             self.num_spectra
         }
 
-        fn run_description(&self) -> Option<&$crate::meta::MassSpectrometryRun> {
+        fn run_description(&self) -> Option<&$crate::MassSpectrometryRun> {
             Some(&self.run)
         }
 
-        fn run_description_mut(&mut self) -> Option<&mut $crate::meta::MassSpectrometryRun> {
+        fn run_description_mut(&mut self) -> Option<&mut $crate::MassSpectrometryRun> {
             Some(&mut self.run)
         }
     };
     () => {
-        fn data_processings(&self) -> &Vec<$crate::meta::DataProcessing> {
+        fn data_processings(&self) -> &Vec<$crate::DataProcessing> {
             &self.data_processings
         }
 
         fn instrument_configurations(
             &self,
-        ) -> &std::collections::HashMap<u32, $crate::meta::InstrumentConfiguration> {
+        ) -> &std::collections::HashMap<u32, $crate::InstrumentConfiguration> {
             &self.instrument_configurations
         }
-        fn file_description(&self) -> &$crate::meta::FileDescription {
+        fn file_description(&self) -> &$crate::FileDescription {
             &self.file_description
         }
-        fn softwares(&self) -> &Vec<$crate::meta::Software> {
+        fn softwares(&self) -> &Vec<$crate::Software> {
             &self.softwares
         }
 
-        fn data_processings_mut(&mut self) -> &mut Vec<$crate::meta::DataProcessing> {
+        fn data_processings_mut(&mut self) -> &mut Vec<$crate::DataProcessing> {
             &mut self.data_processings
         }
 
         fn instrument_configurations_mut(
             &mut self,
-        ) -> &mut std::collections::HashMap<u32, $crate::meta::InstrumentConfiguration> {
+        ) -> &mut std::collections::HashMap<u32, $crate::InstrumentConfiguration> {
             &mut self.instrument_configurations
         }
 
-        fn file_description_mut(&mut self) -> &mut $crate::meta::FileDescription {
+        fn file_description_mut(&mut self) -> &mut $crate::FileDescription {
             &mut self.file_description
         }
 
-        fn softwares_mut(&mut self) -> &mut Vec<$crate::meta::Software> {
+        fn softwares_mut(&mut self) -> &mut Vec<$crate::Software> {
             &mut self.softwares
         }
 
-        fn samples(&self) -> &Vec<$crate::meta::Sample> {
+        fn samples(&self) -> &Vec<$crate::Sample> {
             &self.samples
         }
 
-        fn samples_mut(&mut self) -> &mut Vec<$crate::meta::Sample> {
+        fn samples_mut(&mut self) -> &mut Vec<$crate::Sample> {
             &mut self.samples
         }
     };
@@ -281,61 +280,61 @@ macro_rules! delegate_impl_metadata_trait {
 
     (expr, $self:ident => $impl:tt, &mut => $mut_impl:tt) => {
 
-        fn data_processings(&self) -> &Vec<$crate::meta::DataProcessing> {
+        fn data_processings(&self) -> &Vec<$crate::DataProcessing> {
             let $self = self;
             let step = $impl;
             step.data_processings()
         }
 
-        fn instrument_configurations(&self) -> &std::collections::HashMap<u32, $crate::meta::InstrumentConfiguration> {
+        fn instrument_configurations(&self) -> &std::collections::HashMap<u32, $crate::InstrumentConfiguration> {
             let $self = self;
             let step = $impl;
             step.instrument_configurations()
         }
 
-        fn file_description(&self) -> &$crate::meta::FileDescription {
+        fn file_description(&self) -> &$crate::FileDescription {
             let $self = self;
             let step = $impl;
             step.file_description()
         }
 
-        fn softwares(&self) -> &Vec<$crate::meta::Software> {
+        fn softwares(&self) -> &Vec<$crate::Software> {
             let $self = self;
             let step = $impl;
             step.softwares()
         }
 
-        fn samples(&self) -> &Vec<$crate::meta::Sample> {
+        fn samples(&self) -> &Vec<$crate::Sample> {
             let $self = self;
             let step = $impl;
             step.samples()
         }
 
-        fn data_processings_mut(&mut self) -> &mut Vec<$crate::meta::DataProcessing> {
+        fn data_processings_mut(&mut self) -> &mut Vec<$crate::DataProcessing> {
             let $self = self;
             let step = $mut_impl;
             step.data_processings_mut()
         }
 
-        fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, $crate::meta::InstrumentConfiguration> {
+        fn instrument_configurations_mut(&mut self) -> &mut std::collections::HashMap<u32, $crate::InstrumentConfiguration> {
             let $self = self;
             let step = $mut_impl;
             step.instrument_configurations_mut()
         }
 
-        fn file_description_mut(&mut self) -> &mut $crate::meta::FileDescription {
+        fn file_description_mut(&mut self) -> &mut $crate::FileDescription {
             let $self = self;
             let step = $mut_impl;
             step.file_description_mut()
         }
 
-        fn softwares_mut(&mut self) -> &mut Vec<$crate::meta::Software> {
+        fn softwares_mut(&mut self) -> &mut Vec<$crate::Software> {
             let $self = self;
             let step = $mut_impl;
             step.softwares_mut()
         }
 
-        fn samples_mut(&mut self) -> &mut Vec<$crate::meta::Sample> {
+        fn samples_mut(&mut self) -> &mut Vec<$crate::Sample> {
             let $self = self;
             let step = $mut_impl;
             step.samples_mut()
@@ -347,13 +346,13 @@ macro_rules! delegate_impl_metadata_trait {
             step.spectrum_count_hint()
         }
 
-        fn run_description(&self) -> Option<&$crate::meta::MassSpectrometryRun> {
+        fn run_description(&self) -> Option<&$crate::MassSpectrometryRun> {
             let $self = self;
             let step = $impl;
             step.run_description()
         }
 
-        fn run_description_mut(&mut self) -> Option<&mut $crate::meta::MassSpectrometryRun> {
+        fn run_description_mut(&mut self) -> Option<&mut $crate::MassSpectrometryRun> {
             let $self = self;
             let step = $mut_impl;
             step.run_description_mut()
@@ -365,13 +364,13 @@ macro_rules! delegate_impl_metadata_trait {
             step.source_file_name()
         }
 
-        fn scan_settings(&self) -> Option<&Vec<$crate::meta::ScanSettings>> {
+        fn scan_settings(&self) -> Option<&Vec<$crate::ScanSettings>> {
             let $self = self;
             let step = $impl;
             step.scan_settings()
         }
 
-        fn scan_settings_mut(&mut self) -> Option<&mut Vec<$crate::meta::ScanSettings>> {
+        fn scan_settings_mut(&mut self) -> Option<&mut Vec<$crate::ScanSettings>> {
             let $self = self;
             let step = $mut_impl;
             step.scan_settings_mut()

@@ -1,0 +1,48 @@
+[package]
+name = "mzdata-bindata"
+edition = "2024"
+version.workspace = true
+
+[features]
+
+serde = ["dep:serde", "dep:serde_json", "dep:serde_with"]
+
+parallelism = ["dep:rayon"]
+
+# The zlib feature makes the code faster unoptimized, but with LTO the default
+# algorithm is faster on tests. Odds are on real data, this will vary with the
+# size of the data being shuttled back and forth, and on the quality of the data
+# (de)compression.
+#
+# After substantial testing, zlib-ng-compat is the winner for speed and size on
+# a variety of real-world data.
+zlib = ["flate2/zlib"]
+zlib-ng-compat = ["flate2/zlib-ng-compat"]
+zlib-ng = ["flate2/zlib-ng"]
+zlib-rs = ["flate2/zlib-rs"]
+miniz_oxide = ["flate2/rust_backend"]
+
+[dependencies]
+
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+serde_with = { workspace = true, optional = true }
+
+log = { workspace = true}
+
+num-traits = { workspace = true }
+thiserror = { workspace = true }
+
+mzpeaks = { workspace = true }
+mzsignal = { workspace = true, optional = true }
+mzdata-param = { workspace = true }
+
+# Bytes and compression
+flate2 = { workspace = true }
+zstd = { workspace = true, optional = true }
+numpress = { workspace = true, optional = true }
+bytemuck = { workspace = true, features = ["extern_crate_alloc", "min_const_generics"] }
+base64-simd = { workspace = true }
+
+rayon = { workspace = true, optional = true}
+

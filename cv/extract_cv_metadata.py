@@ -1,11 +1,9 @@
-import gzip
 import argparse
+import gzip
 
 import fastobo
-
 from fastobo.doc import OboDoc
 from fastobo.header import DataVersionClause
-
 
 
 def make_parser():
@@ -16,7 +14,8 @@ def make_parser():
 
 def main():
     args = make_parser()
-    cv: OboDoc = fastobo.load(gzip.open("./cv/psi-ms.obo.gz"))
+    with gzip.open("./cv/psi-ms.obo.gz") as fh:
+        cv: OboDoc = fastobo.load(fh)
 
     clause = args.clause
 

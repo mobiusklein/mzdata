@@ -1,20 +1,18 @@
 use std::collections::{HashMap, VecDeque};
 use std::marker::PhantomData;
 use std::ops::Index;
-#[allow(unused)]
-use std::path::PathBuf;
-use std::sync::mpsc::Receiver;
+
 use std::{fs, io, path};
+use std::sync::mpsc::Receiver;
 
 use log::warn;
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 use thiserror::Error;
 
-#[allow(unused)]
-use crate::io::utils::FileSource;
 use crate::io::{DetailLevel, OffsetIndex};
 use crate::meta::{
-    DataProcessing, FileDescription, FileMetadataConfig, InstrumentConfiguration, MassSpectrometryRun, Sample, Software
+    DataProcessing, FileDescription, FileMetadataConfig, InstrumentConfiguration,
+    MassSpectrometryRun, Sample, Software,
 };
 use crate::prelude::MSDataFileMetadata;
 use crate::spectrum::group::{SpectrumGroup, SpectrumGroupingIterator};
@@ -149,7 +147,7 @@ pub trait SpectrumSource<
     /// Get the nth [`SpectrumGroup`] from this source
     fn get_group_by_index(&mut self, index: usize) -> Option<SpectrumGroup<C, D, S>>
     where
-        Self: Sized
+        Self: Sized,
     {
         self.groups().nth(index)
     }
@@ -362,28 +360,9 @@ pub trait MZFileReader<
     where
         P: Into<path::PathBuf> + Clone,
     {
-
-        #[cfg(feature = "serde")]
-        let index_file_name = FileSource::<fs::File>::from(path.clone()).index_file_name();
-
         match fs::File::open(path.into()) {
             Ok(file) => {
                 let mut reader = Self::open_file(file)?;
-                #[cfg(feature = "serde")]
-                if let Some(index_path) = &index_file_name {
-                    if index_path.exists() {
-                        let index_stream = fs::File::open(index_path)?;
-                        match reader.read_index(Box::new(io::BufReader::new(index_stream))) {
-                            Ok(_) => {}
-                            Err(_err) => {
-                                reader.construct_index_from_stream();
-                            }
-                        }
-                    } else {
-                        reader.construct_index_from_stream();
-                    }
-                }
-                #[cfg(not(feature = "serde"))]
                 reader.construct_index_from_stream();
                 Ok(reader)
             }
@@ -393,29 +372,6 @@ pub trait MZFileReader<
 
     /// Given a regular file, construct a new instance without indexing.
     fn open_file(source: fs::File) -> io::Result<Self>;
-}
-
-#[cfg(feature = "serde")]
-fn _save_index<
-    C: CentroidLike,
-    D: DeconvolutedCentroidLike,
-    S: SpectrumLike<C, D>,
->(
-    index_path: &PathBuf,
-    reader: &impl MZFileReader<C, D, S>,
-) -> io::Result<()> {
-    let index_stream = fs::File::create(index_path)?;
-    match reader.write_index(Box::new(io::BufWriter::new(index_stream))) {
-        Ok(_) => {}
-        Err(err) => {
-            warn!(
-                "Failed to write index to {} because {:?}",
-                index_path.display(),
-                err
-            );
-        }
-    }
-    Ok(())
 }
 
 /// Errors that may occur when reading a spectrum from a [`RandomAccessSpectrumIterator`]
@@ -576,11 +532,8 @@ pub struct StreamingSpectrumIterator<
     _d: PhantomData<D>,
 }
 
-impl<
-        C: CentroidLike + Send,
-        D: DeconvolutedCentroidLike + Send,
-        S: SpectrumLike<C, D> + Send,
-    > From<SpectrumReceiver<C, D, S>>
+impl<C: CentroidLike + Send, D: DeconvolutedCentroidLike + Send, S: SpectrumLike<C, D> + Send>
+    From<SpectrumReceiver<C, D, S>>
     for StreamingSpectrumIterator<C, D, S, SpectrumReceiver<C, D, S>>
 {
     fn from(value: SpectrumReceiver<C, D, S>) -> Self {
@@ -588,11 +541,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike + Send,
-        D: DeconvolutedCentroidLike + Send,
-        S: SpectrumLike<C, D> + Send,
-    > From<Receiver<S>> for StreamingSpectrumIterator<C, D, S, SpectrumReceiver<C, D, S>>
+impl<C: CentroidLike + Send, D: DeconvolutedCentroidLike + Send, S: SpectrumLike<C, D> + Send>
+    From<Receiver<S>> for StreamingSpectrumIterator<C, D, S, SpectrumReceiver<C, D, S>>
 {
     fn from(value: Receiver<S>) -> Self {
         Self::new(value.into())
@@ -860,11 +810,8 @@ pub struct SpectrumReceiver<
     _d: PhantomData<D>,
 }
 
-impl<
-        C: CentroidLike + Send,
-        D: DeconvolutedCentroidLike + Send,
-        S: SpectrumLike<C, D> + Send,
-    > Iterator for SpectrumReceiver<C, D, S>
+impl<C: CentroidLike + Send, D: DeconvolutedCentroidLike + Send, S: SpectrumLike<C, D> + Send>
+    Iterator for SpectrumReceiver<C, D, S>
 {
     type Item = S;
 
@@ -879,11 +826,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike + Send,
-        D: DeconvolutedCentroidLike + Send,
-        S: SpectrumLike<C, D> + Send,
-    > From<Receiver<S>> for SpectrumReceiver<C, D, S>
+impl<C: CentroidLike + Send, D: DeconvolutedCentroidLike + Send, S: SpectrumLike<C, D> + Send>
+    From<Receiver<S>> for SpectrumReceiver<C, D, S>
 {
     fn from(value: Receiver<S>) -> Self {
         Self {
@@ -901,11 +845,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike + Send,
-        D: DeconvolutedCentroidLike + Send,
-        S: SpectrumLike<C, D> + Send,
-    > MSDataFileMetadata for SpectrumReceiver<C, D, S>
+impl<C: CentroidLike + Send, D: DeconvolutedCentroidLike + Send, S: SpectrumLike<C, D> + Send>
+    MSDataFileMetadata for SpectrumReceiver<C, D, S>
 {
     crate::impl_metadata_trait!();
 
@@ -922,11 +863,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike + Send,
-        D: DeconvolutedCentroidLike + Send,
-        S: SpectrumLike<C, D> + Send,
-    > SpectrumReceiver<C, D, S>
+impl<C: CentroidLike + Send, D: DeconvolutedCentroidLike + Send, S: SpectrumLike<C, D> + Send>
+    SpectrumReceiver<C, D, S>
 {
     #[allow(unused, clippy::too_many_arguments)]
     pub fn new(
@@ -982,18 +920,17 @@ pub struct MemorySpectrumSource<
     offsets: OffsetIndex,
     _c: PhantomData<C>,
     _d: PhantomData<D>,
-    metadata: FileMetadataConfig
+    metadata: FileMetadataConfig,
 }
 
-impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>> MSDataFileMetadata for MemorySpectrumSource<C, D, S> {
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D>> MSDataFileMetadata
+    for MemorySpectrumSource<C, D, S>
+{
     crate::delegate_impl_metadata_trait!(expr, x => { &x.metadata }, &mut => { &mut x.metadata });
 }
 
-impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D> + Clone,
-    > MemorySpectrumSource<C, D, S>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D> + Clone>
+    MemorySpectrumSource<C, D, S>
 {
     pub fn new(spectra: VecDeque<S>) -> Self {
         Self::new_with_metadata(spectra, Default::default())
@@ -1016,11 +953,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D> + Clone,
-    > Iterator for MemorySpectrumSource<C, D, S>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D> + Clone> Iterator
+    for MemorySpectrumSource<C, D, S>
 {
     type Item = S;
 
@@ -1036,11 +970,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D> + Clone,
-    > SpectrumSource<C, D, S> for MemorySpectrumSource<C, D, S>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D> + Clone>
+    SpectrumSource<C, D, S> for MemorySpectrumSource<C, D, S>
 {
     fn reset(&mut self) {
         self.position = 0;
@@ -1076,11 +1007,8 @@ impl<
     fn set_detail_level(&mut self, _detail_level: DetailLevel) {}
 }
 
-impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D> + Clone,
-    > RandomAccessSpectrumIterator<C, D, S> for MemorySpectrumSource<C, D, S>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D> + Clone>
+    RandomAccessSpectrumIterator<C, D, S> for MemorySpectrumSource<C, D, S>
 {
     fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
         match self.offsets.get(id) {
@@ -1112,11 +1040,8 @@ impl<
     }
 }
 
-impl<
-        C: CentroidLike,
-        D: DeconvolutedCentroidLike,
-        S: SpectrumLike<C, D> + Clone,
-    > From<VecDeque<S>> for MemorySpectrumSource<C, D, S>
+impl<C: CentroidLike, D: DeconvolutedCentroidLike, S: SpectrumLike<C, D> + Clone> From<VecDeque<S>>
+    for MemorySpectrumSource<C, D, S>
 {
     fn from(value: VecDeque<S>) -> Self {
         Self::new(value)
@@ -1278,8 +1203,7 @@ mod async_traits {
         fn get_spectrum_by_id(&mut self, id: &str) -> impl Future<Output = Option<S>>;
 
         /// Retrieve a spectrum by it's integer index
-        fn get_spectrum_by_index(&mut self, index: usize)
-            -> impl Future<Output = Option<S>>;
+        fn get_spectrum_by_index(&mut self, index: usize) -> impl Future<Output = Option<S>>;
 
         /// Retrieve a spectrum by its scan start time
         /// Considerably more complex than seeking by ID or index, this involves

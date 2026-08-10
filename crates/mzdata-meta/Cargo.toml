@@ -1,0 +1,26 @@
+[package]
+name = "mzdata-meta"
+edition = "2024"
+version.workspace = true
+
+[features]
+
+serde = ["dep:serde", "dep:serde_json", "dep:serde_with"]
+
+
+[dependencies]
+
+mzdata-param = { workspace = true }
+mzdata-bindata  = { workspace = true }
+
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+serde_with = { workspace = true, optional = true }
+
+regex = { workspace = true }
+
+chrono = { workspace = true }
+thiserror = { workspace = true }
+num-traits = { workspace = true }
+log = { workspace = true}
+bitflags = { workspace = true }

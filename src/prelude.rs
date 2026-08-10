@@ -10,9 +10,9 @@ pub use crate::io::traits::{
 
 #[cfg(feature = "async_partial")]
 pub use crate::io::traits::AsyncSpectrumSource;
-
+pub use crate::io::_SourceFileExt;
 pub use crate::meta::MSDataFileMetadata;
-pub use crate::params::{ParamDescribed, ParamLike, ParamValue, ParamDescribedRead};
+pub use crate::params::{ParamDescribed, ParamLike, ParamValue};
 pub use crate::spectrum::bindata::{
     BuildArrayMapFrom, BuildFromArrayMap, ByteArrayView, ByteArrayViewMut,
     BuildArrayMap3DFrom, BuildFromArrayMap3D

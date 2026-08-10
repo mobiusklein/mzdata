@@ -1,10 +1,10 @@
 set dotenv-load := true
 
 test-units:
-    cargo nextest run --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,bruker_tdf,imzml
+    cargo nextest run --workspace --lib --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,bruker_tdf,imzml
 
 test-coverage:
-    cargo llvm-cov --lib --tests nextest --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,imzml --html
+    cargo llvm-cov --lib --workspace --tests nextest --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,imzml --html
 
 alias t := test-units
 
@@ -26,9 +26,18 @@ update-cv:
      https://github.com/HUPO-PSI/psi-ms-CV/releases/latest/download/psi-ms.obo | gzip -c > cv/psi-ms.obo.gz
 
     gzip -d -c cv/psi-ms.obo.gz | head -n 5
+    cargo r -p cvbuild cv/psi-ms.obo.gz "crates/mzdata-param/src/ms.dat"
+
+update-cv-build:
+    cargo r -p cvbuild cv/psi-ms.obo.gz "crates/mzdata-param/src/ms.dat"
 
 update-cv-terms:
-    cog -c -r -U src/meta/software.rs src/meta/instrument.rs src/meta/file_description.rs src/io/mzml/writer.rs src/meta/activation.rs
+    cog -c -r -U \
+        src/io/mzml/writer.rs \
+        crates/mzdata-meta/src/software.rs \
+        crates/mzdata-meta/src/instrument.rs \
+        crates/mzdata-meta/src/file_description.rs \
+        crates/mzdata-meta/src/activation.rs
 
 pytest:
     maturin develop -m "./crates/pymzdata/Cargo.toml"

@@ -57,11 +57,15 @@ debug = true
 # default = ["nalgebra", "parallelism", "mzsignal", "zlib-ng-compat"]
 default = ["zlib-ng-compat", "mgf", "mzml"]
 
-checksum = ["dep:sha1", ]
+checksum = ["dep:sha1", "dep:hex"]
+
+cv = ["mzdata-param/cv", "mzdata-param/static_data", "dep:mzcv"]
 
 mgf = []
 mzml = ["dep:quick-xml", "checksum", "dep:memchr", "dep:encoding_rs"]
-imzml = ["mzml", "dep:uuid"]
+imzml = ["mzml", "dep:uuid", "mzdata-param/imzml"]
+
+mzsignal = ["dep:mzsignal", "mzdata-bindata/mzsignal"]
 
 # mzsignal's main functionality requires a linear algebra backend.
 # Rust does not support exclusive-or style feature flags.
@@ -79,11 +83,12 @@ parallelism = ["dep:rayon", "mzsignal?/parallelism"]
 #
 # After substantial testing, zlib-ng-compat is the winner for speed and size on
 # a variety of real-world data.
-zlib = ["flate2/zlib"]
-zlib-ng-compat = ["flate2/zlib-ng-compat"]
-zlib-ng = ["flate2/zlib-ng"]
-zlib-rs = ["flate2/zlib-rs"]
-miniz_oxide = ["flate2/rust_backend"]
+zlib = ["flate2/zlib", "mzdata-bindata/zlib"]
+zlib-ng-compat = ["flate2/zlib-ng-compat", "mzdata-bindata/zlib-ng-compat"]
+zlib-ng = ["flate2/zlib-ng", "mzdata-bindata/zlib-ng"]
+zlib-rs = ["flate2/zlib-rs", "mzdata-bindata/zlib-rs"]
+miniz_oxide = ["flate2/rust_backend", "mzdata-bindata/miniz_oxide"]
+zstd = ["dep:zstd", "mzdata-bindata/zstd"]
 
 # Enables reading mzMLb
 mzmlb = ["mzml", "dep:hdf5", "dep:ndarray", "dep:hdf5-sys"]
@@ -117,6 +122,9 @@ serde = [
     "chrono/serde",
     "dep:serde_json",
     "dep:serde_with",
+    "mzdata-param/serde",
+    "mzdata-meta/serde",
+    "mzdata-bindata/serde"
 ]
 
 async = ["async_partial", "tokio/fs"]
@@ -124,50 +132,52 @@ async_partial = [
     "dep:tokio",
     "quick-xml/async-tokio",
     "dep:futures",
-    "dep:pin-project-lite",
 ]
 
 proxi = ["dep:reqwest", "serde"]
 proxi-async = ["proxi", "dep:futures"]
 libloading = ["dep:libloading"]
-zstd = ["dep:zstd"]
 
 [dependencies]
-regex = "1"
-serde = { version = "1.0", features = ["derive"], optional = true }
-serde_json = { version = "1.0", optional = true }
-serde_with = { version = "3.12.0", optional = true }
+regex = { workspace = true }
+
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+serde_with = { workspace = true, optional = true }
+
+thiserror = { workspace = true }
+num-traits = { workspace = true }
+log = { workspace = true}
 
 quick-xml = { version = "0.41", features = ["serialize"], optional = true }
 uuid = { version = "1.0", features = ["v4", "serde"], optional = true }
-num-traits = "0.2"
-log = "0.4.20"
+
 indexmap = { version = "2.0.0", features = ["serde"] }
-chrono = "0.4.37"
-bitflags = "2.5.0"
-identity-hash = "0.1.0"
 
-thiserror = "2.0.2"
+chrono = { workspace = true }
+bitflags = { workspace = true }
+identity-hash = { workspace = true }
 
-
-mzpeaks = { version = ">=1.0.6,<1.1.0" }
+mzpeaks = { workspace = true }
 
 # Internal parallelism
-rayon = { version = ">=1.8.0,<2.0", optional = true }
+rayon = { workspace = true, optional = true }
 
 # Internal signal processing
-mzsignal = { version = ">=1.1.10,<1.2.0", default-features = false, optional = true, features = [
-    'avx',
-] }
+mzsignal = { workspace = true, optional = true }
+mzdata-param = { workspace = true }
+mzdata-meta = { workspace = true }
+mzdata-bindata = { workspace = true }
 
 # Checksums and hashing
-sha1 = { version = "0.10.6", optional = true }
+sha1 = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
 
 # Bytes and compression
-flate2 = { version = "1.0.20" }
-numpress = { version = "1.1.0", optional = true, package = "numpress-rs" }
-bytemuck = { version = "1.18.0", features = ["extern_crate_alloc", "min_const_generics"] }
-base64-simd = "0.8.0"
+flate2 = { workspace = true }
+zstd = { workspace = true, optional = true }
+bytemuck = { workspace = true, features = ["extern_crate_alloc", "min_const_generics"] }
+base64-simd = { workspace = true }
 
 # Async reader features
 tokio = { version = "1.42", optional = true, features = ["macros"] }
@@ -195,14 +205,11 @@ timsrust = { version = "0.4.1", default-features = false, features = [
 ], optional = true }
 
 parking_lot = { version = "0.12.3", optional = true }
-pin-project-lite = { version = "0.2.16", optional = true }
 memchr = { version = "2.7.4", optional = true }
-libloading = { version = "0.8.6", optional = true }
-zstd = { version = "0.13.3", optional = true }
-mzcv = "0.2.0"
 encoding_rs = { version = "0.8.35", optional = true }
-bincode = "2"
-context_error = "0.2.0"
+libloading = { version = "0.8.6", optional = true }
+
+mzcv = { workspace = true, optional = true }
 
 
 [dev-dependencies]
@@ -236,3 +243,67 @@ features = [
     "bruker_tdf",
 ]
 no-default-features = true
+
+
+[workspace]
+
+members = [
+    ".",
+    "crates/cvbuild",
+    "crates/mzdata-param",
+    "crates/mzdata-meta",
+    "crates/mzdata-bindata",
+]
+
+[workspace.package]
+
+version = "0.65.6"
+
+[workspace.dependencies]
+
+mzpeaks = { version = ">=1.0.6,<1.1.0" }
+
+# Internal signal processing
+mzsignal = { version = ">=1.1.10,<1.2.0", default-features = false, features = [
+    'avx',
+] }
+
+mzdata-param = { version = "0.65.6", path = "./crates/mzdata-param" }
+mzdata-meta = { version = "0.65.6", path = "./crates/mzdata-meta" }
+mzdata-bindata = { version = "0.65.6", path = "./crates/mzdata-bindata" }
+
+# Checksums and hashing
+sha1 = { version = "0.11" }
+hex = { version = "0.4.3" }
+
+# Common
+thiserror = "2.0.2"
+log = "0.4.20"
+identity-hash = "0.1.0"
+num-traits = "0.2"
+
+# serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+serde_with = { version = "3.12.0" }
+
+
+# Controlled vocabulary handling
+mzcv = { version = "0.3.0" }
+bincode = { version = "2"}
+context_error = {version = "0.3.0" }
+
+chrono = "0.4.37"
+regex = "1"
+bitflags = "2.5.0"
+
+# Internal parallelism
+rayon = { version = ">=1.8.0,<2.0" }
+
+# bindata
+zstd = { version = "0.13.3" }
+flate2 = { version = "1.0.20" }
+numpress = { version = "1.1.0", package = "numpress-rs" }
+bytemuck = { version = "1.18.0", features = ["extern_crate_alloc", "min_const_generics"] }
+base64-simd = "0.8.0"
+

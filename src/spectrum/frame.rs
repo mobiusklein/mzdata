@@ -91,7 +91,7 @@ pub struct IonMobilityFrameDescription {
     pub ion_mobility_unit: Unit,
 }
 
-impl_param_described!(IonMobilityFrameDescription);
+crate::impl_param_described!(IonMobilityFrameDescription);
 
 impl IonMobilityFrameDescription {
     #[allow(clippy::too_many_arguments)]
