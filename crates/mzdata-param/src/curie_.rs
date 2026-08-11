@@ -3,6 +3,7 @@ use super::*;
 /// Controlled vocabularies used in mass spectrometry data files
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "cv", derive(bincode::Encode, bincode::Decode))]
 #[repr(u8)]
 pub enum ControlledVocabulary {
     /// The PSI-MS Controlled Vocabulary [https://www.ebi.ac.uk/ols4/ontologies/ms](https://www.ebi.ac.uk/ols4/ontologies/ms)
@@ -323,6 +324,7 @@ impl FromStr for AccessionCode {
 /// A CURIE is a namespace + accession identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "cv", derive(bincode::Encode, bincode::Decode))]
 pub struct CURIE {
     pub controlled_vocabulary: ControlledVocabulary,
     pub accession: AccessionIntCode,

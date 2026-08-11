@@ -361,7 +361,7 @@ impl ExternalDataRegistry {
             let block_end = (start + self.chunk_size).min(dset.size());
             let cache_block = Self::read_slice_to_bytes(dset, start, block_end)?;
 
-            let cache_block = DataArray::wrap(&destination.name, h5_type_to_binary_array_data_type(&dtype), cache_block);
+            let cache_block = DataArray::wrap(&destination.name, h5_type_to_binary_array_data_type(dtype), cache_block);
             let mut cache_block = CacheInterval::new(start, block_end, cache_block);
             let block = if let Some(cache_block) =
                 self.chunk_cache.get_mut(&range_request.name).map(|prev| {

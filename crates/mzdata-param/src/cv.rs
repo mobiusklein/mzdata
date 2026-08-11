@@ -184,6 +184,15 @@ impl MSVocabulary {
         })
     }
 
+    /// Get or create the global instance of the [`mzcv::CVIndex`] for [`MSVocabulary`]
+    /// using only the statically embedded data.
+    pub fn init_static() -> &'static mzcv::CVIndex<MSVocabulary> {
+        MS.get_or_init(|| {
+            let cv = mzcv::CVIndex::<Self>::init_static();
+            cv
+        })
+    }
+
     /// Get a term by its [`CURIE`]
     pub fn get(curie: CURIE) -> Option<Arc<MSTerm>> {
         Self::init().get_by_index(&curie)
@@ -328,6 +337,8 @@ fn convert_stanza_to_msterm(obj: mzcv::OboStanza) -> Option<Arc<MSTerm>> {
     Some(Arc::new(data))
 }
 
+
+/// A data structure for walking up and down trees.
 #[derive(Debug, bincode::Encode, bincode::Decode)]
 pub struct VocabularyData<T: CVData>
 where
@@ -453,19 +464,12 @@ impl mzcv::CVSource for MSVocabulary {
     fn static_data() -> Option<(mzcv::CVVersion, Self::Structure)> {
         #[cfg(feature = "static_data")]
         {
+            use std::io;
             use bincode::config::Configuration;
-            let mut decoder = flate2::Decompress::new(true);
-            let buf = include_bytes!("ms.dat");
-            let mut outbuf = Vec::new();
-            outbuf.reserve(buf.len() * 10);
-            decoder
-                .decompress_vec(buf, &mut outbuf, flate2::FlushDecompress::Sync)
-                .unwrap();
-            let (cache, _z) = bincode::decode_from_slice::<
-                (mzcv::CVVersion, Self::Structure),
-                Configuration,
-            >(&outbuf, Default::default())
-            .unwrap();
+            let buf = io::Cursor::new(include_bytes!("ms.dat"));
+            let mut reader = flate2::bufread::GzDecoder::new(buf);
+            let cache= bincode::decode_from_std_read::<(mzcv::CVVersion, Self::Structure),
+                Configuration, _>(&mut reader, Configuration::default()).unwrap();
             Some(cache)
         }
         #[cfg(not(feature = "static_data"))]

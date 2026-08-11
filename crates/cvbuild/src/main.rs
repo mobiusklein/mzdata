@@ -1,4 +1,4 @@
-use std::{io, fs, path, env};
+use std::{env, fs, io::{self, prelude::*}, path};
 
 use mzdata_param::MSVocabulary;
 use mzcv::{CVIndex, CVSource, CVStructure, HashBufReader};
@@ -40,11 +40,10 @@ fn main() -> io::Result<()> {
     let buf = fs::read(&outfile)?;
     log::info!("{} bytes uncompressed", buf.len());
     let level = flate2::Compression::best();
-    let mut compress = flate2::Compress::new(level, true);
-    let mut outbuf = Vec::new();
-    outbuf.reserve(buf.len() * 2);
-    compress.compress_vec(&buf, &mut outbuf, flate2::FlushCompress::Sync)?;
-    log::info!("{} bytes compressed", outbuf.len());
-    fs::write(&outfile, outbuf)?;
+    let mut writer = flate2::write::GzEncoder::new(fs::File::create(&outfile)?, level);
+    writer.write_all(&buf)?;
+    let mut writer = writer.finish()?;
+    let n = writer.stream_position()?;
+    log::info!("{n} bytes compressed");
     Ok(())
 }
