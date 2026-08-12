@@ -167,6 +167,16 @@ macro_rules! cvmap {
                 }
             }
 
+            #[cfg(feature = "cv")]
+            /// Test whether a CURIE is descended from this term, even if it isn't part of the compile-time
+            /// constant list.
+            ///
+            /// This depends upon the `cv` feature which may support a variable version of the PSI-MS controlled
+            /// vocabulary.
+            pub fn is_parent_of(&self, curie: $crate::params::CURIE) -> bool {
+                let self_curie = $crate::params::CURIE::new(self.controlled_vocabulary(), self.accession());
+                $crate::params::MSVocabulary::is_child_of(curie, self_curie)
+            }
         }
 
         impl<P> From<P> for $enum_name where P: $crate::params::ParamLike {

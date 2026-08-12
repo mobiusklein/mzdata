@@ -83,6 +83,10 @@ release tag: (patch-version) (changelog tag)
     git commit -m "chore: update changelog"
     git tag {{tag}}
 
+    cargo publish -p mzdata-param
+    cargo publish -p mzdata-meta
+    cargo publish -p mzdata-bindata
+    cargo publish -p mzdata
     cargo publish --allow-dirty
     cd crates/mzdata-spectra && cargo publish --allow-dirty
 
@@ -111,7 +115,30 @@ patch-version:
     else:
         sys.stderr.write(f"mzdata version = {version}")
 
-    target_toml_files = ["./crates/mzdata-spectra/Cargo.toml", "./crates/pymzdata/Cargo.toml", "./crates/mzdata-wasm/Cargo.toml"]
+    with open(ref_toml) as fh:
+        lines = fh.readlines()
+    in_workspace = False
+    buf = []
+    for line in lines:
+        if not in_workspace and line.startswith("[workspace.dependencies"):
+            in_workspace = True
+        elif in_workspace and line.startswith("mzdata-"):
+            line_before = line
+            line = dep_pattern.sub(version.strip(), line)
+            mat_before = dep_pattern.search(line_before)
+            mat_after = dep_pattern.search(line)
+            print(line_before, "=>", line)
+            print(mat_before, "=>", mat_after)
+        buf.append(line)
+    with open(ref_toml, 'w') as fh:
+        fh.writelines(buf)
+
+
+    target_toml_files = [
+        "./crates/mzdata-spectra/Cargo.toml",
+        "./crates/pymzdata/Cargo.toml",
+        "./crates/mzdata-wasm/Cargo.toml"
+    ]
     for target_toml in target_toml_files:
         print(f"Updating {target_toml}")
         buffer = []

@@ -6,6 +6,7 @@ version.workspace = true
 [features]
 
 serde = ["dep:serde", "dep:serde_json", "dep:serde_with"]
+cv = ["mzdata-param/cv"]
 
 
 [dependencies]

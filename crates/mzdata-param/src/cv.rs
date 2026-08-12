@@ -1,10 +1,13 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    fs, path,
+};
 
 use super::*;
 
 use bincode::serde::Compat;
-use context_error::{BoxedError, FullErrorContent, StaticErrorContent};
-use mzcv::{CVData, CVIndex, CVSource, CVStructure};
+use context_error::{BoxedError, CreateError, FullErrorContent, StaticErrorContent};
+use mzcv::{CVData, CVIndex, CVSource, CVStructure, HashBufReader};
 use serde::{Deserialize, Serialize};
 use sha1::Digest;
 use std::sync::{Arc, OnceLock};
@@ -173,6 +176,46 @@ impl MSVocabulary {
         Self::init().version()
     }
 
+    /// Update the PSI-MS vocabulary to the version at the provided path. This will update
+    /// the parsed cache on disk and attempt to set the global in-memory representation to
+    /// use this version.
+    ///
+    /// # Warning
+    /// If the controlled vocabulary is already loaded, this will fail to update the current
+    /// version in memory, but should still update the version on disk so that it will be read
+    /// from when the a new process starts.
+    ///
+    /// This *does not* update the compile time static version embedded in the binary used by [`Self::init_static`].
+    /// That can only be upgraded at build time.
+    pub fn update_from_obo<P: AsRef<path::Path>>(
+        obo_path: P,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let infile = obo_path.as_ref();
+        let cv_reader: HashBufReader<Box<dyn std::io::Read>, sha1::Sha1> =
+            if infile.extension().is_some_and(|s| s == "gz") {
+                HashBufReader::boxed(flate2::read::GzDecoder::new(fs::File::open(&infile)?))
+            } else {
+                HashBufReader::boxed(fs::File::open(&infile)?)
+            };
+
+        let (ver, data, errs) = match MSVocabulary::parse([cv_reader].into_iter()) {
+            Ok(r) => r,
+            Err(e) => {
+                let root = BoxedError::default().add_underlying_errors(e);
+                return Err(Box::new(root));
+            }
+        };
+        for e in errs {
+            log::warn!("While updating PSI-MS CV: {e}");
+        }
+        let mut this = CVIndex::<Self>::empty();
+        this.update_from_structure(ver, data)?;
+        if let Err(_) = MS.set(this) {
+            log::error!("Failed to update global in-memory singleton, value was already initialized. On-disk cache updated.")
+        }
+        Ok(())
+    }
+
     /// Get or create the global instance of the [`mzcv::CVIndex`] for [`MSVocabulary`]
     pub fn init() -> &'static mzcv::CVIndex<MSVocabulary> {
         MS.get_or_init(|| {
@@ -337,7 +380,6 @@ fn convert_stanza_to_msterm(obj: mzcv::OboStanza) -> Option<Arc<MSTerm>> {
     Some(Arc::new(data))
 }
 
-
 /// A data structure for walking up and down trees.
 #[derive(Debug, bincode::Encode, bincode::Decode)]
 pub struct VocabularyData<T: CVData>
@@ -464,12 +506,16 @@ impl mzcv::CVSource for MSVocabulary {
     fn static_data() -> Option<(mzcv::CVVersion, Self::Structure)> {
         #[cfg(feature = "static_data")]
         {
-            use std::io;
             use bincode::config::Configuration;
+            use std::io;
             let buf = io::Cursor::new(include_bytes!("ms.dat"));
             let mut reader = flate2::bufread::GzDecoder::new(buf);
-            let cache= bincode::decode_from_std_read::<(mzcv::CVVersion, Self::Structure),
-                Configuration, _>(&mut reader, Configuration::default()).unwrap();
+            let cache = bincode::decode_from_std_read::<
+                (mzcv::CVVersion, Self::Structure),
+                Configuration,
+                _,
+            >(&mut reader, Configuration::default())
+            .unwrap();
             Some(cache)
         }
         #[cfg(not(feature = "static_data"))]
