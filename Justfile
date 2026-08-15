@@ -77,17 +77,14 @@ changelog version:
 
 release tag: (patch-version) (changelog tag)
     #!/usr/bin/env bash
+    set -e
 
     git add crates
     git add CHANGELOG.md
     git commit -m "chore: update changelog"
     git tag {{tag}}
 
-    cargo publish --allow-dirty -p mzdata-param
-    cargo publish --allow-dirty -p mzdata-meta
-    cargo publish --allow-dirty -p mzdata-bindata
-    cargo publish --allow-dirty -p mzdata-spectrum
-    cargo publish --allow-dirty -p mzdata
+    cargo publish --allow-dirty -p mzdata-param -p mzdata-bindata -p mzdata-meta -p mzdata-spectrum  -p mzdata
     cd crates/mzdata-spectra && cargo publish --allow-dirty
 
 
