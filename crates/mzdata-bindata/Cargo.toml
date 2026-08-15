@@ -1,7 +1,14 @@
 [package]
 name = "mzdata-bindata"
 edition = "2024"
+
 version.workspace = true
+license.workspace = true
+repository.workspace = true
+documentation.workspace = true
+categories.workspace = true
+keywords.workspace = true
+description.workspace = true
 
 [features]
 

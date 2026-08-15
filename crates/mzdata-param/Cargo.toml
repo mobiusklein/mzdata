@@ -5,6 +5,13 @@ edition = "2024"
 
 include = ["src/**/*", "test/**/*", "examples/**/*", "README.md"]
 
+license.workspace = true
+repository.workspace = true
+documentation.workspace = true
+categories.workspace = true
+keywords.workspace = true
+description.workspace = true
+
 [features]
 
 checksum = ["dep:sha1", "dep:hex"]

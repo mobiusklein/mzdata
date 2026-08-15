@@ -1,6 +1,6 @@
 [package]
 name = "mzdata"
-version = "0.66.0"
+version = { workspace = true }
 edition = "2021"
 keywords = ['mass-spectrometry', 'mzml', 'mgf']
 
@@ -263,6 +263,19 @@ exclude = ["crates/pymzdata"]
 [workspace.package]
 
 version = "0.66.0"
+
+keywords = ['mass-spectrometry', 'mzml', 'mgf']
+
+categories = ["science", "parser-implementations", "data-structures"]
+
+description = "A library to read mass spectrometry data formats and a data model for mass spectra"
+
+license = "Apache-2.0"
+
+repository = "https://github.com/mobiusklein/mzdata"
+
+documentation = "https://docs.rs/mzdata"
+
 
 [workspace.dependencies]
 
