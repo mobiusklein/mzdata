@@ -28,6 +28,29 @@ and this project adheres to [Semantic Versioning].
 - Fix CI errors
 - Fix CI errors
 
+## [0.66.0] - 2026-08-15
+
+### Added
+
+- Add `reset` to `pymzdata.MZReader` and `pymzdata.IMZReader`
+- Add `IndexArray`
+
+### Changed
+
+- Factor several submodules into sub-crates to allow controlled vocabulary factorization with static data
+- Update publishing workflow
+- Factor spectrum submodule into a separate crate covering just those specific modules independent of all IO. Retain IO modifiers and tests in the main crate
+- Move `SpectrumGroup` and associated types to `mzdata-spectrum`, leaving iterators producing them in the main crate
+
+### Documentation
+
+- Describe pymzdata bindings (#57)
+
+### Fixed
+
+- Fix CI errors
+- Fix CI errors
+
 ## [0.65.4] - 2026-07-14
 
 ### Fixed
@@ -1157,6 +1180,7 @@ using mz_read macro. This also prevents potential version mismatches.
 <!-- Versions -->
 
 [unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.66.0...HEAD
+[0.66.0]: https://github.com/mobiusklein/mzdata/compare/v0.66.0...v0.66.0
 [0.66.0]: https://github.com/mobiusklein/mzdata/compare/v0.65.5...v0.66.0
 [0.65.5]: https://github.com/mobiusklein/mzdata/compare/v0.65.4...v0.65.5
 [0.65.4]: https://github.com/mobiusklein/mzdata/compare/v0.65.4...v0.65.4
