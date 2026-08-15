@@ -12,13 +12,11 @@ use num_traits::ToBytes;
 
 use mzdata_param::{ParamList, Unit};
 
-use super::encodings::{
-    to_bytes, ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType,
+use crate::encodings::{
+    to_bytes, vec_as_bytes, ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType,
     Bytes,
 };
-use super::traits::{ByteArrayView, ByteArrayViewMut};
-#[allow(unused)]
-use super::vec_as_bytes;
+use crate::traits::{ByteArrayView, ByteArrayViewMut};
 
 #[allow(unused)]
 use super::encodings::{

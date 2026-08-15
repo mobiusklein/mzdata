@@ -191,6 +191,14 @@ pub trait BuildFromArrayMap: Sized {
     }
 }
 
+pub trait BuildArrayMapFrom: Sized {
+    fn arrays_included(&self) -> Option<Vec<ArrayType>> {
+        None
+    }
+
+    fn as_arrays(source: &[Self]) -> BinaryArrayMap;
+}
+
 pub trait BuildArrayMap3DFrom: BuildArrayMapFrom {
     fn as_arrays_3d(source: &[Self]) -> BinaryArrayMap3D {
         BuildArrayMapFrom::as_arrays(source).try_into().unwrap()
@@ -241,13 +249,7 @@ pub trait BuildFromArrayMap3D: BuildFromArrayMap {
     }
 }
 
-pub trait BuildArrayMapFrom: Sized {
-    fn arrays_included(&self) -> Option<Vec<ArrayType>> {
-        None
-    }
-
-    fn as_arrays(source: &[Self]) -> BinaryArrayMap;
-}
+// Basic peaks
 
 impl BuildArrayMapFrom for CentroidPeak {
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {
@@ -393,6 +395,8 @@ impl BuildFromArrayMap for DeconvolutedPeak {
         Ok(peaks)
     }
 }
+
+// Ion mobility features
 
 impl BuildArrayMapFrom for Feature<MZ, IonMobility> {
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {
@@ -737,6 +741,8 @@ impl BuildFromArrayMap3D for ChargedFeature<Mass, IonMobility> {
         Ok(index)
     }
 }
+
+// Ion mobility-aware peaks
 
 impl BuildArrayMapFrom for mzpeaks::peak::IonMobilityAwareCentroidPeak {
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {

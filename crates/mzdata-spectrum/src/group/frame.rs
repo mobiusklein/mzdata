@@ -6,9 +6,9 @@ use mzpeaks::{
     KnownCharge,
 };
 
-use crate::spectrum::{IonMobilityFrameLike, MultiLayerIonMobilityFrame};
+use crate::frame::{IonMobilityFrameLike, MultiLayerIonMobilityFrame};
 
-use super::util::GroupIterState;
+use super::utils::GroupIterState;
 
 /// An abstraction over [`IonMobilityFrameGroup`](crate::spectrum::IonMobilityFrameGroup)'s interface.
 pub trait IonMobilityFrameGrouping<

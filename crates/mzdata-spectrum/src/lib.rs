@@ -5,6 +5,8 @@ mod scan_properties;
 mod spectrum_types;
 mod utils;
 
+pub mod group;
+
 use mzdata_param as params;
 
 pub use peaks::{

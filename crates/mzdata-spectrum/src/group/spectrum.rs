@@ -2,9 +2,9 @@ use std::{marker::PhantomData, mem};
 
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, DeconvolutedPeak};
 
-use super::super::{MultiLayerSpectrum, SpectrumLike};
+use crate::{MultiLayerSpectrum, SpectrumLike};
 
-use super::util::GroupIterState;
+use super::utils::GroupIterState;
 
 
 /// An abstraction over [`SpectrumGroup`](crate::spectrum::SpectrumGroup)'s interface.

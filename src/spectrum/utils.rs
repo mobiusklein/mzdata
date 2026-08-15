@@ -242,6 +242,8 @@ impl<
     }
 }
 
+// Senders
+
 impl<
         C: CentroidLike + Send + BuildArrayMapFrom + BuildFromArrayMap + Clone,
         D: DeconvolutedCentroidLike + Send + BuildArrayMapFrom + BuildFromArrayMap + Clone,
@@ -286,8 +288,6 @@ impl<
         Ok(())
     }
 }
-
-
 
 impl<
         C: CentroidLike + Send + BuildArrayMapFrom + BuildFromArrayMap + Clone,

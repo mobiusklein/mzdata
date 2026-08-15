@@ -1,4 +1,4 @@
-use std::iter::FusedIterator;
+use std::iter::{FusedIterator, ExactSizeIterator};
 
 use crate::spectrum::Chromatogram;
 
@@ -51,3 +51,9 @@ impl<R: ChromatogramSource> Iterator for ChromatogramIterator<'_, R> {
 }
 
 impl<R: ChromatogramSource> FusedIterator for ChromatogramIterator<'_, R> {}
+
+impl<R: ChromatogramSource> ExactSizeIterator for ChromatogramIterator<'_, R> {
+    fn len(&self) -> usize {
+        self.source.count_chromatograms()
+    }
+}

@@ -1,16 +1,6 @@
 use std::collections::{hash_map::Entry, HashMap, HashSet, VecDeque};
 
 
-#[derive(Debug, Default)]
-pub(crate) enum GroupIterState {
-    #[default]
-    Precursor,
-    Product(usize),
-    Done,
-}
-
-
-
 #[derive(Default, Debug)]
 pub(crate) struct GenerationTracker {
     generation_to_id: HashMap<usize, HashSet<String>>,

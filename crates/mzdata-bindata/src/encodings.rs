@@ -527,10 +527,8 @@ mod dictionary_encoding {
     }
 }
 
-#[allow(unused)]
 pub use byte_rotation::*;
 
-#[allow(unused)]
 pub use dictionary_encoding::{dictionary_decoding, dictionary_encoding};
 
 /// The kinds of data arrays found in mass spectrometry data files governed

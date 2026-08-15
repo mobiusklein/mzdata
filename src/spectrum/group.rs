@@ -12,23 +12,26 @@ use crate::{
     io::{
         RandomAccessIonMobilityFrameGroupingIterator, RandomAccessIonMobilityFrameIterator,
         RandomAccessSpectrumGroupingIterator, RandomAccessSpectrumIterator, SpectrumAccessError,
-    }, prelude::{MSDataFileMetadata, SpectrumLike}
+    },
+    prelude::{MSDataFileMetadata, SpectrumLike},
 };
 
 use super::{IonMobilityFrameLike, MultiLayerIonMobilityFrame, MultiLayerSpectrum};
 
-mod frame;
 mod mse_iter;
-mod spectrum;
 mod util;
 
-pub use frame::{
+pub use mzdata_spectrum::group::{
     IonMobilityFrameGroup, IonMobilityFrameGroupIntoIter, IonMobilityFrameGroupIter,
-    IonMobilityFrameGrouping,
+    IonMobilityFrameGrouping, SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter,
+    SpectrumGrouping,
 };
+
 #[allow(unused)]
-pub use mse_iter::{IonMobilityFrameMSEIterator, SpectrumMSEIterator, IonMobilityFrameMSEIteratorExt, SpectrumMSEIteratorExt};
-pub use spectrum::{SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter, SpectrumGrouping};
+pub use mse_iter::{
+    IonMobilityFrameMSEIterator, IonMobilityFrameMSEIteratorExt, SpectrumMSEIterator,
+    SpectrumMSEIteratorExt,
+};
 pub(crate) use util::GenerationTracker;
 
 const MAX_GROUP_DEPTH: u32 = 512u32;
@@ -258,7 +261,6 @@ macro_rules! impl_ms_level_switching {
             self.passed_first_ms1 = false;
         }
     };
-
 }
 
 impl<
@@ -291,7 +293,6 @@ impl<
     }
 
     impl_ms_level_switching!();
-
 
     /**
     Retrieve the next group of spectra from the iterator, buffering all intermediate and
@@ -1538,7 +1539,6 @@ mod test {
         let bat = iter.next().unwrap();
         assert!(bat.precursor().is_some());
         assert_eq!(bat.products().len(), 1);
-
 
         Ok(())
     }
