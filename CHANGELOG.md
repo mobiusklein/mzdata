@@ -5,52 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
-## [0.66.0] - 2026-08-15
-
-### Added
-
-- Add `reset` to `pymzdata.MZReader` and `pymzdata.IMZReader`
-- Add `IndexArray`
-
-### Changed
-
-- Factor several submodules into sub-crates to allow controlled vocabulary factorization with static data
-- Update publishing workflow
-- Factor spectrum submodule into a separate crate covering just those specific modules independent of all IO. Retain IO modifiers and tests in the main crate
-- Move `SpectrumGroup` and associated types to `mzdata-spectrum`, leaving iterators producing them in the main crate
-
-### Documentation
-
-- Describe pymzdata bindings (#57)
-
-### Fixed
-
-- Fix CI errors
-- Fix CI errors
-
-## [0.66.0] - 2026-08-15
-
-### Added
-
-- Add `reset` to `pymzdata.MZReader` and `pymzdata.IMZReader`
-- Add `IndexArray`
-
-### Changed
-
-- Factor several submodules into sub-crates to allow controlled vocabulary factorization with static data
-- Update publishing workflow
-- Factor spectrum submodule into a separate crate covering just those specific modules independent of all IO. Retain IO modifiers and tests in the main crate
-- Move `SpectrumGroup` and associated types to `mzdata-spectrum`, leaving iterators producing them in the main crate
-
-### Documentation
-
-- Describe pymzdata bindings (#57)
-
-### Fixed
-
-- Fix CI errors
-- Fix CI errors
-
 ## [0.65.4] - 2026-07-14
 
 ### Fixed
