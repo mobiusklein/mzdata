@@ -19,6 +19,8 @@ use mzsignal::{
 };
 
 use mzdata_param::{ParamDescribed, Unit, Value};
+
+#[allow(unused)]
 use mzdata_bindata::{
     ArrayRetrievalError, ArrayType, BinaryArrayMap, BinaryDataArrayType, BuildArrayMapFrom,
     BuildFromArrayMap, DataArray,

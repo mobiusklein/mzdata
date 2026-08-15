@@ -65,6 +65,8 @@ mgf = []
 mzml = ["dep:quick-xml", "checksum", "dep:memchr", "dep:encoding_rs"]
 imzml = ["mzml", "dep:uuid", "mzdata-param/imzml"]
 
+numpress = ["mzdata-bindata/numpress"]
+
 mzsignal = ["dep:mzsignal", "mzdata-bindata/mzsignal"]
 
 # mzsignal's main functionality requires a linear algebra backend.

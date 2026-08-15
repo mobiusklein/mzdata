@@ -12,6 +12,7 @@ use num_traits::ToBytes;
 
 use mzdata_param::{ParamList, Unit};
 
+#[allow(unused)]
 use crate::encodings::{
     to_bytes, vec_as_bytes, ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType,
     Bytes,
