@@ -233,7 +233,6 @@ features = [
     "parallelism",
     "mzsignal",
     "nalgebra",
-    "mzmlb",
     "imzml",
     "async",
     "proxi",
@@ -241,6 +240,7 @@ features = [
     # "thermo",
     "doc-only",
     "bruker_tdf",
+    "cv",
 ]
 no-default-features = true
 
