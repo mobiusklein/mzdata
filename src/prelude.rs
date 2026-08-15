@@ -20,6 +20,7 @@ pub use crate::spectrum::bindata::{
 pub use crate::spectrum::{
     IonProperties, PrecursorSelection, SpectrumLike, IonMobilityMeasure, IonMobilityFrameLike,
     SpectrumGrouping, IonMobilityFrameGrouping, ChromatogramLike,
+    PrecursorRetrieval,
     group::{SpectrumMSEIteratorExt, IonMobilityFrameMSEIteratorExt},
 };
 

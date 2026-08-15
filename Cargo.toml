@@ -69,12 +69,12 @@ mzsignal = ["dep:mzsignal", "mzdata-bindata/mzsignal"]
 
 # mzsignal's main functionality requires a linear algebra backend.
 # Rust does not support exclusive-or style feature flags.
-nalgebra = ["mzsignal", "mzsignal/nalgebra"]
-openblas = ["mzsignal", "mzsignal/openblas"]
-netlib = ["mzsignal", "mzsignal/netlib"]
-intel-mkl = ["mzsignal", "mzsignal/intel-mkl"]
+nalgebra = ["mzsignal", "mzsignal/nalgebra", "mzdata-spectrum/nalgebra"]
+openblas = ["mzsignal", "mzsignal/openblas", "mzdata-spectrum/openblas"]
+netlib = ["mzsignal", "mzsignal/netlib", "mzdata-spectrum/netlib"]
+intel-mkl = ["mzsignal", "mzsignal/intel-mkl", "mzdata-spectrum/intel-mkl"]
 
-parallelism = ["dep:rayon", "mzsignal?/parallelism"]
+parallelism = ["dep:rayon", "mzsignal?/parallelism", "mzdata-spectrum/parallelism"]
 
 # The zlib feature makes the code faster unoptimized, but with LTO the default
 # algorithm is faster on tests. Odds are on real data, this will vary with the
@@ -83,12 +83,12 @@ parallelism = ["dep:rayon", "mzsignal?/parallelism"]
 #
 # After substantial testing, zlib-ng-compat is the winner for speed and size on
 # a variety of real-world data.
-zlib = ["flate2/zlib", "mzdata-bindata/zlib"]
-zlib-ng-compat = ["flate2/zlib-ng-compat", "mzdata-bindata/zlib-ng-compat"]
-zlib-ng = ["flate2/zlib-ng", "mzdata-bindata/zlib-ng"]
-zlib-rs = ["flate2/zlib-rs", "mzdata-bindata/zlib-rs"]
-miniz_oxide = ["flate2/rust_backend", "mzdata-bindata/miniz_oxide"]
-zstd = ["dep:zstd", "mzdata-bindata/zstd"]
+zlib = ["flate2/zlib", "mzdata-bindata/zlib", "mzdata-spectrum/zlib"]
+zlib-ng-compat = ["flate2/zlib-ng-compat", "mzdata-bindata/zlib-ng-compat", "mzdata-spectrum/zlib"]
+zlib-ng = ["flate2/zlib-ng", "mzdata-bindata/zlib-ng", "mzdata-spectrum/zlib"]
+zlib-rs = ["flate2/zlib-rs", "mzdata-bindata/zlib-rs", "mzdata-spectrum/zlib"]
+miniz_oxide = ["flate2/rust_backend", "mzdata-bindata/miniz_oxide", "mzdata-spectrum/miniz_oxide"]
+zstd = ["dep:zstd", "mzdata-bindata/zstd", "mzdata-spectrum/zstd"]
 
 # Enables reading mzMLb
 mzmlb = ["mzml", "dep:hdf5", "dep:ndarray", "dep:hdf5-sys"]
@@ -168,6 +168,7 @@ mzsignal = { workspace = true, optional = true }
 mzdata-param = { workspace = true }
 mzdata-meta = { workspace = true }
 mzdata-bindata = { workspace = true }
+mzdata-spectrum = { workspace = true }
 
 # Checksums and hashing
 sha1 = { workspace = true, optional = true }
@@ -253,6 +254,7 @@ members = [
     "crates/mzdata-param",
     "crates/mzdata-meta",
     "crates/mzdata-bindata",
+    "crates/mzdata-spectrum",
     "crates/mzdata-spectra",
 ]
 
@@ -274,6 +276,7 @@ mzsignal = { version = ">=1.1.10,<1.2.0", default-features = false, features = [
 mzdata-param = { version = "0.65.6", path = "./crates/mzdata-param" }
 mzdata-meta = { version = "0.65.6", path = "./crates/mzdata-meta" }
 mzdata-bindata = { version = "0.65.6", path = "./crates/mzdata-bindata" }
+mzdata-spectrum = { version = "0.65.6", path = "./crates/mzdata-spectrum" }
 
 # Checksums and hashing
 sha1 = { version = "0.11" }

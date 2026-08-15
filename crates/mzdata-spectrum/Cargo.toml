@@ -1,0 +1,60 @@
+[package]
+name = "mzdata-spectrum"
+edition = "2024"
+version.workspace = true
+
+[features]
+
+serde = [
+    "dep:serde",
+    "dep:serde_json",
+    "dep:serde_with",
+    "mzdata-bindata/serde",
+    "mzdata-param/serde",
+    "mzpeaks/serde",
+    "mzsignal?/serde",
+]
+
+parallelism = ["dep:rayon", "mzsignal?/parallelism"]
+
+# The zlib feature makes the code faster unoptimized, but with LTO the default
+# algorithm is faster on tests. Odds are on real data, this will vary with the
+# size of the data being shuttled back and forth, and on the quality of the data
+# (de)compression.
+#
+# After substantial testing, zlib-ng-compat is the winner for speed and size on
+# a variety of real-world data.
+zlib = ["mzdata-bindata/zlib"]
+zlib-ng-compat = ["mzdata-bindata/zlib-ng-compat"]
+zlib-ng = ["mzdata-bindata/zlib-ng"]
+zlib-rs = ["mzdata-bindata/zlib-rs"]
+miniz_oxide = ["mzdata-bindata/miniz_oxide"]
+zstd = ["mzdata-bindata/zstd"]
+
+
+# mzsignal's main functionality requires a linear algebra backend.
+# Rust does not support exclusive-or style feature flags.
+nalgebra = ["mzsignal", "mzsignal/nalgebra"]
+openblas = ["mzsignal", "mzsignal/openblas"]
+netlib = ["mzsignal", "mzsignal/netlib"]
+intel-mkl = ["mzsignal", "mzsignal/intel-mkl"]
+
+
+[dependencies]
+
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+serde_with = { workspace = true, optional = true }
+
+log = { workspace = true }
+identity-hash = { workspace = true }
+num-traits = { workspace = true }
+thiserror = { workspace = true }
+
+mzpeaks = { workspace = true }
+mzsignal = { workspace = true, optional = true }
+mzdata-param = { workspace = true }
+mzdata-bindata = { workspace = true }
+mzdata-meta = { workspace = true }
+
+rayon = { workspace = true, optional = true }

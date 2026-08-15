@@ -2388,6 +2388,7 @@ dependencies = [
  "mzdata-bindata",
  "mzdata-meta",
  "mzdata-param",
+ "mzdata-spectrum",
  "mzpeaks",
  "mzsignal",
  "ndarray",
@@ -2471,6 +2472,25 @@ name = "mzdata-spectra"
 version = "0.65.6"
 dependencies = [
  "mzdata",
+]
+
+[[package]]
+name = "mzdata-spectrum"
+version = "0.65.6"
+dependencies = [
+ "identity-hash",
+ "log",
+ "mzdata-bindata",
+ "mzdata-meta",
+ "mzdata-param",
+ "mzpeaks",
+ "mzsignal",
+ "num-traits",
+ "rayon",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

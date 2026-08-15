@@ -8,8 +8,7 @@ use mzpeaks::{
     IndexType, MZPeakSetType, MassPeakSetType,
 };
 
-use super::bindata::{ArrayRetrievalError, BinaryArrayMap, BuildFromArrayMap, ArraysAvailable};
-use crate::utils::mass_charge_ratio;
+use mzdata_bindata::{ArrayRetrievalError, BinaryArrayMap, BuildFromArrayMap, ArraysAvailable, utils::mass_charge_ratio};
 
 trait SummaryOps {
     /// Compute the base peak of a spectrum

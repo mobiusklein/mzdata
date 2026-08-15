@@ -33,7 +33,7 @@ use crate::{
     prelude::*,
     spectrum::{
         bindata::{ArrayType, BinaryCompressionType, BuildFromArrayMap},
-        chromatogram::Chromatogram,
+        Chromatogram,
         spectrum_types::MultiLayerSpectrum,
         IsolationWindow, Precursor, ScanWindow, SelectedIon,
     },
@@ -312,7 +312,7 @@ impl<'a, C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + Buil
         self.inner.into_spectrum(spectrum);
     }
 
-    fn into_chromatogram(self, chromatogram: &mut crate::spectrum::chromatogram::Chromatogram) {
+    fn into_chromatogram(self, chromatogram: &mut crate::spectrum::Chromatogram) {
         self.inner.into_chromatogram(chromatogram);
     }
 

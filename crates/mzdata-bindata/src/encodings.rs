@@ -1508,7 +1508,7 @@ impl Display for BinaryCompressionType {
 }
 
 /// A high level set of failure modes that an operation to retrieve a typed memory buffer
-/// from a `[BinaryArrayMap]` might encounter. May also be used to represented conversion
+/// from a [`BinaryArrayMap`](crate::BinaryArrayMap) might encounter. May also be used to represented conversion
 /// during reading or writing.
 #[derive(Debug, Clone, Error, PartialEq)]
 pub enum ArrayRetrievalError {

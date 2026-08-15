@@ -54,24 +54,24 @@
 //! More examples can be found in the [spectrum tutorial](crate::tutorial::spectrum).
 
 pub mod bindata;
-pub(crate) mod chromatogram;
 pub(crate) mod frame;
 pub(crate) mod group;
-pub(crate) mod peaks;
 pub(crate) mod scan_properties;
 pub(crate) mod spectrum_types;
 pub mod utils;
 
-pub use crate::spectrum::bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, BinaryArrayMap3D};
-pub use crate::spectrum::chromatogram::{Chromatogram, ChromatogramLike};
+pub use crate::spectrum::bindata::{
+    ArrayType, BinaryArrayMap, BinaryArrayMap3D, BinaryDataArrayType, DataArray,
+};
 pub use crate::spectrum::scan_properties::*;
 pub use crate::spectrum::spectrum_types::{
     CentroidPeakAdapting, CentroidSpectrum, CentroidSpectrumType, DeconvolutedPeakAdapting,
     DeconvolutedSpectrum, DeconvolutedSpectrumType, MultiLayerSpectrum, RawSpectrum, Spectrum,
     SpectrumConversionError, SpectrumLike, SpectrumProcessingError,
 };
+pub use mzdata_spectrum::{Chromatogram, ChromatogramLike};
 
-pub use crate::spectrum::peaks::{
+pub use mzdata_spectrum::{
     PeakDataIter, PeakDataIterDispatch, PeakDataLevel, RawIter, RefPeakDataIter, RefPeakDataLevel,
     SpectrumSummary,
 };
@@ -80,13 +80,13 @@ pub use utils::HasIonMobility;
 
 pub use frame::{
     FeatureDataLevel, IonMobilityFrameDescription, IonMobilityFrameLike,
-    MultiLayerIonMobilityFrame, RefFeatureDataLevel
+    MultiLayerIonMobilityFrame, RefFeatureDataLevel,
 };
 
 pub use group::{
     IonMobilityFrameGroup, IonMobilityFrameGroupIntoIter, IonMobilityFrameGroupIter,
-    IonMobilityFrameGroupingIterator, SpectrumGroup, SpectrumGroupIntoIter, SpectrumGroupIter,
-    SpectrumGroupingIterator, SpectrumGrouping, IonMobilityFrameGrouping,
+    IonMobilityFrameGrouping, IonMobilityFrameGroupingIterator, SpectrumGroup,
+    SpectrumGroupIntoIter, SpectrumGroupIter, SpectrumGrouping, SpectrumGroupingIterator,
 };
 
 #[cfg(feature = "mzsignal")]

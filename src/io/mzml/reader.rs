@@ -27,7 +27,7 @@ use crate::{
             ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType,
             BuildArrayMapFrom, BuildFromArrayMap, DataArray,
         },
-        chromatogram::{Chromatogram, ChromatogramLike},
+        {Chromatogram, ChromatogramLike},
         scan_properties::*,
         spectrum_types::{CentroidSpectrumType, MultiLayerSpectrum, RawSpectrum, Spectrum},
         HasIonMobility,
