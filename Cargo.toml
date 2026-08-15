@@ -1,17 +1,14 @@
 [package]
 name = "mzdata"
-version = { workspace = true }
 edition = "2021"
-keywords = ['mass-spectrometry', 'mzml', 'mgf']
 
-categories = ["science", "parser-implementations", "data-structures"]
-
-description = "A library to read mass spectrometry data formats and a data model for mass spectra"
-
-license = "Apache-2.0"
-
-repository = "https://github.com/mobiusklein/mzdata"
-documentation = "https://docs.rs/mzdata"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+documentation.workspace = true
+categories.workspace = true
+keywords.workspace = true
+description.workspace = true
 
 exclude = ["tmp/*", "test/data/*"]
 
