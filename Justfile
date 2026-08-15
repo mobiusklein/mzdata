@@ -88,7 +88,7 @@ release tag: (patch-version) (changelog tag)
     cd crates/mzdata-spectra && cargo publish --allow-dirty
 
 
-patch-version:
+patch-version tag="-":
     #!/usr/bin/env python
     import sys
     import re
@@ -99,12 +99,25 @@ patch-version:
     dep_pattern = re.compile(r"version\s*=\s*\"(.+?)\"")
 
     version = None
-
-    with open(ref_toml) as fh:
-        for line in fh:
+    if "{{tag}}" == "-":
+        with open(ref_toml) as fh:
+            for line in fh:
+                if match := pattern.match(line):
+                    version = match.string
+                    break
+    else:
+        tag = "{{tag}}".replace("v", "")
+        version = f"version = \"{tag}\""
+        with open(ref_toml) as fh:
+            lines = fh.readlines()
+        buf = []
+        for line in lines:
             if match := pattern.match(line):
-                version = match.string
-                break
+                line = version
+            buf.append(line)
+        with open(ref_toml, 'w') as fh:
+            fh.writelines(buf)
+
     if version is None:
         sys.stderr.write("Failed to resolve reference mzdata version")
         if not version:
