@@ -28,7 +28,7 @@
 //! Construct a controlled-vocabulary parameter from a [`ControlledVocabulary`] namespace:
 //!
 //! ```rust
-//! use mzdata_param::{ControlledVocabulary, ParamLike, ParamValue};
+//! use mzdata::params::{ControlledVocabulary, ParamLike, ParamValue};
 //!
 //! let param = ControlledVocabulary::MS.param_val("MS:1000041", "charge state", 2i32);
 //! assert_eq!(param.name(), "charge state");
@@ -40,7 +40,7 @@
 //! including plain user-defined parameters that have no controlled vocabulary:
 //!
 //! ```rust
-//! use mzdata_param::{Param, ParamValue, Unit, curie};
+//! use mzdata::params::{Param, ParamValue, Unit, curie};
 //!
 //! let p = Param::builder()
 //!     .name("scan start time")
@@ -62,7 +62,7 @@
 //! as a string, integer, or float - coercions are attempted on demand:
 //!
 //! ```rust
-//! use mzdata_param::{ControlledVocabulary, ParamValue};
+//! use mzdata::params::{ControlledVocabulary, ParamValue};
 //!
 //! let p = ControlledVocabulary::MS.param_val("MS:1000827", "isolation window target m/z", "500.25");
 //! assert_eq!(p.to_f64().unwrap(), 500.25);
@@ -81,7 +81,7 @@
 //! lazily allocated on first write) to implement [`ParamDescribed`] for your type:
 //!
 //! ```rust
-//! use mzdata_param::{impl_param_described, Param, ParamDescribed, ParamList, ParamValue};
+//! use mzdata::params::{impl_param_described, Param, ParamDescribed, ParamList, ParamValue};
 //!
 //! #[derive(Default)]
 //! struct MyComponent {
@@ -102,7 +102,7 @@
 //! gives a compact way to write one inline:
 //!
 //! ```rust
-//! use mzdata_param::{ControlledVocabulary, ParamLike, curie};
+//! use mzdata::params::{ControlledVocabulary, ParamLike, curie};
 //!
 //! let p = ControlledVocabulary::MS.param("MS:1000016", "scan start time");
 //! assert!(curie!(MS:1000016) == p);
@@ -118,7 +118,7 @@
 //! ```rust
 //! # #[cfg(feature = "static_data")]
 //! # {
-//! use mzdata_param::{MSVocabulary, curie};
+//! use mzdata::params::{MSVocabulary, curie};
 //!
 //! let term = MSVocabulary::get(curie!(MS:1000044)).unwrap();
 //! assert_eq!(term.name.as_ref(), "dissociation method");
