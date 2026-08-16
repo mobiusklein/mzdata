@@ -266,7 +266,7 @@ pub struct RawTDFSQLReader {
 #[allow(unused)]
 impl RawTDFSQLReader {
     pub fn new(tdf_path: &Path) -> Result<Self, Error> {
-        let connection = ReentrantMutex::new(Connection::open(tdf_path)?);
+        let connection = ReentrantMutex::new(Connection::open_with_flags(tdf_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?);
         Ok(Self { connection })
     }
 
