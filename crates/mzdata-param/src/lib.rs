@@ -116,7 +116,7 @@
 //! `.obo` file via [`MSVocabulary::update_from_obo`]:
 //!
 //! ```rust
-//! # #[cfg(feature = "cv")]
+//! # #[cfg(feature = "static_data")]
 //! # {
 //! use mzdata_param::{MSVocabulary, curie};
 //!

@@ -121,8 +121,7 @@
 //!
 pub mod io;
 pub mod meta;
-#[macro_use]
-pub mod params;
+pub use mzdata_param as params;
 pub mod prelude;
 pub mod spectrum;
 pub mod utils;

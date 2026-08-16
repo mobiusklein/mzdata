@@ -210,10 +210,13 @@ impl CVData for MSTerm {
 /// also lets the caller traverse the controlled vocabulary tree.
 ///
 /// ```rust
+/// # #[cfg(feature = "static_data")]
+/// # {
 /// # use mzdata_param::{MSVocabulary, curie, CURIE};
 /// let term = MSVocabulary::get(curie!(MS:1000044)).unwrap();
 /// assert_eq!(term.name.as_ref(), "dissociation method");
 /// assert!(!MSVocabulary::children_of(term.accession()).expect("this term is defined!").is_empty());
+/// # }
 /// ```
 ///
 ///
