@@ -113,7 +113,7 @@ patch-version tag="-":
         buf = []
         for line in lines:
             if match := pattern.match(line):
-                line = version
+                line = version + '\n'
             buf.append(line)
         with open(ref_toml, 'w') as fh:
             fh.writelines(buf)
