@@ -13,10 +13,16 @@ use crate::{
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Param {
+    /// The human-readable name of the parameter.
     pub name: String,
+    /// A type generic value associated with the parameter
     pub value: Value,
+    /// The numeric component of the accession code in the identifier for the parameter's
+    /// definition in [`Self::controlled_vocabulary`], if it is defined by one.
     pub accession: Option<AccessionIntCode>,
+    /// The controlled vocabulary this parameter is defined in, if any.
     pub controlled_vocabulary: Option<ControlledVocabulary>,
+    /// The unit the parameter's value is expressed in, if any.
     pub unit: Unit,
 }
 
@@ -127,21 +133,31 @@ pub struct ParamBuilder {
 }
 
 impl ParamBuilder {
+    /// Set the parameter's name.
     pub fn name<S: ToString>(mut self, name: S) -> Self {
         self.name = name.to_string();
         self
     }
 
+    /// Set the parameter's value.
     pub fn value<V: Into<Value>>(mut self, value: V) -> Self {
         self.value = value.into();
         self
     }
 
+    /// Set the parameter's controlled vocabulary namespace.
+    ///
+    /// # See also
+    /// - [`ParamBuilder::curie`], to set the namespace and accession together
     pub fn controlled_vocabulary(mut self, cv: ControlledVocabulary) -> Self {
         self.controlled_vocabulary = Some(cv);
         self
     }
 
+    /// Set the parameter's accession code.
+    ///
+    /// # See also
+    /// - [`ParamBuilder::curie`], to set the namespace and accession together
     pub fn accession(mut self, accession: AccessionIntCode) -> Self {
         self.accession = Some(accession);
         self
@@ -155,6 +171,7 @@ impl ParamBuilder {
         self
     }
 
+    /// Set the parameter's unit of measure.
     pub fn unit(mut self, unit: Unit) -> Self {
         self.unit = unit;
         self
@@ -186,7 +203,8 @@ impl Param {
         }
     }
 
-    /// Create a new [`ParamBuilder`] to make creating a new [`Param`] more convenient.
+    /// Create a new [`ParamBuilder`] to make creating a new [`Param`] more convenient than
+    /// setting fields on a bare [`Param`] directly.
     pub fn builder() -> ParamBuilder {
         ParamBuilder::default()
     }
@@ -226,6 +244,9 @@ impl Param {
     }
 
     /// Update [`Param::unit`] inferred from `accession`, failing that, `name`
+    ///
+    /// # See also
+    /// - [`Param::with_unit_t`], to infer the unit from a resolved [`Unit`]
     pub fn with_unit<S: AsRef<str>, A: AsRef<str>>(mut self, accession: S, name: A) -> Param {
         self.unit = Unit::from_accession(accession.as_ref());
         if matches!(self.unit, Unit::Unknown) {
@@ -234,7 +255,10 @@ impl Param {
         self
     }
 
-    /// Update [`Param::unit`] from `unit`
+    /// Set [`Param::unit`] directly from `unit`.
+    ///
+    /// # See also
+    /// - [`Param::with_unit`], to infer the unit from an accession or name instead
     pub fn with_unit_t(mut self, unit: &Unit) -> Param {
         self.unit = *unit;
         self

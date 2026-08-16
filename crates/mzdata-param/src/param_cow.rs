@@ -11,10 +11,17 @@ use crate::{
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ParamCow<'a> {
+    /// The human-readable name of the parameter.
     pub name: Cow<'a, str>,
+    /// The parameter's value.
     pub value: ValueRef<'a>,
+    /// The numeric accession code within `controlled_vocabulary`, if this parameter is
+    /// drawn from a controlled vocabulary.
     pub accession: Option<AccessionIntCode>,
+    /// The controlled vocabulary this parameter's term belongs to. `None` for a
+    /// free-text, user-defined parameter.
     pub controlled_vocabulary: Option<ControlledVocabulary>,
+    /// The unit the value is expressed in, if known.
     pub unit: Unit,
 }
 
@@ -89,6 +96,9 @@ impl<'a> ParamValue for ParamCow<'a> {
 }
 
 impl ParamCow<'static> {
+    /// Build a [`ParamCow<'static>`] in a `const` context. Prefer
+    /// [`ControlledVocabulary::const_param`] and its siblings, which fill in the namespace
+    /// for you.
     pub const fn const_new(
         name: &'static str,
         value: ValueRef<'static>,
@@ -107,6 +117,7 @@ impl ParamCow<'static> {
 }
 
 impl<'a> ParamCow<'a> {
+    /// Build a [`ParamCow`] from its parts directly.
     pub fn new(
         name: Cow<'a, str>,
         value: ValueRef<'a>,
@@ -123,14 +134,19 @@ impl<'a> ParamCow<'a> {
         }
     }
 
+    /// Attempt to parse the value of this parameter into `T`.
+    ///
+    /// See [`Value::parse`]
     pub fn parse<T: str::FromStr>(&self) -> Result<T, T::Err> {
         self.value.parse::<T>()
     }
 
+    /// Check if this parameter is defined in a controlled vocabulary
     pub const fn is_controlled(&self) -> bool {
         self.accession.is_some()
     }
 
+    /// Create a [`CURIE`] from [`ParamCow::controlled_vocabulary`] and [`ParamCow::accession`]
     pub const fn curie(&self) -> Option<CURIE> {
         match (self.controlled_vocabulary, self.accession) {
             (Some(cv), Some(acc)) => Some(CURIE::new(cv, acc)),

@@ -27,6 +27,10 @@ pub enum ControlledVocabulary {
     /// The Imaging MS Controlled Vocabulary <https://www.ms-imaging.org/imzml/>
     #[cfg(feature = "imzml")]
     IMS,
+    /// A sentinel for a namespace that could not be recognized, e.g. while parsing an
+    /// unfamiliar CURIE prefix. Not a valid namespace to build a [`Param`] or [`CURIE`]
+    /// from - [`ControlledVocabulary::prefix`] and [`ControlledVocabulary::as_bytes`]
+    /// panic on it.
     Unknown,
 }
 
@@ -114,6 +118,8 @@ impl<'a> ControlledVocabulary {
         }
     }
 
+    /// Convert [`ControlledVocabulary::Unknown`] to `None`, and any other variant to
+    /// `Some(self)`
     pub const fn as_option(&self) -> Option<Self> {
         match self {
             Self::Unknown => None,
@@ -155,6 +161,7 @@ impl<'a> ControlledVocabulary {
         param
     }
 
+    /// Build a [`CURIE`] within this namespace from an accession code.
     pub const fn curie(&self, accession: AccessionIntCode) -> CURIE {
         CURIE::new(*self, accession)
     }
@@ -239,8 +246,11 @@ impl<'a> ControlledVocabulary {
 /// to a known namespace
 #[derive(Debug, Clone, Error)]
 pub enum ControlledVocabularyResolutionError {
+    /// The namespace prefix (e.g. `"MS"`) was not one of the recognized [`ControlledVocabulary`] values.
     #[error("Unrecognized controlled vocabulary {0}")]
     UnknownControlledVocabulary(String),
+    /// The `u8` discriminant did not correspond to any [`ControlledVocabulary`] variant.
+    /// This value is unstable.
     #[error("Unrecognized controlled vocabulary code {0}")]
     UnknownControlledVocabularyCode(u8),
 }
@@ -263,7 +273,10 @@ impl FromStr for ControlledVocabulary {
     }
 }
 
+/// The integer type used to store a [`CURIE`]'s accession number.
 pub type AccessionIntCode = u32;
+/// A fixed-width byte representation of a 7-digit accession code. A future
+/// CURIE implementation might use this for non-numeric accessions.
 pub type AccessionByteCode7 = [u8; 7];
 
 #[allow(unused)]
@@ -321,16 +334,28 @@ impl FromStr for AccessionCode {
     }
 }
 
-/// A CURIE is a namespace + accession identifier
+/// A CURIE is a namespace + accession identifier, of the form `<namespace>:<identifier>`.
+///
+/// A CURIE is a "compact URI": <https://www.w3.org/TR/curie/>. This implementation assumes
+/// that that the accession code is a number *and* that an accession code is always present,
+/// which is not universally true. It is however sufficient for most use-cases in this
+/// library's domain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "cv", derive(bincode::Encode, bincode::Decode))]
 pub struct CURIE {
+    /// The controlled vocabulary namespace, e.g. `MS`.
     pub controlled_vocabulary: ControlledVocabulary,
+    /// The numeric accession code within the namespace, e.g. `1000016`.
     pub accession: AccessionIntCode,
 }
 
 impl CURIE {
+    /// Build a [`CURIE`] from a namespace and accession code directly.
+    ///
+    /// This is a `const` function, but it cannot be used in a context that does
+    /// not allow function calls. Prefer the [`curie`] macro when writing "constant"
+    /// [`CURIE`]s
     pub const fn new(cv_id: ControlledVocabulary, accession: AccessionIntCode) -> Self {
         Self {
             controlled_vocabulary: cv_id,
@@ -338,6 +363,11 @@ impl CURIE {
         }
     }
 
+    /// Create an otherwise-empty [`Param`] carrying this [`CURIE`]'s namespace and
+    /// accession, with an empty name and value.
+    ///
+    /// This is technically valid, but most users will also expect [`Param::name`] to
+    /// be set.
     pub fn as_param(&self) -> Param {
         let mut param = Param::new();
         param.controlled_vocabulary = Some(self.controlled_vocabulary);
@@ -345,13 +375,16 @@ impl CURIE {
         param
     }
 
+    /// The numeric accession code, equivalent to reading [`CURIE::accession`] directly.
     #[inline(always)]
-    pub fn accession_int(&self) -> u32 {
+    pub const fn accession_int(&self) -> u32 {
         self.accession
     }
 
+    /// The controlled vocabulary namespace, equivalent to reading
+    /// [`CURIE::controlled_vocabulary`] directly.
     #[inline(always)]
-    pub fn controlled_vocabulary(&self) -> ControlledVocabulary {
+    pub const fn controlled_vocabulary(&self) -> ControlledVocabulary {
         self.controlled_vocabulary
     }
 }
@@ -387,18 +420,25 @@ impl<T: ParamLike> PartialEq<T> for CURIE {
 
 #[derive(Debug, Error)]
 pub enum CURIEParsingError {
+    /// Indicates that the controlled vocabulary wasn't recognized, even
+    /// if it is perfectly valid, we just don't cover it.
     #[error("{0} is not a recognized controlled vocabulary")]
     UnknownControlledVocabulary(
         #[from]
         #[source]
         ControlledVocabularyResolutionError,
     ),
+    /// Indicates that the accession code wasn't successfully parsed into
+    /// an integer. Non-numeric accession codes are not supported by this
+    /// library.
     #[error("Failed to parse accession number {0}")]
     AccessionParsingError(
         #[from]
         #[source]
         num::ParseIntError,
     ),
+    /// Indicates that a ":" wasn't detected, which indicates a malformed
+    /// CURIE anywhere.
     #[error("Did not detect a namespace separator ':' token")]
     MissingNamespaceSeparator,
 }
@@ -451,13 +491,19 @@ impl<'a> TryFrom<&ParamCow<'a>> for CURIE {
     }
 }
 
+/// Split a CURIE-like string (`"MS:1000016"`) into its namespace and accession parts,
+/// without requiring either to be valid.
+///
+/// Unlike [`CURIE::from_str`], this never fails: an unrecognized namespace resolves to
+/// `None` rather than an error, and a missing or non-numeric accession likewise resolves
+/// to `None`.
 pub fn curie_to_num(curie: &str) -> (Option<ControlledVocabulary>, Option<AccessionIntCode>) {
     let mut parts = curie.split(':');
     let prefix = match parts.next() {
-        Some(v) => v.parse::<ControlledVocabulary>().unwrap().as_option(),
+        Some(v) => v.parse::<ControlledVocabulary>().ok().and_then(|v| v.as_option()),
         None => None,
     };
-    if let Some(k) = curie.split(':').nth(1) {
+    if let Some(k) = parts.next() {
         match k.parse() {
             Ok(v) => (prefix, Some(v)),
             Err(_) => (prefix, None),

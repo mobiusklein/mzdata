@@ -743,6 +743,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
+ "libz-sys",
  "miniz_oxide",
  "zlib-rs",
 ]
@@ -1396,6 +1397,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "libz-sys"
+version = "1.1.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85bc9657773828b90eeb625adff10eeac83cc21bbfd8e23a03eaa8a33c9e28d9"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "linreg"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1508,7 +1520,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata"
-version = "0.65.6"
+version = "0.66.2"
 dependencies = [
  "base64-simd",
  "bitflags",
@@ -1524,6 +1536,7 @@ dependencies = [
  "mzdata-bindata",
  "mzdata-meta",
  "mzdata-param",
+ "mzdata-spectrum",
  "mzpeaks",
  "mzsignal",
  "num-traits",
@@ -1544,7 +1557,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-bindata"
-version = "0.65.6"
+version = "0.66.2"
 dependencies = [
  "base64-simd",
  "bytemuck",
@@ -1554,6 +1567,7 @@ dependencies = [
  "mzpeaks",
  "mzsignal",
  "num-traits",
+ "numpress-rs",
  "serde",
  "serde_json",
  "serde_with",
@@ -1562,7 +1576,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-meta"
-version = "0.65.6"
+version = "0.66.2"
 dependencies = [
  "bitflags",
  "chrono",
@@ -1579,11 +1593,26 @@ dependencies = [
 
 [[package]]
 name = "mzdata-param"
-version = "0.65.6"
+version = "0.66.2"
 dependencies = [
  "log",
  "serde",
  "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "mzdata-spectrum"
+version = "0.66.2"
+dependencies = [
+ "identity-hash",
+ "log",
+ "mzdata-bindata",
+ "mzdata-meta",
+ "mzdata-param",
+ "mzpeaks",
+ "mzsignal",
+ "num-traits",
  "thiserror 2.0.18",
 ]
 
@@ -1768,6 +1797,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "numpress-rs"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "946aff86b57fa697da00db24358cbc55d4afab1790df88f1f185a32d640db79d"
+
+[[package]]
 name = "numpy"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1930,7 +1965,7 @@ dependencies = [
 
 [[package]]
 name = "pymzdata"
-version = "0.65.6"
+version = "0.66.2"
 dependencies = [
  "mzdata",
  "mzpeaks",

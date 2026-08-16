@@ -15,6 +15,8 @@ macro_rules! units {
         }
 
         impl Unit {
+            /// The `(accession, name)` pair for this unit's CV term, or `("", "")` for
+            /// [`Unit::Unknown`].
             pub const fn for_param(&self) -> (&'static str, &'static str) {
                 match self {
                     $(Self::$unit => ($accession, $name),)*
@@ -22,6 +24,8 @@ macro_rules! units {
                 }
             }
 
+            /// Look up a [`Unit`] by its CV term name (e.g. `"minute"`). Returns
+            /// [`Unit::Unknown`] if unrecognized.
             pub const fn from_name(name: &str) -> Unit {
                 match name.as_bytes() {
                     $($bname => Self::$unit,)*
@@ -29,6 +33,8 @@ macro_rules! units {
                 }
             }
 
+            /// Look up a [`Unit`] by its CV accession string (e.g. `"UO:0000031"`).
+            /// Returns [`Unit::Unknown`] if unrecognized.
             pub const fn from_accession(acc: &str) -> Unit {
                 match acc.as_bytes() {
                     $($baccession => Self::$unit,)*
@@ -36,6 +42,8 @@ macro_rules! units {
                 }
             }
 
+            /// Look up a [`Unit`] by its [`CURIE`]. Returns [`Unit::Unknown`] if
+            /// unrecognized.
             pub const fn from_curie(acc: &CURIE) -> Unit {
                 match acc {
                     $(CURIE {
@@ -46,6 +54,7 @@ macro_rules! units {
                 }
             }
 
+            /// The [`CURIE`] for this unit's CV term, or `None` for [`Unit::Unknown`].
             pub const fn to_curie(&self) -> Option<CURIE> {
                 match self {
                     $(Self::$unit => Some(CURIE {
@@ -56,10 +65,12 @@ macro_rules! units {
                 }
             }
 
+            /// Read the [`Param::unit`] of a [`Param`] directly.
             pub const fn from_param(param: &Param) -> Unit {
                 param.unit
             }
 
+            /// Check whether this is the [`Unit::Unknown`] sentinel.
             pub const fn is_unknown(&self) -> bool {
                 matches!(self, Self::Unknown)
             }

@@ -199,12 +199,16 @@ pub trait ParamValue {
 /// from whatever type might be stored in a [`ParamValue`]-like object.
 #[derive(Debug, Clone, Error, PartialEq)]
 pub enum ParamValueParseError {
+    /// The value could not be interpreted as a floating point number.
     #[error("Failed to extract a float from {0:?}")]
     FailedToExtractFloat(Option<String>),
+    /// The value could not be interpreted as an integer.
     #[error("Failed to extract a int from {0:?}")]
     FailedToExtractInt(Option<String>),
+    /// The value could not be interpreted as a string.
     #[error("Failed to extract a string")]
     FailedToExtractString,
+    /// The value could not be interpreted as a byte buffer.
     #[error("Failed to extract a buffer")]
     FailedToExtractBuffer,
 }
@@ -300,26 +304,32 @@ impl Value {
         }
     }
 
+    /// See [`ParamValue::is_empty`].
     pub fn is_empty(&self) -> bool {
         matches!(self, Self::Empty)
     }
 
+    /// See [`ParamValue::is_i64`].
     pub fn is_i64(&self) -> bool {
         matches!(self, Self::Int(_))
     }
 
+    /// See [`ParamValue::is_f64`].
     pub fn is_f64(&self) -> bool {
         matches!(self, Self::Float(_))
     }
 
+    /// See [`ParamValue::is_buffer`].
     pub fn is_buffer(&self) -> bool {
         matches!(self, Self::Buffer(_))
     }
 
+    /// See [`ParamValue::is_str`].
     pub fn is_str(&self) -> bool {
         matches!(self, Self::String(_))
     }
 
+    /// See [`ParamValue::is_list`].
     pub fn is_list(&self) -> bool {
         matches!(self, Self::List(_))
     }
@@ -389,6 +399,7 @@ impl Value {
         }
     }
 
+    /// See [`ParamValue::to_bool`].
     pub fn to_bool(&self) -> Result<bool, ParamValueParseError> {
         if let Self::Boolean(val) = self {
             Ok(*val)
@@ -405,6 +416,7 @@ impl Value {
         }
     }
 
+    /// See [`ParamValue::to_f64`].
     pub fn to_f64(&self) -> Result<f64, ParamValueParseError> {
         if let Self::Float(val) = self {
             return Ok(*val);
@@ -420,6 +432,7 @@ impl Value {
         )))
     }
 
+    /// See [`ParamValue::to_i64`].
     pub fn to_i64(&self) -> Result<i64, ParamValueParseError> {
         if let Self::Int(val) = self {
             return Ok(*val);
@@ -435,6 +448,7 @@ impl Value {
         )))
     }
 
+    /// See [`ParamValue::to_str`].
     pub fn to_str(&self) -> Cow<'_, str> {
         if let Self::String(val) = self {
             Cow::Borrowed(val)
@@ -443,6 +457,7 @@ impl Value {
         }
     }
 
+    /// See [`ParamValue::to_buffer`].
     pub fn to_buffer(&self) -> Result<Cow<'_, [u8]>, ParamValueParseError> {
         if let Self::Buffer(val) = self {
             Ok(Cow::Borrowed(val))
@@ -453,6 +468,7 @@ impl Value {
         }
     }
 
+    /// See [`ParamValue::as_ref`].
     pub fn as_ref(&self) -> ValueRef<'_> {
         self.into()
     }
@@ -632,6 +648,9 @@ param_value_int!(usize);
 param_value_float!(f32);
 param_value_float!(f64);
 
+
+/// When the `serde` feature is enabled, [`mzdata_param::Value`] can be converted from
+/// `serde_json::Value` without going through the generic deserialization process.
 #[cfg(feature = "serde")]
 impl From<Value> for serde_json::Value {
     fn from(value: Value) -> Self {

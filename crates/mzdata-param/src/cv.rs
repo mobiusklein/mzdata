@@ -95,36 +95,52 @@ impl TryFrom<mzcv::OboIdentifier> for CURIE {
     }
 }
 
+/// Describes a single entry in the PSI-MS controlled vocabulary.
+///
+/// This is a *template* for [`Param`] instances. You don't need it to work with or create
+/// [`Param`]s if you already know a particular term's [`CURIE`] and name - it's most useful
+/// for looking up a term's human-readable name, synonyms, unit constraints, or its position
+/// in the `is_a` hierarchy via [`MSVocabulary`] / [`CVTraversal`]
 #[derive(Clone, Debug, bincode::Encode, bincode::Decode)]
 pub struct MSTerm {
+    /// The human-readable name of the term, e.g. `"dissociation method"`.
     pub name: Box<str>,
     accession: bincode::serde::Compat<CURIE>,
     pub(crate) parents: HashSet<bincode::serde::Compat<CURIE>>,
+    /// Alternate names for this term recognized by the ontology.
     pub synonyms: Vec<Box<str>>,
+    /// Other OBO relationships this term declares, as `(relationship type, target)` pairs
+    /// - for example `("has_units", "UO:0000031")`. `is_a` relationships are excluded
+    /// here and instead tracked via [`MSTerm::parents`].
     pub relationships: Vec<(Box<str>, Box<str>)>,
 }
 
 impl MSTerm {
+    /// Get the [`CURIE`] for this term
     #[inline(always)]
     pub fn accession(&self) -> CURIE {
         self.accession.0
     }
 
+    /// An alias of [`Self::accession`]
     #[inline(always)]
     pub fn curie(&self) -> CURIE {
         self.accession()
     }
 
+    /// The [`CURIE`]s which this term is a direct descendant of via an `is_a` relationship.
     #[inline(always)]
     pub fn parents(&self) -> impl ExactSizeIterator<Item = &CURIE> + '_ {
         self.parents.iter().map(|v| &v.0)
     }
 
+    /// Test if this term is an immediate child of `accession`
     #[inline(always)]
     pub fn is_a(&self, accession: &CURIE) -> bool {
         self.parents.iter().any(|v| v.0 == *accession)
     }
 
+    /// The value types this term can use
     #[inline(always)]
     pub fn has_value_types(&self) -> impl Iterator<Item = &str> + '_ {
         self.relationships.iter().filter_map(|(r, v)| {
@@ -134,6 +150,25 @@ impl MSTerm {
                 None
             }
         })
+    }
+
+    /// The units that this term can be described with
+    #[inline(always)]
+    pub fn has_units(&self) -> impl Iterator<Item = Unit> + '_ {
+        self.relationships.iter().filter_map(|(r, v)| {
+            (r.as_ref() == "has_units")
+                .then(|| v.parse::<CURIE>().ok().map(|v| Unit::from_curie(&v)))
+                .flatten()
+        })
+    }
+
+    /// Create a [`Param`] of this term with the provided Value
+    pub fn as_param(&self, value: impl Into<Value>) -> Param {
+        Param::builder()
+            .curie(self.curie())
+            .value(value)
+            .name(self.name.clone().into_string())
+            .build()
     }
 }
 
@@ -164,7 +199,32 @@ impl CVData for MSTerm {
     }
 }
 
-/// A global facade for interacting with the PSI-MS controlled vocabulary
+/// A global facade for interacting with the PSI-MS controlled vocabulary.
+///
+/// This requires the `cv` feature which uses the [`mzcv`] library to work
+/// with OBO files, runtime caching and embed static compile-time embedding
+/// of controlled vocabulary data.
+///
+/// This type is a singleton guarded by a [`OnceLock`] wrapping a [`mzcv::CVIndex`]
+/// that lets the caller fetch [`MSTerm`] entries by accession [`CURIE`] or name. It
+/// also lets the caller traverse the controlled vocabulary tree.
+///
+/// ```rust
+/// # use mzdata_param::{MSVocabulary, curie, CURIE};
+/// let term = MSVocabulary::get(curie!(MS:1000044)).unwrap();
+/// assert_eq!(term.name.as_ref(), "dissociation method");
+/// assert!(!MSVocabulary::children_of(term.accession()).expect("this term is defined!").is_empty());
+/// ```
+///
+///
+/// ## Data Source
+/// Alternatively, you can take a reference to the global instance with
+/// [`MSVocabulary::init`], which first checks the on-disk cache and then
+/// uses the statically embedded copy of the controlled vocabulary if it
+/// isn't available. Using [`MSVocabulary::init_static`] directly uses the
+/// fixed, pre-compiled version if it is the first call. Finally, you can
+/// choose to update the cached on-disk version using [`MSVocabulary::update_from_obo`],
+/// see the method documentation for more details.
 #[derive(Debug)]
 pub struct MSVocabulary();
 
@@ -211,7 +271,9 @@ impl MSVocabulary {
         let mut this = CVIndex::<Self>::empty();
         this.update_from_structure(ver, data)?;
         if let Err(_) = MS.set(this) {
-            log::error!("Failed to update global in-memory singleton, value was already initialized. On-disk cache updated.")
+            log::error!(
+                "Failed to update global in-memory singleton, value was already initialized. On-disk cache updated."
+            )
         }
         Ok(())
     }
@@ -241,9 +303,15 @@ impl MSVocabulary {
         Self::init().get_by_index(&curie)
     }
 
-    /// Get a term by its human-readable name
+    /// Get a term by its human-readable name in a case-insensitive manner.
     pub fn get_by_name(name: &str) -> Option<Arc<MSTerm>> {
         Self::init().get_by_name(name)
+    }
+
+    /// Load a term by name or if that fails by synonym, names are matched in a case insensitive manner.
+    /// Returns a boolean indicating if it matches a name true or a synonym false
+    pub fn get_by_name_or_synonym(name: &str) -> Option<(bool, Arc<MSTerm>)> {
+        Self::init().get_by_name_or_synonym(name)
     }
 
     /// Get the immediate parents of this term
@@ -380,7 +448,8 @@ fn convert_stanza_to_msterm(obj: mzcv::OboStanza) -> Option<Arc<MSTerm>> {
     Some(Arc::new(data))
 }
 
-/// A data structure for walking up and down trees.
+/// The in-memory representation of a parsed controlled vocabulary: its terms plus a
+/// precomputed `is_a` child adjacency map, used to implement [`mzcv::CVStructure`].
 #[derive(Debug, bincode::Encode, bincode::Decode)]
 pub struct VocabularyData<T: CVData>
 where
@@ -419,6 +488,7 @@ impl<T: CVData> VocabularyData<T>
 where
     T::Index: Serialize + for<'a> Deserialize<'a>,
 {
+    /// Build a [`VocabularyData`] from an already-parsed term list and child map.
     pub fn new(
         terms: Vec<Arc<T>>,
         child_map: HashMap<Compat<T::Index>, Vec<Compat<T::Index>>>,
@@ -426,10 +496,12 @@ where
         Self { terms, child_map }
     }
 
+    /// All terms in the vocabulary, in parse order.
     pub fn terms(&self) -> &[Arc<T>] {
         &self.terms
     }
 
+    /// The `is_a` child adjacency map: parent index -> direct children.
     pub fn child_map(&self) -> &HashMap<Compat<T::Index>, Vec<Compat<T::Index>>> {
         &self.child_map
     }
