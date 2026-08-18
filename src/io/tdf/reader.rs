@@ -10,7 +10,10 @@ use crate::io::checksum_file;
 
 use crate::{
     curie,
-    io::{DetailLevel, IntoIonMobilityFrameSource, IonMobilityFrameAccessError, OffsetIndex},
+    io::{
+        DetailLevel, IntoIonMobilityFrameSource,
+        IonMobilityFrameAccessError, OffsetIndex,
+    },
     meta::{
         Component, ComponentType, DataProcessing, DetectorTypeTerm,
         DissociationMethodTerm::CollisionInducedDissociation, FileDescription,
@@ -42,9 +45,9 @@ use timsrust::{
     Metadata, TimsRustError,
 };
 
-pub use super::arrays::FrameToArraysMapper;
 use super::{
-    arrays::consolidate_peaks,
+    arrays::{consolidate_peaks, FrameToArraysMapper},
+    calibration::{CalibrationParameters, MzCalibrationModel, TimsCalibrationModel},
     constants::{InstrumentSource, MsMsType},
     sql::{
         ChromatographyData, FromSQL, PasefPrecursor, RawTDFSQLReader, SQLDIAFrameMsMsWindow,
@@ -151,6 +154,7 @@ pub struct TDFFrameReaderType<
     entry_index: Vec<IndexExtry>,
     index: usize,
     offset_index: OffsetIndex,
+    calibration_models: CalibrationParameters,
     /// The description of the file's contents and the previous data files that were
     /// consumed to produce it.
     pub(crate) file_description: FileDescription,
@@ -186,6 +190,21 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         Self::new_with_detail_level(path, DetailLevel::Full)
     }
 
+    pub fn calibration_models_for(&self, index: usize) -> (MzCalibrationModel, TimsCalibrationModel) {
+        if let Some(entry) = self.entry_index.get(index) {
+            let mz_model: MzCalibrationModel = self
+                .calibration_models
+                .find_mz_model_for_frame(&entry.frame)
+                .unwrap_or_else(|_e| self.metadata.mz_converter.clone().into());
+            let im_model: TimsCalibrationModel = self.calibration_models
+                .find_tims_model_for_frame(&entry.frame)
+                .unwrap_or_else(|_e| self.metadata.im_converter.clone().into());
+            (mz_model, im_model)
+        } else {
+            (self.metadata.mz_converter.clone().into(), self.metadata.im_converter.clone().into())
+        }
+    }
+
     /// Construct a new reader from the specified file system path with the specified
     /// [`DetailLevel`].
     ///
@@ -209,6 +228,10 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         let tdf_reader = RawTDFSQLReader::new(&tdf_path)
             .map_err(|e| TimsRustError::FrameReaderError(FrameReaderError::SqlError(e.into())))?;
 
+        let calibration_models = CalibrationParameters::from_sql(&tdf_reader.connection())
+            .inspect_err(|e| log::error!("Failed to load calibration from {}: {e}", path.display()))
+            .unwrap_or_default();
+
         let mut this = Self {
             metadata,
             frame_reader,
@@ -216,7 +239,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             entry_index: Vec::new(),
             index: 0,
             offset_index: OffsetIndex::new("spectrum".into()),
-
+            calibration_models,
             instrument_configurations: HashMap::default(),
             file_description: FileDescription::default(),
             softwares: Vec::new(),
@@ -582,19 +605,37 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                         "Extracting {index} as PasefFrameMsMs with range {:?}",
                         pasef.scan_start..pasef.scan_end
                     );
-                    let arrays = FrameToArraysMapper::new(&frame, &self.metadata)
-                        .process_3d_slice(pasef.scan_start..pasef.scan_end);
+                    let arrays = FrameToArraysMapper::new(
+                        &frame,
+                        &self.metadata,
+                        &self.calibration_models,
+                        &entry.frame,
+                    )
+                    .process_3d_slice(pasef.scan_start..pasef.scan_end);
                     Some(arrays)
                 } else if let Some(dia_pasef) = entry.dia_window() {
                     log::trace!(
                         "Extracting {index} as DIAFrameMsMsWindow with range {:?}",
                         dia_pasef.scan_start..dia_pasef.scan_end
                     );
-                    let arrays = FrameToArraysMapper::new(&frame, &self.metadata)
-                        .process_3d_slice(dia_pasef.scan_start..dia_pasef.scan_end);
+                    let arrays = FrameToArraysMapper::new(
+                        &frame,
+                        &self.metadata,
+                        &self.calibration_models,
+                        &entry.frame,
+                    )
+                    .process_3d_slice(dia_pasef.scan_start..dia_pasef.scan_end);
                     Some(arrays)
                 } else {
-                    Some(FrameToArraysMapper::new(&frame, &self.metadata).process_3d_slice(..))
+                    Some(
+                        FrameToArraysMapper::new(
+                            &frame,
+                            &self.metadata,
+                            &self.calibration_models,
+                            &entry.frame,
+                        )
+                        .process_3d_slice(..),
+                    )
                 }
             } else {
                 None
@@ -1047,13 +1088,13 @@ impl<
     ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError>
     {
         let view = self.into_frame_reader();
-
         Ok(TDFFrameReaderType {
             tdf_reader: view.tdf_reader,
             metadata: view.metadata,
             frame_reader: view.frame_reader,
             entry_index: view.entry_index,
             index: view.index,
+            calibration_models: view.calibration_models,
             offset_index: view.offset_index,
             file_description: view.file_description,
             instrument_configurations: view.instrument_configurations,
@@ -1631,13 +1672,13 @@ pub fn is_tdf<P: AsRef<Path>>(path: P) -> bool {
 mod test {
     use crate::MZReader;
 
-use super::*;
+    use super::*;
 
     #[test]
     fn test_tdf_spectrum() -> io::Result<()> {
         let mut reader = TDFSpectrumReader::open_path("test/data/diaPASEF.d")?;
         reader.set_consolidate_peaks(true);
-        eprintln!("{}", reader.len());
+        assert_eq!(reader.len(), 9);
         let s = reader.get_spectrum_by_index(0).unwrap();
         assert!(s.peaks.is_some());
         assert_eq!(s.signal_continuity(), SignalContinuity::Centroid);
@@ -1649,7 +1690,8 @@ use super::*;
     fn test_tdf_frame_parity() -> io::Result<()> {
         let mut reader = TDFFrameReader::new("test/data/diaPASEF.d")
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        let mut ref_reader = MZReader::open_path("test/data/diaPASEF.mzML")?.into_frame_source::<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>();
+        let mut ref_reader = MZReader::open_path("test/data/diaPASEF.mzML")?
+            .into_frame_source::<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>();
 
         for (frame, ref_frame) in reader.iter().zip(ref_reader.iter()) {
             let arrays = frame.raw_arrays().unwrap().unstack().unwrap();
@@ -1658,22 +1700,39 @@ use super::*;
             let arrays_3d = frame.raw_arrays().unwrap();
             let ref_arrays_3d = ref_frame.raw_arrays().unwrap();
 
-            let it_arrays_3d_im = arrays_3d.iter().enumerate().filter(|(_, (_, v))| {
-                v.mzs().map(|v| v.len()).unwrap_or_default() > 0
-            }).map(|(i, (a, _))| (i, a));
-            let it_arrays_3d_im_ref = ref_arrays_3d.iter().enumerate().filter(|(_, (_, v))| {
-                v.mzs().map(|v| v.len()).unwrap_or_default() > 0
-            }).map(|(i, (a, _))| (i, a));
+            let it_arrays_3d_im = arrays_3d
+                .iter()
+                .enumerate()
+                .filter(|(_, (_, v))| v.mzs().map(|v| v.len()).unwrap_or_default() > 0)
+                .map(|(i, (a, _))| (i, a));
+            let it_arrays_3d_im_ref = ref_arrays_3d
+                .iter()
+                .enumerate()
+                .filter(|(_, (_, v))| v.mzs().map(|v| v.len()).unwrap_or_default() > 0)
+                .map(|(i, (a, _))| (i, a));
 
             for (_i, ((ai, a), (bi, b))) in it_arrays_3d_im.zip(it_arrays_3d_im_ref).enumerate() {
                 let e = (a - b).abs();
                 let arrays_at = &arrays_3d.arrays[ai];
                 let ref_arrays_at = &ref_arrays_3d.arrays[bi];
                 // eprintln!("ion mobility axis {a} - {b} = {e} at index {i} ({ai} with {:?} vs {bi} {:?})", arrays_at.mzs(), ref_arrays_at.mzs());
-                assert_eq!(arrays_at.mzs().map(|v| v.len()).unwrap_or_default(), ref_arrays_at.mzs().map(|v| v.len()).unwrap_or_default());
+                assert_eq!(
+                    arrays_at.mzs().map(|v| v.len()).unwrap_or_default(),
+                    ref_arrays_at.mzs().map(|v| v.len()).unwrap_or_default()
+                );
                 // Track that the interpolation error is
                 assert!(e < 1.0);
                 // assert!(e < 1.5e-3, "ion mobility axis {a} - {b} = {e} at index {i} ({ai} with {:?} vs {bi} {:?})", arrays_at.mzs(), ref_arrays_at.mzs())
+                let mzs_at = arrays_at.mzs().unwrap();
+                let ref_mzs = ref_arrays_at.mzs().unwrap();
+                let mut acc = 0.0;
+                for (j, (ma, mb)) in mzs_at.iter().copied().zip(ref_mzs.iter().copied()).enumerate() {
+                    let e = (ma - mb).abs();
+                    assert!(e < 0.1, "{ma} - {mb} err {e} too large at position {j} in slot {_i}");
+                    acc += e;
+                }
+                acc /= mzs_at.len() as f64;
+                assert!(acc < 0.1);
             }
 
             let (im, _) = arrays.ion_mobility().unwrap();
@@ -1684,8 +1743,6 @@ use super::*;
             //     assert!(e < 1e-3, "ion mobility point {a} - {b} = {e} at index {i}")
             // }
         }
-
-
         Ok(())
     }
 
@@ -1693,6 +1750,9 @@ use super::*;
     fn test_tdf_frame() -> io::Result<()> {
         let mut reader = TDFFrameReader::new("test/data/diaPASEF.d")
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        assert_eq!(reader.calibration_models.mz.len(), 2);
+        assert_eq!(reader.calibration_models.tims.len(), 1);
 
         let s = reader.get_frame_by_index(0).unwrap();
         assert!(s.features.is_none());

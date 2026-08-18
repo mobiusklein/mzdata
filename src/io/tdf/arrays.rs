@@ -7,12 +7,8 @@ use mzpeaks::{feature::Feature, IonMobility, MZPeakSetType, MZ};
 use timsrust::{converters::ConvertableDomain, Metadata};
 
 use crate::{
-    mzpeaks::{CentroidPeak, PeakSet},
-    params::Unit,
-    prelude::*,
-    spectrum::{
-        bindata::{ArrayRetrievalError, BinaryArrayMap3D},
-        ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray,
+    io::tdf::{CalibrationParameters, sql::SQLFrame}, mzpeaks::{CentroidPeak, PeakSet}, params::Unit, prelude::*, spectrum::{
+        ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, bindata::{ArrayRetrievalError, BinaryArrayMap3D},
     },
 };
 
@@ -21,23 +17,39 @@ use mzsignal::feature_mapping::{FeatureGraphBuilder, IMMSMapExtracter};
 pub struct FrameToArraysMapper<'a> {
     frame: &'a timsrust::Frame,
     metadata: &'a Metadata,
+    calibration_models: &'a CalibrationParameters,
+    frame_meta: &'a SQLFrame
 }
 
 impl<'a> FrameToArraysMapper<'a> {
-    pub fn new(frame: &'a timsrust::Frame, metadata: &'a Metadata) -> Self {
-        Self { frame, metadata }
+    pub fn new(frame: &'a timsrust::Frame, metadata: &'a Metadata, calibration_models: &'a CalibrationParameters, frame_meta: &'a SQLFrame) -> Self {
+        Self { frame, metadata, calibration_models, frame_meta }
+    }
+
+    fn find_calibration_models(&self) -> (super::calibration::MzCalibrationModel, super::calibration::TimsCalibrationModel) {
+        let mz_model = match self.calibration_models.find_mz_model_for_frame(self.frame_meta) {
+            Ok(model) => model,
+            Err(e) => {
+                log::warn!("Falling back to basic m/z model: {e}");
+                self.metadata.mz_converter.clone().into()
+            }
+        };
+
+        let im_model = match self.calibration_models.find_tims_model_for_frame(self.frame_meta) {
+            Ok(model) => model,
+            Err(e) => {
+                log::warn!("Falling back to basic ion mobility model: {e}");
+                self.metadata.im_converter.clone().into()
+            },
+        };
+        (mz_model, im_model)
     }
 
     pub fn process_3d_slice(&self, iv: impl RangeBounds<usize>) -> BinaryArrayMap3D {
         // `scan_offsets` is a cumulative prefix-sum of peak OFFSETS into
         // tof_indices/intensities (length `n_scan_rows + 1`, last entry = total
         // peak count); scan `k`'s peaks are tof_indices[scan_offsets[k] ..
-        // scan_offsets[k + 1]]. #50 corrected the read offset so peak counts are
-        // right, but the mobility was still taken from the loop position
-        // (`convert(i + first_scan)`), tagging each scan's peaks with the *next*
-        // scan's mobility. Index scans directly so each is read once and labelled
-        // with its own mobility. (The end-bound mapping is also restored to the
-        // conventional half-open meaning; the selected peak set is unchanged.)
+        // scan_offsets[k + 1]].
         let n_scan_rows = self.frame.scan_offsets.len() - 1;
 
         let first_scan = match iv.start_bound() {
@@ -58,6 +70,9 @@ impl<'a> FrameToArraysMapper<'a> {
         let mut im_dimension = Vec::with_capacity(span);
         let mut arrays = Vec::with_capacity(span);
 
+        let (mz_converter,
+             im_converter) = self.find_calibration_models();
+
         for scan in first_scan..final_scan {
             let begin = self.frame.scan_offsets[scan];
             let end = self.frame.scan_offsets[scan + 1].min(self.frame.tof_indices.len());
@@ -70,12 +85,12 @@ impl<'a> FrameToArraysMapper<'a> {
 
             self.frame.tof_indices[begin..end].iter().for_each(|tof_idx| {
                 mz_array_bytes
-                    .extend_from_slice(&self.metadata.mz_converter.convert(*tof_idx).to_le_bytes())
+                    .extend_from_slice(&mz_converter.convert(*tof_idx).to_le_bytes())
             });
             self.frame.intensities[begin..end].iter().for_each(|intensity| {
                 intensity_array_bytes.extend_from_slice(&((*intensity as u64) as f32).to_le_bytes())
             });
-            let drift = self.metadata.im_converter.convert(scan as u32);
+            let drift = im_converter.convert(scan as u32);
             im_dimension.push(drift);
 
             let mut mz_array = DataArray::wrap(

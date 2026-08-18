@@ -95,6 +95,21 @@ impl TryFrom<mzcv::OboIdentifier> for CURIE {
     }
 }
 
+impl From<CURIE> for mzcv::Curie {
+    fn from(value: CURIE) -> Self {
+        mzcv::Curie {
+            cv: value.controlled_vocabulary.into(),
+            accession: mzcv::AccessionCode::Numeric(value.accession_int())
+        }
+    }
+}
+
+impl PartialEq<mzcv::Curie> for CURIE {
+    fn eq(&self, other: &mzcv::Curie) -> bool {
+        Self::try_from(*other).is_ok_and(|v| v == *self)
+    }
+}
+
 /// Describes a single entry in the PSI-MS controlled vocabulary.
 ///
 /// This is a *template* for [`Param`] instances. You don't need it to work with or create
