@@ -2,9 +2,10 @@
 //!
 //! It is replicated to be compatible with `timsrust` v0.4.1 instead of v0.5+ which introduces
 //! greater complexity, and to avoid adding a second SQLite3 implementation.
+use mzdata_param::{Param, Unit, Value, curie};
 use rusqlite::Connection;
 use thiserror::Error;
-use timsrust::converters::{ConvertableDomain, Tof2MzConverter, Scan2ImConverter};
+use timsrust::converters::{ConvertableDomain, Scan2ImConverter, Tof2MzConverter};
 
 use super::sql::{FromSQL, SQLFrame};
 
@@ -22,12 +23,24 @@ fn require_at<T: rusqlite::types::FromSql>(
     }
 }
 
+fn im_boundaries_to_parameter(im_min: f64, im_max: f64, scan_max_index: u32) -> [f64; 2] {
+    let scan_intercept: f64 = im_max;
+    let scan_slope: f64 = (im_min - scan_intercept) / scan_max_index as f64;
+    [scan_intercept, scan_slope]
+}
+
+fn mz_boundaries_to_parameter(mz_min: f64, mz_max: f64, tof_max_index: u32) -> [f64; 2] {
+    let tof_intercept: f64 = mz_min.sqrt();
+    let tof_slope: f64 = (mz_max.sqrt() - tof_intercept) / tof_max_index as f64;
+    [tof_intercept, tof_slope]
+}
+
 /// One row of the `MzCalibration` table (physical TOF->m/z model).
 ///
 /// Only the columns this crate's converters actually consume are kept; see
 /// the module docs for the columns dropped as unused (`T2`, `dC2`, `C2`,
 /// `C3`, `C4`).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MzCalibration {
     /// `MzCalibration.Id` (primary key), referenced by `Frames.MzCalibration`.
     pub id: u32,
@@ -96,7 +109,7 @@ impl FromSQL for MzCalibration {
 ///
 /// Only the columns this crate's converters actually consume are kept; see
 /// the module docs for the columns dropped as unused (`C5`, `C8`, `C9`).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TimsCalibration {
     /// `TimsCalibration.Id` (primary key), referenced by
     /// `Frames.TimsCalibration`.
@@ -175,39 +188,112 @@ impl FromSQL for TimsCalibration {
 pub struct CalibrationParameters {
     pub mz: Vec<MzCalibration>,
     pub tims: Vec<TimsCalibration>,
+    pub basic_tims_parameters: [f64; 2],
+    pub basic_mz_parameters: [f64; 2],
 }
 
 impl CalibrationParameters {
-    pub fn new(mz: Vec<MzCalibration>, tims: Vec<TimsCalibration>) -> Self {
-        Self { mz, tims }
+    pub fn new(
+        mz: Vec<MzCalibration>,
+        tims: Vec<TimsCalibration>,
+        basic_mz_parameters: [f64; 2],
+        basic_tims_parameters: [f64; 2],
+    ) -> Self {
+        Self {
+            mz,
+            tims,
+            basic_mz_parameters,
+            basic_tims_parameters,
+        }
     }
 
-    pub fn from_sql(connection: &Connection) -> Result<Self, rusqlite::Error> {
+    pub fn from_sql(
+        connection: &Connection,
+        metadata: &timsrust::Metadata,
+    ) -> Result<Self, rusqlite::Error> {
         let mz = MzCalibration::read_from(connection, [])?;
         let tims = TimsCalibration::read_from(connection, [])?;
-        Ok(Self::new(mz, tims))
+
+        let scan_max_index =
+            connection.query_row("SELECT MAX(NumScans) FROM Frames", [], |row| {
+                row.get::<usize, u32>(0)
+            })?;
+
+        let tof_max_index = connection.query_row(
+            "SELECT Value FROM GlobalMetadata WHERE Key == \"DigitizerNumSamples\";",
+            [],
+            |row| row.get::<usize, u32>(0),
+        )?;
+
+        let basic_tims_parameters =
+            im_boundaries_to_parameter(metadata.lower_im, metadata.upper_im, scan_max_index);
+        let basic_mz_parameters =
+            mz_boundaries_to_parameter(metadata.lower_mz, metadata.upper_mz, tof_max_index);
+
+        Ok(Self::new(
+            mz,
+            tims,
+            basic_mz_parameters,
+            basic_tims_parameters,
+        ))
     }
 
-    pub fn find_mz_model_for_frame(&self, frame: &SQLFrame) -> Result<MzCalibrationModel, MzCalibrationError> {
-        match self.mz.iter().find(|m| m.id == frame.mz_calibration).map(|v| {
-            MzCalibrationModel::try_from((v, frame.t1))
-        }) {
+    pub(crate) fn basic_mz_parameters(&self) -> Param {
+        Param::builder()
+            .curie(curie!(MS:1003825))
+            .name("square root grid interpolation?")
+            .value(
+                Value::from_iter(self.basic_mz_parameters.map(Value::Float).into_iter())
+            )
+            .unit(Unit::MZ)
+            .build()
+    }
+
+    pub(crate) fn basic_tims_parameters(&self) -> Param {
+        Param::builder()
+            .curie(curie!(MS:1003824))
+            .name("linear grid interpolation?")
+            .value(
+                Value::List(Box::new(self.basic_tims_parameters.map(Value::Float)))
+            )
+            .unit(Unit::VoltSecondPerSquareCentimeter)
+            .build()
+    }
+
+    pub fn find_mz_model_for_frame(
+        &self,
+        frame: &SQLFrame,
+    ) -> Result<MzCalibrationModel, MzCalibrationError> {
+        match self
+            .mz
+            .iter()
+            .find(|m| m.id == frame.mz_calibration)
+            .map(|v| MzCalibrationModel::try_from((v, frame.t1)))
+        {
             Some(value) => value,
             None => Err(MzCalibrationError::ModelNotFound(frame.mz_calibration)),
         }
     }
 
-    pub fn find_tims_model_for_frame(&self, frame: &SQLFrame) -> Result<TimsCalibrationModel, IonMobilityCalibrationError> {
-        match self.tims.iter().find(|m| m.id == frame.tims_calibration).map(|v| {
-            TimsCalibrationModel::try_from(v)
-        }) {
+    pub fn find_tims_model_for_frame(
+        &self,
+        frame: &SQLFrame,
+    ) -> Result<TimsCalibrationModel, IonMobilityCalibrationError> {
+        match self
+            .tims
+            .iter()
+            .find(|m| m.id == frame.tims_calibration)
+            .map(|v| TimsCalibrationModel::try_from(v))
+        {
             Some(value) => value,
-            None => Err(IonMobilityCalibrationError::ModelNotFound(frame.mz_calibration)),
+            None => Err(IonMobilityCalibrationError::ModelNotFound(
+                frame.mz_calibration,
+            )),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TimsCalibrationModel1 {
     pub c6: f64,
     pub c7: f64,
@@ -217,7 +303,28 @@ pub struct TimsCalibrationModel1 {
 
 impl TimsCalibrationModel1 {
     pub fn new(c6: f64, c7: f64, offset: f64, slope: f64) -> Self {
-        Self { c6, c7, offset, slope }
+        Self {
+            c6,
+            c7,
+            offset,
+            slope,
+        }
+    }
+
+    pub fn as_param(&self) -> Param {
+        Param::builder()
+            .curie(curie!(MS:1003824))
+            .name("linear grid interpolation?")
+            .value(
+                Value::List(Box::new([
+                    self.offset,
+                    self.slope,
+                    self.c6,
+                    self.c7,
+                ].map(Value::Float)))
+            )
+            .unit(Unit::VoltSecondPerSquareCentimeter)
+            .build()
     }
 }
 
@@ -236,15 +343,31 @@ impl TryFrom<&'_ TimsCalibration> for TimsCalibrationModel1 {
 
     fn try_from(value: &'_ TimsCalibration) -> Result<Self, Self::Error> {
         if value.model_type != 2 {
-            return Err(IonMobilityCalibrationError::UnsupportedModel(value.model_type));
+            return Err(IonMobilityCalibrationError::UnsupportedModel(
+                value.model_type,
+            ));
         }
-        let c0 = value.c0.ok_or( IonMobilityCalibrationError::MissingParameters("c0"))?;
-        let c1 = value.c1.ok_or( IonMobilityCalibrationError::MissingParameters("c1"))?;
-        let c2 = value.c2.ok_or( IonMobilityCalibrationError::MissingParameters("c2"))?;
-        let c3 = value.c3.ok_or( IonMobilityCalibrationError::MissingParameters("c3"))?;
-        let c4 = value.c4.ok_or( IonMobilityCalibrationError::MissingParameters("c4"))?;
-        let c6 = value.c6.ok_or( IonMobilityCalibrationError::MissingParameters("c6"))?;
-        let c7 = value.c7.ok_or( IonMobilityCalibrationError::MissingParameters("c7"))?;
+        let c0 = value
+            .c0
+            .ok_or(IonMobilityCalibrationError::MissingParameters("c0"))?;
+        let c1 = value
+            .c1
+            .ok_or(IonMobilityCalibrationError::MissingParameters("c1"))?;
+        let c2 = value
+            .c2
+            .ok_or(IonMobilityCalibrationError::MissingParameters("c2"))?;
+        let c3 = value
+            .c3
+            .ok_or(IonMobilityCalibrationError::MissingParameters("c3"))?;
+        let c4 = value
+            .c4
+            .ok_or(IonMobilityCalibrationError::MissingParameters("c4"))?;
+        let c6 = value
+            .c6
+            .ok_or(IonMobilityCalibrationError::MissingParameters("c6"))?;
+        let c7 = value
+            .c7
+            .ok_or(IonMobilityCalibrationError::MissingParameters("c7"))?;
 
         let slope = if c1 == 0.0 { 0.0 } else { (c3 - c2) / c1 };
         let offset = c2 - slope * (c4 + c0);
@@ -265,7 +388,7 @@ impl ConvertableDomain for TimsCalibrationModel1 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MzCalibrationModel1 {
     pub c0: f64,
     pub c1: f64,
@@ -275,7 +398,39 @@ pub struct MzCalibrationModel1 {
 
 impl MzCalibrationModel1 {
     pub fn new(c0: f64, c1: f64, digitizer_timebase: f64, digitize_delay: f64) -> Self {
-        Self { c0, c1, digitizer_timebase, digitize_delay }
+        Self {
+            c0,
+            c1,
+            digitizer_timebase,
+            digitize_delay,
+        }
+    }
+
+    pub fn convert_f64(&self, idx: f64) -> f64 {
+        let tof = (idx * self.digitizer_timebase) + self.digitize_delay;
+        let inner = tof - self.c0;
+        (self.c1 * inner.powi(2)) / 1e12
+    }
+
+    pub fn invert_f64(&self, mz: f64) -> f64 {
+        let tof = ((mz * 1e12) / self.c1).sqrt() + self.c0;
+        (tof - self.digitize_delay) / self.digitizer_timebase
+    }
+
+    pub fn as_param(&self) -> Param {
+        Param::builder()
+            .curie(curie!(MS:1003825))
+            .name("square root grid interpolation?")
+            .value(
+                Value::List(Box::new([
+                    self.c0,
+                    self.c1,
+                    self.digitize_delay,
+                    self.digitizer_timebase,
+                ].map(Value::Float)))
+            )
+            .unit(Unit::MZ)
+            .build()
     }
 }
 
@@ -295,15 +450,24 @@ impl TryFrom<(&'_ MzCalibration, f64)> for MzCalibrationModel1 {
     type Error = MzCalibrationError;
 
     fn try_from(value: (&'_ MzCalibration, f64)) -> Result<Self, Self::Error> {
-        let (value, t1 ) = value;
+        let (value, t1) = value;
         if value.model_type != 1 {
-            return Err(MzCalibrationError::UnsupportedModel(value.model_type))
+            return Err(MzCalibrationError::UnsupportedModel(value.model_type));
         }
-        let c0 = value.c0.ok_or(MzCalibrationError::MissingParameters("c0"))?;
-        let c1 = value.c1.ok_or(MzCalibrationError::MissingParameters("c1"))?;
+        let c0 = value
+            .c0
+            .ok_or(MzCalibrationError::MissingParameters("c0"))?;
+        let c1 = value
+            .c1
+            .ok_or(MzCalibrationError::MissingParameters("c1"))?;
         let cf = value.dc1 * (value.t1 - t1);
         let cf = 1.0 + (cf / 1.0e6);
-        Ok(Self::new(c0, c1 * cf, value.digitizer_timebase, value.digitizer_delay))
+        Ok(Self::new(
+            c0,
+            c1 * cf,
+            value.digitizer_timebase,
+            value.digitizer_delay,
+        ))
     }
 }
 
@@ -315,9 +479,7 @@ impl ConvertableDomain for MzCalibrationModel1 {
     }
 
     fn invert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
-        let mz = value.into();
-        let tof = ((mz * 1e12) / self.c1).sqrt() + self.c0;
-        (tof - self.digitize_delay) / self.digitizer_timebase
+        clamp_u32(self.invert_f64(value.into())) as f64
     }
 }
 
@@ -332,25 +494,37 @@ pub fn clamp_u32(value: f64) -> u32 {
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub enum TimsCalibrationModel {
     Basic(Scan2ImConverter),
     Model1(TimsCalibrationModel1),
 }
 
+impl TimsCalibrationModel {
+    pub fn as_param(&self) -> Option<Param> {
+        match self {
+            TimsCalibrationModel::Basic(_) => None,
+            TimsCalibrationModel::Model1(tims_calibration_model1) => Some(tims_calibration_model1.as_param()),
+        }
+    }
+}
+
 impl ConvertableDomain for TimsCalibrationModel {
     fn convert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
         match self {
             TimsCalibrationModel::Basic(scan2_im_converter) => scan2_im_converter.convert(value),
-            TimsCalibrationModel::Model1(tims_calibration_model1) => tims_calibration_model1.convert(value),
+            TimsCalibrationModel::Model1(tims_calibration_model1) => {
+                tims_calibration_model1.convert(value)
+            }
         }
     }
 
     fn invert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
         match self {
             TimsCalibrationModel::Basic(scan2_im_converter) => scan2_im_converter.invert(value),
-            TimsCalibrationModel::Model1(tims_calibration_model1) => tims_calibration_model1.invert(value),
+            TimsCalibrationModel::Model1(tims_calibration_model1) => {
+                tims_calibration_model1.invert(value)
+            }
         }
     }
 }
@@ -375,11 +549,19 @@ impl TryFrom<&'_ TimsCalibration> for TimsCalibrationModel {
     }
 }
 
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum MzCalibrationModel {
     Basic(Tof2MzConverter),
-    Model1(MzCalibrationModel1)
+    Model1(MzCalibrationModel1),
+}
+
+impl MzCalibrationModel {
+    pub fn as_param(&self) -> Option<Param> {
+        match self {
+            MzCalibrationModel::Basic(_) => None,
+            MzCalibrationModel::Model1(mz_calibration_model1) => Some(mz_calibration_model1.as_param()),
+        }
+    }
 }
 
 impl TryFrom<(&'_ MzCalibration, f64)> for MzCalibrationModel {
@@ -394,14 +576,18 @@ impl ConvertableDomain for MzCalibrationModel {
     fn convert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
         match self {
             MzCalibrationModel::Basic(tof2_mz_converter) => tof2_mz_converter.convert(value),
-            MzCalibrationModel::Model1(mz_calibration_model1) => mz_calibration_model1.convert(value),
+            MzCalibrationModel::Model1(mz_calibration_model1) => {
+                mz_calibration_model1.convert(value)
+            }
         }
     }
 
     fn invert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
         match self {
             MzCalibrationModel::Basic(tof2_mz_converter) => tof2_mz_converter.invert(value),
-            MzCalibrationModel::Model1(mz_calibration_model1) => mz_calibration_model1.invert(value),
+            MzCalibrationModel::Model1(mz_calibration_model1) => {
+                mz_calibration_model1.invert(value)
+            }
         }
     }
 }
@@ -417,7 +603,6 @@ impl From<Tof2MzConverter> for MzCalibrationModel {
         Self::Basic(v)
     }
 }
-
 
 #[cfg(test)]
 mod test_im {
@@ -453,7 +638,7 @@ mod test_im {
 mod test_mz {
     use super::*;
 
-        #[test]
+    #[test]
     fn tof2mz_matches_fork_reference() {
         let cal = MzCalibration {
             id: 1,
@@ -475,7 +660,7 @@ mod test_mz {
         assert!((mz_max - 1700.005).abs() < TOL, "mz_max={mz_max}");
 
         // round trip
-        let back = conv.convert(mz_max);
+        let back = conv.invert(mz_max);
         assert!(((back as u32) as i64 - 636029).abs() <= 1);
     }
 }

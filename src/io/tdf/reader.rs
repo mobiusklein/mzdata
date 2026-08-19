@@ -10,10 +10,7 @@ use crate::io::checksum_file;
 
 use crate::{
     curie,
-    io::{
-        DetailLevel, IntoIonMobilityFrameSource,
-        IonMobilityFrameAccessError, OffsetIndex,
-    },
+    io::{DetailLevel, IntoIonMobilityFrameSource, IonMobilityFrameAccessError, OffsetIndex},
     meta::{
         Component, ComponentType, DataProcessing, DetectorTypeTerm,
         DissociationMethodTerm::CollisionInducedDissociation, FileDescription,
@@ -190,18 +187,63 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         Self::new_with_detail_level(path, DetailLevel::Full)
     }
 
-    pub fn calibration_models_for(&self, index: usize) -> (MzCalibrationModel, TimsCalibrationModel) {
+    /// Get the models used to recalibrate the m/z and ion mobility for the frame at `index`.
+    ///
+    /// If the models cannot be resolved, either because one is not found or is not supported,
+    /// the most basic interpolation models will be used instead.
+    pub fn calibration_models_for(
+        &self,
+        index: usize,
+    ) -> (MzCalibrationModel, TimsCalibrationModel) {
         if let Some(entry) = self.entry_index.get(index) {
             let mz_model: MzCalibrationModel = self
                 .calibration_models
                 .find_mz_model_for_frame(&entry.frame)
-                .unwrap_or_else(|_e| self.metadata.mz_converter.clone().into());
-            let im_model: TimsCalibrationModel = self.calibration_models
+                .unwrap_or_else(|_e| self.metadata.mz_converter.into());
+            let im_model: TimsCalibrationModel = self
+                .calibration_models
                 .find_tims_model_for_frame(&entry.frame)
-                .unwrap_or_else(|_e| self.metadata.im_converter.clone().into());
+                .unwrap_or_else(|_e| self.metadata.im_converter.into());
             (mz_model, im_model)
         } else {
-            (self.metadata.mz_converter.clone().into(), self.metadata.im_converter.clone().into())
+            (
+                self.metadata.mz_converter.into(),
+                self.metadata.im_converter.into(),
+            )
+        }
+    }
+
+    /// Get the model parameters as [`Param`]s used to recalibrate the m/z and ion mobility
+    /// for the frame at `index`.
+    ///
+    /// If the models cannot be resolved, either because one is not found or is not supported,
+    /// the most basic interpolation models will be used instead.
+    pub fn calibration_parameters_for(&self, index: usize) -> (Param, Param) {
+        if let Some(entry) = self.entry_index.get(index) {
+            let mz_model = match self
+                .calibration_models
+                .find_mz_model_for_frame(&entry.frame)
+            {
+                Ok(val) => val
+                    .as_param()
+                    .unwrap_or_else(|| self.calibration_models.basic_mz_parameters()),
+                Err(_e) => self.calibration_models.basic_mz_parameters(),
+            };
+            let im_model = match self
+                .calibration_models
+                .find_tims_model_for_frame(&entry.frame)
+            {
+                Ok(val) => val
+                    .as_param()
+                    .unwrap_or_else(|| self.calibration_models.basic_tims_parameters()),
+                Err(_e) => self.calibration_models.basic_tims_parameters(),
+            };
+            (mz_model, im_model)
+        } else {
+            (
+                self.calibration_models.basic_mz_parameters(),
+                self.calibration_models.basic_tims_parameters(),
+            )
         }
     }
 
@@ -228,9 +270,12 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         let tdf_reader = RawTDFSQLReader::new(&tdf_path)
             .map_err(|e| TimsRustError::FrameReaderError(FrameReaderError::SqlError(e.into())))?;
 
-        let calibration_models = CalibrationParameters::from_sql(&tdf_reader.connection())
-            .inspect_err(|e| log::error!("Failed to load calibration from {}: {e}", path.display()))
-            .unwrap_or_default();
+        let calibration_models =
+            CalibrationParameters::from_sql(&tdf_reader.connection(), &metadata)
+                .inspect_err(|e| {
+                    log::error!("Failed to load calibration from {}: {e}", path.display())
+                })
+                .unwrap_or_default();
 
         let mut this = Self {
             metadata,
@@ -1400,6 +1445,19 @@ impl<
     pub fn set_consolidate_peaks(&mut self, do_consolidate_peaks: bool) {
         self.do_consolidate_peaks = do_consolidate_peaks;
     }
+
+    /// See [`TDFFrameReaderType::calibration_models_for`]
+    pub fn calibration_models_for(
+            &self,
+            index: usize,
+        ) -> (MzCalibrationModel, TimsCalibrationModel) {
+        self.frame_reader.calibration_models_for(index)
+    }
+
+    /// See [`TDFFrameReaderType::calibration_parameters_for`]
+    pub fn calibration_parameters_for(&self, index: usize) -> (Param, Param) {
+        self.frame_reader.calibration_parameters_for(index)
+    }
 }
 
 pub type TDFSpectrumReader = TDFSpectrumReaderType<
@@ -1726,9 +1784,17 @@ mod test {
                 let mzs_at = arrays_at.mzs().unwrap();
                 let ref_mzs = ref_arrays_at.mzs().unwrap();
                 let mut acc = 0.0;
-                for (j, (ma, mb)) in mzs_at.iter().copied().zip(ref_mzs.iter().copied()).enumerate() {
+                for (j, (ma, mb)) in mzs_at
+                    .iter()
+                    .copied()
+                    .zip(ref_mzs.iter().copied())
+                    .enumerate()
+                {
                     let e = (ma - mb).abs();
-                    assert!(e < 0.1, "{ma} - {mb} err {e} too large at position {j} in slot {_i}");
+                    assert!(
+                        e < 0.1,
+                        "{ma} - {mb} err {e} too large at position {j} in slot {_i}"
+                    );
                     acc += e;
                 }
                 acc /= mzs_at.len() as f64;
