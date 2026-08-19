@@ -886,6 +886,7 @@ mod async_impl {
             AsyncMZReaderBuilder::default()
         }
 
+        #[allow(unreachable_patterns)]
         /// Get the file format for this reader
         pub fn as_format(&self) -> MassSpectrometryFormat {
             match &self {

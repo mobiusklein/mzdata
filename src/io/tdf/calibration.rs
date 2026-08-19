@@ -2,7 +2,7 @@
 //!
 //! It is replicated to be compatible with `timsrust` v0.4.1 instead of v0.5+ which introduces
 //! greater complexity, and to avoid adding a second SQLite3 implementation.
-use mzdata_param::{Param, Unit, Value, curie};
+use mzdata_param::{curie, Param, Unit, Value};
 use rusqlite::Connection;
 use thiserror::Error;
 use timsrust::converters::{ConvertableDomain, Scan2ImConverter, Tof2MzConverter};
@@ -215,14 +215,22 @@ impl CalibrationParameters {
         let tims = TimsCalibration::read_from(connection, [])?;
 
         let scan_max_index =
-            connection.query_row("SELECT MAX(NumScans) FROM Frames", [], |row| {
+            connection.query_row("SELECT max(Frames.NumScans) as NumScans FROM Frames", [], |row| {
                 row.get::<usize, u32>(0)
             })?;
 
         let tof_max_index = connection.query_row(
-            "SELECT Value FROM GlobalMetadata WHERE Key == \"DigitizerNumSamples\";",
+            "SELECT Value FROM GlobalMetadata WHERE Key == \"DigitizerNumSamples\"",
             [],
-            |row| row.get::<usize, u32>(0),
+            |row| {
+                row.get::<usize, String>(0)?.parse::<u32>().map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })
+            },
         )?;
 
         let basic_tims_parameters =
@@ -242,9 +250,9 @@ impl CalibrationParameters {
         Param::builder()
             .curie(curie!(MS:1003825))
             .name("square root grid interpolation?")
-            .value(
-                Value::from_iter(self.basic_mz_parameters.map(Value::Float).into_iter())
-            )
+            .value(Value::from_iter(
+                self.basic_mz_parameters.map(Value::Float).into_iter(),
+            ))
             .unit(Unit::MZ)
             .build()
     }
@@ -253,9 +261,9 @@ impl CalibrationParameters {
         Param::builder()
             .curie(curie!(MS:1003824))
             .name("linear grid interpolation?")
-            .value(
-                Value::List(Box::new(self.basic_tims_parameters.map(Value::Float)))
-            )
+            .value(Value::List(Box::new(
+                self.basic_tims_parameters.map(Value::Float),
+            )))
             .unit(Unit::VoltSecondPerSquareCentimeter)
             .build()
     }
@@ -315,14 +323,9 @@ impl TimsCalibrationModel1 {
         Param::builder()
             .curie(curie!(MS:1003824))
             .name("linear grid interpolation?")
-            .value(
-                Value::List(Box::new([
-                    self.offset,
-                    self.slope,
-                    self.c6,
-                    self.c7,
-                ].map(Value::Float)))
-            )
+            .value(Value::List(Box::new(
+                [self.offset, self.slope, self.c6, self.c7].map(Value::Float),
+            )))
             .unit(Unit::VoltSecondPerSquareCentimeter)
             .build()
     }
@@ -421,14 +424,15 @@ impl MzCalibrationModel1 {
         Param::builder()
             .curie(curie!(MS:1003825))
             .name("square root grid interpolation?")
-            .value(
-                Value::List(Box::new([
+            .value(Value::List(Box::new(
+                [
                     self.c0,
                     self.c1,
                     self.digitize_delay,
                     self.digitizer_timebase,
-                ].map(Value::Float)))
-            )
+                ]
+                .map(Value::Float),
+            )))
             .unit(Unit::MZ)
             .build()
     }
@@ -504,7 +508,9 @@ impl TimsCalibrationModel {
     pub fn as_param(&self) -> Option<Param> {
         match self {
             TimsCalibrationModel::Basic(_) => None,
-            TimsCalibrationModel::Model1(tims_calibration_model1) => Some(tims_calibration_model1.as_param()),
+            TimsCalibrationModel::Model1(tims_calibration_model1) => {
+                Some(tims_calibration_model1.as_param())
+            }
         }
     }
 }
@@ -559,7 +565,9 @@ impl MzCalibrationModel {
     pub fn as_param(&self) -> Option<Param> {
         match self {
             MzCalibrationModel::Basic(_) => None,
-            MzCalibrationModel::Model1(mz_calibration_model1) => Some(mz_calibration_model1.as_param()),
+            MzCalibrationModel::Model1(mz_calibration_model1) => {
+                Some(mz_calibration_model1.as_param())
+            }
         }
     }
 }

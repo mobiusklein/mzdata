@@ -1812,7 +1812,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[test_log::test]
     fn test_tdf_frame() -> io::Result<()> {
         let mut reader = TDFFrameReader::new("test/data/diaPASEF.d")
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
