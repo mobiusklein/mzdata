@@ -886,6 +886,20 @@ mod async_impl {
             AsyncMZReaderBuilder::default()
         }
 
+        /// Get the file format for this reader
+        pub fn as_format(&self) -> MassSpectrometryFormat {
+            match &self {
+                #[cfg(feature = "mzml")]
+                Self::MzML(_) => MassSpectrometryFormat::MzML,
+                #[cfg(feature = "mgf")]
+                Self::MGF(_) => MassSpectrometryFormat::MGF,
+                #[cfg(feature = "thermo")]
+                Self::ThermoRaw(_) => MassSpectrometryFormat::ThermoRaw,
+                _ => MassSpectrometryFormat::Unknown
+            }
+        }
+
+
         pub async fn open_read_seek(mut source: R) -> io::Result<AsyncMZReaderType<R, C, D>> {
             let mut buffer: Vec<u8> = vec![0; 250];
             let current = source.stream_position().await?;
