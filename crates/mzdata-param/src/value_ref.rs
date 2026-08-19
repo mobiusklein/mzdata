@@ -33,6 +33,26 @@ pub enum ValueRef<'a> {
 
 impl Eq for ValueRef<'_> {}
 
+impl<U: Into<Value>> FromIterator<U> for ValueRef<'static> {
+    fn from_iter<T: IntoIterator<Item = U>>(iter: T) -> Self {
+        let values: Vec<Value> = iter.into_iter().map(|v| v.into()).collect();
+        Self::List(Cow::Owned(values))
+    }
+}
+
+
+impl From<Vec<Value>> for ValueRef<'static> {
+    fn from(value: Vec<Value>) -> Self {
+        Self::List(Cow::Owned(value))
+    }
+}
+
+impl<'a> From<Cow<'a, [Value]>> for ValueRef<'a> {
+    fn from(value: Cow<'a, [Value]>) -> Self {
+        Self::List(value)
+    }
+}
+
 impl From<String> for ValueRef<'_> {
     fn from(value: String) -> Self {
         value.parse().unwrap()

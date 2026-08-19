@@ -569,6 +569,25 @@ impl ParamValue for Value {
     }
 }
 
+impl<U: Into<Value>> FromIterator<U> for Value {
+    fn from_iter<T: IntoIterator<Item = U>>(iter: T) -> Self {
+        let values: Box<[Value]> = iter.into_iter().map(|v| v.into()).collect();
+        Self::List(values)
+    }
+}
+
+impl From<Box<[Value]>> for Value {
+    fn from(value: Box<[Value]>) -> Self {
+        Self::List(value)
+    }
+}
+
+impl From<Vec<Value>> for Value {
+    fn from(value: Vec<Value>) -> Self {
+        Self::List(value.into_boxed_slice())
+    }
+}
+
 impl PartialEq<String> for Value {
     fn eq(&self, other: &String) -> bool {
         self.as_str() == other.as_str()

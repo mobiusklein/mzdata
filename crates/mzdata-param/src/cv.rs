@@ -37,6 +37,12 @@ impl TryFrom<mzcv::ControlledVocabulary> for ControlledVocabulary {
     }
 }
 
+impl PartialEq<mzcv::ControlledVocabulary> for ControlledVocabulary {
+    fn eq(&self, other: &mzcv::ControlledVocabulary) -> bool {
+        mzcv::ControlledVocabulary::from(*self) == *other
+    }
+}
+
 impl From<ControlledVocabulary> for mzcv::ControlledVocabulary {
     fn from(value: ControlledVocabulary) -> Self {
         match value {

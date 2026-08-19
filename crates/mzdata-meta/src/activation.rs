@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-
-
 crate::cvmap! {
     #[flag_type=i32]
     #[allow(unused)]
@@ -91,6 +89,8 @@ crate::cvmap! {
 
 impl DissociationMethodTerm {
 
+    /// Test if the dissociation method is based upon the transfer of electrons to or from
+    /// a radical ion reagent
     pub fn is_electronic(&self) -> bool {
         matches!(self, Self::ElectronActivatedDissociation
             | Self::ElectronCaptureDissociation
@@ -98,6 +98,7 @@ impl DissociationMethodTerm {
             | Self::NegativeElectronTransferDissociation)
     }
 
+    /// Test if the dissociation method is based upon a reaction following collision with a neutral gas
     pub fn is_collisional(&self) -> bool {
         matches!(self, Self::CollisionInducedDissociation
             | Self::LowEnergyCollisionInducedDissociation
@@ -158,18 +159,22 @@ impl Display for DissociationEnergyTerm {
 }
 
 impl DissociationEnergyTerm {
+    /// Is the collision energy supplemental to another dissociation method?
     pub const fn is_supplemental(&self) -> bool {
         matches!(self, Self::SupplementalCollisionEnergy(_))
     }
 
+    /// Is this the start of an energy ramp?
     pub const fn is_ramp_start(&self) -> bool {
         matches!(self, Self::CollisionEnergyRampStart(_) | Self::PercentCollisionEnergyRampStart(_))
     }
 
+    /// Is this the end of an energy ramp?
     pub const fn is_ramp_end(&self) -> bool {
         matches!(self, Self::CollisionEnergyRampEnd(_) | Self::PercentCollisionEnergyRampEnd(_))
     }
 
+    /// Get the scalar energy value for this term
     pub const fn energy(&self) -> f32 {
         *match self {
             DissociationEnergyTerm::CollisionEnergy(x) => x,
@@ -183,6 +188,7 @@ impl DissociationEnergyTerm {
         }
     }
 
+    /// Get a mutable reference to the energy in the term
     pub fn energy_mut(&mut self) -> &mut f32 {
         match self {
             DissociationEnergyTerm::CollisionEnergy(x) => x,
@@ -197,6 +203,7 @@ impl DissociationEnergyTerm {
     }
 }
 
+/// A [`DissociationEnergyTerm`] can be treated as a reference to their energy value
 impl AsRef<f32> for DissociationEnergyTerm {
     fn as_ref(&self) -> &f32 {
         match self {

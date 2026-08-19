@@ -65,6 +65,7 @@ impl DataProcessing {
     }
 }
 
+/// A root type for data transformations
 #[derive(Debug, Clone, PartialEq)]
 pub enum DataTransformationAction {
     FormatConversion(FormatConversion),
@@ -78,6 +79,7 @@ impl Display for DataTransformationAction {
     }
 }
 
+/// A compile time checkable list mapping to [`MS:1000543|data processing action`](http://purl.obolibrary.org/obo/MS_1000543)
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 pub enum DataProcessingAction {
     Deisotoping,
