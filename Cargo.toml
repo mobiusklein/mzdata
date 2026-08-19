@@ -123,7 +123,8 @@ serde = [
     "dep:serde_with",
     "mzdata-param/serde",
     "mzdata-meta/serde",
-    "mzdata-bindata/serde"
+    "mzdata-bindata/serde",
+    "mzdata-spectrum/serde",
 ]
 
 async = ["async_partial", "tokio/fs"]
