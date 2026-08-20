@@ -30,7 +30,8 @@ mzdata = { path = "../../", version = "0.66.3", default-features = false, featur
 "imzml",
 "mzsignal",
 'nalgebra',
-"serde"
+"serde",
+"async_partial"
 ] }
 
 uuid = { version = "1.0", features = ["js"] }
@@ -70,3 +71,6 @@ opt-level = 3
 
 [profile.dev.package."mzsignal"]
 opt-level = 3
+
+[workspace]
+members = []

@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.66.3] - 2026-08-20
+
+### Added
+
+- Add conversion traits to `Value::List` and `ValueRef::List`
+- Add `as_format` to `AsyncMZReaderType`
+- Add `AsyncIonMobilityFrameSource`
+- Add `AsyncGeneric3DIonMobilityFrameSource` and `AsyncIntoIonMobilityFrameSource`
+- Add impl of `AsyncIntoIonMobilityFrameSource ` for `AsyncMZReaderType` and `AsyncMzMLReaderType`
+
+### Documentation
+
+- Restore old wrapper module for `params`, copy module docs
+- Rewrite module comment
+
+### Fixed
+
+- Fix up doctest when cached CV is not available
+- Implement timstof calibration
+- Enabling `serde` feature properly makes `mzdata-spectrum` defined types serializable
+- Expose timstof calibration parameters
+
 ## [0.66.2] - 2026-08-16
 
 ### Documentation
@@ -1172,7 +1194,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.66.2...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.66.3...HEAD
+[0.66.3]: https://github.com/mobiusklein/mzdata/compare/v0.66.2...v0.66.3
 [0.66.2]: https://github.com/mobiusklein/mzdata/compare/v0.66.1...v0.66.2
 [0.66.1]: https://github.com/mobiusklein/mzdata/compare/v0.66.0...v0.66.1
 [0.66.0]: https://github.com/mobiusklein/mzdata/compare/v0.66.0...v0.66.0

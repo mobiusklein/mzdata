@@ -27,6 +27,18 @@ impl From<Blob> for BufferHandle {
     }
 }
 
+impl From<Uint8Array> for BufferHandle {
+    fn from(value: Uint8Array) -> Self {
+        Self::Blob(gloo_file::Blob::new(value.buffer()))
+    }
+}
+
+impl From<js_sys::ArrayBuffer> for BufferHandle {
+    fn from(value: js_sys::ArrayBuffer) -> Self {
+        Self::Blob(gloo_file::Blob::new(value))
+    }
+}
+
 impl From<File> for BufferHandle {
     fn from(value: File) -> Self {
         Self::File(gloo_file::File::from(value))
@@ -149,6 +161,8 @@ impl Clone for WebIO {
     }
 }
 
+unsafe impl Send for WebIO {}
+
 #[wasm_bindgen]
 impl WebIO {
     pub fn blob(blob: web_sys::Blob) -> Self {
@@ -157,6 +171,14 @@ impl WebIO {
 
     pub fn file(file: web_sys::File) -> Self {
         Self::new(file)
+    }
+
+    pub fn byte_array(buffer: js_sys::Uint8Array) -> Self {
+        Self::new(BufferHandle::from(buffer))
+    }
+
+    pub fn buffer(buffer: js_sys::ArrayBuffer) -> Self {
+        Self::new(BufferHandle::from(buffer))
     }
 
     #[wasm_bindgen(getter, js_name = "size")]
@@ -172,6 +194,11 @@ impl WebIO {
             Err(e) => Err(JsError::from(e)),
         };
         v
+    }
+
+    #[wasm_bindgen(js_name = "clone")]
+    pub fn js_clone(&self) -> Self {
+        self.clone()
     }
 }
 

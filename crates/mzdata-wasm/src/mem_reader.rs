@@ -7,11 +7,12 @@ use mzpeaks::feature::{Feature, ChargedFeature};
 use mzpeaks::{CentroidPeak, IonMobility, MZ, Mass, DeconvolutedPeak};
 use wasm_bindgen::prelude::*;
 
-use mzdata::io::{IMMZReaderType, MZReaderType};
+use mzdata::io::{AsyncMZReader, AsyncRandomAccessSpectrumIterator, IMMZReaderType, MZReaderType};
 use mzdata::prelude::*;
 use mzdata::spectrum::{MultiLayerIonMobilityFrame, MultiLayerSpectrum, SignalContinuity};
 
 use crate::binds::{WebIonMobilityFrame, WebSpectrum};
+use crate::blobio::WebIO;
 
 #[derive(Debug)]
 pub struct SharedBuffer {
@@ -324,5 +325,109 @@ impl MemWebIMMZReader {
             .collect();
         Reflect::set(&obj, &JsValue::from_str(&"products"), &products).unwrap();
         Some(obj)
+    }
+}
+
+
+#[wasm_bindgen]
+pub struct WebMZReader {
+    handle: AsyncMZReader<WebIO>,
+    peak_picking: bool,
+}
+
+#[wasm_bindgen]
+impl WebMZReader {
+    async fn new(source: WebIO) -> Result<Self, JsError> {
+        let handle = AsyncMZReader::open_read_seek(source).await.map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(Self {
+            handle,
+            peak_picking: false
+        })
+    }
+
+    pub async fn blob(blob: web_sys::Blob) -> Result<Self, JsError> {
+        Self::new(WebIO::blob(blob)).await
+    }
+
+    pub  async fn file(file: web_sys::File) -> Result<Self, JsError> {
+        Self::new(WebIO::file(file)).await
+    }
+
+    pub  async fn byte_array(buffer: js_sys::Uint8Array) -> Result<Self, JsError> {
+        Self::new(WebIO::byte_array(buffer)).await
+    }
+
+    pub  async fn buffer(buffer: js_sys::ArrayBuffer) -> Result<Self, JsError> {
+        Self::new(WebIO::buffer(buffer)).await
+    }
+
+
+    pub fn set_data_loading(&mut self, load_data: bool) {
+        if load_data {
+            self.handle.set_detail_level(mzdata::io::DetailLevel::Full);
+        } else {
+            self.handle
+                .set_detail_level(mzdata::io::DetailLevel::MetadataOnly);
+        }
+    }
+
+    pub fn set_peak_picking(&mut self, pick_peaks: bool) {
+        self.peak_picking = pick_peaks;
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn file_format(&self) -> String {
+        self.handle.as_format().to_string()
+    }
+
+    pub async fn reset(&mut self) {
+        self.handle.reset().await
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn length(&self) -> usize {
+        self.handle.len()
+    }
+
+    fn convert_spectrum(
+        &self,
+        mut spectrum: MultiLayerSpectrum<CentroidPeak, DeconvolutedPeak>,
+    ) -> WebSpectrum {
+        // if spectrum.peaks.is_none() && spectrum.deconvoluted_peaks.is_none() {
+        //     spectrum.pick_peaks(1.0).unwrap();
+        //     spectrum.description_mut().signal_continuity = SignalContinuity::Centroid;
+        // }
+        if self.peak_picking && spectrum.signal_continuity() == SignalContinuity::Profile {
+            spectrum.pick_peaks(1.0).unwrap();
+            spectrum.description_mut().signal_continuity = SignalContinuity::Centroid;
+        }
+        WebSpectrum::from(spectrum)
+    }
+
+    pub async fn get_spectrum_by_id(&mut self, id: &str) -> Option<WebSpectrum> {
+        let spectrum = self.handle.get_spectrum_by_id(id).await?;
+        Some(self.convert_spectrum(spectrum))
+    }
+
+    pub async fn get_spectrum_by_index(&mut self, index: usize) -> Option<WebSpectrum> {
+        let spectrum = self.handle.get_spectrum_by_index(index).await?;
+        Some(self.convert_spectrum(spectrum))
+    }
+
+    pub async fn get_spectrum_by_time(&mut self, time: f64) -> Option<WebSpectrum> {
+        let spectrum = self.handle.get_spectrum_by_time(time).await?;
+        Some(self.convert_spectrum(spectrum))
+    }
+
+    pub async fn next(&mut self) -> Option<WebSpectrum> {
+        self.handle.read_next().await.map(|v| self.convert_spectrum(v))
+    }
+
+    pub async fn start_from_index(&mut self, index: usize) {
+        self.handle.start_from_index(index).await.unwrap();
+    }
+
+    pub async fn start_from_time(&mut self, time: f64) {
+        self.handle.start_from_time(time).await.unwrap();
     }
 }
