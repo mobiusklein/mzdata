@@ -57,6 +57,7 @@ pub use crate::io::traits::{AsyncSpectrumSource, AsyncRandomAccessSpectrumIterat
 
 #[cfg(feature = "async_partial")]
 pub use crate::io::traits::{
+    AsyncGeneric3DIonMobilityFrameSource, AsyncIntoIonMobilityFrameSource,
     AsyncIonMobilityFrameSource, AsyncRandomAccessIonMobilityFrameIterator, IonMobilityFrameStream,
 };
 

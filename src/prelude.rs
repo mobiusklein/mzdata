@@ -9,7 +9,9 @@ pub use crate::io::traits::{
 };
 
 #[cfg(feature = "async_partial")]
-pub use crate::io::traits::{AsyncSpectrumSource, AsyncIonMobilityFrameSource};
+pub use crate::io::traits::{
+    AsyncIntoIonMobilityFrameSource, AsyncIonMobilityFrameSource, AsyncSpectrumSource,
+};
 pub use crate::io::_SourceFileExt;
 pub use crate::meta::MSDataFileMetadata;
 pub use crate::params::{ParamDescribed, ParamLike, ParamValue};

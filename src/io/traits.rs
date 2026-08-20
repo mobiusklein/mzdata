@@ -29,6 +29,7 @@ pub use spectrum::{AsyncSpectrumSource, AsyncRandomAccessSpectrumIterator, Spect
 
 #[cfg(feature = "async_partial")]
 pub use frame::{
+    AsyncGeneric3DIonMobilityFrameSource, AsyncIntoIonMobilityFrameSource,
     AsyncIonMobilityFrameSource, AsyncRandomAccessIonMobilityFrameIterator, IonMobilityFrameStream,
 };
 
