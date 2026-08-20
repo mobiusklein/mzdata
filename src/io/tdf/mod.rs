@@ -14,4 +14,15 @@ mod calibration;
 pub use reader::{TDFFrameReader, TDFFrameReaderType, TDFSpectrumReader, TDFSpectrumReaderType, is_tdf};
 pub use sql::{ChromatographyData, SQLTrace};
 
-pub use calibration::{CalibrationParameters, IonMobilityCalibrationError, MzCalibration, TimsCalibration, MzCalibrationError, clamp_u32};
+pub use calibration::{
+    CalibrationParameters,
+    IonMobilityCalibrationError,
+    MzCalibration,
+    TimsCalibration,
+    MzCalibrationError,
+    clamp_u32,
+    TimsCalibrationModel,
+    TimsCalibrationModel1,
+    MzCalibrationModel,
+    MzCalibrationModel1
+};

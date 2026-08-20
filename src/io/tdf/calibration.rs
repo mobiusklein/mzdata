@@ -1,4 +1,5 @@
-//! The majority of this code is adapted from https://github.com/jspaezp/timsrust-calibration.
+//! The majority of this code is adapted from https://github.com/jspaezp/timsrust-calibration,
+//! distributed under the Apache-2.0 license.
 //!
 //! It is replicated to be compatible with `timsrust` v0.4.1 instead of v0.5+ which introduces
 //! greater complexity, and to avoid adding a second SQLite3 implementation.
@@ -301,6 +302,7 @@ impl CalibrationParameters {
     }
 }
 
+/// Implementation details of approximated converter model type == 1 for ion mobility conversion
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TimsCalibrationModel1 {
     pub c6: f64,
@@ -319,24 +321,32 @@ impl TimsCalibrationModel1 {
         }
     }
 
+    /// Convert the model to a [`Param`] that can be used to pass the values around in a tagged generic container
     pub fn as_param(&self) -> Param {
         Param::builder()
             .curie(curie!(MS:1003824))
             .name("linear grid interpolation?")
             .value(Value::List(Box::new(
-                [self.offset, self.slope, self.c6, self.c7].map(Value::Float),
+                [self.c6, self.c7, self.offset, self.slope].map(Value::Float),
             )))
             .unit(Unit::VoltSecondPerSquareCentimeter)
             .build()
     }
 }
 
+/// Errors that may occur during ion mobility calibration model retrieval
 #[derive(Debug, Error)]
 pub enum IonMobilityCalibrationError {
+    /// Indicates that the model recorded in the frame metadata doesn't have
+    /// an implementation available
     #[error("Ion mobility calibration model type {0} is not supported")]
     UnsupportedModel(u8),
+    /// Indicates that the reported model type is supported, but is missing required
+    /// parameters in the model definition
     #[error("Missing model parameters: {0}")]
     MissingParameters(&'static str),
+    /// Indicates that the model ID provided doesn't map to a set of parameters read
+    /// from the model definition table
     #[error("Ion mobility model ID {0} not found")]
     ModelNotFound(u32),
 }
@@ -391,6 +401,11 @@ impl ConvertableDomain for TimsCalibrationModel1 {
     }
 }
 
+/// Implementation details of approximated converter model type == 1 for ion m/z
+///
+/// These parameters are specific to a particular frame's T1 value. If a global
+/// model is desired, construct using [`TryFrom::try_from`] using the [`MzCalibration`]
+/// and some average (mean, median) value of T1.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MzCalibrationModel1 {
     pub c0: f64,
@@ -420,6 +435,7 @@ impl MzCalibrationModel1 {
         (tof - self.digitize_delay) / self.digitizer_timebase
     }
 
+    /// Convert the model to a [`Param`] that can be used to pass the values around in a tagged generic container
     pub fn as_param(&self) -> Param {
         Param::builder()
             .curie(curie!(MS:1003825))
@@ -428,8 +444,8 @@ impl MzCalibrationModel1 {
                 [
                     self.c0,
                     self.c1,
-                    self.digitize_delay,
                     self.digitizer_timebase,
+                    self.digitize_delay,
                 ]
                 .map(Value::Float),
             )))
@@ -438,14 +454,22 @@ impl MzCalibrationModel1 {
     }
 }
 
+/// Errors that may occur during ion mobility calibration model retrieval
 #[derive(Debug, Error)]
 pub enum MzCalibrationError {
+    /// Indicates that the model recorded in the frame metadata doesn't have
+    /// an implementation available
     #[error("Mz calibration model type {0} is not supported")]
     UnsupportedModel(u8),
+    /// Indicates that the reported model type is supported, but is missing required
+    /// parameters in the model definition
     #[error("Missing model parameters: {0}")]
     MissingParameters(&'static str),
+    /// Indicates that the model ID provided doesn't map to a set of parameters read
+    /// from the model definition table
     #[error("Mz model ID {0} not found")]
     ModelNotFound(u32),
+    /// Indicates that m/z recalibration is not permitted and the minimal quadratic transform should be used
     #[error("Mz calibration models are disabled")]
     Disabled,
 }
@@ -498,13 +522,18 @@ pub fn clamp_u32(value: f64) -> u32 {
     }
 }
 
+/// A generic container for pre-parameterized ion mobility calibration models
 #[derive(Debug, Clone)]
 pub enum TimsCalibrationModel {
+    /// The basic linear calibration in [`timsrust`]
     Basic(Scan2ImConverter),
+    /// The model type == 1 implementation, adapted from https://github.com/jspaezp/timsrust-calibration.
     Model1(TimsCalibrationModel1),
 }
 
 impl TimsCalibrationModel {
+
+    /// Convert the model to a [`Param`] that can be used to pass the values around in a tagged generic container
     pub fn as_param(&self) -> Option<Param> {
         match self {
             TimsCalibrationModel::Basic(_) => None,
@@ -555,13 +584,17 @@ impl TryFrom<&'_ TimsCalibration> for TimsCalibrationModel {
     }
 }
 
+/// A generic container for pre-parameterized m/z calibration models
 #[derive(Debug, Clone, Copy)]
 pub enum MzCalibrationModel {
+    /// The basic quadratic calibration in [`timsrust`]
     Basic(Tof2MzConverter),
+    /// The model type == 1 implementation, adapted from https://github.com/jspaezp/timsrust-calibration.
     Model1(MzCalibrationModel1),
 }
 
 impl MzCalibrationModel {
+    /// Convert the model to a [`Param`] that can be used to pass the values around in a tagged generic container
     pub fn as_param(&self) -> Option<Param> {
         match self {
             MzCalibrationModel::Basic(_) => None,
