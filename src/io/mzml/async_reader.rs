@@ -24,7 +24,7 @@ use crate::{
     io::{
         traits::{
             AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource,
-            SpectrumStream,
+            SpectrumStream, AsyncGeneric3DIonMobilityFrameSource, AsyncIntoIonMobilityFrameSource
         },
         utils::DetailLevel,
     },
@@ -38,6 +38,7 @@ use crate::{
         bindata::BuildFromArrayMap,
         spectrum_types::MultiLayerSpectrum,
         Chromatogram,
+        HasIonMobility,
     },
 };
 
@@ -1088,6 +1089,39 @@ impl<
         Ok(self)
     }
 }
+
+impl<
+        R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Send,
+        C: CentroidLike + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
+    > AsyncIntoIonMobilityFrameSource<C, D>
+    for MzMLReaderType<R, C, D> {
+
+    type IonMobilityFrameSource<
+        CF: FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility> + Send + Sync,
+        DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge + Send + Sync,
+    > = AsyncGeneric3DIonMobilityFrameSource<C, D, Self, CF, DF>;
+
+    async fn try_into_frame_source<
+        CF: FeatureLike<mzpeaks::MZ, mzpeaks::IonMobility> + Send + Sync,
+        DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge + Send + Sync,
+    >(
+        mut self,
+    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError>
+    {
+        match self.has_ion_mobility().await {
+            Some(dim) => {
+                if matches!(dim, HasIonMobility::Dimension) {
+                    Ok(AsyncGeneric3DIonMobilityFrameSource::new(self))
+                } else {
+                    Err(crate::io::IntoIonMobilityFrameSourceError::ConversionNotPossible)
+                }
+            },
+            None => Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound),
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod test {

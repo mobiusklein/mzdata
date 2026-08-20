@@ -859,7 +859,10 @@ mod async_impl {
     use crate::io::mgf::AsyncMGFReaderType;
     #[cfg(feature = "mzml")]
     use crate::io::mzml::AsyncMzMLReaderType;
-    use crate::io::traits::{AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource};
+    use crate::io::traits::{
+        AsyncGeneric3DIonMobilityFrameSource, AsyncIntoIonMobilityFrameSource,
+        AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource,
+    };
 
     #[cfg(feature = "thermo")]
     use crate::io::thermo::AsyncThermoRawReaderType;
@@ -1058,6 +1061,37 @@ mod async_impl {
         async fn start_from_time(&mut self, time: f64) -> Result<&mut Self, crate::prelude::SpectrumAccessError> {
             amsfmt_dispatch!(self, reader,{ reader.start_from_time(time).await?;});
             Ok(self)
+        }
+    }
+
+    /// Unlike the synchronous [`MZReaderType`], every variant here is converted through
+    /// [`AsyncGeneric3DIonMobilityFrameSource`]. There is no dispatch-based async ion mobility
+    /// type yet do to lack of native support for async reading in existing formats.
+    impl<R: AsyncRead + AsyncSeek + Unpin + Send,
+         C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap + Send + Sync + 'static,
+         D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap + Send + Sync + 'static> AsyncIntoIonMobilityFrameSource<C, D> for AsyncMZReaderType<R, C, D> {
+
+        type IonMobilityFrameSource<
+            CF: FeatureLike<MZ, IonMobility> + Send + Sync,
+            DF: FeatureLike<Mass, IonMobility> + KnownCharge + Send + Sync,
+        > = AsyncGeneric3DIonMobilityFrameSource<C, D, Self, CF, DF>;
+
+        async fn try_into_frame_source<
+            CF: FeatureLike<MZ, IonMobility> + Send + Sync,
+            DF: FeatureLike<Mass, IonMobility> + KnownCharge + Send + Sync,
+        >(
+            mut self,
+        ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError>
+        {
+            if let Some(state) = self.has_ion_mobility().await {
+                if matches!(state, crate::spectrum::HasIonMobility::Dimension) {
+                    Ok(Self::IonMobilityFrameSource::new(self))
+                } else {
+                    Err(crate::io::IntoIonMobilityFrameSourceError::ConversionNotPossible)
+                }
+            } else {
+                Err(crate::io::IntoIonMobilityFrameSourceError::NoIonMobilityFramesFound)
+            }
         }
     }
 
@@ -1361,15 +1395,67 @@ mod test {
     use super::*;
 
     #[test]
+    #[cfg(feature = "bruker_tdf")]
     fn test_tdf() -> io::Result<()> {
-        #[cfg(feature = "bruker_tdf")]
-        {
-            let mut reader = MZReader::open_path("test/data/diaPASEF.d")?;
-            assert_eq!(reader.as_format(), MassSpectrometryFormat::BrukerTDF);
-            eprintln!("{}", reader.len());
-            let s = reader.get_spectrum_by_index(0).unwrap();
-            assert!(s.has_ion_mobility_dimension());
+        let mut reader = MZReader::open_path("test/data/diaPASEF.d")?;
+        assert_eq!(reader.as_format(), MassSpectrometryFormat::BrukerTDF);
+        eprintln!("{}", reader.len());
+        let s = reader.get_spectrum_by_index(0).unwrap();
+        assert!(s.has_ion_mobility_dimension());
+        Ok(())
+    }
+
+    /// The async frame source must yield exactly the same frames as the established
+    /// synchronous path over the same file.
+    #[tokio::test]
+    #[cfg(all(feature = "async", feature = "mzml"))]
+    async fn test_async_into_frame_source() -> io::Result<()> {
+        use crate::io::traits::AsyncMZFileReader;
+
+        let reader = AsyncMZReader::open_path("test/data/diaPASEF.mzML").await?;
+        let mut frames = reader
+            .try_into_frame_source::<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>()
+            .await
+            .expect("diaPASEF.mzML should convert to a frame source");
+
+        let mut sync_frames = MZReader::open_path("test/data/diaPASEF.mzML")?
+            .into_frame_source::<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>();
+
+        let mut n = 0;
+        while let Some(frame) = frames.read_next_frame().await {
+            let ref_frame = sync_frames.next().expect("sync source ended early");
+            assert_eq!(frame.id(), ref_frame.id());
+            assert_eq!(frame.index(), ref_frame.index());
+            assert_eq!(frame.ms_level(), ref_frame.ms_level());
+            n += 1;
         }
+        assert_eq!(n, 9, "expected every spectrum in diaPASEF.mzML to yield a frame");
+        assert!(sync_frames.next().is_none(), "async source ended early");
+        Ok(())
+    }
+
+    /// A file with no ion mobility dimension must report an error rather than
+    /// panicking or producing an empty frame source.
+    #[tokio::test]
+    #[cfg(all(feature = "async", feature = "mzml"))]
+    async fn test_async_into_frame_source_rejects_non_im() -> io::Result<()> {
+        use crate::io::traits::AsyncMZFileReader;
+
+        let reader = AsyncMZReader::open_path("test/data/small.mzML").await?;
+        let result = reader
+            .try_into_frame_source::<Feature<MZ, IonMobility>, ChargedFeature<Mass, IonMobility>>()
+            .await;
+
+        // `has_ion_mobility` reports `Some(HasIonMobility::None)` here rather than `None`,
+        // so the probe succeeds but the state is not `Dimension`. This matches what the
+        // synchronous leaf readers do for the same file.
+        assert!(
+            matches!(
+                result,
+                Err(crate::io::IntoIonMobilityFrameSourceError::ConversionNotPossible)
+            ),
+            "small.mzML has no ion mobility dimension and should not convert"
+        );
         Ok(())
     }
 
