@@ -6,6 +6,7 @@ test-units:
 test-coverage:
     cargo llvm-cov --lib --workspace --tests nextest --features nalgebra,parallelism,mzsignal,zlib-ng-compat,thermo,async,numpress,imzml,cv --html
 
+alias test := test-units
 alias t := test-units
 
 test-units-more:

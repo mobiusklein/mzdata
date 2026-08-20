@@ -27,6 +27,11 @@ pub use crate::spectrum::group::{SpectrumGrouping, IonMobilityFrameGrouping};
 #[cfg(feature = "async_partial")]
 pub use spectrum::{AsyncSpectrumSource, AsyncRandomAccessSpectrumIterator, SpectrumStream};
 
+#[cfg(feature = "async_partial")]
+pub use frame::{
+    AsyncIonMobilityFrameSource, AsyncRandomAccessIonMobilityFrameIterator, IonMobilityFrameStream,
+};
+
 #[cfg(feature = "async")]
 pub use spectrum::AsyncMZFileReader;
 

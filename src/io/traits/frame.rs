@@ -1016,3 +1016,234 @@ pub trait IntoIonMobilityFrameSource<C: CentroidLike, D: DeconvolutedCentroidLik
         Some(status)
     }
 }
+
+#[cfg(feature = "async_partial")]
+mod async_traits {
+    use std::future::Future;
+
+    use futures::{
+        stream::{self, FusedStream},
+        Stream,
+    };
+
+    use super::*;
+
+    /// An asynchronous analog of [`IonMobilityFrameSource`], the base trait defining
+    /// the behaviors of an async source of ion mobility frames.
+    ///
+    /// This is the frame-side mirror of
+    /// [`AsyncSpectrumSource`](crate::io::traits::AsyncSpectrumSource).
+    pub trait AsyncIonMobilityFrameSource<
+        C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
+        S: IonMobilityFrameLike<C, D> = MultiLayerIonMobilityFrame<C, D>,
+    >: Send
+    {
+        /// Rewind the current position of the source to the beginning
+        fn reset(&mut self) -> impl Future<Output = ()>;
+
+        /// Get the [`DetailLevel`] the reader currently uses
+        fn detail_level(&self) -> &DetailLevel;
+
+        /// Set the [`DetailLevel`] for the reader, changing
+        /// the amount of work done immediately on loading a
+        /// frame.
+        ///
+        /// # Note
+        /// Not all readers support all detail levels, and the
+        /// behavior when requesting one of those levels will
+        /// depend upon the underlying reader.
+        fn set_detail_level(&mut self, detail_level: DetailLevel);
+
+        /// Retrieve a frame by it's native ID
+        fn get_frame_by_id(&mut self, id: &str) -> impl Future<Output = Option<S>>;
+
+        /// Retrieve a frame by it's integer index
+        fn get_frame_by_index(&mut self, index: usize) -> impl Future<Output = Option<S>>;
+
+        /// Retrieve a frame by its scan start time
+        /// Considerably more complex than seeking by ID or index, this involves
+        /// a binary search over the frame index and assumes that frames are stored
+        /// in chronological order.
+        #[allow(async_fn_in_trait)]
+        async fn get_frame_by_time(&mut self, time: f64) -> Option<S> {
+            {
+                let n = self.len();
+                if n == 0 && !self.get_index().init {
+                    warn!("Attempting to use `get_frame_by_time` when the frame index has not been initialized.");
+                    return None;
+                }
+                let mut lo: usize = 0;
+                let mut hi: usize = n;
+
+                let mut best_error: f64 = f64::INFINITY;
+                let mut best_match: Option<S> = None;
+
+                if lo == hi {
+                    return None;
+                }
+
+                let original_detail_level = *self.detail_level();
+                self.set_detail_level(DetailLevel::MetadataOnly);
+                while hi != lo {
+                    let mid = (hi + lo) / 2;
+                    let scan = self.get_frame_by_index(mid).await?;
+                    let scan_time = scan.start_time();
+                    let err = (scan_time - time).abs();
+
+                    if err < best_error {
+                        best_error = err;
+                        best_match = Some(scan);
+                    }
+                    if hi.saturating_sub(1) == lo {
+                        self.set_detail_level(original_detail_level);
+                        return best_match;
+                    } else if scan_time > time {
+                        hi = mid;
+                    } else {
+                        lo = mid;
+                    }
+                }
+                self.set_detail_level(original_detail_level);
+                best_match
+            }
+        }
+
+        /// Retrieve the number of frames in source file, usually by getting
+        /// the length of the index. If the index isn't initialized, this will
+        /// be 0.
+        fn len(&self) -> usize {
+            self.get_index().len()
+        }
+
+        fn is_empty(&self) -> bool {
+            self.len() == 0
+        }
+
+        /// Access the frame offset index to enumerate all frames by ID
+        fn get_index(&self) -> &OffsetIndex;
+
+        /// Set the frame offset index. This method shouldn't be needed if not writing
+        /// a new adapter
+        fn set_index(&mut self, index: OffsetIndex);
+
+        /// Helper method to support seeking to an ID
+        fn _offset_of_id(&self, id: &str) -> Option<u64> {
+            self.get_index().get(id)
+        }
+
+        /// Helper method to support seeking to an index
+        fn _offset_of_index(&self, index: usize) -> Option<u64> {
+            self.get_index()
+                .get_index(index)
+                .map(|(_id, offset)| offset)
+        }
+
+        /// Helper method to support seeking to a specific time.
+        /// Considerably more complex than seeking by ID or index.
+        #[allow(async_fn_in_trait)]
+        async fn _offset_of_time(&mut self, time: f64) -> Option<u64> {
+            {
+                match self.get_frame_by_time(time).await {
+                    Some(scan) => self._offset_of_index(scan.index()),
+                    None => None,
+                }
+            }
+        }
+
+        /// Read the next frame from the source, advancing the current position
+        fn read_next_frame(&mut self) -> impl Future<Output = Option<S>>;
+
+        /// Wrap this source in a [`Stream`] over its frames
+        ///
+        /// The returned stream is [`Unpin`], so it can be driven directly with
+        /// [`StreamExt::next`](futures::StreamExt::next) without pinning it first.
+        fn as_stream(&mut self) -> impl IonMobilityFrameStream<C, D, S> + Unpin + '_ {
+            Box::pin(stream::unfold(self, |reader| async {
+                let frame = reader.read_next_frame();
+                frame.await.map(|val| (val, reader))
+            }))
+        }
+    }
+
+    /// An asynchronous analog of [`RandomAccessIonMobilityFrameIterator`], extending
+    /// [`AsyncIonMobilityFrameSource`] with relocatable iteration relative to a specific
+    /// frame coordinate or identifier.
+    pub trait AsyncRandomAccessIonMobilityFrameIterator<
+        C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
+        S: IonMobilityFrameLike<C, D> = MultiLayerIonMobilityFrame<C, D>,
+    >: AsyncIonMobilityFrameSource<C, D, S> + Sized
+    {
+        /// Start iterating from the frame whose native ID matches `id`
+        fn start_from_id(
+            &mut self,
+            id: &str,
+        ) -> impl Future<Output = Result<&mut Self, IonMobilityFrameAccessError>>;
+
+        /// Start iterating from the frame whose index is `index`
+        fn start_from_index(
+            &mut self,
+            index: usize,
+        ) -> impl Future<Output = Result<&mut Self, IonMobilityFrameAccessError>>;
+
+        /// Start iterating from the frame starting closest to `time`
+        fn start_from_time(
+            &mut self,
+            time: f64,
+        ) -> impl Future<Output = Result<&mut Self, IonMobilityFrameAccessError>>;
+    }
+
+    /// A [`Stream`] over ion mobility frames, the frame-side analog of
+    /// [`SpectrumStream`](crate::io::traits::SpectrumStream).
+    pub trait IonMobilityFrameStream<
+        C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
+        S: IonMobilityFrameLike<C, D> = MultiLayerIonMobilityFrame<C, D>,
+    >: Stream<Item = S> + FusedStream
+    {
+    }
+
+    impl<
+            C: FeatureLike<MZ, IonMobility>,
+            D: FeatureLike<Mass, IonMobility> + KnownCharge,
+            S: IonMobilityFrameLike<C, D>,
+            T: Stream<Item = S> + FusedStream,
+        > IonMobilityFrameStream<C, D, S> for T
+    {
+    }
+}
+
+#[cfg(feature = "async_partial")]
+pub use async_traits::{
+    AsyncIonMobilityFrameSource, AsyncRandomAccessIonMobilityFrameIterator, IonMobilityFrameStream,
+};
+
+/// Compile-time checks that the async frame traits are usable through a generic
+/// bound, not just at a concrete implementor. These functions are never called;
+/// they fail the build if a signature regresses.
+#[cfg(all(test, feature = "async_partial"))]
+mod async_trait_tests {
+    use super::*;
+    use futures::StreamExt;
+
+    /// The provided methods must be callable via the trait alone, and `as_stream`
+    /// must return an [`Unpin`] stream so `next()` works without pinning it first.
+    #[allow(unused)]
+    async fn provided_methods_are_callable<S: AsyncIonMobilityFrameSource>(src: &mut S) {
+        let _ = src.get_frame_by_time(1.0).await;
+        let _ = src._offset_of_time(1.0).await;
+        let _ = src.len();
+        let mut stream = src.as_stream();
+        let _first = stream.next().await;
+    }
+
+    #[allow(unused)]
+    async fn random_access_methods_are_callable<S: AsyncRandomAccessIonMobilityFrameIterator>(
+        src: &mut S,
+    ) {
+        let _ = src.start_from_id("x").await;
+        let _ = src.start_from_index(0).await;
+        let _ = src.start_from_time(0.0).await;
+    }
+}
