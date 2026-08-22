@@ -16,14 +16,13 @@ use mzsignal::feature_mapping::{FeatureGraphBuilder, IMMSMapExtracter};
 
 pub struct FrameToArraysMapper<'a> {
     frame: &'a timsrust::Frame,
-    metadata: &'a Metadata,
     calibration_models: &'a CalibrationParameters,
     frame_meta: &'a SQLFrame
 }
 
 impl<'a> FrameToArraysMapper<'a> {
-    pub fn new(frame: &'a timsrust::Frame, metadata: &'a Metadata, calibration_models: &'a CalibrationParameters, frame_meta: &'a SQLFrame) -> Self {
-        Self { frame, metadata, calibration_models, frame_meta }
+    pub fn new(frame: &'a timsrust::Frame, calibration_models: &'a CalibrationParameters, frame_meta: &'a SQLFrame) -> Self {
+        Self { frame, calibration_models, frame_meta }
     }
 
     fn find_calibration_models(&self) -> (super::calibration::MzCalibrationModel, super::calibration::TimsCalibrationModel) {
@@ -31,7 +30,7 @@ impl<'a> FrameToArraysMapper<'a> {
             Ok(model) => model,
             Err(e) => {
                 log::warn!("Falling back to basic m/z model: {e}");
-                self.metadata.mz_converter.clone().into()
+                self.calibration_models.basic_mz_model.into()
             }
         };
 
@@ -39,7 +38,7 @@ impl<'a> FrameToArraysMapper<'a> {
             Ok(model) => model,
             Err(e) => {
                 log::warn!("Falling back to basic ion mobility model: {e}");
-                self.metadata.im_converter.clone().into()
+                self.calibration_models.basic_im_model.into()
             },
         };
         (mz_model, im_model)

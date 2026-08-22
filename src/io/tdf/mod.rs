@@ -22,7 +22,7 @@ pub use calibration::{
     MzCalibrationError,
     clamp_u32,
     TimsCalibrationModel,
-    TimsCalibrationModel1,
+    TimsCalibrationModel2,
     MzCalibrationModel,
     MzCalibrationModel1
 };

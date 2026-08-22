@@ -1520,7 +1520,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata"
-version = "0.66.2"
+version = "0.66.5"
 dependencies = [
  "base64-simd",
  "bitflags",
@@ -1557,7 +1557,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-bindata"
-version = "0.66.2"
+version = "0.66.5"
 dependencies = [
  "base64-simd",
  "bytemuck",
@@ -1576,7 +1576,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-meta"
-version = "0.66.2"
+version = "0.66.5"
 dependencies = [
  "bitflags",
  "chrono",
@@ -1593,7 +1593,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-param"
-version = "0.66.2"
+version = "0.66.5"
 dependencies = [
  "log",
  "serde",
@@ -1603,7 +1603,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-spectrum"
-version = "0.66.2"
+version = "0.66.5"
 dependencies = [
  "identity-hash",
  "log",
@@ -1613,6 +1613,9 @@ dependencies = [
  "mzpeaks",
  "mzsignal",
  "num-traits",
+ "serde",
+ "serde_json",
+ "serde_with",
  "thiserror 2.0.18",
 ]
 
@@ -1965,7 +1968,7 @@ dependencies = [
 
 [[package]]
 name = "pymzdata"
-version = "0.66.2"
+version = "0.66.5"
 dependencies = [
  "mzdata",
  "mzpeaks",
@@ -2096,7 +2099,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2381,7 +2384,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3342,7 +3345,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

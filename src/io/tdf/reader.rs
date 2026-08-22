@@ -199,16 +199,16 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             let mz_model: MzCalibrationModel = self
                 .calibration_models
                 .find_mz_model_for_frame(&entry.frame)
-                .unwrap_or_else(|_e| self.metadata.mz_converter.into());
+                .unwrap_or_else(|_e| self.calibration_models.basic_mz_model.into());
             let im_model: TimsCalibrationModel = self
                 .calibration_models
                 .find_tims_model_for_frame(&entry.frame)
-                .unwrap_or_else(|_e| self.metadata.im_converter.into());
+                .unwrap_or_else(|_e| self.calibration_models.basic_im_model.into());
             (mz_model, im_model)
         } else {
             (
-                self.metadata.mz_converter.into(),
-                self.metadata.im_converter.into(),
+                self.calibration_models.basic_mz_model.into(),
+                self.calibration_models.basic_im_model.into(),
             )
         }
     }
@@ -270,12 +270,15 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         let tdf_reader = RawTDFSQLReader::new(&tdf_path)
             .map_err(|e| TimsRustError::FrameReaderError(FrameReaderError::SqlError(e.into())))?;
 
-        let calibration_models =
+        let mut calibration_models =
             CalibrationParameters::from_sql(&tdf_reader.connection(), &metadata)
                 .inspect_err(|e| {
                     log::error!("Failed to load calibration from {}: {e}", path.display())
                 })
                 .unwrap_or_default();
+
+        // The m/z models aren't consistently good enough, or at least my translations aren't
+        calibration_models.mz_enabled = false;
 
         let mut this = Self {
             metadata,
@@ -652,7 +655,6 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                     );
                     let arrays = FrameToArraysMapper::new(
                         &frame,
-                        &self.metadata,
                         &self.calibration_models,
                         &entry.frame,
                     )
@@ -665,7 +667,6 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                     );
                     let arrays = FrameToArraysMapper::new(
                         &frame,
-                        &self.metadata,
                         &self.calibration_models,
                         &entry.frame,
                     )
@@ -675,7 +676,6 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                     Some(
                         FrameToArraysMapper::new(
                             &frame,
-                            &self.metadata,
                             &self.calibration_models,
                             &entry.frame,
                         )

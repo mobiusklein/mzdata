@@ -195,6 +195,7 @@ pub struct SQLFrame {
     pub tims_calibration: u32,
     pub mz_calibration: u32,
     pub t1: f64,
+    pub t2: f64,
 }
 
 impl SQLFrame {
@@ -216,6 +217,7 @@ impl SQLFrame {
         mz_calibration: u32,
         tims_calibration: u32,
         t1: f64,
+        t2: f64,
     ) -> Self {
         Self {
             id,
@@ -234,6 +236,7 @@ impl SQLFrame {
             mz_calibration,
             tims_calibration,
             t1,
+            t2,
         }
     }
 }
@@ -261,12 +264,13 @@ impl FromSQL for SQLFrame {
             row.get(13)?,
             row.get(14)?,
             row.get(15)?,
+            row.get(16)?,
         );
         Ok(this)
     }
 
     fn get_sql() -> String {
-        "SELECT Id, Time, Polarity, ScanMode, MsMsType, TimsId, MaxIntensity, SummedIntensities, AccumulationTime, RampTime, PropertyGroup, NumScans, NumPeaks, MzCalibration, TimsCalibration, T1 FROM Frames".into()
+        "SELECT Id, Time, Polarity, ScanMode, MsMsType, TimsId, MaxIntensity, SummedIntensities, AccumulationTime, RampTime, PropertyGroup, NumScans, NumPeaks, MzCalibration, TimsCalibration, T1, T2 FROM Frames".into()
     }
 }
 

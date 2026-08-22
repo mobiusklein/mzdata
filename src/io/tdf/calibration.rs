@@ -54,8 +54,10 @@ pub struct MzCalibration {
     /// `MzCalibration.T1`, the reference digitizer temperature the
     /// calibration was fit at.
     pub t1: f64,
+    pub t2: f64,
     /// `MzCalibration.dC1`, the per-degree drift coefficient for `C1`.
     pub dc1: f64,
+    pub dc2: f64,
     /// `MzCalibration.C0`
     pub c0: Option<f64>,
     /// `MzCalibration.C1`
@@ -69,7 +71,9 @@ impl MzCalibration {
         digitizer_timebase: f64,
         digitizer_delay: f64,
         t1: f64,
+        t2: f64,
         dc1: f64,
+        dc2: f64,
         c0: Option<f64>,
         c1: Option<f64>,
     ) -> Self {
@@ -79,7 +83,9 @@ impl MzCalibration {
             digitizer_timebase,
             digitizer_delay,
             t1,
+            t2,
             dc1,
+            dc2,
             c0,
             c1,
         }
@@ -95,14 +101,16 @@ impl FromSQL for MzCalibration {
             require_at(row, 2, TABLE_NAME, "DigitizerTimebase")?,
             require_at(row, 3, TABLE_NAME, "DigitizerDelay")?,
             require_at(row, 4, TABLE_NAME, "T1")?,
-            require_at(row, 5, TABLE_NAME, "dC1")?,
-            require_at(row, 6, TABLE_NAME, "C0")?,
-            require_at(row, 7, TABLE_NAME, "C1")?,
+            require_at(row, 5, TABLE_NAME, "T2")?,
+            require_at(row, 6, TABLE_NAME, "dC1")?,
+            require_at(row, 7, TABLE_NAME, "dC2")?,
+            require_at(row, 8, TABLE_NAME, "C0")?,
+            require_at(row, 9, TABLE_NAME, "C1")?,
         ))
     }
 
     fn get_sql() -> String {
-        "SELECT Id, ModelType, DigitizerTimebase, DigitizerDelay, T1, dC1, C0, C1 FROM MzCalibration".into()
+        "SELECT Id, ModelType, DigitizerTimebase, DigitizerDelay, T1, T2, dC1, dC2, C0, C1 FROM MzCalibration".into()
     }
 }
 
@@ -191,6 +199,11 @@ pub struct CalibrationParameters {
     pub tims: Vec<TimsCalibration>,
     pub basic_tims_parameters: [f64; 2],
     pub basic_mz_parameters: [f64; 2],
+    pub use_otof_control: bool,
+    pub basic_mz_model: Tof2MzConverter,
+    pub basic_im_model: Scan2ImConverter,
+    pub mz_enabled: bool,
+    pub im_enabled: bool,
 }
 
 impl CalibrationParameters {
@@ -199,12 +212,22 @@ impl CalibrationParameters {
         tims: Vec<TimsCalibration>,
         basic_mz_parameters: [f64; 2],
         basic_tims_parameters: [f64; 2],
+        use_otof_control: bool,
+        basic_mz_model: Tof2MzConverter,
+        basic_im_model: Scan2ImConverter,
+        mz_enabled: bool,
+        im_enabled: bool,
     ) -> Self {
         Self {
             mz,
             tims,
             basic_mz_parameters,
             basic_tims_parameters,
+            use_otof_control,
+            basic_mz_model,
+            basic_im_model,
+            mz_enabled,
+            im_enabled,
         }
     }
 
@@ -215,10 +238,11 @@ impl CalibrationParameters {
         let mz = MzCalibration::read_from(connection, [])?;
         let tims = TimsCalibration::read_from(connection, [])?;
 
-        let scan_max_index =
-            connection.query_row("SELECT max(Frames.NumScans) as NumScans FROM Frames", [], |row| {
-                row.get::<usize, u32>(0)
-            })?;
+        let scan_max_index = connection.query_row(
+            "SELECT max(Frames.NumScans) as NumScans FROM Frames",
+            [],
+            |row| row.get::<usize, u32>(0),
+        )?;
 
         let tof_max_index = connection.query_row(
             "SELECT Value FROM GlobalMetadata WHERE Key == \"DigitizerNumSamples\"",
@@ -234,16 +258,31 @@ impl CalibrationParameters {
             },
         )?;
 
+        let acq_sw = connection.query_row(
+            "SELECT Value FROM GlobalMetadata WHERE Key == \"AcquisitionSoftware\"",
+            [],
+            |row| row.get::<usize, String>(0),
+        )?;
+        let use_otof_control = acq_sw == "Bruker otofControl";
         let basic_tims_parameters =
             im_boundaries_to_parameter(metadata.lower_im, metadata.upper_im, scan_max_index);
-        let basic_mz_parameters =
-            mz_boundaries_to_parameter(metadata.lower_mz, metadata.upper_mz, tof_max_index);
+
+        let basic_mz_parameters = mz_boundaries_to_parameter(
+            metadata.lower_mz,
+            metadata.upper_mz,
+            tof_max_index,
+        );
 
         Ok(Self::new(
             mz,
             tims,
             basic_mz_parameters,
             basic_tims_parameters,
+            use_otof_control,
+            metadata.mz_converter,
+            metadata.im_converter,
+            true,
+            true
         ))
     }
 
@@ -273,11 +312,14 @@ impl CalibrationParameters {
         &self,
         frame: &SQLFrame,
     ) -> Result<MzCalibrationModel, MzCalibrationError> {
+        if !self.mz_enabled {
+            return Ok(MzCalibrationModel::Basic(self.basic_mz_model))
+        }
         match self
             .mz
             .iter()
             .find(|m| m.id == frame.mz_calibration)
-            .map(|v| MzCalibrationModel::try_from((v, frame.t1)))
+            .map(|v| MzCalibrationModel::try_from((v, frame)))
         {
             Some(value) => value,
             None => Err(MzCalibrationError::ModelNotFound(frame.mz_calibration)),
@@ -288,6 +330,9 @@ impl CalibrationParameters {
         &self,
         frame: &SQLFrame,
     ) -> Result<TimsCalibrationModel, IonMobilityCalibrationError> {
+        if !self.im_enabled {
+            return Ok(TimsCalibrationModel::Basic(self.basic_im_model))
+        }
         match self
             .tims
             .iter()
@@ -304,14 +349,14 @@ impl CalibrationParameters {
 
 /// Implementation details of approximated converter model type == 1 for ion mobility conversion
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct TimsCalibrationModel1 {
+pub struct TimsCalibrationModel2 {
     pub c6: f64,
     pub c7: f64,
     pub offset: f64,
     pub slope: f64,
 }
 
-impl TimsCalibrationModel1 {
+impl TimsCalibrationModel2 {
     pub fn new(c6: f64, c7: f64, offset: f64, slope: f64) -> Self {
         Self {
             c6,
@@ -332,6 +377,14 @@ impl TimsCalibrationModel1 {
             .unit(Unit::VoltSecondPerSquareCentimeter)
             .build()
     }
+
+    pub fn convert_f6(&self, value: f64) -> f64 {
+        self.convert(value)
+    }
+
+    pub fn invert_f64(&self, value: f64) -> f64 {
+        self.invert(value)
+    }
 }
 
 /// Errors that may occur during ion mobility calibration model retrieval
@@ -351,7 +404,7 @@ pub enum IonMobilityCalibrationError {
     ModelNotFound(u32),
 }
 
-impl TryFrom<&'_ TimsCalibration> for TimsCalibrationModel1 {
+impl TryFrom<&'_ TimsCalibration> for TimsCalibrationModel2 {
     type Error = IonMobilityCalibrationError;
 
     fn try_from(value: &'_ TimsCalibration) -> Result<Self, Self::Error> {
@@ -388,7 +441,7 @@ impl TryFrom<&'_ TimsCalibration> for TimsCalibrationModel1 {
     }
 }
 
-impl ConvertableDomain for TimsCalibrationModel1 {
+impl ConvertableDomain for TimsCalibrationModel2 {
     fn convert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
         1.0 / (self.c6 + self.c7 / (self.offset + self.slope * value.into()))
     }
@@ -411,28 +464,28 @@ pub struct MzCalibrationModel1 {
     pub c0: f64,
     pub c1: f64,
     pub digitizer_timebase: f64,
-    pub digitize_delay: f64,
+    pub digitizer_delay: f64,
 }
 
 impl MzCalibrationModel1 {
-    pub fn new(c0: f64, c1: f64, digitizer_timebase: f64, digitize_delay: f64) -> Self {
+    pub fn new(c0: f64, c1: f64, digitizer_timebase: f64, digitizer_delay: f64) -> Self {
         Self {
             c0,
             c1,
             digitizer_timebase,
-            digitize_delay,
+            digitizer_delay,
         }
     }
 
     pub fn convert_f64(&self, idx: f64) -> f64 {
-        let tof = (idx * self.digitizer_timebase) + self.digitize_delay;
+        let tof = (idx * self.digitizer_timebase) + self.digitizer_delay;
         let inner = tof - self.c0;
         (self.c1 * inner.powi(2)) / 1e12
     }
 
     pub fn invert_f64(&self, mz: f64) -> f64 {
         let tof = ((mz * 1e12) / self.c1).sqrt() + self.c0;
-        (tof - self.digitize_delay) / self.digitizer_timebase
+        (tof - self.digitizer_delay) / self.digitizer_timebase
     }
 
     /// Convert the model to a [`Param`] that can be used to pass the values around in a tagged generic container
@@ -445,7 +498,7 @@ impl MzCalibrationModel1 {
                     self.c0,
                     self.c1,
                     self.digitizer_timebase,
-                    self.digitize_delay,
+                    self.digitizer_delay,
                 ]
                 .map(Value::Float),
             )))
@@ -474,11 +527,19 @@ pub enum MzCalibrationError {
     Disabled,
 }
 
-impl TryFrom<(&'_ MzCalibration, f64)> for MzCalibrationModel1 {
+impl TryFrom<(&'_ MzCalibration, &'_ SQLFrame)> for MzCalibrationModel1 {
     type Error = MzCalibrationError;
 
-    fn try_from(value: (&'_ MzCalibration, f64)) -> Result<Self, Self::Error> {
-        let (value, t1) = value;
+    fn try_from(value: (&'_ MzCalibration, &'_ SQLFrame)) -> Result<Self, Self::Error> {
+        (value.0, value.1.t1, value.1.t2).try_into()
+    }
+}
+
+impl TryFrom<(&'_ MzCalibration, f64, f64)> for MzCalibrationModel1 {
+    type Error = MzCalibrationError;
+
+    fn try_from(value: (&'_ MzCalibration, f64, f64)) -> Result<Self, Self::Error> {
+        let (value, t1, t2) = value;
         if value.model_type != 1 {
             return Err(MzCalibrationError::UnsupportedModel(value.model_type));
         }
@@ -488,7 +549,9 @@ impl TryFrom<(&'_ MzCalibration, f64)> for MzCalibrationModel1 {
         let c1 = value
             .c1
             .ok_or(MzCalibrationError::MissingParameters("c1"))?;
-        let cf = value.dc1 * (value.t1 - t1);
+
+        // The dC2 value is usually zero
+        let cf = value.dc1 * (value.t1 - t1) + value.dc2 * (value.t2 - t2);
         let cf = 1.0 + (cf / 1.0e6);
         Ok(Self::new(
             c0,
@@ -501,7 +564,7 @@ impl TryFrom<(&'_ MzCalibration, f64)> for MzCalibrationModel1 {
 
 impl ConvertableDomain for MzCalibrationModel1 {
     fn convert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
-        let tof = (value.into() * self.digitizer_timebase) + self.digitize_delay;
+        let tof = (value.into() * self.digitizer_timebase) + self.digitizer_delay;
         let inner = tof - self.c0;
         (self.c1 * inner.powi(2)) / 1e12
     }
@@ -527,20 +590,27 @@ pub fn clamp_u32(value: f64) -> u32 {
 pub enum TimsCalibrationModel {
     /// The basic linear calibration in [`timsrust`]
     Basic(Scan2ImConverter),
-    /// The model type == 1 implementation, adapted from https://github.com/jspaezp/timsrust-calibration.
-    Model1(TimsCalibrationModel1),
+    /// The model type == 2 implementation, adapted from https://github.com/jspaezp/timsrust-calibration.
+    Model2(TimsCalibrationModel2),
 }
 
 impl TimsCalibrationModel {
-
     /// Convert the model to a [`Param`] that can be used to pass the values around in a tagged generic container
     pub fn as_param(&self) -> Option<Param> {
         match self {
             TimsCalibrationModel::Basic(_) => None,
-            TimsCalibrationModel::Model1(tims_calibration_model1) => {
+            TimsCalibrationModel::Model2(tims_calibration_model1) => {
                 Some(tims_calibration_model1.as_param())
             }
         }
+    }
+
+    pub fn convert_f6(&self, value: f64) -> f64 {
+        self.convert(value)
+    }
+
+    pub fn invert_f64(&self, value: f64) -> f64 {
+        self.invert(value)
     }
 }
 
@@ -548,7 +618,7 @@ impl ConvertableDomain for TimsCalibrationModel {
     fn convert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
         match self {
             TimsCalibrationModel::Basic(scan2_im_converter) => scan2_im_converter.convert(value),
-            TimsCalibrationModel::Model1(tims_calibration_model1) => {
+            TimsCalibrationModel::Model2(tims_calibration_model1) => {
                 tims_calibration_model1.convert(value)
             }
         }
@@ -557,16 +627,16 @@ impl ConvertableDomain for TimsCalibrationModel {
     fn invert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
         match self {
             TimsCalibrationModel::Basic(scan2_im_converter) => scan2_im_converter.invert(value),
-            TimsCalibrationModel::Model1(tims_calibration_model1) => {
+            TimsCalibrationModel::Model2(tims_calibration_model1) => {
                 tims_calibration_model1.invert(value)
             }
         }
     }
 }
 
-impl From<TimsCalibrationModel1> for TimsCalibrationModel {
-    fn from(v: TimsCalibrationModel1) -> Self {
-        Self::Model1(v)
+impl From<TimsCalibrationModel2> for TimsCalibrationModel {
+    fn from(v: TimsCalibrationModel2) -> Self {
+        Self::Model2(v)
     }
 }
 
@@ -580,7 +650,7 @@ impl TryFrom<&'_ TimsCalibration> for TimsCalibrationModel {
     type Error = IonMobilityCalibrationError;
 
     fn try_from(value: &'_ TimsCalibration) -> Result<Self, Self::Error> {
-        TimsCalibrationModel1::try_from(value).map(|v| TimsCalibrationModel::Model1(v))
+        TimsCalibrationModel2::try_from(value).map(|v| TimsCalibrationModel::Model2(v))
     }
 }
 
@@ -603,12 +673,29 @@ impl MzCalibrationModel {
             }
         }
     }
+
+    pub fn convert_f6(&self, value: f64) -> f64 {
+        self.convert(value)
+    }
+
+    pub fn invert_f64(&self, value: f64) -> f64 {
+        self.invert(value)
+    }
 }
 
-impl TryFrom<(&'_ MzCalibration, f64)> for MzCalibrationModel {
+impl TryFrom<(&'_ MzCalibration, &'_ SQLFrame)> for MzCalibrationModel {
     type Error = MzCalibrationError;
 
-    fn try_from(value: (&'_ MzCalibration, f64)) -> Result<Self, Self::Error> {
+    fn try_from(value: (&'_ MzCalibration, &'_ SQLFrame)) -> Result<Self, Self::Error> {
+        MzCalibrationModel1::try_from(value).map(|v| v.into())
+    }
+}
+
+impl TryFrom<(&'_ MzCalibration, f64, f64)> for MzCalibrationModel {
+    type Error = MzCalibrationError;
+
+    fn try_from(value: (&'_ MzCalibration, f64, f64)) -> Result<Self, Self::Error> {
+        eprintln!("Converting {value:?} to m/z calibration");
         MzCalibrationModel1::try_from(value).map(|v| v.into())
     }
 }
@@ -662,7 +749,7 @@ mod test_im {
             c6: Some(0.0071422641733084),
             c7: Some(164.998795925213),
         };
-        let conv = TimsCalibrationModel1::try_from(&cal).unwrap();
+        let conv = TimsCalibrationModel2::try_from(&cal).unwrap();
         const TOL: f64 = 5e-2;
         let im1 = conv.convert(1u32);
         assert!((im1 - 1.45).abs() < TOL, "im1={im1}");
@@ -687,12 +774,15 @@ mod test_mz {
             digitizer_timebase: 0.125,
             digitizer_delay: 25741.0,
             t1: 20.9410989491122,
+            t2: 0.0,
             dc1: 20.0,
+            dc2: 0.0,
             c0: Some(286.065160463331),
             c1: Some(154317.348188993),
         };
         let real_t1 = 20.9455139021767;
-        let conv = MzCalibrationModel1::try_from((&cal, real_t1)).unwrap();
+        let real_t2 = 0.0;
+        let conv = MzCalibrationModel1::try_from((&cal, real_t1, real_t2)).unwrap();
 
         let mz0 = f64::from(conv.convert(0u32));
         let mz_max = f64::from(conv.convert(636029u32));

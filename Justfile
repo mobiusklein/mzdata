@@ -40,8 +40,14 @@ update-cv-terms:
         crates/mzdata-meta/src/file_description.rs \
         crates/mzdata-meta/src/activation.rs
 
-pytest:
+
+maturin-dev:
     maturin develop -m "./crates/pymzdata/Cargo.toml"
+
+maturin:
+    maturin develop --release -m "./crates/pymzdata/Cargo.toml"
+
+pytest: maturin-dev
     pytest -v -s ./crates/pymzdata/
 
 changelog version:

@@ -1,4 +1,4 @@
-use mzdata::params::{CURIE, CURIEParsingError, Param, ParamDescribed, ParamLike, ParamValue, Unit, ValueRef};
+use mzdata::params::{CURIE, CURIEParsingError, Param, ParamDescribed, ParamLike, Unit, ValueRef};
 use mzdata::spectrum::{Activation, IsolationWindow, Precursor, ScanEvent, ScanWindow, SelectedIon};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyFloat, PyList, PyString, PyInt};
