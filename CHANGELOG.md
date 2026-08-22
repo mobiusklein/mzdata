@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.66.5] - 2026-08-22
+
+### Changed
+
+- Disable tdf mz calibration models, not consistently better
+
 ## [0.66.4] - 2026-08-20
 
 ### Fixed
@@ -1200,7 +1206,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.66.4...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.66.5...HEAD
+[0.66.5]: https://github.com/mobiusklein/mzdata/compare/v0.66.4...v0.66.5
 [0.66.4]: https://github.com/mobiusklein/mzdata/compare/v0.66.3...v0.66.4
 [0.66.3]: https://github.com/mobiusklein/mzdata/compare/v0.66.2...v0.66.3
 [0.66.2]: https://github.com/mobiusklein/mzdata/compare/v0.66.1...v0.66.2
