@@ -10,7 +10,7 @@ categories.workspace = true
 keywords.workspace = true
 description.workspace = true
 
-exclude = ["tmp/*", "test/data/*"]
+exclude = ["tmp/*", "test/data/*", "cv/", "*.sh"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [[bin]]
@@ -262,7 +262,7 @@ exclude = ["crates/pymzdata"]
 
 [workspace.package]
 
-version = "0.66.5"
+version = "0.66.6"
 
 keywords = ['mass-spectrometry', 'mzml', 'mgf']
 
@@ -286,10 +286,10 @@ mzsignal = { version = ">=1.1.10,<1.2.0", default-features = false, features = [
     'avx',
 ] }
 
-mzdata-param = { version = "0.66.5", path = "./crates/mzdata-param" }
-mzdata-meta = { version = "0.66.5", path = "./crates/mzdata-meta" }
-mzdata-bindata = { version = "0.66.5", path = "./crates/mzdata-bindata" }
-mzdata-spectrum = { version = "0.66.5", path = "./crates/mzdata-spectrum" }
+mzdata-param = { version = "0.66.6", path = "./crates/mzdata-param" }
+mzdata-meta = { version = "0.66.6", path = "./crates/mzdata-meta" }
+mzdata-bindata = { version = "0.66.6", path = "./crates/mzdata-bindata" }
+mzdata-spectrum = { version = "0.66.6", path = "./crates/mzdata-spectrum" }
 
 # Checksums and hashing
 sha1 = { version = "0.11" }
