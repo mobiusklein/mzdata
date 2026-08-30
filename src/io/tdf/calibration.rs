@@ -62,6 +62,9 @@ pub struct MzCalibration {
     pub c0: Option<f64>,
     /// `MzCalibration.C1`
     pub c1: Option<f64>,
+    pub c2: Option<f64>,
+    pub c3: Option<f64>,
+    pub c4: Option<f64>,
 }
 
 impl MzCalibration {
@@ -76,6 +79,9 @@ impl MzCalibration {
         dc2: f64,
         c0: Option<f64>,
         c1: Option<f64>,
+        c2: Option<f64>,
+        c3: Option<f64>,
+        c4: Option<f64>,
     ) -> Self {
         Self {
             id,
@@ -88,6 +94,9 @@ impl MzCalibration {
             dc2,
             c0,
             c1,
+            c2,
+            c3,
+            c4,
         }
     }
 }
@@ -106,11 +115,14 @@ impl FromSQL for MzCalibration {
             require_at(row, 7, TABLE_NAME, "dC2")?,
             require_at(row, 8, TABLE_NAME, "C0")?,
             require_at(row, 9, TABLE_NAME, "C1")?,
+            require_at(row, 10, TABLE_NAME, "C2")?,
+            require_at(row, 11, TABLE_NAME, "C3")?,
+            require_at(row, 12, TABLE_NAME, "C4")?,
         ))
     }
 
     fn get_sql() -> String {
-        "SELECT Id, ModelType, DigitizerTimebase, DigitizerDelay, T1, T2, dC1, dC2, C0, C1 FROM MzCalibration".into()
+        "SELECT Id, ModelType, DigitizerTimebase, DigitizerDelay, T1, T2, dC1, dC2, C0, C1, C2, C3, C4 FROM MzCalibration".into()
     }
 }
 
@@ -463,28 +475,49 @@ impl ConvertableDomain for TimsCalibrationModel2 {
 pub struct MzCalibrationModel1 {
     pub c0: f64,
     pub c1: f64,
+    pub c2: f64,
+    pub c3: f64,
+    pub c4: f64,
     pub digitizer_timebase: f64,
     pub digitizer_delay: f64,
 }
 
 impl MzCalibrationModel1 {
-    pub fn new(c0: f64, c1: f64, digitizer_timebase: f64, digitizer_delay: f64) -> Self {
-        Self {
-            c0,
-            c1,
-            digitizer_timebase,
-            digitizer_delay,
-        }
+    pub fn new(c0: f64, c1: f64, c2: f64, c3: f64, c4: f64, digitizer_timebase: f64, digitizer_delay: f64) -> Self {
+        Self { c0, c1, c2, c3, c4, digitizer_timebase, digitizer_delay }
     }
 
     pub fn convert_f64(&self, idx: f64) -> f64 {
         let tof = (idx * self.digitizer_timebase) + self.digitizer_delay;
         let inner = tof - self.c0;
-        (self.c1 * inner.powi(2)) / 1e12
+        // Incomplete attempt to follow `rustims` approach. This is still wrong, but saved for
+        // future fiddling
+        let lin = inner / self.c1;
+        let refined = if self.c3 != 0.0 {
+            let f = self.c0 + self.c1 * lin + self.c2 * lin.powi(2) + self.c3 * lin.powi(3) - tof;
+            let deriv_f = self.c1 + 2.0 * self.c2 * lin + 3.0 * self.c3 * lin.powi(2);
+            if deriv_f == 0.0 {
+                lin
+            } else {
+                lin - f / deriv_f
+            }
+        } else if self.c2 != 0.0 {
+            let d = self.c1 - 4.0 * self.c2 * (self.c0 - tof);
+            if d < 0.0 {
+                lin
+            } else {
+                let q = -0.5 * (self.c1 + d.sqrt());
+                (self.c0 - tof) / q
+            }
+        } else {
+            lin
+        };
+        refined.powi(2) - self.c4
     }
 
     pub fn invert_f64(&self, mz: f64) -> f64 {
-        let tof = ((mz * 1e12) / self.c1).sqrt() + self.c0;
+        let lin = (mz - self.c4).max(0.0).sqrt();
+        let tof = self.c0 + self.c1 * lin + self.c2 * lin.powi(2) + self.c3 * lin.powi(3);
         (tof - self.digitizer_delay) / self.digitizer_timebase
     }
 
@@ -497,6 +530,9 @@ impl MzCalibrationModel1 {
                 [
                     self.c0,
                     self.c1,
+                    self.c2,
+                    self.c3,
+                    self.c4,
                     self.digitizer_timebase,
                     self.digitizer_delay,
                 ]
@@ -549,13 +585,19 @@ impl TryFrom<(&'_ MzCalibration, f64, f64)> for MzCalibrationModel1 {
         let c1 = value
             .c1
             .ok_or(MzCalibrationError::MissingParameters("c1"))?;
+        let c2 = value.c2.ok_or(MzCalibrationError::MissingParameters("c2"))?;
+        let c3 = value.c3.ok_or(MzCalibrationError::MissingParameters("c3"))?;
+        let c4 = value.c4.ok_or(MzCalibrationError::MissingParameters("c4"))?;
 
         // The dC2 value is usually zero
-        let cf = value.dc1 * (value.t1 - t1) + value.dc2 * (value.t2 - t2);
-        let cf = 1.0 + (cf / 1.0e6);
+        let cf = 1.0 + (value.dc1 * (value.t1 - t1) + value.dc2 * (value.t2 - t2)) / 1.0e6;
+        let c1 = (1.0e12 / (c1 * cf)).sqrt();
         Ok(Self::new(
             c0,
-            c1 * cf,
+            c1,
+            c2 / cf,
+            c3,
+            c4,
             value.digitizer_timebase,
             value.digitizer_delay,
         ))
@@ -564,9 +606,7 @@ impl TryFrom<(&'_ MzCalibration, f64, f64)> for MzCalibrationModel1 {
 
 impl ConvertableDomain for MzCalibrationModel1 {
     fn convert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
-        let tof = (value.into() * self.digitizer_timebase) + self.digitizer_delay;
-        let inner = tof - self.c0;
-        (self.c1 * inner.powi(2)) / 1e12
+        self.convert_f64(value.into())
     }
 
     fn invert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
@@ -779,6 +819,9 @@ mod test_mz {
             dc2: 0.0,
             c0: Some(286.065160463331),
             c1: Some(154317.348188993),
+            c2: Some(0.0),
+            c3: Some(0.0),
+            c4: Some(0.0),
         };
         let real_t1 = 20.9455139021767;
         let real_t2 = 0.0;
