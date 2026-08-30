@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.66.6] - 2026-08-30
+
+### Added
+
+- Add  `curie` const function to `cvmap` enums
+- Add support for supplemental activation in `thermo` reader
+- Add `__getitem__` to `pymzdata::MZReader`
+
+### Changed
+
+- Update wasm wrapper to be consistently async
+
 ## [0.66.5] - 2026-08-22
 
 ### Changed
@@ -1206,7 +1218,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.66.5...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.66.6...HEAD
+[0.66.6]: https://github.com/mobiusklein/mzdata/compare/v0.66.5...v0.66.6
 [0.66.5]: https://github.com/mobiusklein/mzdata/compare/v0.66.4...v0.66.5
 [0.66.4]: https://github.com/mobiusklein/mzdata/compare/v0.66.3...v0.66.4
 [0.66.3]: https://github.com/mobiusklein/mzdata/compare/v0.66.2...v0.66.3
