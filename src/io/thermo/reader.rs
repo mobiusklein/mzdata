@@ -91,21 +91,20 @@ fn make_native_id(index: i32) -> String {
     )
 }
 
-const SOURCE_FILE_ID: & str = "RAW1";
+const SOURCE_FILE_ID: &str = "RAW1";
 
 #[cfg(not(feature = "doc-only"))]
 pub(crate) mod sealed {
     use std::path::Path;
 
-    use crate::spectrum::{IsolationWindowState, bindata::to_bytes};
+    use crate::spectrum::{bindata::to_bytes, IsolationWindowState};
 
     use super::*;
-    use thermorawfilereader::{
-        schema::{
-            AcquisitionT, DissociationMethod, Polarity, PrecursorT, SpectrumMode,
-        },
+    use mzdata_param::curie;
+use thermorawfilereader::{
+        schema::{AcquisitionT, DissociationMethod, Polarity, PrecursorT, SpectrumMode},
         ExtendedSpectrumData, FileDescription as ThermoFileDescription, IonizationMode,
-        MassAnalyzer, RawFileReader, OwnedSpectrumData,
+        MassAnalyzer, OwnedSpectrumData, RawFileReader,
     };
 
     /**
@@ -133,9 +132,7 @@ pub(crate) mod sealed {
     }
 
     // The public API
-    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
-        ThermoRawReaderType<C, D>
-    {
+    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike> ThermoRawReaderType<C, D> {
         /// Create a new [`ThermoRawReaderType`] from a path.
         /// This may trigger an expensive I/O operation to checksum the file
         pub fn new_with_detail_level_and_centroiding<P: Into<PathBuf>>(
@@ -213,23 +210,25 @@ pub(crate) mod sealed {
         }
 
         /// Directly load binary data arrays for a specific spectrum
-        pub fn get_data_arrays_for(&mut self, index: usize, centroiding: bool, extra_data: bool) -> Option<BinaryArrayMap> {
+        pub fn get_data_arrays_for(
+            &mut self,
+            index: usize,
+            centroiding: bool,
+            extra_data: bool,
+        ) -> Option<BinaryArrayMap> {
             let data = self.handle.get_spectrum_data(index, centroiding)?;
             let mut arrays = BinaryArrayMap::default();
             if !data.is_empty() {
                 let (mz_bytes, intensity_bytes) = data.into_le_bytes();
-                let mut mz_array = DataArray::wrap(
-                    &ArrayType::MZArray,
-                    BinaryDataArrayType::Float64,
-                    mz_bytes,
-                );
+                let mut mz_array =
+                    DataArray::wrap(&ArrayType::MZArray, BinaryDataArrayType::Float64, mz_bytes);
                 mz_array.unit = Unit::MZ;
                 arrays.add(mz_array);
 
                 let mut intensity_array = DataArray::wrap(
                     &ArrayType::IntensityArray,
                     BinaryDataArrayType::Float32,
-                    intensity_bytes
+                    intensity_bytes,
                 );
                 intensity_array.unit = Unit::DetectorCounts;
                 arrays.add(intensity_array);
@@ -379,7 +378,7 @@ pub(crate) mod sealed {
                             array.unit = Unit::Psi;
                             array.extend(&data).unwrap();
                             array
-                        },
+                        }
                         _ => {
                             let data = $log.values();
                             let name = $log.name.strip_suffix(":").unwrap_or_else(|| &$log.name);
@@ -398,7 +397,11 @@ pub(crate) mod sealed {
             if let Some(logs) = self.handle.get_status_logs() {
                 macro_rules! make_description {
                     ($descr:ident, $log:ident) => {
-                        let name = $log.name.strip_suffix(":").unwrap_or_else(|| &$log.name).to_string();
+                        let name = $log
+                            .name
+                            .strip_suffix(":")
+                            .unwrap_or_else(|| &$log.name)
+                            .to_string();
                         $descr.id = name;
                         if temperature_pattern.is_match(&($log.name)) {
                             $descr.chromatogram_type = ChromatogramType::TemperatureChromatogram;
@@ -451,7 +454,8 @@ pub(crate) mod sealed {
                             let mut arrays = BinaryArrayMap::new();
                             make_description!(descr, log);
                             make_arrays!(log, arrays);
-                            let array = create_data_array!(descr, log, BinaryDataArrayType::Float64);
+                            let array =
+                                create_data_array!(descr, log, BinaryDataArrayType::Float64);
                             arrays.add(array);
                             Some(Chromatogram::new(descr, arrays))
                         } else {
@@ -559,9 +563,7 @@ pub(crate) mod sealed {
         }
     }
 
-    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
-        ThermoRawReaderType<C, D>
-    {
+    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike> ThermoRawReaderType<C, D> {
         pub(crate) fn make_ms_run(
             path: &Path,
             thermo_file_description: &ThermoFileDescription,
@@ -570,9 +572,11 @@ pub(crate) mod sealed {
                 default_instrument_id: Some(0),
                 default_source_file_id: Some(SOURCE_FILE_ID.to_string()),
                 id: path
-                .file_name()
-                .map(|s| s.to_string_lossy().split(".").next().unwrap().to_string()),
-                start_time: thermo_file_description.creation_date().map(|s| DateTime::parse_from_rfc3339(s).unwrap()),
+                    .file_name()
+                    .map(|s| s.to_string_lossy().split(".").next().unwrap().to_string()),
+                start_time: thermo_file_description
+                    .creation_date()
+                    .map(|s| DateTime::parse_from_rfc3339(s).unwrap()),
                 ..Default::default()
             };
             run
@@ -665,11 +669,9 @@ pub(crate) mod sealed {
                 })
                 .collect();
 
-            let serial_number_param = descr.serial_number().map(|serial| ControlledVocabulary::MS.param_val(
-                    1000529,
-                    "instrument serial number",
-                    serial,
-                ));
+            let serial_number_param = descr.serial_number().map(|serial| {
+                ControlledVocabulary::MS.param_val(1000529, "instrument serial number", serial)
+            });
 
             // Try to build the instrument configuration from the metadata
             for (i, vconf) in descr.configurations().enumerate() {
@@ -756,8 +758,12 @@ pub(crate) mod sealed {
                 let mass_analyzers = instrument_model_to_mass_analyzers(model_type);
                 let ionization_types = instrument_model_to_ion_sources(model_type);
                 let detectors = instrument_model_to_detector(model_type);
-                log::debug!("Found {} mass analyzers, {} ionization types, {} detectors for model",
-                    mass_analyzers.len(), ionization_types.len(), detectors.len());
+                log::debug!(
+                    "Found {} mass analyzers, {} ionization types, {} detectors for model",
+                    mass_analyzers.len(),
+                    ionization_types.len(),
+                    detectors.len()
+                );
 
                 let mut i = 0;
                 for ionization in ionization_types.iter() {
@@ -788,7 +794,12 @@ pub(crate) mod sealed {
 
                         let vconf_mass_analyzer = translate_mass_analyzer_reverse(mass_analyzer);
                         components_to_instrument_id.insert(vconf_mass_analyzer, i);
-                        log::debug!("Created piece-meal configuration {}: {:?} -> {:?}", i, mass_analyzer, vconf_mass_analyzer);
+                        log::debug!(
+                            "Created piece-meal configuration {}: {:?} -> {:?}",
+                            i,
+                            mass_analyzer,
+                            vconf_mass_analyzer
+                        );
 
                         configs.insert(i, config);
                         i += 1;
@@ -798,7 +809,11 @@ pub(crate) mod sealed {
             if configs.is_empty() {
                 log::warn!("No instrument configurations were found in Thermo RAW file")
             } else {
-                log::debug!("Final result: {} configurations, mapping: {:?}", configs.len(), components_to_instrument_id);
+                log::debug!(
+                    "Final result: {} configurations, mapping: {:?}",
+                    configs.len(),
+                    components_to_instrument_id
+                );
             }
             (sw, configs, components_to_instrument_id)
         }
@@ -814,11 +829,9 @@ pub(crate) mod sealed {
         pub(crate) fn make_sample(
             thermo_file_description: &ThermoFileDescription,
         ) -> Option<Sample> {
-            thermo_file_description.sample_id().map(|name| Sample::new(
-                    name.to_string(),
-                    Some(name.to_string()),
-                    Vec::new(),
-                ))
+            thermo_file_description
+                .sample_id()
+                .map(|name| Sample::new(name.to_string(), Some(name.to_string()), Vec::new()))
         }
 
         pub(crate) fn populate_precursor(&self, vprec: &PrecursorT, precursor: &mut Precursor) {
@@ -835,79 +848,94 @@ pub(crate) mod sealed {
             *precursor.ion_mut().unwrap() = ion;
 
             let activation = &mut precursor.activation;
-            let vact = vprec.activation();
-            activation.energy = vact.collision_energy() as f32;
-            match vact.dissociation_method() {
-                DissociationMethod::CID => {
-                    activation
-                        .methods_mut()
-                        .push(DissociationMethodTerm::CollisionInducedDissociation);
-                }
-                DissociationMethod::HCD => {
-                    activation
-                        .methods_mut()
-                        .push(DissociationMethodTerm::BeamTypeCollisionInducedDissociation);
-                }
-                DissociationMethod::ECD => {
-                    activation
-                        .methods_mut()
-                        .push(DissociationMethodTerm::ElectronCaptureDissociation);
-                }
-                DissociationMethod::ETD => {
-                    activation
-                        .methods_mut()
-                        .push(DissociationMethodTerm::ElectronTransferDissociation);
-                }
-                DissociationMethod::ETHCD => {
-                    activation
-                        .methods_mut()
-                        .push(DissociationMethodTerm::ElectronTransferDissociation);
+            for vact in vprec.iter_activations() {
+                if vact.supplemental() {
                     activation.add_param(
-                        DissociationMethodTerm::SupplementalBeamTypeCollisionInducedDissociation
-                            .into(),
+                        Param::builder()
+                            .name("supplemental collision energy")
+                            .curie(curie!(MS:1002680))
+                            .value(vact.collision_energy())
+                            .unit(Unit::Electronvolt).build(),
                     );
+                } else {
+                    activation.energy = vact.collision_energy() as f32;
                 }
-                DissociationMethod::ETCID => {
-                    activation
-                        .methods_mut()
-                        .push(DissociationMethodTerm::ElectronTransferDissociation);
-                    activation.methods_mut().push(
-                        DissociationMethodTerm::SupplementalCollisionInducedDissociation,
-                    );
-                }
-                DissociationMethod::NETD => {
-                    activation
-                        .methods_mut()
-                        .push(DissociationMethodTerm::NegativeElectronTransferDissociation);
-                }
-                DissociationMethod::MPD => {
-                    todo!("Need to define MPD")
-                }
-                DissociationMethod::PTD => {
-                    todo!("Need to define PTD")
-                }
-                DissociationMethod::ECCID => {
-                    activation
-                        .methods_mut()
-                        .push(DissociationMethodTerm::ElectronCaptureDissociation);
-                    activation.add_param(
-                        DissociationMethodTerm::SupplementalCollisionInducedDissociation.into(),
-                    );
-                }
-                DissociationMethod::ECHCD => {
-                    activation
-                        .methods_mut()
-                        .push(DissociationMethodTerm::ElectronCaptureDissociation);
-                    activation.add_param(
-                        DissociationMethodTerm::SupplementalBeamTypeCollisionInducedDissociation
-                            .into(),
-                    )
-                }
-                _ => {
-                    warn!("No activation translation found for {:?}", vact);
-                    activation
-                        .methods_mut()
-                        .push(DissociationMethodTerm::CollisionInducedDissociation);
+                match vact.dissociation_method() {
+                    DissociationMethod::CID => {
+                        activation.methods_mut().push(if vact.supplemental() {
+                            DissociationMethodTerm::SupplementalCollisionInducedDissociation
+                        } else {
+                            DissociationMethodTerm::CollisionInducedDissociation
+                        })
+                    }
+                    DissociationMethod::HCD => {
+                        activation.methods_mut().push(if vact.supplemental() {
+                            DissociationMethodTerm::SupplementalBeamTypeCollisionInducedDissociation
+                        } else {
+                            DissociationMethodTerm::BeamTypeCollisionInducedDissociation
+                        });
+                    }
+                    DissociationMethod::ECD => {
+                        activation
+                            .methods_mut()
+                            .push(DissociationMethodTerm::ElectronCaptureDissociation);
+                    }
+                    DissociationMethod::ETD => {
+                        activation
+                            .methods_mut()
+                            .push(DissociationMethodTerm::ElectronTransferDissociation);
+                    }
+                    DissociationMethod::ETHCD => {
+                        activation
+                            .methods_mut()
+                            .push(DissociationMethodTerm::ElectronTransferDissociation);
+                        activation.add_param(
+                            DissociationMethodTerm::SupplementalBeamTypeCollisionInducedDissociation
+                                .into(),
+                        );
+                    }
+                    DissociationMethod::ETCID => {
+                        activation
+                            .methods_mut()
+                            .push(DissociationMethodTerm::ElectronTransferDissociation);
+                        activation
+                            .methods_mut()
+                            .push(DissociationMethodTerm::SupplementalCollisionInducedDissociation);
+                    }
+                    DissociationMethod::NETD => {
+                        activation
+                            .methods_mut()
+                            .push(DissociationMethodTerm::NegativeElectronTransferDissociation);
+                    }
+                    DissociationMethod::MPD => {
+                        todo!("Need to define MPD")
+                    }
+                    DissociationMethod::PTD => {
+                        todo!("Need to define PTD")
+                    }
+                    DissociationMethod::ECCID => {
+                        activation
+                            .methods_mut()
+                            .push(DissociationMethodTerm::ElectronCaptureDissociation);
+                        activation.add_param(
+                            DissociationMethodTerm::SupplementalCollisionInducedDissociation.into(),
+                        );
+                    }
+                    DissociationMethod::ECHCD => {
+                        activation
+                            .methods_mut()
+                            .push(DissociationMethodTerm::ElectronCaptureDissociation);
+                        activation.add_param(
+                            DissociationMethodTerm::SupplementalBeamTypeCollisionInducedDissociation
+                                .into(),
+                        )
+                    }
+                    _ => {
+                        warn!("No activation translation found for {:?}", vact);
+                        activation
+                            .methods_mut()
+                            .push(DissociationMethodTerm::CollisionInducedDissociation);
+                    }
                 }
             }
 
@@ -1069,18 +1097,15 @@ pub(crate) mod sealed {
             let mut arrays = BinaryArrayMap::default();
             if !data.is_empty() {
                 let (mz_bytes, intensity_bytes) = data.into_le_bytes();
-                let mut mz_array = DataArray::wrap(
-                    &ArrayType::MZArray,
-                    BinaryDataArrayType::Float64,
-                    mz_bytes,
-                );
+                let mut mz_array =
+                    DataArray::wrap(&ArrayType::MZArray, BinaryDataArrayType::Float64, mz_bytes);
                 mz_array.unit = Unit::MZ;
                 arrays.add(mz_array);
 
                 let mut intensity_array = DataArray::wrap(
                     &ArrayType::IntensityArray,
                     BinaryDataArrayType::Float32,
-                    intensity_bytes
+                    intensity_bytes,
                 );
                 intensity_array.unit = Unit::DetectorCounts;
                 arrays.add(intensity_array);
@@ -1096,7 +1121,7 @@ pub(crate) mod sealed {
                 let mut intensity_array = DataArray::wrap(
                     &ArrayType::IntensityArray,
                     BinaryDataArrayType::Float32,
-                    Vec::new()
+                    Vec::new(),
                 );
                 intensity_array.unit = Unit::DetectorCounts;
                 arrays.add(intensity_array);
@@ -1262,9 +1287,7 @@ pub(crate) mod stub {
     // The public API
     // This is a stub for documentation compilation when the dotnet runtime isn't available.
     // See the the [`sealed`](super::sealed) module for the real implementation.
-    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
-        ThermoRawReaderType<C, D>
-    {
+    impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike> ThermoRawReaderType<C, D> {
         /// Get whether or not to load extended spectrum signal information for the spectrum.
         ///
         /// The loaded data isn't incorporated into a peak list, instead access them under
@@ -1454,8 +1477,8 @@ impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
     }
 }
 
-impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike>
-    MSDataFileMetadata for ThermoRawReaderType<C, D>
+impl<C: CentroidLike + From<CentroidPeak>, D: DeconvolutedCentroidLike> MSDataFileMetadata
+    for ThermoRawReaderType<C, D>
 {
     fn data_processings(&self) -> &Vec<DataProcessing> {
         &self.data_processings
@@ -1547,7 +1570,8 @@ impl<C: CentroidPeakAdapting, D: DeconvolutedPeakAdapting> IntoIonMobilityFrameS
         DF: FeatureLike<mzpeaks::Mass, mzpeaks::IonMobility> + KnownCharge,
     >(
         mut self,
-    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError> {
+    ) -> Result<Self::IonMobilityFrameSource<CF, DF>, crate::io::IntoIonMobilityFrameSourceError>
+    {
         if let Some(state) = self.has_ion_mobility() {
             if matches!(state, crate::spectrum::HasIonMobility::Dimension) {
                 Ok(Self::IonMobilityFrameSource::new(self))
@@ -1682,16 +1706,16 @@ mod test {
                     .for_each(|((i, s), r)| {
                         assert!((s - r).abs() < 1e-3, "[{i}]{s} - {r} = {}", s - r);
                     });
-            }
-            else {
+            } else {
                 for (i, (a, b)) in s1.peaks().iter().zip(r1.peaks().iter()).enumerate() {
                     let e = a.mz - b.mz;
-                    assert!(
-                        e.abs() < 1e-3, "[{i}]{} - {} = {e}", a.mz, b.mz
-                    );
+                    assert!(e.abs() < 1e-3, "[{i}]{} - {} = {e}", a.mz, b.mz);
                     let e = a.intensity - b.intensity;
                     assert!(
-                        e.abs() < 1e-3, "[{i}]{} - {} = {e}", a.intensity, b.intensity
+                        e.abs() < 1e-3,
+                        "[{i}]{} - {} = {e}",
+                        a.intensity,
+                        b.intensity
                     );
                 }
             }
@@ -1815,9 +1839,18 @@ mod test {
 
         let spec = reader.get_spectrum_by_index(0).unwrap();
         let arrays = spec.arrays.as_ref().unwrap();
-        assert!(arrays.iter().find(|(k, _)| **k == ArrayType::ChargeArray).is_some());
-        assert!(arrays.iter().find(|(k, _)| **k == ArrayType::SignalToNoiseArray).is_some());
-        assert!(arrays.iter().find(|(k, _)| **k == ArrayType::BaselineArray).is_some());
+        assert!(arrays
+            .iter()
+            .find(|(k, _)| **k == ArrayType::ChargeArray)
+            .is_some());
+        assert!(arrays
+            .iter()
+            .find(|(k, _)| **k == ArrayType::SignalToNoiseArray)
+            .is_some());
+        assert!(arrays
+            .iter()
+            .find(|(k, _)| **k == ArrayType::BaselineArray)
+            .is_some());
         Ok(())
     }
 }

@@ -623,9 +623,9 @@ dependencies = [
 
 [[package]]
 name = "dotnetrawfilereader-sys"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54656bb5cfcee01b9e2b8b3d624252f8275c415e3ac8ff965166e7b4a2da07f0"
+checksum = "7dc64ed6386ff99a4f911317f9629dd87b82074cab06c47de3c18bb37153a031"
 dependencies = [
  "include_dir",
  "netcorehost",
@@ -1520,7 +1520,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata"
-version = "0.66.5"
+version = "0.66.6"
 dependencies = [
  "base64-simd",
  "bitflags",
@@ -1557,7 +1557,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-bindata"
-version = "0.66.5"
+version = "0.66.6"
 dependencies = [
  "base64-simd",
  "bytemuck",
@@ -1576,7 +1576,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-meta"
-version = "0.66.5"
+version = "0.66.6"
 dependencies = [
  "bitflags",
  "chrono",
@@ -1593,7 +1593,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-param"
-version = "0.66.5"
+version = "0.66.6"
 dependencies = [
  "log",
  "serde",
@@ -1603,7 +1603,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-spectrum"
-version = "0.66.5"
+version = "0.66.6"
 dependencies = [
  "identity-hash",
  "log",
@@ -1968,7 +1968,7 @@ dependencies = [
 
 [[package]]
 name = "pymzdata"
-version = "0.66.5"
+version = "0.66.6"
 dependencies = [
  "mzdata",
  "mzpeaks",
@@ -2789,9 +2789,9 @@ dependencies = [
 
 [[package]]
 name = "thermorawfilereader"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2274064550a7cc2d9081e191e2f91bee5058f9e0e9bb7cb272ad6c714dad1522"
+checksum = "8faf2d9c96319714a96315e17c3eb45bb69347168b2c0709880b4aa39e9e1b1e"
 dependencies = [
  "bytemuck",
  "dotnetrawfilereader-sys",
