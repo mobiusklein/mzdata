@@ -102,7 +102,7 @@ impl PyDetailLevel {
 ///         for spectrum in reader:
 ///             print(spectrum.id, spectrum.ms_level)
 ///
-#[pyclass(name = "MZReader", module = "pymzdata")]
+#[pyclass(name = "MZReader", module = "pymzdata", mapping)]
 pub struct PyMZReader {
     inner: Option<RawMZReader>,
 }
@@ -159,6 +159,10 @@ impl PyMZReader {
 
     fn __len__(&self) -> usize {
         self.inner.as_ref().map(|r| r.len()).unwrap_or(0)
+    }
+
+    fn __getitem__(&mut self, index: usize) -> PyResult<Option<PySpectrum>> {
+        self.get_by_index(index)
     }
 
     // ---- Random access ----------------------------------------------------
@@ -363,7 +367,7 @@ impl PyMZReader {
 ///         for frame in reader:
 ///             print(frame.id, frame.ms_level)
 ///
-#[pyclass(name = "IMMZReader", module = "pymzdata")]
+#[pyclass(name = "IMMZReader", module = "pymzdata", mapping)]
 pub struct PyIMMZReader {
     pub inner: Option<RawIMMZReader>,
 }
@@ -428,6 +432,10 @@ impl PyIMMZReader {
             .as_ref()
             .map(|r| r.get_index().len())
             .unwrap_or(0)
+    }
+
+    fn __getitem__(&mut self, index: usize) -> PyResult<Option<PyIonMobilityFrame>> {
+        self.get_by_index(index)
     }
 
     // ---- Random access ----------------------------------------------------
