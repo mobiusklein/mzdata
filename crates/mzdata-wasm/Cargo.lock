@@ -567,7 +567,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata"
-version = "0.66.3"
+version = "0.66.6"
 dependencies = [
  "base64-simd",
  "bitflags",
@@ -601,7 +601,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-bindata"
-version = "0.66.3"
+version = "0.66.6"
 dependencies = [
  "base64-simd",
  "bytemuck",
@@ -619,7 +619,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-meta"
-version = "0.66.3"
+version = "0.66.6"
 dependencies = [
  "bitflags",
  "chrono",
@@ -636,7 +636,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-param"
-version = "0.66.3"
+version = "0.66.6"
 dependencies = [
  "log",
  "serde",
@@ -646,7 +646,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-spectrum"
-version = "0.66.3"
+version = "0.66.6"
 dependencies = [
  "identity-hash",
  "log",
@@ -664,7 +664,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-wasm"
-version = "0.66.3"
+version = "0.66.6"
 dependencies = [
  "bytes",
  "console_error_panic_hook",

@@ -7,7 +7,7 @@ use mzpeaks::feature::{Feature, ChargedFeature};
 use mzpeaks::{CentroidPeak, IonMobility, MZ, Mass, DeconvolutedPeak};
 use wasm_bindgen::prelude::*;
 
-use mzdata::io::{AsyncMZReader, AsyncRandomAccessSpectrumIterator, IMMZReaderType, MZReaderType};
+use mzdata::io::{AsyncGeneric3DIonMobilityFrameSource, AsyncMZReader, AsyncRandomAccessIonMobilityFrameIterator, AsyncRandomAccessSpectrumIterator, IMMZReaderType, MZReaderType};
 use mzdata::prelude::*;
 use mzdata::spectrum::{MultiLayerIonMobilityFrame, MultiLayerSpectrum, SignalContinuity};
 
@@ -332,15 +332,24 @@ impl MemWebIMMZReader {
 #[wasm_bindgen]
 pub struct WebMZReader {
     handle: AsyncMZReader<WebIO>,
+    loopback: WebIO,
     peak_picking: bool,
+}
+
+impl WebMZReader {
+    pub fn get_ref(&self) -> &AsyncMZReader<WebIO> {
+        &self.handle
+    }
 }
 
 #[wasm_bindgen]
 impl WebMZReader {
     async fn new(source: WebIO) -> Result<Self, JsError> {
+        let loopback = source.clone();
         let handle = AsyncMZReader::open_read_seek(source).await.map_err(|e| JsError::new(&e.to_string()))?;
         Ok(Self {
             handle,
+            loopback,
             peak_picking: false
         })
     }
@@ -360,7 +369,6 @@ impl WebMZReader {
     pub  async fn buffer(buffer: js_sys::ArrayBuffer) -> Result<Self, JsError> {
         Self::new(WebIO::buffer(buffer)).await
     }
-
 
     pub fn set_data_loading(&mut self, load_data: bool) {
         if load_data {
@@ -421,6 +429,129 @@ impl WebMZReader {
 
     pub async fn next(&mut self) -> Option<WebSpectrum> {
         self.handle.read_next().await.map(|v| self.convert_spectrum(v))
+    }
+
+    pub async fn start_from_index(&mut self, index: usize) {
+        self.handle.start_from_index(index).await.unwrap();
+    }
+
+    pub async fn start_from_time(&mut self, time: f64) {
+        self.handle.start_from_time(time).await.unwrap();
+    }
+
+    pub async fn has_ion_mobility_dimension(&mut self) -> bool {
+        matches!(self.handle.has_ion_mobility().await, Some(HasIonMobility::Dimension))
+    }
+
+    pub async fn as_ion_mobility_reader(&mut self) -> Option<WebIMMZReader> {
+        if self.has_ion_mobility_dimension().await {
+            WebIMMZReader::new(self.loopback.clone()).await.ok()
+        } else {
+            None
+        }
+    }
+}
+
+
+#[wasm_bindgen]
+pub struct WebIMMZReader {
+    handle: AsyncGeneric3DIonMobilityFrameSource<
+        CentroidPeak,
+        DeconvolutedPeak,
+        AsyncMZReader<WebIO>,
+        Feature<MZ, IonMobility>,
+        ChargedFeature<Mass, IonMobility>
+    >,
+    extract_features: bool
+}
+
+impl WebIMMZReader {
+    pub fn get_ref(&self) -> &AsyncGeneric3DIonMobilityFrameSource<CentroidPeak, DeconvolutedPeak, mzdata::io::AsyncMZReaderType<WebIO>> {
+        &self.handle
+    }
+}
+
+#[wasm_bindgen]
+impl WebIMMZReader {
+    async fn new(source: WebIO) -> Result<Self, JsError> {
+        let mut handle = AsyncMZReader::open_read_seek(source).await.map_err(|e| JsError::new(&e.to_string()))?;
+        if matches!(handle.has_ion_mobility().await, Some(HasIonMobility::Dimension)) {
+            let handle = handle.into_frame_source().await;
+            Ok(Self { handle, extract_features: false })
+        } else {
+            Err(JsError::new("No ion mobility data detected"))
+        }
+    }
+
+    pub async fn blob(blob: web_sys::Blob) -> Result<Self, JsError> {
+        Self::new(WebIO::blob(blob)).await
+    }
+
+    pub  async fn file(file: web_sys::File) -> Result<Self, JsError> {
+        Self::new(WebIO::file(file)).await
+    }
+
+    pub  async fn byte_array(buffer: js_sys::Uint8Array) -> Result<Self, JsError> {
+        Self::new(WebIO::byte_array(buffer)).await
+    }
+
+    pub  async fn buffer(buffer: js_sys::ArrayBuffer) -> Result<Self, JsError> {
+        Self::new(WebIO::buffer(buffer)).await
+    }
+
+    pub fn set_data_loading(&mut self, load_data: bool) {
+        if load_data {
+            self.handle.set_detail_level(mzdata::io::DetailLevel::Full);
+        } else {
+            self.handle
+                .set_detail_level(mzdata::io::DetailLevel::MetadataOnly);
+        }
+    }
+
+    pub fn set_extract_features(&mut self, extract_features: bool) {
+        self.extract_features = extract_features;
+    }
+
+    pub async fn reset(&mut self) {
+        self.handle.reset().await
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn length(&self) -> usize {
+        self.handle.len()
+    }
+
+    fn convert_frame(&self, frame: MultiLayerIonMobilityFrame) -> WebIonMobilityFrame {
+        let mut frame = WebIonMobilityFrame::from(frame);
+        if self.extract_features {
+            frame.extract_features(3, 0.1, None);
+        }
+        frame
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn file_format(&self) -> String {
+        self.handle.get_inner().as_format().to_string()
+    }
+
+    pub async fn next(&mut self) -> Option<WebIonMobilityFrame> {
+        self.handle.read_next_frame().await.map(|v| self.convert_frame(v))
+    }
+
+
+    pub async fn get_frame_by_id(&mut self, id: &str) -> Option<WebIonMobilityFrame> {
+        let spectrum = self.handle.get_frame_by_id(id).await?;
+        Some(self.convert_frame(spectrum))
+    }
+
+    pub async fn get_frame_by_index(&mut self, index: usize) -> Option<WebIonMobilityFrame> {
+        let spectrum = self.handle.get_frame_by_index(index).await?;
+        Some(self.convert_frame(spectrum))
+    }
+
+    pub async fn get_frame_by_time(&mut self, time: f64) -> Option<WebIonMobilityFrame> {
+        let spectrum = self.handle.get_frame_by_time(time).await?;
+        Some(self.convert_frame(spectrum))
     }
 
     pub async fn start_from_index(&mut self, index: usize) {

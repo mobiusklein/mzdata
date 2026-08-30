@@ -31,7 +31,7 @@ pub fn write_spectra_to_mgf(spectra: Vec<WebSpectrum>) -> String {
 
 
 #[wasm_bindgen]
-pub fn _write_spectra_to_mzml(spectra: Vec<WebSpectrum>, reader: &crate::mem_reader::MemWebMZReader) -> String {
+pub fn _write_spectra_to_mzml(spectra: Vec<WebSpectrum>, reader: &crate::mem_reader::WebMZReader) -> String {
     let mut buffer = Vec::new();
     let writer = io::Cursor::new(&mut buffer);
     let mut writer: MzMLWriterType<

@@ -1,72 +1,58 @@
 import * as wasm from "mzdata-wasm";
-import { Spectrum } from "mzdata-wasm";
-
-export type SpectrumGroup = {
-    precursor: Spectrum | null,
-    products: Spectrum[]
-}
-
-
-const readFileToBuffer = async (file: File) => {
-  let buffer: Uint8Array = new Uint8Array();
-  if (file.name.endsWith(".gz")) {
-    console.log(`Decompressing ${file.name}`);
-    const readerHandle = file
-      .stream()
-      .pipeThrough(new DecompressionStream("gzip"))
-      .getReader();
-    const chunks = [];
-    let totalSize = 0;
-    while (true) {
-      let { value, done } = await readerHandle.read();
-      if (done) break;
-      if (value) {
-        totalSize += value.length;
-        chunks.push(value);
-      }
-    }
-    buffer = new Uint8Array(totalSize);
-    let offset = 0;
-    for (let chunk of chunks) {
-      buffer.set(chunk, offset);
-      offset += chunk.length;
-    }
-  } else {
-    buffer = new Uint8Array(await file.arrayBuffer());
-  }
-  return buffer
-}
 
 export class IMMZReader {
-  reader: wasm.MemWebIMMZReader;
+  reader: wasm.WebIMMZReader;
 
-  static async open(file: File) {
-    const buffer = await readFileToBuffer(file);
-    const reader = wasm.MemWebMZReader.from_buffer(buffer);
-    const im_reader = reader.to_frame_reader()
-    return new IMMZReader(im_reader);
+  static async fromByteArray(bytes: Uint8Array) {
+    return new IMMZReader(await wasm.WebIMMZReader.byte_array(bytes));
   }
 
-  private constructor(reader: wasm.MemWebIMMZReader) {
+  static async fromBuffer(buffer: ArrayBuffer) {
+    return new IMMZReader(await wasm.WebIMMZReader.buffer(buffer));
+  }
+
+  static async fromBlob(blob: Blob) {
+    return new IMMZReader(await wasm.WebIMMZReader.blob(blob));
+  }
+
+  static async fromFile(file: File) {
+    return new IMMZReader(await wasm.WebIMMZReader.file(file));
+  }
+
+  static __wrap(reader: wasm.WebIMMZReader)  {
+    return new IMMZReader(reader)
+  }
+
+  private constructor(reader: wasm.WebIMMZReader) {
     this.reader = reader;
   }
 }
 
 export class MZReader {
-  reader: wasm.MemWebMZReader;
+  reader: wasm.WebMZReader;
 
-  static async open(file: File) {
-    const buffer = await readFileToBuffer(file);
-    const reader = wasm.MemWebMZReader.from_buffer(buffer);
-    return new MZReader(reader);
+  static async fromByteArray(bytes: Uint8Array) {
+    return new MZReader(await wasm.WebMZReader.byte_array(bytes));
   }
 
-  private constructor(reader: wasm.MemWebMZReader) {
+  static async fromBuffer(buffer: ArrayBuffer) {
+    return new MZReader(await wasm.WebMZReader.buffer(buffer));
+  }
+
+  static async fromBlob(blob: Blob) {
+    return new MZReader(await wasm.WebMZReader.blob(blob));
+  }
+
+  static async fromFile(file: File) {
+    return new MZReader(await wasm.WebMZReader.file(file));
+  }
+
+  private constructor(reader: wasm.WebMZReader) {
     this.reader = reader;
   }
 
   fileFormat() {
-    this.reader.file_format
+    this.reader.file_format;
   }
 
   setDataLoading(value: boolean) {
@@ -110,8 +96,13 @@ export class MZReader {
     return this.reader.get_spectrum_by_time(time);
   }
 
-  groupAt(index: number): SpectrumGroup | undefined {
-    const group = this.reader.group_at(index) as SpectrumGroup | undefined;
-    return group
+  hasIonMobility() {
+    return this.reader.has_ion_mobility_dimension()
+  }
+
+  asIonMobilityReader() {
+    return this.reader.as_ion_mobility_reader().then((reader) => {
+      reader === undefined ? null : IMMZReader.__wrap(reader);
+    })
   }
 }

@@ -1,5 +1,5 @@
 export * as wasm from "mzdata-wasm";
-export { MZReader, type SpectrumGroup } from "./mem_reader";
+export { MZReader, IMMZReader } from "./mem_reader";
 export { writeMGF, writeMzML } from './mem_writer';
 
 
