@@ -68,6 +68,10 @@ macro_rules! cvmap {
         /// These methods are part of the controlled vocabulary mapping
         impl $enum_name {
 
+            pub const fn curie(&self) -> $crate::params::CURIE {
+                $crate::params::CURIE::new(self.controlled_vocabulary(), self.accession())
+            }
+
             /// Retrieve the accession number for this term, independent of its controlled vocabulary
             pub const fn accession(&self) -> $crate::params::AccessionIntCode {
                 match self {
@@ -249,6 +253,10 @@ macro_rules! cvmap {
                 match self {
                     $(Self::$variant(_) => $accession,)*
                 }
+            }
+
+            pub const fn curie(&self) -> $crate::params::CURIE {
+                $crate::params::CURIE::new(self.controlled_vocabulary(), self.accession())
             }
 
             /// Retrieve the controlled vocabulary this term belongs to
