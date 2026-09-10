@@ -10,6 +10,7 @@ use std::{
 use encoding_rs::mem::decode_latin1;
 use log::{debug, trace, warn};
 
+use mzdata_param::curie;
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedPeak};
 use quick_xml::{
     escape::escape,
@@ -379,8 +380,9 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
     }
 
     fn populate_isolation_window(param: Param, window: &mut IsolationWindow) {
-        match param.name.as_ref() {
-            "isolation window target m/z" => {
+        match param.curie() {
+            // isolation window target m/z
+            Some(curie!(MS:1000827)) => {
                 window.target = param
                     .to_f32()
                     .expect("Failed to parse isolation window target");
@@ -393,9 +395,11 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                         IsolationWindowState::Complete
                     }
                     IsolationWindowState::Complete => IsolationWindowState::Complete,
+                    IsolationWindowState::NoIsolation => IsolationWindowState::NoIsolation
                 };
             }
-            "isolation window lower offset" => {
+            // isolation window lower offset
+            Some(curie!(MS:1000828)) => {
                 let lower_bound = param
                     .to_f32()
                     .expect("Failed to parse isolation window limit");
@@ -414,7 +418,8 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                     _ => {}
                 }
             }
-            "isolation window upper offset" => {
+            // isolation window upper offset
+            Some(curie!(MS:1000829)) => {
                 let upper_bound = param
                     .to_f32()
                     .expect("Failed to parse isolation window limit");
@@ -432,31 +437,42 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                     _ => {}
                 }
             }
-            "isolation window lower limit" => {
+            // deprecated lower limit
+            Some(curie!(MS:1000794)) => {
                 let lower_bound = param
                     .to_f32()
                     .expect("Failed to parse isolation window limit");
                 if matches!(
                     window.flags,
-                    IsolationWindowState::Unknown | IsolationWindowState::Explicit
+                    IsolationWindowState::Unknown | IsolationWindowState::Explicit | IsolationWindowState::Complete
                 ) {
                     window.flags = IsolationWindowState::Explicit;
                     window.lower_bound = lower_bound;
                 }
             }
-            "isolation window upper limit" => {
+            // deprecated upper limit
+            Some(curie!(MS:1000793)) => {
                 let upper_bound = param
                     .to_f32()
                     .expect("Failed to parse isolation window limit");
                 if matches!(
                     window.flags,
-                    IsolationWindowState::Unknown | IsolationWindowState::Explicit
+                    IsolationWindowState::Unknown | IsolationWindowState::Explicit | IsolationWindowState::Complete
                 ) {
                     window.flags = IsolationWindowState::Explicit;
                     window.upper_bound = upper_bound;
                 }
             }
-            &_ => {}
+            // no isolation, MSe/all ions fragmentation
+            Some(curie!(MS:1003159)) => {
+                window.flags = IsolationWindowState::NoIsolation;
+            }
+            Some(_) => {
+                log::debug!("Unexpected isolation window term {:?}", param)
+            }
+            _ => {
+                log::debug!("Unexpected isolation window term {:?}", param)
+            }
         }
     }
 
@@ -3278,7 +3294,7 @@ mod test {
         let param = ControlledVocabulary::MS.const_param(
             "isolation window target m/z",
             crate::params::ValueRef::Float(50.0),
-            0,
+            1000827,
             Unit::MZ,
         );
         builder.fill_param_into(param.into(), MzMLParserState::IsolationWindow);
@@ -3288,7 +3304,7 @@ mod test {
         let param = ControlledVocabulary::MS.const_param(
             "isolation window lower limit",
             crate::params::ValueRef::Float(48.0),
-            0,
+            1000794,
             Unit::MZ,
         );
         builder.fill_param_into(param.into(), MzMLParserState::IsolationWindow);
@@ -3296,7 +3312,7 @@ mod test {
         let param = ControlledVocabulary::MS.const_param(
             "isolation window upper limit",
             crate::params::ValueRef::Float(52.0),
-            0,
+            1000793,
             Unit::MZ,
         );
         builder.fill_param_into(param.into(), MzMLParserState::IsolationWindow);

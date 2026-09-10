@@ -238,9 +238,7 @@ fn transform_response(
             title,
             kind,
         }),
-        Err(err) => {
-            Err(PROXIError::IO(backend, err))
-        },
+        Err(err) => Err(PROXIError::IO(backend, err)),
     }
 }
 
@@ -370,7 +368,7 @@ where
         Value::Buffer(v) => serializer.serialize_bytes(v),
         Value::Boolean(v) => serializer.serialize_bool(*v),
         Value::Empty => serializer.serialize_unit(),
-        Value::List(v) => serializer.collect_seq(v.iter())
+        Value::List(v) => serializer.collect_seq(v.iter()),
     }
 }
 
@@ -414,8 +412,9 @@ where
         }
 
         fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>, {
+        where
+            A: SeqAccess<'de>,
+        {
             let mut entries = Vec::new();
             while let Some(val) = SeqAccess::next_element::<Value>(&mut seq)? {
                 entries.push(val);
@@ -510,7 +509,7 @@ impl Display for PROXIValue {
             Value::Buffer(v) => write!(f, "{v:?}"),
             Value::Boolean(v) => write!(f, "{v}"),
             Value::Empty => Ok(()),
-            Value::List(_) => write!(f, "{}", self.0)
+            Value::List(_) => write!(f, "{}", self.0),
         }
     }
 }
@@ -975,7 +974,8 @@ impl From<&PROXISpectrum> for SpectrumDescription {
 
                 "selected ion m/z" => {
                     has_precursor = true;
-                    precursor.ion_mut().unwrap().mz = param.to_f64().expect("Failed to parse ion m/z");
+                    precursor.ion_mut().unwrap().mz =
+                        param.to_f64().expect("Failed to parse ion m/z");
                 }
                 "peak intensity" => {
                     has_precursor = true;
@@ -1006,6 +1006,7 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                                 precursor.isolation_window.target;
                             IsolationWindowState::Complete
                         }
+                        IsolationWindowState::NoIsolation => IsolationWindowState::NoIsolation,
                     };
                 }
                 "isolation window lower offset" => {
@@ -1050,6 +1051,8 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                     if matches!(
                         precursor.isolation_window.flags,
                         IsolationWindowState::Unknown
+                            | IsolationWindowState::Complete
+                            | IsolationWindowState::Explicit
                     ) {
                         precursor.isolation_window.flags = IsolationWindowState::Explicit;
                         precursor.isolation_window.lower_bound = lower_bound;
@@ -1063,6 +1066,8 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                     if matches!(
                         precursor.isolation_window.flags,
                         IsolationWindowState::Unknown
+                            | IsolationWindowState::Complete
+                            | IsolationWindowState::Explicit
                     ) {
                         precursor.isolation_window.flags = IsolationWindowState::Explicit;
                         precursor.isolation_window.upper_bound = upper_bound;
@@ -1072,6 +1077,8 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                     let mut p = Param::new_key_value(param.name.clone(), param.value.clone());
                     if let PROXIAccession::CURIE(c) = param.accession {
                         p.accession = Some(c.accession);
+                    } else {
+                        log::debug!("{:?} could not be translated to a compact CURIE instance, dropping accession", param.accession)
                     }
                     p.controlled_vocabulary = Some(param.accession.controlled_vocabulary());
                     this.add_param(p);
@@ -1345,9 +1352,9 @@ mod test {
 
     #[test]
     fn test_proxi_parse() {
-        let spec: PROXISpectrum = serde_json::from_reader(
-            std::fs::File::open("test/data/proxi_test.json").unwrap()
-        ).unwrap();
+        let spec: PROXISpectrum =
+            serde_json::from_reader(std::fs::File::open("test/data/proxi_test.json").unwrap())
+                .unwrap();
         assert!(!spec.mzs.is_empty());
         assert!(!spec.attributes.is_empty());
     }

@@ -20,11 +20,21 @@ Describe the initialization stage of an isolation window
 #[derive(Debug, Clone, Copy, Default)]
 #[repr(i8)]
 pub enum IsolationWindowState {
+    /// The isolation window hasn't been populated at all yet
     #[default]
     Unknown = 0,
+    /// The isolation window is defined in terms of offsets relative
+    /// to an isolation target
     Offset,
+    /// The isolation window is defined in terms of absolute bounds. This
+    /// configuration uses deprecated controlled vocabulary terms.
     Explicit,
+    /// The isolation window is completely specified, either in terms of the
+    /// isolation target with optional relative boundaries or explicit boundaries
     Complete,
+    /// No isolation is explicitly specified, meaning all ions were fragmented,
+    /// intentionally selecting everything.
+    NoIsolation,
 }
 
 impl Display for IsolationWindowState {
