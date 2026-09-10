@@ -404,6 +404,10 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                         window.flags = IsolationWindowState::Offset;
                         window.lower_bound = lower_bound;
                     }
+                    // The other offset came first; keep waiting for the target to resolve both.
+                    IsolationWindowState::Offset => {
+                        window.lower_bound = lower_bound;
+                    }
                     IsolationWindowState::Complete => {
                         window.lower_bound = window.target - lower_bound;
                     }
@@ -417,6 +421,9 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                 match window.flags {
                     IsolationWindowState::Unknown => {
                         window.flags = IsolationWindowState::Offset;
+                        window.upper_bound = upper_bound;
+                    }
+                    IsolationWindowState::Offset => {
                         window.upper_bound = upper_bound;
                     }
                     IsolationWindowState::Complete => {
@@ -3294,5 +3301,59 @@ mod test {
         );
         builder.fill_param_into(param.into(), MzMLParserState::IsolationWindow);
         assert_eq!(builder.isolation_window_mut().upper_bound, 52.0);
+    }
+}
+
+#[cfg(test)]
+mod isolation_window_offset_order {
+    use super::*;
+    use crate::spectrum::IsolationWindowState;
+    use std::io;
+
+    // ProteoWizard's Waters writer lists both offsets BEFORE the target m/z. The second offset
+    // used to be dropped while the window sat in the `Offset` state, so the lower bound came out
+    // as `target - 0`.
+    const MZML: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<mzML xmlns="http://psi.hupo.org/ms/mzml" id="iw" version="1.1.0">
+  <cvList count="1"><cv id="MS" fullName="PSI-MS" version="4.1.0" URI="https://raw.githubusercontent.com/HUPO-PSI/psi-ms-CV/master/psi-ms.obo"/></cvList>
+  <fileDescription><fileContent><cvParam cvRef="MS" accession="MS:1000580" name="MSn spectrum" value=""/></fileContent></fileDescription>
+  <softwareList count="1"><software id="sw" version="0"><cvParam cvRef="MS" accession="MS:1000615" name="ProteoWizard software" value=""/></software></softwareList>
+  <instrumentConfigurationList count="1"><instrumentConfiguration id="ic"><cvParam cvRef="MS" accession="MS:1000031" name="instrument model" value=""/></instrumentConfiguration></instrumentConfigurationList>
+  <dataProcessingList count="1"><dataProcessing id="dp"><processingMethod order="0" softwareRef="sw"><cvParam cvRef="MS" accession="MS:1000544" name="Conversion to mzML" value=""/></processingMethod></dataProcessing></dataProcessingList>
+  <run id="run" defaultInstrumentConfigurationRef="ic">
+    <spectrumList count="2" defaultDataProcessingRef="dp">
+      <spectrum index="0" id="scan=1" defaultArrayLength="0">
+        <cvParam cvRef="MS" accession="MS:1000580" name="MSn spectrum" value=""/>
+        <cvParam cvRef="MS" accession="MS:1000511" name="ms level" value="2"/>
+        <precursorList count="1"><precursor><isolationWindow>
+          <cvParam cvRef="MS" accession="MS:1000829" name="isolation window upper offset" value="3" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+          <cvParam cvRef="MS" accession="MS:1000828" name="isolation window lower offset" value="2" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+          <cvParam cvRef="MS" accession="MS:1000827" name="isolation window target m/z" value="500" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+        </isolationWindow></precursor></precursorList>
+      </spectrum>
+      <spectrum index="1" id="scan=2" defaultArrayLength="0">
+        <cvParam cvRef="MS" accession="MS:1000580" name="MSn spectrum" value=""/>
+        <cvParam cvRef="MS" accession="MS:1000511" name="ms level" value="2"/>
+        <precursorList count="1"><precursor><isolationWindow>
+          <cvParam cvRef="MS" accession="MS:1000828" name="isolation window lower offset" value="2" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+          <cvParam cvRef="MS" accession="MS:1000829" name="isolation window upper offset" value="3" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+          <cvParam cvRef="MS" accession="MS:1000827" name="isolation window target m/z" value="500" unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>
+        </isolationWindow></precursor></precursorList>
+      </spectrum>
+    </spectrumList>
+  </run>
+</mzML>"#;
+
+    #[test]
+    fn both_offsets_survive_when_listed_before_the_target() {
+        let reader = MzMLReader::new(io::Cursor::new(MZML.as_bytes()));
+        let windows: Vec<IsolationWindow> = reader
+            .map(|s| s.precursor().expect("precursor").isolation_window.clone())
+            .collect();
+        assert_eq!(windows.len(), 2);
+        for w in windows {
+            assert!(matches!(w.flags, IsolationWindowState::Complete), "{:?}", w.flags);
+            assert_eq!((w.target, w.lower_bound, w.upper_bound), (500.0, 498.0, 503.0));
+        }
     }
 }
