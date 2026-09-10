@@ -1618,7 +1618,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata"
-version = "0.66.6"
+version = "0.66.7"
 dependencies = [
  "base64-simd",
  "bitflags 2.11.0",
@@ -1655,7 +1655,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-bindata"
-version = "0.66.6"
+version = "0.66.7"
 dependencies = [
  "base64-simd",
  "bytemuck",
@@ -1674,7 +1674,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-meta"
-version = "0.66.6"
+version = "0.66.7"
 dependencies = [
  "bitflags 2.11.0",
  "chrono",
@@ -1691,7 +1691,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-param"
-version = "0.66.6"
+version = "0.66.7"
 dependencies = [
  "log",
  "serde",
@@ -1701,7 +1701,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-spectrum"
-version = "0.66.6"
+version = "0.66.7"
 dependencies = [
  "identity-hash",
  "log",
@@ -2066,7 +2066,7 @@ dependencies = [
 
 [[package]]
 name = "pymzdata"
-version = "0.66.6"
+version = "0.66.7"
 dependencies = [
  "mzdata",
  "mzpeaks",
