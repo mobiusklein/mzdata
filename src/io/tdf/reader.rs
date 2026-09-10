@@ -270,7 +270,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         let tdf_reader = RawTDFSQLReader::new(&tdf_path)
             .map_err(|e| TimsRustError::FrameReaderError(FrameReaderError::SqlError(e.into())))?;
 
-        let mut calibration_models =
+        let calibration_models =
             CalibrationParameters::from_sql(&tdf_reader.connection(), &metadata)
                 .inspect_err(|e| {
                     log::error!("Failed to load calibration from {}: {e}", path.display())
@@ -278,7 +278,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                 .unwrap_or_default();
 
         // The m/z models aren't consistently good enough, or at least my translations aren't
-        calibration_models.mz_enabled = false;
+        // calibration_models.mz_enabled = false;
 
         let mut this = Self {
             metadata,
@@ -706,6 +706,18 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             ))
         })?;
         Ok(handle)
+    }
+
+    /// Get immutable access to the collection of calibration models for m/z and ion mobility
+    pub fn calibration_models(&self) -> &CalibrationParameters {
+        &self.calibration_models
+    }
+
+    /// Get mutable access to the collection of calibration models for m/z and ion mobility.
+    /// Care *MUST* be taken when configuring these to be consistent with the inferred Bruker
+    /// models' equations.
+    pub fn calibration_models_mut(&mut self) -> &mut CalibrationParameters {
+        &mut self.calibration_models
     }
 }
 

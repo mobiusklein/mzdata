@@ -24,5 +24,5 @@ pub use calibration::{
     TimsCalibrationModel,
     TimsCalibrationModel2,
     MzCalibrationModel,
-    MzCalibrationModel1
+    MzCalibrationModel2
 };
