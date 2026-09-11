@@ -1,5 +1,8 @@
 use std::{
-    collections::HashMap, io, sync::mpsc::{Receiver, Sender, SyncSender, TryRecvError}, time::Duration
+    collections::HashMap,
+    io,
+    sync::mpsc::{Receiver, Sender, SyncSender, TryRecvError},
+    time::Duration,
 };
 
 use mzpeaks::{CentroidLike, DeconvolutedCentroidLike};
@@ -247,19 +250,16 @@ impl<
 impl<
         C: CentroidLike + Send + BuildArrayMapFrom + BuildFromArrayMap + Clone,
         D: DeconvolutedCentroidLike + Send + BuildArrayMapFrom + BuildFromArrayMap + Clone,
-    > SpectrumWriter<C, D> for Sender<MultiLayerSpectrum<C, D>> {
+    > SpectrumWriter<C, D> for Sender<MultiLayerSpectrum<C, D>>
+{
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> std::io::Result<usize> {
         let k = spectrum.index();
         let peaks = spectrum.peaks().cloned();
         let descr = spectrum.description().clone();
         let t = MultiLayerSpectrum::from_peaks_data_levels_and_description(peaks, descr);
         match self.send(t) {
-            Ok(_) => {Ok(k)},
-            Err(e) => {
-                Err(
-                    io::Error::new(io::ErrorKind::BrokenPipe, e.to_string())
-                )
-            },
+            Ok(_) => Ok(k),
+            Err(e) => Err(io::Error::new(io::ErrorKind::BrokenPipe, e.to_string())),
         }
     }
 
@@ -271,12 +271,8 @@ impl<
         let (peaks, description) = spectrum.into_peaks_and_description();
         let t = MultiLayerSpectrum::from_peaks_data_levels_and_description(peaks, description);
         match self.send(t) {
-            Ok(_) => {Ok(k)},
-            Err(e) => {
-                Err(
-                    io::Error::new(io::ErrorKind::BrokenPipe, e.to_string())
-                )
-            },
+            Ok(_) => Ok(k),
+            Err(e) => Err(io::Error::new(io::ErrorKind::BrokenPipe, e.to_string())),
         }
     }
 
@@ -292,19 +288,16 @@ impl<
 impl<
         C: CentroidLike + Send + BuildArrayMapFrom + BuildFromArrayMap + Clone,
         D: DeconvolutedCentroidLike + Send + BuildArrayMapFrom + BuildFromArrayMap + Clone,
-    > SpectrumWriter<C, D> for SyncSender<MultiLayerSpectrum<C, D>> {
+    > SpectrumWriter<C, D> for SyncSender<MultiLayerSpectrum<C, D>>
+{
     fn write<S: SpectrumLike<C, D> + 'static>(&mut self, spectrum: &S) -> std::io::Result<usize> {
         let k = spectrum.index();
         let peaks = spectrum.peaks().cloned();
         let descr = spectrum.description().clone();
         let t = MultiLayerSpectrum::from_peaks_data_levels_and_description(peaks, descr);
         match self.send(t) {
-            Ok(_) => {Ok(k)},
-            Err(e) => {
-                Err(
-                    io::Error::new(io::ErrorKind::BrokenPipe, e.to_string())
-                )
-            },
+            Ok(_) => Ok(k),
+            Err(e) => Err(io::Error::new(io::ErrorKind::BrokenPipe, e.to_string())),
         }
     }
 
@@ -316,12 +309,8 @@ impl<
         let (peaks, description) = spectrum.into_peaks_and_description();
         let t = MultiLayerSpectrum::from_peaks_data_levels_and_description(peaks, description);
         match self.send(t) {
-            Ok(_) => {Ok(k)},
-            Err(e) => {
-                Err(
-                    io::Error::new(io::ErrorKind::BrokenPipe, e.to_string())
-                )
-            },
+            Ok(_) => Ok(k),
+            Err(e) => Err(io::Error::new(io::ErrorKind::BrokenPipe, e.to_string())),
         }
     }
 

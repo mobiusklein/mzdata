@@ -117,8 +117,9 @@ impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap, D: DeconvolutedCe
     }
 }
 
-#[allow(unused)]
-impl<C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap, D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> MZReaderBuilder<C, D> {
+impl<
+    C: CentroidLike + From<CentroidPeak> + BuildFromArrayMap,
+    D: DeconvolutedCentroidLike + From<DeconvolutedPeak> + BuildFromArrayMap> MZReaderBuilder<C, D> {
 
     /// Set the buffer capacity for a streaming reader.
     pub fn buffer_size(mut self, capacity: usize) -> Self {

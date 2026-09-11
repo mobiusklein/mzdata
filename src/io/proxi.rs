@@ -5,6 +5,7 @@ use std::{
     str::FromStr,
 };
 
+use mzdata_spectrum::IsolationWindowBuilder;
 use num_traits::AsPrimitive;
 use serde::{de::SeqAccess, Deserialize, Deserializer, Serialize};
 
@@ -14,7 +15,7 @@ use crate::{
     params::{ControlledVocabulary, Param, ParamCow, Value, CURIE},
     prelude::*,
     spectrum::{
-        ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, IsolationWindowState,
+        ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray,
         MultiLayerSpectrum, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
     },
 };
@@ -990,88 +991,40 @@ impl From<&PROXISpectrum> for SpectrumDescription {
 
                 "isolation window target m/z" => {
                     has_precursor = true;
-                    precursor.isolation_window.target = param
-                        .to_f32()
-                        .expect("Failed to parse isolation window target");
-                    precursor.isolation_window.flags = match precursor.isolation_window.flags {
-                        IsolationWindowState::Unknown => IsolationWindowState::Complete,
-                        IsolationWindowState::Explicit | IsolationWindowState::Complete => {
-                            IsolationWindowState::Complete
-                        }
-                        IsolationWindowState::Offset => {
-                            precursor.isolation_window.lower_bound =
-                                precursor.isolation_window.target
-                                    - precursor.isolation_window.lower_bound;
-                            precursor.isolation_window.upper_bound +=
-                                precursor.isolation_window.target;
-                            IsolationWindowState::Complete
-                        }
-                        IsolationWindowState::NoIsolation => IsolationWindowState::NoIsolation,
-                    };
+                    let window = IsolationWindowBuilder(precursor.isolation_window_mut());
+                    window.target(param.to_f32().expect("Failed to parse isolation window target"));
                 }
                 "isolation window lower offset" => {
                     has_precursor = true;
                     let lower_bound = param
                         .to_f32()
                         .expect("Failed to parse isolation window limit");
-                    match precursor.isolation_window.flags {
-                        IsolationWindowState::Unknown => {
-                            precursor.isolation_window.flags = IsolationWindowState::Offset;
-                            precursor.isolation_window.lower_bound = lower_bound;
-                        }
-                        IsolationWindowState::Complete => {
-                            precursor.isolation_window.lower_bound =
-                                precursor.isolation_window.target - lower_bound;
-                        }
-                        _ => {}
-                    }
+                    let window = IsolationWindowBuilder(precursor.isolation_window_mut());
+                    window.lower_offset(lower_bound);
                 }
                 "isolation window upper offset" => {
                     has_precursor = true;
                     let upper_bound = param
                         .to_f32()
                         .expect("Failed to parse isolation window limit");
-                    match precursor.isolation_window.flags {
-                        IsolationWindowState::Unknown => {
-                            precursor.isolation_window.flags = IsolationWindowState::Offset;
-                            precursor.isolation_window.upper_bound = upper_bound;
-                        }
-                        IsolationWindowState::Complete => {
-                            precursor.isolation_window.upper_bound =
-                                precursor.isolation_window.target + upper_bound;
-                        }
-                        _ => {}
-                    }
+                    let window = IsolationWindowBuilder(precursor.isolation_window_mut());
+                    window.upper_offset(upper_bound);
                 }
                 "isolation window lower limit" => {
                     has_precursor = true;
+                    let window = IsolationWindowBuilder(precursor.isolation_window_mut());
                     let lower_bound = param
                         .to_f32()
                         .expect("Failed to parse isolation window limit");
-                    if matches!(
-                        precursor.isolation_window.flags,
-                        IsolationWindowState::Unknown
-                            | IsolationWindowState::Complete
-                            | IsolationWindowState::Explicit
-                    ) {
-                        precursor.isolation_window.flags = IsolationWindowState::Explicit;
-                        precursor.isolation_window.lower_bound = lower_bound;
-                    }
+                    window.lower_limit(lower_bound);
                 }
                 "isolation window upper limit" => {
                     has_precursor = true;
                     let upper_bound = param
                         .to_f32()
                         .expect("Failed to parse isolation window limit");
-                    if matches!(
-                        precursor.isolation_window.flags,
-                        IsolationWindowState::Unknown
-                            | IsolationWindowState::Complete
-                            | IsolationWindowState::Explicit
-                    ) {
-                        precursor.isolation_window.flags = IsolationWindowState::Explicit;
-                        precursor.isolation_window.upper_bound = upper_bound;
-                    }
+                    let window = IsolationWindowBuilder(precursor.isolation_window_mut());
+                    window.upper_limit(upper_bound);
                 }
                 _ => {
                     let mut p = Param::new_key_value(param.name.clone(), param.value.clone());

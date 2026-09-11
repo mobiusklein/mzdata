@@ -11,6 +11,7 @@ use encoding_rs::mem::decode_latin1;
 use log::{debug, trace, warn};
 
 use mzdata_param::curie;
+use mzdata_spectrum::IsolationWindowBuilder;
 use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedPeak};
 use quick_xml::{
     escape::escape,
@@ -380,99 +381,79 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
     }
 
     fn populate_isolation_window(param: Param, window: &mut IsolationWindow) {
+        let window = IsolationWindowBuilder(window);
         match param.curie() {
             // isolation window target m/z
             Some(curie!(MS:1000827)) => {
-                window.target = param
-                    .to_f32()
-                    .expect("Failed to parse isolation window target");
-                window.flags = match window.flags {
-                    IsolationWindowState::Unknown => IsolationWindowState::Complete,
-                    IsolationWindowState::Explicit => IsolationWindowState::Complete,
-                    IsolationWindowState::Offset => {
-                        window.lower_bound = window.target - window.lower_bound;
-                        window.upper_bound += window.target;
-                        IsolationWindowState::Complete
-                    }
-                    IsolationWindowState::Complete => IsolationWindowState::Complete,
-                    IsolationWindowState::NoIsolation => IsolationWindowState::NoIsolation
-                };
+                window.target(
+                    param
+                        .to_f32()
+                        .expect("Failed to parse isolation window target"),
+                );
             }
             // isolation window lower offset
             Some(curie!(MS:1000828)) => {
-                let lower_bound = param
-                    .to_f32()
-                    .expect("Failed to parse isolation window limit");
-                match window.flags {
-                    IsolationWindowState::Unknown => {
-                        window.flags = IsolationWindowState::Offset;
-                        window.lower_bound = lower_bound;
-                    }
-                    // The other offset came first; keep waiting for the target to resolve both.
-                    IsolationWindowState::Offset => {
-                        window.lower_bound = lower_bound;
-                    }
-                    IsolationWindowState::Complete => {
-                        window.lower_bound = window.target - lower_bound;
-                    }
-                    _ => {}
-                }
+                window.lower_offset(
+                    param
+                        .to_f32()
+                        .expect("Failed to parse isolation window limit"),
+                );
             }
             // isolation window upper offset
             Some(curie!(MS:1000829)) => {
-                let upper_bound = param
-                    .to_f32()
-                    .expect("Failed to parse isolation window limit");
-                match window.flags {
-                    IsolationWindowState::Unknown => {
-                        window.flags = IsolationWindowState::Offset;
-                        window.upper_bound = upper_bound;
-                    }
-                    IsolationWindowState::Offset => {
-                        window.upper_bound = upper_bound;
-                    }
-                    IsolationWindowState::Complete => {
-                        window.upper_bound = window.target + upper_bound;
-                    }
-                    _ => {}
-                }
+                window.upper_offset(
+                    param
+                        .to_f32()
+                        .expect("Failed to parse isolation window limit"),
+                );
             }
             // deprecated lower limit
             Some(curie!(MS:1000794)) => {
-                let lower_bound = param
-                    .to_f32()
-                    .expect("Failed to parse isolation window limit");
-                if matches!(
-                    window.flags,
-                    IsolationWindowState::Unknown | IsolationWindowState::Explicit | IsolationWindowState::Complete
-                ) {
-                    window.flags = IsolationWindowState::Explicit;
-                    window.lower_bound = lower_bound;
-                }
+                window.lower_limit(
+                    param
+                        .to_f32()
+                        .expect("Failed to parse isolation window limit"),
+                );
             }
             // deprecated upper limit
             Some(curie!(MS:1000793)) => {
-                let upper_bound = param
-                    .to_f32()
-                    .expect("Failed to parse isolation window limit");
-                if matches!(
-                    window.flags,
-                    IsolationWindowState::Unknown | IsolationWindowState::Explicit | IsolationWindowState::Complete
-                ) {
-                    window.flags = IsolationWindowState::Explicit;
-                    window.upper_bound = upper_bound;
-                }
+                window.upper_limit(
+                    param
+                        .to_f32()
+                        .expect("Failed to parse isolation window limit"),
+                );
             }
             // no isolation, MSe/all ions fragmentation
             Some(curie!(MS:1003159)) => {
-                window.flags = IsolationWindowState::NoIsolation;
+                window.no_isolation();
             }
             Some(_) => {
                 log::debug!("Unexpected isolation window term {:?}", param)
             }
-            _ => {
-                log::debug!("Unexpected isolation window term {:?}", param)
-            }
+            _ => match param.name() {
+                "isolation window target m/z" => {
+                    window.target(
+                        param
+                            .to_f32()
+                            .expect("Failed to parse isolation window target"),
+                    );
+                }
+                "isolation window lower offset" => {
+                    window.lower_offset(
+                        param
+                            .to_f32()
+                            .expect("Failed to parse isolation window limit"),
+                    );
+                }
+                "isolation window upper offset" => {
+                    window.upper_offset(
+                        param
+                            .to_f32()
+                            .expect("Failed to parse isolation window limit"),
+                    );
+                }
+                _ => log::debug!("Unexpected isolation window term {:?}", param),
+            },
         }
     }
 
@@ -3368,8 +3349,15 @@ mod isolation_window_offset_order {
             .collect();
         assert_eq!(windows.len(), 2);
         for w in windows {
-            assert!(matches!(w.flags, IsolationWindowState::Complete), "{:?}", w.flags);
-            assert_eq!((w.target, w.lower_bound, w.upper_bound), (500.0, 498.0, 503.0));
+            assert!(
+                matches!(w.flags, IsolationWindowState::Complete),
+                "{:?}",
+                w.flags
+            );
+            assert_eq!(
+                (w.target, w.lower_bound, w.upper_bound),
+                (500.0, 498.0, 503.0)
+            );
         }
     }
 }

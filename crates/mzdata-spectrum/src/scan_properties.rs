@@ -7,12 +7,14 @@ use num_traits::Float;
 
 // use super::spectrum_types::{CentroidPeakAdapting, DeconvolutedPeakAdapting, SpectrumLike};
 // use crate::io::traits::SpectrumSource;
-use mzdata_meta::DissociationMethodTerm;
 use crate::params::{
-    AccessionIntCode, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue, Unit,
-    CURIE,
+    AccessionIntCode, CURIE, ControlledVocabulary, Param, ParamDescribed, ParamLike, ParamValue,
+    Unit,
 };
-use mzdata_param::{curie, impl_param_described, impl_param_described_deferred, ParamList, find_param_method};
+use mzdata_meta::DissociationMethodTerm;
+use mzdata_param::{
+    ParamList, curie, find_param_method, impl_param_described, impl_param_described_deferred,
+};
 
 /**
 Describe the initialization stage of an isolation window
@@ -43,22 +45,130 @@ impl Display for IsolationWindowState {
     }
 }
 
+#[derive(Debug)]
+/// A helper type that wraps an existing mutable reference to [`IsolationWindow`]
+/// that runs through a state machine updating fields depending upon the accumulated
+/// state of the isolation window.
+pub struct IsolationWindowBuilder<'a>(pub &'a mut IsolationWindow);
+
+impl<'a> IsolationWindowBuilder<'a> {
+    /// Set the target value
+    pub const fn target(self, value: f32) -> Self {
+        self.0.target = value;
+        self.0.flags = match self.0.flags {
+            IsolationWindowState::Unknown => IsolationWindowState::Complete,
+            IsolationWindowState::Explicit => IsolationWindowState::Complete,
+            IsolationWindowState::Offset => {
+                self.0.lower_bound = self.0.target - self.0.lower_bound;
+                self.0.upper_bound += self.0.target;
+                IsolationWindowState::Complete
+            }
+            IsolationWindowState::Complete => IsolationWindowState::Complete,
+            IsolationWindowState::NoIsolation => IsolationWindowState::NoIsolation,
+        };
+        self
+    }
+
+    /// Set the lower offset relative to the target
+    pub const fn lower_offset(self, lower_bound: f32) -> Self {
+        match self.0.flags {
+            IsolationWindowState::Unknown => {
+                self.0.flags = IsolationWindowState::Offset;
+                self.0.lower_bound = lower_bound;
+            }
+            // The other offset came first; keep waiting for the target to resolve both.
+            IsolationWindowState::Offset => {
+                self.0.lower_bound = lower_bound;
+            }
+            IsolationWindowState::Complete => {
+                self.0.lower_bound = self.0.target - lower_bound;
+            }
+            _ => {}
+        }
+        self
+    }
+
+    /// Set the upper offset relative to the target
+    pub const fn upper_offset(self, upper_bound: f32) -> Self {
+        match self.0.flags {
+            IsolationWindowState::Unknown => {
+                self.0.flags = IsolationWindowState::Offset;
+                self.0.upper_bound = upper_bound;
+            }
+            IsolationWindowState::Offset => {
+                self.0.upper_bound = upper_bound;
+            }
+            IsolationWindowState::Complete => {
+                self.0.upper_bound = self.0.target + upper_bound;
+            }
+            _ => {}
+        }
+        self
+    }
+
+    /// Set the explicit lower limit
+    pub const fn lower_limit(self, lower_bound: f32) -> Self {
+        if matches!(
+            self.0.flags,
+            IsolationWindowState::Unknown
+                | IsolationWindowState::Explicit
+                | IsolationWindowState::Complete
+        ) {
+            self.0.flags = IsolationWindowState::Explicit;
+            self.0.lower_bound = lower_bound;
+            if self.0.upper_bound != 0.0 && self.0.target != 0.0 {
+                self.0.flags = IsolationWindowState::Complete
+            }
+        }
+        self
+    }
+
+    /// Set the explicit upper limit
+    pub const fn upper_limit(self, upper_bound: f32) -> Self {
+        if matches!(
+            self.0.flags,
+            IsolationWindowState::Unknown
+                | IsolationWindowState::Explicit
+                | IsolationWindowState::Complete
+        ) {
+            self.0.flags = IsolationWindowState::Explicit;
+            self.0.upper_bound = upper_bound;
+            if self.0.lower_bound != 0.0 && self.0.target != 0.0 {
+                self.0.flags = IsolationWindowState::Complete
+            }
+        }
+        self
+    }
+
+    /// Set no isolation, MSe/all ions fragmentation
+    pub const fn no_isolation(self) -> Self {
+        self.0.flags = IsolationWindowState::NoIsolation;
+        self
+    }
+
+    /// Check if the window is finished being configured
+    pub const fn is_complete(&self) -> bool {
+        matches!(
+            self.0.flags,
+            IsolationWindowState::Complete | IsolationWindowState::NoIsolation
+        )
+    }
+}
+
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The interval around the precursor ion that was isolated in the precursor scan.
 /// Although an isolation window may be specified either with explicit bounds or
 /// offsets from the target, this data structure always uses explicit bounds once
-/// it is in a [`IsolationWindowState::Complete`] .
+/// it is in a [`IsolationWindowState::Complete`]. If [`Self::flags`] is
+/// [`IsolationWindowState::NoIsolation`], then the assumption is that the bounds
+/// are undefined and that there is no target.
 pub struct IsolationWindow {
     /// The recorded isolation window target m/z, which may actually be outside the window
     pub target: f32,
-    /// The lower m/z boundary of the isolation window if `flags` is
-    /// [`IsolationWindowState::Explicit`], or the offset from `target`
-    /// if `flags` is [`IsolationWindowState::Offset`]
+    /// The lower m/z boundary of the isolation window.
     pub lower_bound: f32,
-    /// The upper m/z boundary of the isolation window if `flags` is
-    /// [`IsolationWindowState::Explicit`], or the offset from `target`
-    /// if `flags` is [`IsolationWindowState::Offset`]
+    /// The upper m/z boundary of the isolation window.
     pub upper_bound: f32,
     /// Describes the decision making process used to establish the bounds of the
     /// window from the source file.
@@ -67,7 +177,7 @@ pub struct IsolationWindow {
 }
 
 impl IsolationWindow {
-    pub fn new(
+    pub const fn new(
         target: f32,
         lower_bound: f32,
         upper_bound: f32,
@@ -81,9 +191,21 @@ impl IsolationWindow {
         }
     }
 
-    pub fn around(target: f32, width: f32) -> Self {
-        let lower_bound = target - width;
-        let upper_bound = target + width;
+    /// Create an isolation window that is in the "no isolation" state.
+    pub const fn full() -> Self {
+        Self::new(0.0, 0.0, 0.0, IsolationWindowState::NoIsolation)
+    }
+
+    /// Check if there is a registered intent to isolate nothing
+    pub const fn has_isolation(&self) -> bool {
+        !matches!(self.flags, IsolationWindowState::NoIsolation)
+    }
+
+    /// Create a new isolation window around `target` with width `radius`
+    /// units above and below the `target`
+    pub const fn around(target: f32, radius: f32) -> Self {
+        let lower_bound = target - radius;
+        let upper_bound = target + radius;
         Self::new(
             target,
             lower_bound,
@@ -92,13 +214,17 @@ impl IsolationWindow {
         )
     }
 
+    /// Test if `point` is within the isolation window
     pub fn contains<F: Float>(&self, point: F) -> bool {
         let point = point.to_f32().unwrap();
         self.lower_bound <= point && point <= self.upper_bound
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.lower_bound == 0.0 && self.upper_bound == 0.0
+    /// Check if the isolation window has any width, or is just a single point at the
+    /// target. This often means that the bounds are unknown or unspecified. This is
+    /// distinct from [`Self::has_isolation`]
+    pub const fn is_empty(&self) -> bool {
+        self.lower_bound == 0.0 && self.upper_bound == 0.0 && self.has_isolation()
     }
 }
 
@@ -614,7 +740,6 @@ impl PrecursorSelection for Precursor {
     }
 }
 
-
 /**
 Describes the polarity of a mass spectrum. A spectrum is either `Positive` (1+), `Negative` (-1)
 or `Unknown` (0). The `Unknown` state is the default.
@@ -675,7 +800,6 @@ pub enum SignalContinuity {
 }
 
 impl SignalContinuity {
-
     pub const fn is_profile(&self) -> bool {
         matches!(self, Self::Profile)
     }
@@ -691,19 +815,20 @@ impl Display for SignalContinuity {
     }
 }
 
-
 /// An adapter type to make it possible to pass an `Option<Precursor>`, `Vec<Precursor>`,
 /// or [`Precursor`] in an argument context.
 #[derive(Debug)]
 pub enum AsPrecursorCollection {
     Single(Option<Precursor>),
-    Multiple(Vec<Precursor>)
+    Multiple(Vec<Precursor>),
 }
 
 impl From<AsPrecursorCollection> for Vec<Precursor> {
     fn from(value: AsPrecursorCollection) -> Self {
         match value {
-            AsPrecursorCollection::Single(precursor) => precursor.map(|v| vec![v]).unwrap_or_default(),
+            AsPrecursorCollection::Single(precursor) => {
+                precursor.map(|v| vec![v]).unwrap_or_default()
+            }
             AsPrecursorCollection::Multiple(precursors) => precursors,
         }
     }
@@ -726,7 +851,6 @@ impl From<Vec<Precursor>> for AsPrecursorCollection {
         Self::Multiple(value)
     }
 }
-
 
 /**
 The set of descriptive metadata that give context for how a mass spectrum was acquired
@@ -793,7 +917,8 @@ impl SpectrumDescription {
     /// to be the case. `mzdata` can handle non-MS spectra, but little of the signal processing
     /// machinery it provides currently supports those other kinds of data.
     pub fn spectrum_type(&self) -> Option<mzdata_meta::SpectrumType> {
-        const SPECTRUM_TYPES: &[(mzdata_meta::SpectrumType, crate::params::ParamCow<'static>)] = mzdata_meta::SpectrumType::all_types();
+        const SPECTRUM_TYPES: &[(mzdata_meta::SpectrumType, crate::params::ParamCow<'static>)] =
+            mzdata_meta::SpectrumType::all_types();
 
         let conv_table: HashMap<CURIE, mzdata_meta::SpectrumType> = SPECTRUM_TYPES
             .iter()
@@ -812,7 +937,8 @@ impl SpectrumDescription {
 
     /// Set the kind of spectrum represented.
     pub fn set_spectrum_type(&mut self, spectrum_type: mzdata_meta::SpectrumType) {
-        const SPECTRUM_TYPES: &[(mzdata_meta::SpectrumType, crate::params::ParamCow<'static>)] = mzdata_meta::SpectrumType::all_types();
+        const SPECTRUM_TYPES: &[(mzdata_meta::SpectrumType, crate::params::ParamCow<'static>)] =
+            mzdata_meta::SpectrumType::all_types();
 
         let to_insert: crate::params::ParamCow<'_> = spectrum_type.to_param();
 
@@ -832,8 +958,6 @@ impl SpectrumDescription {
 
         self.add_param(to_insert.into());
     }
-
-
 }
 
 impl_param_described!(Activation, SpectrumDescription);
@@ -888,7 +1012,9 @@ impl ChromatogramType {
     pub fn is_electromagnetic_radiation(&self) -> bool {
         matches!(
             self,
-            Self::AbsorptionChromatogram | Self::EmissionChromatogram | Self::ElectromagneticRadiationChromatogram
+            Self::AbsorptionChromatogram
+                | Self::EmissionChromatogram
+                | Self::ElectromagneticRadiationChromatogram
         )
     }
 
@@ -925,7 +1051,9 @@ impl ChromatogramType {
                 CURIE::new(ControlledVocabulary::MS, 1000473)
             }
             Self::AbsorptionChromatogram => CURIE::new(ControlledVocabulary::MS, 1000812),
-            Self::ElectromagneticRadiationChromatogram => CURIE::new(ControlledVocabulary::MS, 1000811),
+            Self::ElectromagneticRadiationChromatogram => {
+                CURIE::new(ControlledVocabulary::MS, 1000811)
+            }
             Self::EmissionChromatogram => CURIE::new(ControlledVocabulary::MS, 1000813),
             Self::FlowRateChromatogram => CURIE::new(ControlledVocabulary::MS, 1003020),
             Self::PressureChromatogram => CURIE::new(ControlledVocabulary::MS, 1003019),
@@ -941,7 +1069,7 @@ impl ChromatogramType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Product {
     /// The product ion's isolation window.
-    pub isolation_window: IsolationWindow
+    pub isolation_window: IsolationWindow,
 }
 
 impl From<IsolationWindow> for Product {
@@ -955,7 +1083,6 @@ impl Product {
         Self { isolation_window }
     }
 }
-
 
 /// The set of descriptive metadata that give context for how a chromatogram was
 /// recorded.
@@ -1001,8 +1128,14 @@ mod contains_tests {
     fn isolation_window_contains_is_inclusive_range() {
         let window = IsolationWindow::around(810.789, 1.0); // [809.789, 811.789]
         assert!(window.contains(window.target), "target must be inside");
-        assert!(window.contains(window.lower_bound), "lower bound is inclusive");
-        assert!(window.contains(window.upper_bound), "upper bound is inclusive");
+        assert!(
+            window.contains(window.lower_bound),
+            "lower bound is inclusive"
+        );
+        assert!(
+            window.contains(window.upper_bound),
+            "upper bound is inclusive"
+        );
         assert!(window.contains(810.0_f64), "interior point");
         assert!(!window.contains(809.0_f64), "below the lower bound");
         assert!(!window.contains(812.0_f64), "above the upper bound");
@@ -1015,6 +1148,9 @@ mod contains_tests {
         assert!(window.contains(200.0_f64), "lower bound is inclusive");
         assert!(window.contains(2000.0_f64), "upper bound is inclusive");
         assert!(!window.contains(199.0_f64), "below the lower bound");
-        assert!(!window.contains(2500.0_f64), "above the upper bound (the old bug returned true here)");
+        assert!(
+            !window.contains(2500.0_f64),
+            "above the upper bound (the old bug returned true here)"
+        );
     }
 }

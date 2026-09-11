@@ -28,7 +28,7 @@ use crate::{
         bindata::{ArrayRetrievalError, BinaryArrayMap3D},
         Activation, ArrayType, BinaryArrayMap, BinaryDataArrayType, Chromatogram,
         ChromatogramDescription, ChromatogramType, DataArray, IonMobilityFrameDescription,
-        IsolationWindow, IsolationWindowState, MultiLayerIonMobilityFrame, MultiLayerSpectrum,
+        IsolationWindow, MultiLayerIonMobilityFrame, MultiLayerSpectrum,
         Precursor, ScanCombination, ScanEvent, ScanWindow, SelectedIon, SignalContinuity,
     },
     Param,
@@ -1507,20 +1507,14 @@ fn index_to_precursor(
             act.methods_mut().push(CollisionInducedDissociation);
 
             let iso_width = pasef.isolation_width / 2.0;
-            isolation.target = pasef.isolation_mz as f32;
-            isolation.lower_bound = (pasef.isolation_mz - iso_width) as f32;
-            isolation.upper_bound = (pasef.isolation_mz + iso_width) as f32;
-            isolation.flags = IsolationWindowState::Complete;
+            isolation = IsolationWindow::around(pasef.isolation_mz as f32, iso_width as f32);
         }
         if let Some(pasef) = index_entry.dia_window() {
             act.energy = pasef.collision_energy;
             act.methods_mut().push(CollisionInducedDissociation);
 
             let iso_width = pasef.isolation_width / 2.0;
-            isolation.target = pasef.isolation_mz as f32;
-            isolation.lower_bound = (pasef.isolation_mz - iso_width) as f32;
-            isolation.upper_bound = (pasef.isolation_mz + iso_width) as f32;
-            isolation.flags = IsolationWindowState::Complete;
+            isolation = IsolationWindow::around(pasef.isolation_mz as f32, iso_width as f32);
         }
 
         let mut mz_prec = Precursor::default();
@@ -1549,20 +1543,14 @@ fn index_to_precursor(
             act.methods_mut().push(CollisionInducedDissociation);
 
             let iso_width = pasef.isolation_width / 2.0;
-            isolation.target = pasef.isolation_mz as f32;
-            isolation.lower_bound = (pasef.isolation_mz - iso_width) as f32;
-            isolation.upper_bound = (pasef.isolation_mz + iso_width) as f32;
-            isolation.flags = IsolationWindowState::Complete;
+            isolation = IsolationWindow::around(pasef.isolation_mz as f32, iso_width as f32);
         }
         if let Some(pasef) = index_entry.dia_window() {
             act.energy = pasef.collision_energy;
             act.methods_mut().push(CollisionInducedDissociation);
 
             let iso_width = pasef.isolation_width / 2.0;
-            isolation.target = pasef.isolation_mz as f32;
-            isolation.lower_bound = (pasef.isolation_mz - iso_width) as f32;
-            isolation.upper_bound = (pasef.isolation_mz + iso_width) as f32;
-            isolation.flags = IsolationWindowState::Complete;
+            isolation = IsolationWindow::around(pasef.isolation_mz as f32, iso_width as f32);
         }
         let mut mz_prec = Precursor::default();
         mz_prec.add_ion(ion);

@@ -18,7 +18,7 @@ pub use scan_properties::{
     Acquisition, Activation, AsPrecursorCollection, ChromatogramDescription, ChromatogramType,
     IonMobilityMeasure, IonProperties, IsolationWindow, IsolationWindowState, Precursor,
     PrecursorSelection, Product, ScanCombination, ScanEvent, ScanPolarity, ScanWindow, SelectedIon,
-    SignalContinuity, SpectrumDescription,
+    SignalContinuity, SpectrumDescription, IsolationWindowBuilder
 };
 
 pub use chromatogram::{Chromatogram, ChromatogramLike};
