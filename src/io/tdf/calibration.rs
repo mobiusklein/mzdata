@@ -520,7 +520,7 @@ impl MzCalibrationModel2 {
     }
 
     pub fn invert_f64(&self, mz: f64) -> f64 {
-        let lin = (mz - self.c4).max(0.0).sqrt();
+        let lin = (mz + self.c4).max(0.0).sqrt();
         let tof = self.c0 + self.beta * lin + self.c2 * lin.powi(2) + self.c3 * lin.powi(3);
         (tof - self.digitizer_delay) / self.digitizer_timebase
     }
