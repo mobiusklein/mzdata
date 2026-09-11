@@ -61,6 +61,9 @@ pub use crate::io::traits::{
     AsyncIonMobilityFrameSource, AsyncRandomAccessIonMobilityFrameIterator, IonMobilityFrameStream,
 };
 
+#[cfg(feature = "mzsignal")]
+pub use traits::PeakPicking;
+
 #[cfg(feature = "async")]
 pub use crate::io::traits::AsyncMZFileReader;
 

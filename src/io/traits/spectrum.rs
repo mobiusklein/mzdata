@@ -1424,3 +1424,206 @@ pub use async_traits::{AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource, S
 
 #[cfg(feature = "async")]
 pub use async_traits::AsyncMZFileReader;
+
+
+
+#[cfg(feature = "mzsignal")]
+mod peak_picking {
+    use super::*;
+
+    use mzdata_bindata::BuildFromArrayMap;
+    use mzdata_spectrum::MultiLayerSpectrum;
+    use std::marker::PhantomData;
+
+    /// A wrapper around [`SpectrumSource`] that picks peaks from
+    /// the profile spectra and materializes peak lists.
+    pub struct PeakPicking<
+        R: SpectrumSource<C, D>,
+        C: CentroidLike + From<mzsignal::FittedPeak>,
+        D: DeconvolutedCentroidLike,
+    > {
+        inner: R,
+        ms_level_to_signal_to_noise_filter: Vec<Option<f32>>,
+        _t: PhantomData<(C, D)>,
+    }
+
+    impl<
+            R: SpectrumSource<C, D>,
+            C: CentroidLike + From<mzsignal::FittedPeak> + BuildFromArrayMap,
+            D: DeconvolutedCentroidLike + BuildFromArrayMap,
+        > RandomAccessSpectrumIterator<C, D> for PeakPicking<R, C, D>
+    where
+        R: RandomAccessSpectrumIterator<C, D>,
+    {
+        fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
+            self.inner.start_from_id(id)?;
+            Ok(self)
+        }
+
+        fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
+            self.inner.start_from_index(index)?;
+            Ok(self)
+        }
+
+        fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
+            self.inner.start_from_time(time)?;
+            Ok(self)
+        }
+    }
+
+    impl<
+            R: SpectrumSource<C, D>,
+            C: CentroidLike + From<mzsignal::FittedPeak> + BuildFromArrayMap,
+            D: DeconvolutedCentroidLike + BuildFromArrayMap,
+        > MSDataFileMetadata for PeakPicking<R, C, D>
+    where
+        R: MSDataFileMetadata,
+    {
+        mzdata_meta::delegate_impl_metadata_trait!(inner);
+    }
+
+    impl<
+            R: SpectrumSource<C, D>,
+            C: CentroidLike + From<mzsignal::FittedPeak> + BuildFromArrayMap,
+            D: DeconvolutedCentroidLike + BuildFromArrayMap,
+        > Iterator for PeakPicking<R, C, D>
+    {
+        type Item = MultiLayerSpectrum<C, D>;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let mut s = self.inner.next()?;
+            self.pick_peaks(&mut s);
+            Some(s)
+        }
+    }
+
+    impl<
+            R: SpectrumSource<C, D>,
+            C: CentroidLike + BuildFromArrayMap + From<mzsignal::FittedPeak>,
+            D: DeconvolutedCentroidLike + BuildFromArrayMap,
+        > SpectrumSource<C, D> for PeakPicking<R, C, D>
+    {
+        fn reset(&mut self) {
+            self.inner.reset();
+        }
+
+        fn detail_level(&self) -> &crate::io::DetailLevel {
+            self.inner.detail_level()
+        }
+
+        fn set_detail_level(&mut self, detail_level: crate::io::DetailLevel) {
+            self.inner.set_detail_level(detail_level);
+        }
+
+        fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
+            let mut s = self.inner.get_spectrum_by_id(id)?;
+            self.pick_peaks(&mut s);
+            Some(s)
+        }
+
+        fn get_spectrum_by_index(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
+            let mut s = self.inner.get_spectrum_by_index(index)?;
+            self.pick_peaks(&mut s);
+            Some(s)
+        }
+
+        fn get_spectrum_by_time(&mut self, time: f64) -> Option<MultiLayerSpectrum<C, D>> {
+            let mut s = self.inner.get_spectrum_by_time(time)?;
+            self.pick_peaks(&mut s);
+            Some(s)
+        }
+
+        fn get_index(&self) -> &crate::io::OffsetIndex {
+            self.inner.get_index()
+        }
+
+        fn set_index(&mut self, index: crate::io::OffsetIndex) {
+            self.inner.set_index(index);
+        }
+    }
+
+    impl<
+            R: SpectrumSource<C, D>,
+            C: CentroidLike + BuildFromArrayMap + From<mzsignal::FittedPeak>,
+            D: DeconvolutedCentroidLike + BuildFromArrayMap,
+        > PeakPicking<R, C, D>
+    {
+        /// Create a new [`PeakPicking`] with a single signal to noise threshold for all spectra
+        pub fn new(inner: R, signal_to_noise_threshold: f32) -> Self {
+            Self {
+                inner,
+                _t: PhantomData,
+                ms_level_to_signal_to_noise_filter: vec![Some(signal_to_noise_threshold)],
+            }
+        }
+
+        /// Create a new [`PeakPicking`] with a per MS-level signal to noise threshold for all spectra
+        pub fn new_with_per_ms_level_signal_to_noise_threshold(inner: R, mut signal_to_noise_threshold: Vec<Option<f32>>) -> Self {
+            if signal_to_noise_threshold.is_empty() {
+                log::warn!("Per MS level signal to noise threshold array is empty, defaulting to a threshold of 1.5 for all levels");
+                signal_to_noise_threshold = vec![Some(1.5)];
+            }
+            Self {
+                inner,
+                _t: PhantomData,
+                ms_level_to_signal_to_noise_filter: signal_to_noise_threshold
+            }
+        }
+
+        /// Pick peaks for a specific spectrum if it can have peaks picked, and the MS level
+        /// is configured or the default parameters are set.
+        ///
+        /// Returns `true` if peaks were picked, `false` otherwise.
+        pub fn pick_peaks(&self, spectrum: &mut MultiLayerSpectrum<C, D>) -> bool {
+            let needs_picking = if spectrum.signal_continuity().is_centroid() {
+                MultiLayerSpectrum::try_build_peaks(spectrum).is_err()
+            } else {
+                spectrum.signal_continuity().is_profile()
+            };
+            if needs_picking {
+                let snr_threshold = self
+                    .ms_level_to_signal_to_noise_filter
+                    .get(spectrum.ms_level() as usize)
+                    .copied()
+                    .unwrap_or_else(|| {
+                        self.ms_level_to_signal_to_noise_filter
+                            .first()
+                            .copied()
+                            .unwrap_or_default()
+                    });
+                if let Some(snr_threshold) = snr_threshold {
+                    MultiLayerSpectrum::pick_peaks(
+                        spectrum,
+                        snr_threshold).is_ok()
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        }
+
+        /// Get an immutable reference to the inner instance `R`
+        pub fn get_ref(&self) -> &R {
+            &self.inner
+        }
+
+        /// Get an mutable reference to the inner instance `R`
+        pub fn get_mut(&mut self) -> &mut R {
+            &mut self.inner
+        }
+
+        /// Consume the [`PeakPicking`] instance, retrieving the original `R` instance
+        pub fn into_inner(self) -> R {
+            self.inner
+        }
+
+        /// Get an immutable view of the signal to noise thresholds
+        pub fn ms_level_to_signal_to_noise_filter(&self) -> &[Option<f32>] {
+            &self.ms_level_to_signal_to_noise_filter
+        }
+    }
+}
+
+#[cfg(feature = "mzsignal")]
+pub use peak_picking::PeakPicking;

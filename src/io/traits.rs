@@ -33,6 +33,9 @@ pub use frame::{
     AsyncIonMobilityFrameSource, AsyncRandomAccessIonMobilityFrameIterator, IonMobilityFrameStream,
 };
 
+#[cfg(feature = "mzsignal")]
+pub use spectrum::PeakPicking;
+
 #[cfg(feature = "async")]
 pub use spectrum::AsyncMZFileReader;
 

@@ -3,10 +3,12 @@ use std::{io, path};
 use flate2::bufread::MultiGzDecoder;
 use std::io::prelude::*;
 
+/// Test if the byte slice starts with the GZIP magic bytes `\x1f\x8b`
 pub fn is_gzipped(header: &[u8]) -> bool {
     header.starts_with(b"\x1f\x8b")
 }
 
+/// Test if the path has a `.gz` extension
 pub fn is_gzipped_extension(path: path::PathBuf) -> (bool, path::PathBuf) {
     if let Some(ext) = path.extension() {
         if ext.eq_ignore_ascii_case("gz") {
@@ -30,6 +32,9 @@ pub struct RestartableGzDecoder<R: BufRead + Seek> {
 }
 
 impl<R: BufRead + Seek> RestartableGzDecoder<R> {
+    /// Wrap an existing reader. It is the caller's responsibility to ensure that
+    /// `handle` actually contains a GZIP stream. Failure to do so will lead to
+    /// errors on future [`io::Read`] operations.
     pub fn new(handle: R) -> Self {
         Self {
             handle: Some(MultiGzDecoder::new(handle)),
@@ -37,6 +42,8 @@ impl<R: BufRead + Seek> RestartableGzDecoder<R> {
         }
     }
 
+    /// Reset the stream, seeking back to the beginning of the stream. Fails if
+    /// [`io::Seek::seek`] on `R` fails.
     fn reset(&mut self) -> io::Result<u64> {
         let handle = self.handle.take().unwrap();
         let mut inner = handle.into_inner();
@@ -47,6 +54,7 @@ impl<R: BufRead + Seek> RestartableGzDecoder<R> {
     }
 }
 
+/// Trivially implements [`io::Read`]
 impl<R: BufRead + Seek> Read for RestartableGzDecoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let handle = self.handle.as_mut().unwrap();
@@ -60,7 +68,11 @@ impl<R: BufRead + Seek> Read for RestartableGzDecoder<R> {
     }
 }
 
+/// Implements [`io::Seek`], but does not support seeking relative to the end of the file.
 impl<R: BufRead + Seek> Seek for RestartableGzDecoder<R> {
+    /// Supports absolute and relative seeks, but does not support seeking relative to the
+    /// *end* of the file. Seeking from the end is generally impossible to do for a GZIP
+    /// stream.
     fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
         match pos {
             io::SeekFrom::Start(o) => {
