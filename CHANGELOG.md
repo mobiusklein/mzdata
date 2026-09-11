@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.66.7] - 2026-09-11
+
+### Added
+
+- Keep both isolation window offsets when they precede the target m/z (#58)
+`populate_isolation_window` moved the window to `IsolationWindowState::Offset`
+on the first offset param and dropped the second one (`_ => {}`), so once the
+target arrived the missing offset resolved as 0 and one bound collapsed onto
+the target. ProteoWizard's Waters writer emits `upper offset, lower offset,
+target` in that order, so every pwiz Waters MSe mzML read back with
+`lower_bound == target`.
+
+Store the second offset while in `Offset`; the target arm already resolves
+both bounds. Adds an inline two-spectrum mzML test covering both orders.
+- Expand isolation window adjustments to handle both the preferred and deprecated code paths, support no isolation flag
+- Add `IsolationWindowBuilder` to deduplicate isolation window building logic
+- Add `PeakPicking` wrapper to transparently add peak picking behavior to `SpectrumSource` implementations
+
+### Changed
+
+- Rename bruker_tdf::MzCalbrationModel1 to 2, to reflect the actual version handled
+
 ## [0.66.6] - 2026-08-30
 
 ### Added
@@ -1218,7 +1240,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.66.6...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.66.7...HEAD
+[0.66.7]: https://github.com/mobiusklein/mzdata/compare/v0.66.6...v0.66.7
 [0.66.6]: https://github.com/mobiusklein/mzdata/compare/v0.66.5...v0.66.6
 [0.66.5]: https://github.com/mobiusklein/mzdata/compare/v0.66.4...v0.66.5
 [0.66.4]: https://github.com/mobiusklein/mzdata/compare/v0.66.3...v0.66.4
