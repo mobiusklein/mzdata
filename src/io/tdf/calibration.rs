@@ -466,7 +466,10 @@ impl ConvertableDomain for TimsCalibrationModel2 {
     }
 }
 
-/// Implementation details of approximated converter model type == 2 for ion m/z
+/// Implementation details of approximated converter model types 1 and 2 for ion m/z
+///
+/// The algorithms were taken from https://github.com/theGreatHerrLebert/rustims/blob/main/rustdf/src/data/calibration.rs,
+/// and covered under the MIT license attributed to the author there.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MzCalibrationModel2 {
     pub model_type: u8,
@@ -487,8 +490,6 @@ impl MzCalibrationModel2 {
     pub fn convert_f64(&self, idx: f64) -> f64 {
         let tof = (idx * self.digitizer_timebase) + self.digitizer_delay;
         let inner = tof - self.c0;
-        // Incomplete attempt to follow `rustims` approach. This is still wrong, but saved for
-        // future fiddling
         let s0 = inner / self.beta;
         let refined = if self.c3 != 0.0 {
             let mut s = s0;
@@ -580,7 +581,7 @@ impl TryFrom<(&'_ MzCalibration, f64, f64)> for MzCalibrationModel2 {
 
     fn try_from(value: (&'_ MzCalibration, f64, f64)) -> Result<Self, Self::Error> {
         let (value, t1, t2) = value;
-        if value.model_type != 2  {
+        if value.model_type != 2 && value.model_type != 1 {
             return Err(MzCalibrationError::UnsupportedModel(value.model_type));
         }
         let c0 = value
@@ -704,7 +705,7 @@ impl TryFrom<&'_ TimsCalibration> for TimsCalibrationModel {
 pub enum MzCalibrationModel {
     /// The basic quadratic calibration in [`timsrust`]
     Basic(Tof2MzConverter),
-    /// The model type == 1 implementation, adapted from https://github.com/jspaezp/timsrust-calibration.
+    Model1(MzCalibrationModel2),
     Model2(MzCalibrationModel2),
 }
 
@@ -713,6 +714,7 @@ impl MzCalibrationModel {
     pub fn as_param(&self) -> Option<Param> {
         match self {
             MzCalibrationModel::Basic(_) => None,
+            MzCalibrationModel::Model1(mz_calibration_model1) => Some(mz_calibration_model1.as_param()),
             MzCalibrationModel::Model2(mz_calibration_model2) => {
                 Some(mz_calibration_model2.as_param())
             }
@@ -749,8 +751,11 @@ impl ConvertableDomain for MzCalibrationModel {
     fn convert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
         match self {
             MzCalibrationModel::Basic(tof2_mz_converter) => tof2_mz_converter.convert(value),
-            MzCalibrationModel::Model2(mz_calibration_model1) => {
-                mz_calibration_model1.convert(value)
+            MzCalibrationModel::Model1(mz_calibration_model) => {
+                mz_calibration_model.convert(value)
+            }
+            MzCalibrationModel::Model2(mz_calibration_model) => {
+                mz_calibration_model.convert(value)
             }
         }
     }
@@ -758,6 +763,9 @@ impl ConvertableDomain for MzCalibrationModel {
     fn invert<T: Into<f64> + Copy>(&self, value: T) -> f64 {
         match self {
             MzCalibrationModel::Basic(tof2_mz_converter) => tof2_mz_converter.invert(value),
+            MzCalibrationModel::Model1(mz_calibration_model) => {
+                mz_calibration_model.invert(value)
+            }
             MzCalibrationModel::Model2(mz_calibration_model1) => {
                 mz_calibration_model1.invert(value)
             }
