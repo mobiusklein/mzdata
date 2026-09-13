@@ -82,30 +82,41 @@ const EMPTY_BUFFER: [u8; 0] = [];
 
 
 impl<'transient, 'lifespan: 'transient> DataArray {
+    /// An alias of [`Default::default`], no configuration is
+    /// performed whatsoever.
     pub fn new() -> DataArray {
         DataArray {
             ..Default::default()
         }
     }
 
+    /// Create a new [`DataArray`] for a given `name` in its preferred data type
+    /// returned by [`ArrayType::preferred_dtype`] and unit returned by [`ArrayType::preferred_unit`]
     pub fn from_name(name: &ArrayType) -> DataArray {
         DataArray {
             dtype: name.preferred_dtype(),
             name: name.clone(),
             compression: BinaryCompressionType::Decoded,
+            unit: name.preferred_unit().unwrap_or_default(),
             ..Default::default()
         }
     }
 
+    /// Create a new [`DataArray`] with a given `name` and `dtype`, using
+    /// `name`'s preferred units. Does not allocate any additional storage.
     pub fn from_name_and_type(name: &ArrayType, dtype: BinaryDataArrayType) -> DataArray {
         DataArray {
             dtype,
             name: name.clone(),
             compression: BinaryCompressionType::Decoded,
+            unit: name.preferred_unit().unwrap_or_default(),
             ..Default::default()
         }
     }
 
+    /// Create a new [`DataArray`] with a given `name` and `dtype`, using
+    /// `name`'s preferred units. Pre-allocates but does not fill
+    /// `size` storage capacity in bytes (not elements of `dtype`).
     pub fn from_name_type_size(
         name: &ArrayType,
         dtype: BinaryDataArrayType,
@@ -116,10 +127,27 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             name: name.clone(),
             data: Bytes::with_capacity(size),
             compression: BinaryCompressionType::Decoded,
+            unit: name.preferred_unit().unwrap_or_default(),
             ..Default::default()
         }
     }
 
+    /// Extract a subrange of the encoded byte buffer as a new [`DataArray`].
+    ///
+    /// `start` and `end` are **byte offsets** into the decoded buffer, not element
+    /// indices, so they must be aligned to a multiple of [`DataArray::dtype`]'s size.
+    ///
+    /// # Examples
+    /// ```
+    /// use mzdata_bindata::{ArrayType, BinaryDataArrayType, ByteArrayView, DataArray};
+    ///
+    /// let mut array = DataArray::from_name_and_type(&ArrayType::MZArray, BinaryDataArrayType::Float64);
+    /// array.extend(&[1.0f64, 2.0, 3.0, 4.0]).unwrap();
+    ///
+    /// // Each `f64` is 8 bytes wide, so the 2nd and 3rd elements occupy bytes [8, 24).
+    /// let middle = array.slice(8, 24).unwrap();
+    /// assert_eq!(&*middle.to_f64().unwrap(), &[2.0f64, 3.0f64][..]);
+    /// ```
     pub fn slice(&self, start: usize, end: usize) -> Result<DataArray, ArrayRetrievalError> {
         if end < start || (end - start) % self.dtype.size_of() != 0 {
             Err(ArrayRetrievalError::DataTypeSizeMismatch)
@@ -131,6 +159,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    /// Retrieve a slice of raw bytes with no concern for value type alignment.
+    ///
+    /// `start` and `end` are **byte offsets** into the decoded buffer
     pub fn slice_buffer(
         &self,
         start: usize,
@@ -150,7 +181,21 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
-    /// This method assumes the data are already in native byte order
+    /// This method assumes the data are already in native byte order.
+    ///
+    /// This is not endian-safe *yet*, but is valid for in-memory operations.
+    ///
+    /// # Examples
+    /// ```
+    /// use mzdata_bindata::{ArrayType, BinaryDataArrayType, ByteArrayView, DataArray};
+    ///
+    /// let values: [f64; 3] = [100.5, 200.25, 300.0];
+    /// let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
+    /// let array = DataArray::wrap(&ArrayType::MZArray, BinaryDataArrayType::Float64, bytes);
+    ///
+    /// let decoded = array.to_f64().unwrap();
+    /// assert_eq!(&*decoded, &values[..]);
+    /// ```
     pub fn wrap(name: &ArrayType, dtype: BinaryDataArrayType, data: Bytes) -> DataArray {
         DataArray {
             dtype,
@@ -195,6 +240,17 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     ///
     /// This will return an error if `std::mem::size_of::<T>()` is not equal to
     /// the size of [`DataArray::dtype`].
+    ///
+    /// # Examples
+    /// ```
+    /// use mzdata_bindata::{ArrayType, BinaryDataArrayType, ByteArrayView, DataArray};
+    ///
+    /// let mut array = DataArray::from_name_and_type(&ArrayType::MZArray, BinaryDataArrayType::Float64);
+    /// array.push(500.5f64).unwrap();
+    /// array.push(501.0f64).unwrap();
+    ///
+    /// assert_eq!(&*array.to_f64().unwrap(), &[500.5f64, 501.0f64][..]);
+    /// ```
     pub fn push<T: Pod>(&mut self, value: T) -> Result<(), ArrayRetrievalError> {
         if !matches!(self.compression, BinaryCompressionType::Decoded) {
             self.decode_and_store()?;
@@ -214,6 +270,16 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     ///
     /// This will return an error if `std::mem::size_of::<T>()` is not equal to
     /// the size of [`DataArray::dtype`].
+    ///
+    /// # Examples
+    /// ```
+    /// use mzdata_bindata::{ArrayType, BinaryDataArrayType, ByteArrayView, DataArray};
+    ///
+    /// let mut array = DataArray::from_name_and_type(&ArrayType::IntensityArray, BinaryDataArrayType::Float32);
+    /// array.extend(&[10.0f32, 20.0, 30.0]).unwrap();
+    ///
+    /// assert_eq!(&*array.to_f32().unwrap(), &[10.0f32, 20.0f32, 30.0f32][..]);
+    /// ```
     pub fn extend<T: Pod>(&mut self, values: &[T]) -> Result<(), ArrayRetrievalError> {
         if !matches!(self.compression, BinaryCompressionType::Decoded) {
             self.decode_and_store()?;
@@ -261,6 +327,20 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
     /// Encode the data buffer to a byte array using the requested [`BinaryCompressionType`] to
     /// compress it and then base64 encode it.
+    ///
+    /// This method takes the current byte buffer in [`Self::data`] and does the following:
+    ///     1. If [`Self::compression`] is `compression`, just return a copy of the data as-is,
+    ///         it is pre-coded properly.
+    ///     2. If [`Self::compression`] is not [`BinaryCompressionType::Decoded`], copy and decode
+    ///         [`Self::data`], otherwise borrow the raw byte data.
+    ///     3. Apply `compression` to the decoded raw bytes, performing one or more transformations
+    ///         and then base64 encode the resulting compressed byte array.
+    ///     4. Return the base64 encoded, compressed byte array
+    ///
+    /// # Panics
+    /// This method will panic if compression fails for any reason, or if an unsupported
+    /// compression method is requested. Some compression methods are only available if
+    /// appropriate features are enabled.
     pub fn encode_bytestring(&self, compression: BinaryCompressionType) -> Bytes {
         if self.compression == compression {
             log::trace!("Fast-path encoding {}:{}", self.name, self.dtype);
@@ -412,6 +492,22 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     /// The return value is the content of `self.compression` after decoding.
     ///
     /// This may fail if the decoding fails for any reason.
+    ///
+    /// # Examples
+    /// ```
+    /// use mzdata_bindata::{ArrayType, BinaryCompressionType, BinaryDataArrayType, ByteArrayView, DataArray};
+    ///
+    /// let values: [f64; 4] = [1.0, 2.0, 3.0, 4.0];
+    /// let mut array = DataArray::from_name_and_type(&ArrayType::MZArray, BinaryDataArrayType::Float64);
+    /// array.extend(&values).unwrap();
+    ///
+    /// array.store_compressed(BinaryCompressionType::Zlib).unwrap();
+    /// assert_eq!(array.compression, BinaryCompressionType::Zlib);
+    ///
+    /// array.decode_and_store().unwrap();
+    /// assert_eq!(array.compression, BinaryCompressionType::Decoded);
+    /// assert_eq!(&*array.to_f64().unwrap(), &values[..]);
+    /// ```
     pub fn decode_and_store(&mut self) -> Result<BinaryCompressionType, ArrayRetrievalError> {
         match self.decode() {
             Ok(data) => {
@@ -436,6 +532,10 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     ///
     /// If the data were already decoded, the existing bytes are returned. Otherwise one or
     /// more buffers may be allocated to hold the decompressed and decoded bytes.
+    ///
+    /// # Panics
+    /// This method panics if [`Self::compression`] fails for any reason or is not supported.
+    /// Several compression methods require certain features be enabled.
     pub fn decode(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError> {
         if self.data.is_empty() {
             return Ok(Cow::Borrowed(&EMPTY_BUFFER));
@@ -445,7 +545,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
             () => {
                 base64_simd::STANDARD
                     .decode_type::<Bytes>(&self.data)
-                    .unwrap_or_else(|e| panic!("Failed to decode base64 array: {}", e))
+                    .map_err(|_| ArrayRetrievalError::MalformedBase64Encoding)?
             };
         }
 
@@ -574,6 +674,11 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    /// Get a slice of the raw bytes aligned to [`Self::dtype`].
+    ///
+    /// If the data are already decoded, this does not create a copy of the data.
+    ///
+    /// This is an aligned version of [`Self::slice_buffer`].
     pub(crate) fn decoded_slice(
         &'lifespan self,
         start: usize,
@@ -590,6 +695,15 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         }
     }
 
+    /// Get a mutable view of the raw bytes.
+    ///
+    /// If the data are already decoded, this just borrows [`Self::data`], otherwise
+    /// the [`Self::decode`] is called [`Self::data`] is updated to the decoded copy first,
+    /// then borrowed.
+    ///
+    /// Note that care **MUST** be taken here to avoid writing invalid values when working on the
+    /// raw bytes directly. Prefer to update the native values indirectly via
+    /// [`ByteArrayViewMut::coerce_mut`].
     pub fn decode_mut(&'transient mut self) -> Result<&'transient mut Bytes, ArrayRetrievalError> {
         if self.data.is_empty() || matches!(self.compression, BinaryCompressionType::Decoded) {
             Ok(&mut self.data)
@@ -608,6 +722,8 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
     }
 
+    /// Erase all the data in the array, calling [`Vec::clear`] on [`Self::data`],
+    /// and erasing all [`Param`] values. All other properties remain unchanged.
     pub fn clear(&mut self) {
         self.data.clear();
         self.params = None;
@@ -632,6 +748,12 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     }
 
     /// Recode the stored data as the requested binary data type.
+    ///
+    /// This is a no-op if the [`Self::dtype`] matches the `dtype` argument.
+    ///
+    /// ## Note
+    /// When down-casting to a lower precision type, e.g. `f64` to `f32`, data may be lost.
+    /// Take care to do this only when necessary or when the loss of precision is acceptable.
     pub fn store_as(&mut self, dtype: BinaryDataArrayType) -> Result<usize, ArrayRetrievalError> {
         if self.dtype == dtype {
             return Ok(self.data.len());
@@ -732,15 +854,24 @@ impl<'transient, 'lifespan: 'transient> DataArray {
 
 
 /// [`DataArray`] implements several compression codecs, some of which require additional dependencies.
+///
+/// These methods are often cumbersome and not easy to use as they require a lot of extra context. They
+/// live here as a historical artefact. They shouldn't be used directly in the vast majority of cases.
 impl DataArray {
-    pub fn compress_zlib(bytestring: &[u8]) -> Bytes {
+
+    /// Compress the provided bytes using `zlib` at the highest compression setting
+    pub(crate) fn compress_zlib(bytestring: &[u8]) -> Bytes {
         let result = Bytes::new();
         let mut compressor = ZlibEncoder::new(result, Compression::best());
         compressor.write_all(bytestring).expect("Error compressing");
         compressor.finish().expect("Error compressing")
     }
 
-    pub fn decompress_zlib(bytestring: &[u8]) -> Bytes {
+    /// Decompress the provided bytes using `zlib`.
+    ///
+    /// # Panics
+    /// If the data are not `zlib` compressed.
+    pub(crate) fn decompress_zlib(bytestring: &[u8]) -> Bytes {
         let result = Bytes::new();
         let mut decompressor = ZlibDecoder::new(result);
         decompressor
@@ -753,7 +884,11 @@ impl DataArray {
     }
 
     #[cfg(feature = "numpress")]
-    pub fn compress_numpress_linear(data: &[f64]) -> Result<Bytes, ArrayRetrievalError> {
+    /// Encode the provided `f64`` data using MS-Numpress Linear encoding.
+    ///
+    /// The data **MUST** be pre-sorted or else the regression model will provide
+    /// worse results.
+    pub(crate) fn compress_numpress_linear(data: &[f64]) -> Result<Bytes, ArrayRetrievalError> {
         if data.is_empty() {
             return Ok(Bytes::new());
         }
@@ -765,7 +900,7 @@ impl DataArray {
     }
 
     #[cfg(feature = "numpress")]
-    pub fn compress_numpress_slof<T: numpress::AsFloat64>(data: &[T]) -> Result<Bytes, ArrayRetrievalError> {
+    pub(crate) fn compress_numpress_slof<T: numpress::AsFloat64>(data: &[T]) -> Result<Bytes, ArrayRetrievalError> {
         let scaling = numpress::optimal_slof_fixed_point(data);
         let mut buf = Bytes::new();
         match numpress::encode_slof(data, &mut buf, scaling) {
@@ -775,7 +910,8 @@ impl DataArray {
     }
 
     #[cfg(feature = "numpress")]
-    pub fn decompress_numpress_linear(data: &[u8]) -> Result<Vec<f64>, ArrayRetrievalError> {
+    /// Decode a MS-Numpress Linear encoded byte array.
+    pub(crate) fn decompress_numpress_linear(data: &[u8]) -> Result<Vec<f64>, ArrayRetrievalError> {
         if data.is_empty() {
             return Ok(Vec::new())
         }
@@ -786,7 +922,7 @@ impl DataArray {
     }
 
     #[cfg(feature = "numpress")]
-    pub fn decompress_numpress_slof(data: &[u8], dtype: BinaryDataArrayType) -> Result<Cow<'static, [u8]>, ArrayRetrievalError> {
+    pub(crate) fn decompress_numpress_slof(data: &[u8], dtype: BinaryDataArrayType) -> Result<Cow<'static, [u8]>, ArrayRetrievalError> {
         use log::trace;
 
         let mut buf = Vec::new();
@@ -898,7 +1034,7 @@ impl DataArray {
     }
 
     #[cfg(feature = "zstd")]
-    pub fn compress_dict_zstd(bytestring: &[u8], dtype: BinaryDataArrayType) -> Bytes {
+    pub(crate) fn compress_dict_zstd(bytestring: &[u8], dtype: BinaryDataArrayType) -> Bytes {
         use super::encodings::dictionary_encoding;
         log::trace!("Dictionary encoding {} bytes as {dtype}", bytestring.len());
         if bytestring.is_empty() {
@@ -1066,14 +1202,19 @@ impl<'transient, 'lifespan: 'transient> ByteArrayViewMut<'transient, 'lifespan> 
 mzdata_param::impl_param_described_deferred!(DataArray);
 
 /// Represent a slice of a [`DataArray`] that manages offsets and decoding automatically.
+///
+/// This **does not** copy the data.
 #[derive(Clone, Debug)]
 pub struct DataArraySlice<'a> {
     source: &'a DataArray,
+    /// The start of the slice, in bytes
     pub start: usize,
+    /// The end of the slice, in bytes
     pub end: usize,
 }
 
 impl<'a> DataArraySlice<'a> {
+    /// Construct a new [`DataArraySlice`]
     pub fn new(source: &'a DataArray, mut start: usize, mut end: usize) -> Self {
         if start > end {
             mem::swap(&mut start, &mut end);
@@ -1081,12 +1222,27 @@ impl<'a> DataArraySlice<'a> {
         Self { source, start, end }
     }
 
+    /// Decompress and base64-decode encoded bytes, and return the data.
+    ///
+    /// If the data were already decoded, the existing bytes are returned. Otherwise one or
+    /// more buffers may be allocated to hold the decompressed and decoded bytes.
+    ///
+    /// This is a thin wrapper around [`DataArray::decoded_slice`].
     pub fn decode(&'a self) -> Result<Cow<'a, [u8]>, ArrayRetrievalError> {
         self.source.decoded_slice(self.start, self.end)
     }
 
+    /// Test if the the array describes an ion mobility quantity.
+    ///
+    /// # See also
+    /// [`ArrayType::is_ion_mobility`]
     pub const fn is_ion_mobility(&self) -> bool {
         self.source.is_ion_mobility()
+    }
+
+    /// Get an reference to the source [`DataArray`]
+    pub fn source(&self) -> &'a DataArray {
+        self.source
     }
 }
 

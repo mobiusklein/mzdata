@@ -17,6 +17,16 @@ use mzdata_param::{curie, Param, ControlledVocabulary, ParamCow, Unit, CURIE, Va
 pub type Bytes = Vec<u8>;
 
 /// Convert the values in `data` into an owned buffer of little-endian bytes
+///
+/// # Examples
+/// ```
+/// use mzdata_bindata::to_bytes;
+///
+/// let values: [f64; 3] = [1.0, 2.5, -3.25];
+/// let bytes = to_bytes(&values);
+/// assert_eq!(bytes.len(), 3 * 8);
+/// assert_eq!(&bytes[0..8], &1.0f64.to_le_bytes());
+/// ```
 pub fn to_bytes<T: Pod + ToBytes>(data: &[T]) -> Bytes {
     let n = data.len();
     let mut buf = Vec::with_capacity(n * size_of::<T>());
@@ -26,10 +36,39 @@ pub fn to_bytes<T: Pod + ToBytes>(data: &[T]) -> Bytes {
     buf
 }
 
+/// Reinterpret a slice of a [`bytemuck::Pod`] type as raw bytes without copying or
+/// converting endianness.
+///
+/// Unlike [`to_bytes`], this does not convert byte order: the returned bytes are in the
+/// host's native byte order, which only matches [`to_bytes`]'s little-endian output on a
+/// little-endian host.
+///
+/// # Examples
+/// ```
+/// use mzdata_bindata::as_bytes;
+///
+/// let values: [i32; 2] = [7, -1];
+/// let bytes = as_bytes(&values);
+/// assert_eq!(bytes.len(), 8);
+/// ```
 pub fn as_bytes<T: Pod>(data: &[T]) -> &[u8] {
     bytemuck::cast_slice(data)
 }
 
+/// Convert an owned [`Vec`] of a [`bytemuck::Pod`] type into an owned buffer of bytes.
+///
+/// Unlike [`to_bytes`], this does not convert byte order: the returned bytes are in the
+/// host's native byte order, which only matches [`to_bytes`]'s little-endian output on a
+/// little-endian host.
+///
+/// # Examples
+/// ```
+/// use mzdata_bindata::vec_as_bytes;
+///
+/// let values: Vec<f32> = vec![1.0, 2.0, 3.0];
+/// let bytes = vec_as_bytes(values);
+/// assert_eq!(bytes.len(), 3 * 4);
+/// ```
 pub fn vec_as_bytes<T: Pod>(data: Vec<T>) -> Bytes {
     let mut buf = Bytes::with_capacity(data.len() * std::mem::size_of::<T>());
     for val in data {
@@ -538,36 +577,85 @@ pub use dictionary_encoding::{dictionary_decoding, dictionary_encoding};
 #[derive(Debug, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ArrayType {
+    /// No information is given about this array, not even a name
     #[default]
     Unknown,
+    /// The m/z array, the coordinate values of a mass spectrum. The default unit is [`Unit::MZ`].
     MZArray,
+    /// The intensity or abundance of a signal at a given point.
+    /// The default unit is [`Unit::DetectorCounts`].
     IntensityArray,
+    /// The deconvolved charge state of an ion
     ChargeArray,
+    /// The estimated signal to noise ratio of a point observation
     SignalToNoiseArray,
+    /// The time coordinate an observation occured such as for a feature, trace, or chromatgam.
+    /// The default unit is [`Unit::Minute`]
     TimeArray,
+    /// The wavelength coordinate of an observation in a photospectrometry measurement.
+    /// The default unit is [`Unit::Nanometer`].
     WavelengthArray,
 
+    /// A basic ion mobility array that contains no additional information about the unit
+    /// or level of processing or aggregation. **Note: It has no implicit unit information!**
     IonMobilityArray,
+
+    /// The mean ion mobility measurement of an observation. This is the centroid of an ion mobility
+    /// measurement, distinct from a profile array view. **Note: It has no implicit unit information!**
     MeanIonMobilityArray,
+    /// The mean drift time of an observation. This is the centroid of an ion mobility measurement
+    /// expressed in terms of drift time. The default unit is [`Unit::Millisecond`].
     MeanDriftTimeArray,
+    /// The mean drift time of an observation. This is the centroid of an ion mobility measurement
+    /// expressed in terms of $V*s/cm^2$. The default unit is [`Unit::VoltSecondPerSquareCentimeter`].
     MeanInverseReducedIonMobilityArray,
+
+    /// The raw ion mobility measurement of an observation. This is unprocessed and may be profile
+    /// or centroid ion mobility measurements.
     RawIonMobilityArray,
+    /// The raw drift time of an observation. This is may be a profile or centroid representation
+    /// of an ion mobility measurement expressed in terms of drift time. The default unit is [`Unit::Millisecond`].
     RawDriftTimeArray,
+    /// The raw drift time of an observation. This is may be a profile or centroid representation
+    /// of an ion mobility measurement expressed in terms of $V*s/cm^2$. The default unit is [`Unit::VoltSecondPerSquareCentimeter`].
     RawInverseReducedIonMobilityArray,
+
+    /// The mean ion mobility measurement of an observation after deconvolution of cross-cutting properties like
+    /// charge state, adduct, or some other relevant property. This is the centroid of an ion mobility
+    /// measurement, distinct from a profile array view. **Note: It has no implicit unit information!**
     DeconvolutedIonMobilityArray,
+    /// The mean ion mobility drift time measurement of an observation expressed in drift time after deconvolution
+    /// of cross-cutting properties like charge state, adduct, or some other relevant property. This is the centroid of
+    /// an ion mobility measurement. The default unit is [`Unit::Millisecond`].
     DeconvolutedDriftTimeArray,
+    /// The mean ion mobility drift time measurement of an observation expressed in $V*s/cm^2$ after deconvolution
+    /// of cross-cutting properties like charge state, adduct, or some other relevant property. This is the centroid of
+    /// an ion mobility measurement. The default unit is [`Unit::Millisecond`].
     DeconvolutedInverseReducedIonMobilityArray,
 
+    /// Array of m/z values representing the lower bound m/z of the quadrupole position at each point in the spectrum.
+    /// The default unit is [`Unit::MZ`]
     ScanningQuadrupolePositionLowerBoundMZ,
+    /// Array of m/z values representing the upper bound m/z of the quadrupole position at each point in the spectrum.
+    /// The default unit is [`Unit::MZ`]
     ScanningQuadrupolePositionUpperBoundMZ,
 
+    /// A data array whose values are index values for another collection or array.
     IndexArray,
 
+    /// A data array of signal baseline values (the signal in the absence of analytes).
     BaselineArray,
+    /// A data array of resolution values, which influence the accuracy of measurements.
     ResolutionArray,
+    /// A data array of pressure measurements.
     PressureArray,
+    /// A data array of temperature measurements.
     TemperatureArray,
+    /// A data array of flow rate measurements.
     FlowRateArray,
+
+    /// A data array that is not covered by any of the existing types, but given a distinct name.
+    /// This is used for user- or application-defined arrays.
     NonStandardDataArray {
         name: Box<String>,
     },
@@ -586,6 +674,15 @@ impl ArrayType {
     /// By default, the m/z array is encoded using `Float64`,
     /// the charge state array is encoded using `Int32`, and
     /// all other arrays are encoded using `Float32`.
+    ///
+    /// # Examples
+    /// ```
+    /// use mzdata_bindata::{ArrayType, BinaryDataArrayType};
+    ///
+    /// assert_eq!(ArrayType::MZArray.preferred_dtype(), BinaryDataArrayType::Float64);
+    /// assert_eq!(ArrayType::IntensityArray.preferred_dtype(), BinaryDataArrayType::Float32);
+    /// assert_eq!(ArrayType::ChargeArray.preferred_dtype(), BinaryDataArrayType::Int32);
+    /// ```
     pub const fn preferred_dtype(&self) -> BinaryDataArrayType {
         match self {
             ArrayType::MZArray => BinaryDataArrayType::Float64,
@@ -597,6 +694,17 @@ impl ArrayType {
     }
 
     /// Convert an ion mobility array to its mean variant
+    ///
+    /// # Examples
+    /// ```
+    /// use mzdata_bindata::ArrayType;
+    ///
+    /// assert_eq!(
+    ///     ArrayType::RawDriftTimeArray.as_mean_ion_mobility(),
+    ///     Some(ArrayType::MeanDriftTimeArray)
+    /// );
+    /// assert_eq!(ArrayType::MZArray.as_mean_ion_mobility(), None);
+    /// ```
     pub const fn as_mean_ion_mobility(&self) -> Option<ArrayType> {
         Some(match self {
             Self::RawDriftTimeArray
@@ -653,7 +761,30 @@ impl ArrayType {
         }
     }
 
+    /// The preferred unit for this array type.
+    pub const fn preferred_unit(&self) -> Option<Unit> {
+        let unit = match self {
+            Self::MZArray | Self::ScanningQuadrupolePositionLowerBoundMZ | Self::ScanningQuadrupolePositionUpperBoundMZ => Unit::MZ,
+            Self::IntensityArray => Unit::DetectorCounts,
+            Self::WavelengthArray => Unit::Nanometer,
+            Self::TimeArray | Self::FlowRateArray => Unit::Minute,
+            Self::PressureArray => Unit::Pascal,
+            Self::RawDriftTimeArray | Self::MeanDriftTimeArray | Self::DeconvolutedDriftTimeArray => Unit::Millisecond,
+            Self::RawInverseReducedIonMobilityArray | Self::MeanInverseReducedIonMobilityArray | Self::DeconvolutedInverseReducedIonMobilityArray => Unit::VoltSecondPerSquareCentimeter,
+            _ => return None
+        };
+        Some(unit)
+    }
+
     /// Test if the the array describes an ion mobility quantity.
+    ///
+    /// # Examples
+    /// ```
+    /// use mzdata_bindata::ArrayType;
+    ///
+    /// assert!(!ArrayType::MZArray.is_ion_mobility());
+    /// assert!(ArrayType::MeanInverseReducedIonMobilityArray.is_ion_mobility());
+    /// ```
     pub const fn is_ion_mobility(&self) -> bool {
         matches!(
             self,
@@ -674,151 +805,180 @@ impl ArrayType {
     ///
     /// If a unit is provided, that unit will be specified, otherwise a default unit may
     /// be used instead.
+    ///
+    /// Prefer this to [`Self::as_param_const`] when you do not need to worry about const-ness
+    /// and the
     pub fn as_param(&self, unit: Option<Unit>) -> Param {
         const CV: ControlledVocabulary = ControlledVocabulary::MS;
-        match self {
-            ArrayType::MZArray => CV
-                .const_param_ident_unit("m/z array", 1000514, unit.unwrap_or(Unit::MZ))
-                .into(),
-            ArrayType::IntensityArray => CV
-                .const_param_ident_unit(
-                    "intensity array",
-                    1000515,
-                    unit.unwrap_or(Unit::DetectorCounts),
-                )
-                .into(),
-            ArrayType::ChargeArray => CV.const_param_ident("charge array", 1000516).into(),
-            ArrayType::TimeArray => CV
-                .const_param_ident_unit("time array", 1000595, unit.unwrap_or(Unit::Minute))
-                .into(),
-            ArrayType::WavelengthArray => CV
-                .const_param_ident_unit("wavelength array", 1000617, Unit::Nanometer)
-                .into(),
-            ArrayType::SignalToNoiseArray => CV
-                .const_param_ident("signal to noise array", 1000517)
-                .into(),
-            ArrayType::IonMobilityArray => CV
-                .const_param_ident_unit("ion mobility array", 1002893, unit.unwrap_or_default())
-                .into(),
+        let unit = unit.or_else(|| self.preferred_unit());
 
-            ArrayType::RawDriftTimeArray => CV
-                .const_param_ident_unit(
-                    "raw ion mobility drift time array",
-                    1003153,
-                    unit.unwrap_or_default(),
-                )
-                .into(),
-            ArrayType::RawInverseReducedIonMobilityArray => CV
-                .const_param_ident_unit(
-                    "raw inverse reduced ion mobility array",
-                    1003008,
-                    unit.unwrap_or_default(),
-                )
-                .into(),
-            ArrayType::RawIonMobilityArray => CV
-                .const_param_ident_unit("raw ion mobility array", 1003007, unit.unwrap_or_default())
-                .into(),
-
-            ArrayType::MeanIonMobilityArray => CV
-                .const_param_ident_unit(
-                    "mean ion mobility array",
-                    1002816,
-                    unit.unwrap_or_default(),
-                )
-                .into(),
-            ArrayType::MeanDriftTimeArray => CV
-                .const_param_ident_unit(
-                    "mean ion mobility drift time array",
-                    1002477,
-                    unit.unwrap_or_default(),
-                )
-                .into(),
-            ArrayType::MeanInverseReducedIonMobilityArray => CV
-                .const_param_ident_unit(
-                    "mean inverse reduced ion mobility array",
-                    1003006,
-                    unit.unwrap_or_default(),
-                )
-                .into(),
-
-            ArrayType::DeconvolutedIonMobilityArray => CV
-                .const_param_ident_unit(
-                    "deconvoluted ion mobility array",
-                    1003154,
-                    unit.unwrap_or_default(),
-                )
-                .into(),
-            ArrayType::DeconvolutedDriftTimeArray => CV
-                .const_param_ident_unit(
-                    "deconvoluted ion mobility drift time array",
-                    1003156,
-                    unit.unwrap_or_default(),
-                )
-                .into(),
-            ArrayType::DeconvolutedInverseReducedIonMobilityArray => CV
-                .const_param_ident_unit(
-                    "deconvoluted inverse reduced ion mobility array",
-                    1003155,
-                    unit.unwrap_or_default(),
-                )
-                .into(),
-
-            ArrayType::NonStandardDataArray { name } => {
-                let mut p = CV.param_val(1000786, "non-standard data array", name.to_string());
-                p.unit = unit.unwrap_or_default();
-                p
-            }
-            ArrayType::BaselineArray => CV.const_param_ident("baseline array", 1002530).into(),
-            ArrayType::ResolutionArray => CV.const_param_ident("resolution array", 1002529).into(),
-            ArrayType::PressureArray => {
-                let mut p = CV.const_param_ident("pressure array", 1000821);
-                p.unit = unit.unwrap_or_default();
-                p.into()
-            }
-            ArrayType::TemperatureArray => {
-                let mut p = CV.const_param_ident("temperature array", 1000822);
-                p.unit = unit.unwrap_or_default();
-                p.into()
-            }
-            ArrayType::FlowRateArray => {
-                let mut p = CV.const_param_ident("flow rate array", 1000820);
-                p.unit = unit.unwrap_or_default();
-                p.into()
-            }
-            ArrayType::ScanningQuadrupolePositionLowerBoundMZ => {
-                let mut p = CV.const_param_ident("scanning quadrupole position lower bound m/z array", 1003157);
-                p.unit = unit.unwrap_or_default();
-                p.into()
-            }
-            ArrayType::ScanningQuadrupolePositionUpperBoundMZ => {
-                let mut p = CV.const_param_ident("scanning quadrupole position upper bound m/z array", 1003158);
-                p.unit = unit.unwrap_or_default();
-                p.into()
-            }
-            ArrayType::IndexArray => {
-                CV.const_param_ident("index array", 1003870).into()
-            }
-            _ => {
-                panic!("Could not determine how to name for array {}", self);
+        if let Self::NonStandardDataArray { name } = self {
+            let mut p = CV.param_val(
+                1000786,
+                "non-standard data array",
+                name.to_string()
+            );
+            p.unit = unit.unwrap_or_default();
+            p
+        }
+        else {
+            match unit {
+                Some(unit) => self.as_param_with_unit_const(unit).into(),
+                None => self.as_param_const().into()
             }
         }
+
+        // match self {
+        //     ArrayType::MZArray => CV
+        //         .const_param_ident_unit("m/z array", 1000514, unit.unwrap_or_default())
+        //         .into(),
+        //     ArrayType::IntensityArray => CV
+        //         .const_param_ident_unit(
+        //             "intensity array",
+        //             1000515,
+        //             unit.unwrap_or_default(),
+        //         )
+        //         .into(),
+        //     ArrayType::ChargeArray => CV.const_param_ident("charge array", 1000516).into(),
+        //     ArrayType::TimeArray => CV
+        //         .const_param_ident_unit("time array", 1000595, unit.unwrap_or_default())
+        //         .into(),
+        //     ArrayType::WavelengthArray => CV
+        //         .const_param_ident_unit("wavelength array", 1000617, unit.unwrap_or_default())
+        //         .into(),
+        //     ArrayType::SignalToNoiseArray => CV
+        //         .const_param_ident("signal to noise array", 1000517)
+        //         .into(),
+        //     ArrayType::IonMobilityArray => CV
+        //         .const_param_ident_unit(
+        //             "ion mobility array", 1002893, unit.unwrap_or_default())
+        //         .into(),
+
+        //     ArrayType::RawDriftTimeArray => CV
+        //         .const_param_ident_unit(
+        //             "raw ion mobility drift time array",
+        //             1003153,
+        //             unit.unwrap_or_default(),
+        //         )
+        //         .into(),
+        //     ArrayType::RawInverseReducedIonMobilityArray => CV
+        //         .const_param_ident_unit(
+        //             "raw inverse reduced ion mobility array",
+        //             1003008,
+        //             unit.unwrap_or_default(),
+        //         )
+        //         .into(),
+        //     ArrayType::RawIonMobilityArray => CV
+        //         .const_param_ident_unit("raw ion mobility array", 1003007, unit.unwrap_or_default())
+        //         .into(),
+
+        //     ArrayType::MeanIonMobilityArray => CV
+        //         .const_param_ident_unit(
+        //             "mean ion mobility array",
+        //             1002816,
+        //             unit.unwrap_or_default(),
+        //         )
+        //         .into(),
+        //     ArrayType::MeanDriftTimeArray => CV
+        //         .const_param_ident_unit(
+        //             "mean ion mobility drift time array",
+        //             1002477,
+        //             unit.unwrap_or_default(),
+        //         )
+        //         .into(),
+        //     ArrayType::MeanInverseReducedIonMobilityArray => CV
+        //         .const_param_ident_unit(
+        //             "mean inverse reduced ion mobility array",
+        //             1003006,
+        //             unit.unwrap_or_default(),
+        //         )
+        //         .into(),
+
+        //     ArrayType::DeconvolutedIonMobilityArray => CV
+        //         .const_param_ident_unit(
+        //             "deconvoluted ion mobility array",
+        //             1003154,
+        //             unit.unwrap_or_default(),
+        //         )
+        //         .into(),
+        //     ArrayType::DeconvolutedDriftTimeArray => CV
+        //         .const_param_ident_unit(
+        //             "deconvoluted ion mobility drift time array",
+        //             1003156,
+        //             unit.unwrap_or_default(),
+        //         )
+        //         .into(),
+        //     ArrayType::DeconvolutedInverseReducedIonMobilityArray => CV
+        //         .const_param_ident_unit(
+        //             "deconvoluted inverse reduced ion mobility array",
+        //             1003155,
+        //             unit.unwrap_or_default(),
+        //         )
+        //         .into(),
+
+        //     ArrayType::NonStandardDataArray { name } => {
+        //         let mut p = CV.param_val(1000786, "non-standard data array", name.to_string());
+        //         p.unit = unit.unwrap_or_default();
+        //         p
+        //     }
+        //     ArrayType::BaselineArray => CV.const_param_ident("baseline array", 1002530).into(),
+        //     ArrayType::ResolutionArray => CV.const_param_ident("resolution array", 1002529).into(),
+        //     ArrayType::PressureArray => {
+        //         let mut p = CV.const_param_ident("pressure array", 1000821);
+        //         p.unit = unit.unwrap_or_default();
+        //         p.into()
+        //     }
+        //     ArrayType::TemperatureArray => {
+        //         let mut p = CV.const_param_ident("temperature array", 1000822);
+        //         p.unit = unit.unwrap_or_default();
+        //         p.into()
+        //     }
+        //     ArrayType::FlowRateArray => {
+        //         let mut p = CV.const_param_ident("flow rate array", 1000820);
+        //         p.unit = unit.unwrap_or_default();
+        //         p.into()
+        //     }
+        //     ArrayType::ScanningQuadrupolePositionLowerBoundMZ => {
+        //         let mut p = CV.const_param_ident("scanning quadrupole position lower bound m/z array", 1003157);
+        //         p.unit = unit.unwrap_or_default();
+        //         p.into()
+        //     }
+        //     ArrayType::ScanningQuadrupolePositionUpperBoundMZ => {
+        //         let mut p = CV.const_param_ident("scanning quadrupole position upper bound m/z array", 1003158);
+        //         p.unit = unit.unwrap_or_default();
+        //         p.into()
+        //     }
+        //     ArrayType::IndexArray => {
+        //         CV.const_param_ident("index array", 1003870).into()
+        //     }
+        //     _ => {
+        //         panic!("Could not determine how to name for array {}", self);
+        //     }
+        // }
     }
 
     /// Create a [`ParamCow`] for this array type in a `const` context using the default unit.
     ///
     /// **NOTE**: If this is a [`Self::NonStandardDataArray`], this function *will* panic as
     /// this variant requires allocation.
+    ///
+    /// Prefer this method over [`Self::as_param_with_unit_const`] when the default unit is
+    /// acceptable, and you are confident you are not dealing with a non-standard array.
+    ///
+    /// # Panics
+    /// When `self` is either [`Self::NonStandardDataArray`] or an unimplemented variant.
     pub const fn as_param_const(&self) -> ParamCow<'static> {
         const CV: ControlledVocabulary = ControlledVocabulary::MS;
+
         match self {
-            ArrayType::MZArray => CV.const_param_ident_unit("m/z array", 1000514, Unit::MZ),
+            ArrayType::MZArray => CV.const_param_ident_unit("m/z array", 1000514, self.preferred_unit().unwrap()),
             ArrayType::IntensityArray => {
-                CV.const_param_ident_unit("intensity array", 1000515, Unit::DetectorCounts)
+                CV.const_param_ident_unit("intensity array", 1000515, self.preferred_unit().unwrap())
             }
             ArrayType::ChargeArray => CV.const_param_ident("charge array", 1000516),
-            ArrayType::TimeArray => CV.const_param_ident_unit("time array", 1000595, Unit::Minute),
+            ArrayType::TimeArray => CV.const_param_ident_unit("time array", 1000595, self.preferred_unit().unwrap()),
             ArrayType::WavelengthArray => {
-                CV.const_param_ident_unit("wavelength array", 1000617, Unit::Nanometer)
+                CV.const_param_ident_unit("wavelength array", 1000617, self.preferred_unit().unwrap())
             }
             ArrayType::SignalToNoiseArray => CV.const_param_ident("signal to noise array", 1000517),
             ArrayType::IonMobilityArray => CV.const_param_ident("ion mobility array", 1002893),
@@ -834,34 +994,34 @@ impl ArrayType {
             ArrayType::RawDriftTimeArray => CV.const_param_ident_unit(
                 "raw ion mobility drift time array",
                 1003153,
-                Unit::Unknown,
+                self.preferred_unit().unwrap(),
             ),
             ArrayType::RawInverseReducedIonMobilityArray => CV.const_param_ident_unit(
                 "raw inverse reduced ion mobility array",
                 1003008,
-                Unit::VoltSecondPerSquareCentimeter,
+                self.preferred_unit().unwrap(),
             ),
 
             ArrayType::MeanDriftTimeArray => CV.const_param_ident_unit(
                 "mean ion mobility drift time array",
                 1002477,
-                Unit::Unknown,
+                self.preferred_unit().unwrap(),
             ),
             ArrayType::MeanInverseReducedIonMobilityArray => CV.const_param_ident_unit(
                 "mean inverse reduced ion mobility array",
                 1003006,
-                Unit::VoltSecondPerSquareCentimeter,
+                self.preferred_unit().unwrap(),
             ),
 
             ArrayType::DeconvolutedDriftTimeArray => CV.const_param_ident_unit(
                 "deconvoluted ion mobility drift time array",
                 1003156,
-                Unit::Unknown,
+                self.preferred_unit().unwrap(),
             ),
             ArrayType::DeconvolutedInverseReducedIonMobilityArray => CV.const_param_ident_unit(
                 "deconvoluted inverse reduced ion mobility array",
                 1003155,
-                Unit::VoltSecondPerSquareCentimeter,
+                self.preferred_unit().unwrap(),
             ),
 
             ArrayType::NonStandardDataArray { name: _name } => {
@@ -871,12 +1031,12 @@ impl ArrayType {
             }
             ArrayType::BaselineArray => CV.const_param_ident("baseline array", 1002530),
             ArrayType::ResolutionArray => CV.const_param_ident("resolution array", 1002529),
-            ArrayType::PressureArray => CV.const_param_ident_unit("pressure array", 1000821, Unit::Pascal),
+            ArrayType::PressureArray => CV.const_param_ident_unit("pressure array", 1000821, self.preferred_unit().unwrap()),
             ArrayType::TemperatureArray => CV.const_param_ident("temperature array", 1000822),
-            ArrayType::FlowRateArray => CV.const_param_ident_unit("flow rate array", 1000820, Unit::MicrolitersPerMinute),
+            ArrayType::FlowRateArray => CV.const_param_ident_unit("flow rate array", 1000820, self.preferred_unit().unwrap()),
             ArrayType::ScanningQuadrupolePositionLowerBoundMZ => {
                 let mut p = CV.const_param_ident("scanning quadrupole position lower bound m/z array", 1003157);
-                p.unit = Unit::MZ;
+                p.unit = self.preferred_unit().unwrap();
                 p
             }
             ArrayType::IndexArray => {
@@ -884,7 +1044,7 @@ impl ArrayType {
             }
             ArrayType::ScanningQuadrupolePositionUpperBoundMZ => {
                 let mut p = CV.const_param_ident("scanning quadrupole position upper bound m/z array", 1003158);
-                p.unit = Unit::MZ;
+                p.unit = self.preferred_unit().unwrap();
                 p
             }
             _ => {
@@ -897,86 +1057,17 @@ impl ArrayType {
     ///
     /// **NOTE**: If this is a [`Self::NonStandardDataArray`], this function *will* panic as
     /// this variant requires allocation.
+    ///
+    /// Prefer this method over [`Self::as_param_const`] when you want to control the unit
+    /// directly rather than accepting the default unit and possibly updating it in the calling
+    /// code.
+    ///
+    /// # Panics
+    /// When `self` is either [`Self::NonStandardDataArray`] or an unimplemented variant.
     pub const fn as_param_with_unit_const(&self, unit: Unit) -> ParamCow<'static> {
-        const CV: ControlledVocabulary = ControlledVocabulary::MS;
-        match self {
-            ArrayType::MZArray => CV.const_param_ident_unit("m/z array", 1000514, unit),
-            ArrayType::IntensityArray => {
-                CV.const_param_ident_unit("intensity array", 1000515, unit)
-            }
-            ArrayType::ChargeArray => CV.const_param_ident_unit("charge array", 1000516, unit),
-            ArrayType::TimeArray => CV.const_param_ident_unit("time array", 1000595, unit),
-            ArrayType::RawIonMobilityArray => {
-                CV.const_param_ident_unit("raw ion mobility array", 1003007, unit)
-            }
-            ArrayType::MeanIonMobilityArray => {
-                CV.const_param_ident_unit("mean ion mobility array", 1002816, unit)
-            }
-            ArrayType::DeconvolutedIonMobilityArray => {
-                CV.const_param_ident_unit("deconvoluted ion mobility array", 1003154, unit)
-            }
-            ArrayType::NonStandardDataArray { name: _name } => {
-                panic!(
-                    "Cannot format NonStandardDataArray in a const context, please use `as_param`"
-                );
-            }
-
-            ArrayType::RawDriftTimeArray => {
-                CV.const_param_ident_unit("raw ion mobility drift time array", 1003153, unit)
-            }
-            ArrayType::RawInverseReducedIonMobilityArray => {
-                CV.const_param_ident_unit("raw inverse reduced ion mobility array", 1003008, unit)
-            }
-
-            ArrayType::MeanDriftTimeArray => {
-                CV.const_param_ident_unit("mean ion mobility drift time array", 1002477, unit)
-            }
-            ArrayType::MeanInverseReducedIonMobilityArray => {
-                CV.const_param_ident_unit("mean inverse reduced ion mobility array", 1003006, unit)
-            }
-
-            ArrayType::DeconvolutedDriftTimeArray => CV.const_param_ident_unit(
-                "deconvoluted ion mobility drift time array",
-                1003156,
-                unit,
-            ),
-            ArrayType::DeconvolutedInverseReducedIonMobilityArray => CV.const_param_ident_unit(
-                "deconvoluted inverse reduced ion mobility array",
-                1003155,
-                unit,
-            ),
-
-            ArrayType::BaselineArray => CV.const_param_ident_unit("baseline array", 1002530, unit),
-            ArrayType::ResolutionArray => {
-                CV.const_param_ident_unit("resolution array", 1002529, unit)
-            }
-            ArrayType::PressureArray => CV.const_param_ident_unit("pressure array", 1000821, unit),
-            ArrayType::TemperatureArray => {
-                CV.const_param_ident_unit("temperature array", 1000822, unit)
-            }
-            ArrayType::FlowRateArray => CV.const_param_ident_unit("flow rate array", 1000820, unit),
-            ArrayType::ScanningQuadrupolePositionLowerBoundMZ => {
-                CV.const_param_ident_unit("scanning quadrupole position lower bound m/z array", 1003157, unit)
-            }
-            ArrayType::ScanningQuadrupolePositionUpperBoundMZ => {
-                CV.const_param_ident_unit("scanning quadrupole position upper bound m/z array", 1003158, unit)
-            }
-            ArrayType::SignalToNoiseArray => {
-                CV.const_param_ident_unit("signal to noise array", 1000517, unit)
-            }
-            ArrayType::WavelengthArray => {
-                CV.const_param_ident_unit("wavelength array", 1000617, unit)
-            }
-            ArrayType::IonMobilityArray => {
-                CV.const_param_ident_unit("ion mobility array", 1002893, unit)
-            }
-            ArrayType::IndexArray => {
-                CV.const_param_ident_unit("index array", 1003870, unit)
-            }
-            _ => {
-                panic!("Could not determine how to name for array");
-            }
-        }
+        let mut inner = self.as_param_const();
+        inner.unit = unit;
+        inner
     }
 
     /// Translate from [`CURIE`] to an [`ArrayType`]
@@ -1078,12 +1169,18 @@ impl ArrayType {
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BinaryDataArrayType {
+    /// Unspecified, opaque data
     #[default]
     Unknown,
+    /// 64-bit floating point numbers
     Float64,
+    /// 32-bit floating point numbers
     Float32,
+    /// 64-bit signed integers
     Int64,
+    /// 32-bit signed integers
     Int32,
+    /// Null-terminated ASCII strings
     ASCII,
 }
 
@@ -1095,6 +1192,15 @@ impl Display for BinaryDataArrayType {
 
 impl BinaryDataArrayType {
     /// Get the size in bytes of a single value of this type
+    ///
+    /// # Examples
+    /// ```rust
+    /// use mzdata_bindata::BinaryDataArrayType;
+    ///
+    /// assert_eq!(BinaryDataArrayType::Float32.size_of(), 4);
+    /// assert_eq!(BinaryDataArrayType::Float64.size_of(), 8);
+    /// assert_eq!(BinaryDataArrayType::ASCII.size_of(), 1);
+    /// ```
     pub const fn size_of(&self) -> usize {
         match self {
             BinaryDataArrayType::Unknown | BinaryDataArrayType::ASCII => 1,
@@ -1149,7 +1255,17 @@ impl BinaryDataArrayType {
         }
     }
 
-    /// Byte order swap the data stored in
+    /// Byte-order swap the data stored in `data`, treating it as a sequence of
+    /// fixed-width elements of `self`'s size.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use mzdata_bindata::BinaryDataArrayType;
+    ///
+    /// let mut bytes = 42u32.to_le_bytes();
+    /// BinaryDataArrayType::Int32.swap_bytes(&mut bytes).unwrap();
+    /// assert_eq!(u32::from_be_bytes(bytes), 42);
+    /// ```
     pub fn swap_bytes(&self, data: &mut [u8]) -> Result<(), ArrayRetrievalError> {
         let z = self.size_of();
         if !(data.len() % z == 0) {
@@ -1189,28 +1305,89 @@ impl BinaryDataArrayType {
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BinaryCompressionType {
+    /// The data are not compressed, but are base64 encoded and not ready for native use.
     #[default]
     NoCompression,
+
+    /// A well known, widely available general-purpose compressor codec with many implementations. Always
+    /// available, but several backends with differing speed and size tradeoffs are available under different
+    /// features.
     Zlib,
+
+    /// **Warning: Lossy** A combination simple linear model fit and byte packing codec that stores the model
+    /// coefficients as float64 and the residuals as unsigned 16 or 32-bit integers. With an optimal fixed point, this will produce a median loss of accuracy below
+    /// of about 2e-8 absolute units, but may vary widely from dataset to dataset. This codec **MUST** be used with sorted data only, and is only suitable for
+    /// float64 data. It may be combined with `zlib` [`BinaryCompressionType::NumpressLinearZlib`] or `zstd` [`BinaryCompressionType::NumpressLinearZstd`] for even
+    /// greater space savings. See details at <https://doi.org/10.1074/mcp.O114.037879>
+    ///
+    /// Requires feature `numpress`
     NumpressLinear,
+
+    /// **Warning: Lossy** A lossy numerical approximation that log transforms and scales values to make them very
+    /// close to 16-bit integers. This codec is lossier the larger the value is, and is only appropriate for count data like intensities. It can also combine with
+    /// `zlib` [`BinaryCompressionType::NumpressSLOFZlib`] and `zstd` [`BinaryCompressionType::NumpressSLOFZstd`]. See details at <https://doi.org/10.1074/mcp.O114.037879>
+    ///
+    /// Requires feature `numpress`
     NumpressSLOF,
+
+    /// **Warning: Lossy** This simply rounds a floating point value and then packs it
+    /// into a truncated integer. May be suitable for intensity values, but not consistently better than [`BinaryCompressionType::NumpressSLOF`].
+    /// See details at <https://doi.org/10.1074/mcp.O114.037879>
+    ///
+    /// Requires feature `numpress`
     NumpressPIC,
+    /// **Warning: Lossy** Combines [`Self::Zlib`] with [`Self::NumpressLinear`]
     NumpressLinearZlib,
+    /// **Warning: Lossy** Combines [`Self::Zlib`] with [`Self::NumpressSLOF`]
     NumpressSLOFZlib,
+    /// **Warning: Lossy** Combines [`Self::Zlib`] with [`Self::NumpressPIC`]
     NumpressPICZlib,
+    /// **Warning: Lossy** The same concept as [`BinaryCompressionType::NumpressLinear`] without the truncation
+    /// All of the same concerns apply though it loses less precision. This does not perform any form of compression. It was uses as part of mzMLb which applies
+    /// container-level compression. Only suitable for float64 data.
     LinearPrediction,
+    /// **Warning: Lossy** This computes first order difference of a sorted array of values and stores the difference
+    /// and the starting point. It is sometimes more accurate than [`BinaryCompressionType::LinearPrediction`]. Like [`BinaryCompressionType::LinearPrediction`],
+    /// it does not do any actual compression. It was meant for use with mzMLb, which compresses the entire container. Only suitable for float64 data.
     DeltaPrediction,
+    /// The data are completely decoded in native byte order
     Decoded,
+    /// A newer general-purpose codec that is not widely used in mzML but very popular in other applications.
+    /// Much faster and often better compression compared to `zlib`.
+    ///
+    /// Unlike [`Self::Zlib`], [`Self::Zstd`]'s default compression level is controlled by [`zstd::DEFAULT_COMPRESSION_LEVEL`],
+    /// but the `MZDATA_ZSTD_LEVEL` environment variable can be used to raise or lower it as desired.
+    ///
+    /// Requires feature `zstd`
     Zstd,
+    /// This first applies a byte shuffle transform to the data to compress
+    /// the `n`th byte of each value contiguously, and then apply [`Self::Zstd`]. This makes sorted data compress more effectively.
+    ///
+    /// Requires feature `zstd`
     ShuffleZstd,
+    /// **Warning: Lossy** This computes first order difference of a sorted array of values and stores the difference
+    /// and the starting point. It then byte shuffles the differences and [`Self::Zstd`] compresses them.
+    /// Only suitable for sorted float64 data.
+    ///
+    /// Requires feature `zstd`
     DeltaShuffleZstd,
+    /// Another elaboration of `byte-shuffled zstd` where the values are first dictionary-encoded
+    /// so that repeated values are denoted by indices rather than the full size value itself. The dictionary is sorted and then both the dictionary and the
+    /// indices are byte shuffle encoded and then [`Self::Zstd`] compressed. This is even more effective than previous codecs for data with repeated, semi-sorted values
+    /// like m/z and ion mobility.
+    ///
+    /// Requires feature `zstd`
     ZstdDict,
+    /// **Warning: Lossy** Combines [`Self::Zstd`] with [`Self::NumpressLinear`]
     NumpressLinearZstd,
+    /// **Warning: Lossy** Combines [`Self::Zstd`] with [`Self::NumpressSLOF`]
     NumpressSLOFZstd,
+    /// **Warning: Lossy** Combines [`Self::Zstd`] with [`Self::NumpressPIC`]
     NumpressPICZstd,
 }
 
 impl BinaryCompressionType {
+    /// All compression methods in an array
     pub const COMPRESSION_METHODS: &[Self] = &[
         Self::NoCompression,
         Self::Zlib,
@@ -1261,6 +1438,7 @@ impl BinaryCompressionType {
         }
     }
 
+    /// Get the accession number in the [`ControlledVocabulary::MS`] vocabulary.
     pub const fn accession(&self) -> Option<u32> {
         let acc = match self {
             BinaryCompressionType::NoCompression => 1000576,
@@ -1516,8 +1694,10 @@ pub enum ArrayRetrievalError {
     NotFound(ArrayType),
     #[error("An error occurred while decompressing: {0}")]
     DecompressionError(String),
-    #[error("The requested data type does not match the number of bytes available in the buffer")]
+    #[error("The requested data type does not match the number of bytes available in the buffer, or the conversion is unsupported")]
     DataTypeSizeMismatch,
+    #[error("The content was not properly Base64 encoded")]
+    MalformedBase64Encoding,
 }
 
 impl From<bytemuck::PodCastError> for ArrayRetrievalError {
@@ -1542,6 +1722,9 @@ impl From<ArrayRetrievalError> for io::Error {
             }
             ArrayRetrievalError::DataTypeSizeMismatch => {
                 io::Error::new(io::ErrorKind::InvalidData, value)
+            },
+            ArrayRetrievalError::MalformedBase64Encoding => {
+                io::Error::new(io::ErrorKind::InvalidData, value)
             }
         }
     }
@@ -1554,6 +1737,7 @@ impl From<numpress::Error> for ArrayRetrievalError {
     }
 }
 
+/// The decoder for [`BinaryCompressionType::LinearPrediction`].
 pub fn linear_prediction_decoding<F: Num + Copy + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
     if values.len() < 2 {
         return values;
@@ -1586,6 +1770,7 @@ pub fn linear_prediction_decoding<F: Num + Copy + Mul + AddAssign>(values: &mut 
     values
 }
 
+/// The encoder for [`BinaryCompressionType::LinearPrediction`].
 pub fn linear_prediction_encoding<F: Num + Copy + Mul<F> + AddAssign>(
     values: &mut [F],
 ) -> &mut [F] {
@@ -1610,6 +1795,7 @@ pub fn linear_prediction_encoding<F: Num + Copy + Mul<F> + AddAssign>(
     values
 }
 
+/// The decoder for [`BinaryCompressionType::DeltaPrediction`].
 pub fn delta_decoding<F: Num + Copy + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
     if values.len() < 2 {
         return values;
@@ -1625,6 +1811,7 @@ pub fn delta_decoding<F: Num + Copy + Mul + AddAssign>(values: &mut [F]) -> &mut
     values
 }
 
+/// The encoder for [`BinaryCompressionType::DeltaPrediction`].
 pub fn delta_encoding<F: Num + Copy + Mul + AddAssign>(values: &mut [F]) -> &mut [F] {
     let n = values.len();
     if n < 2 {

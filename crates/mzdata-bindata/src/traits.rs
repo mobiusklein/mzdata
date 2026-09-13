@@ -10,10 +10,17 @@ use mzdata_param::Unit;
 use super::encodings::{ArrayRetrievalError, BinaryDataArrayType, Bytes};
 use super::ArrayType;
 
-
+/// A byte array that may be encoded and compressed as [`BinaryCompressionType`], or unpacked in
+/// memory and re-interpreted as native types appropriate to [`BinaryDataArrayType`].
+///
+/// The raw bytes must be made available through the [`ByteArrayView::view`] method,
+/// but all other behavior is added on top of that
 pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
+    /// The core method that exposes the decoded byte array that the type *must* provide.
     fn view(&'lifespan self) -> Result<Cow<'lifespan, [u8]>, ArrayRetrievalError>;
 
+    /// This is a helper method for the various `to_<type>` methods like [`Self::to_f64`]. It should not
+    /// need to be called directly. This method relies on [`bytemuck::try_cast_slice`] to do the heavy lifting.
     fn coerce_from<T: Pod>(
         buffer: Cow<'transient, [u8]>,
     ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
@@ -41,6 +48,8 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         }
     }
 
+    /// This is a helper method for the various `to_<type>` methods like [`Self::to_f64`]. It should not
+    /// need to be called directly. This calls into [`Self::coerce_from`] internally after decoding.
     fn coerce<T: Pod>(
         &'lifespan self,
     ) -> Result<Cow<'transient, [T]>, ArrayRetrievalError> {
@@ -62,6 +71,8 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
     }
 
     /// Decode the array, then copy it to a new array, converting each element from type `D` to to type `S`
+    ///
+    /// This makes a copy of the data, forcibly coercing the values using [`AsPrimitive`]
     fn convert<S: Num + Clone + AsPrimitive<D> + Pod, D: Num + Clone + Copy + 'static>(
         &'lifespan self,
     ) -> Result<Cow<'transient, [D]>, ArrayRetrievalError> {
@@ -95,6 +106,8 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         None
     }
 
+    /// Get a view of the data as [`f32`]. If the data are stored that way already, no
+    /// copy is required.
     fn to_f32(&'lifespan self) -> Result<Cow<'transient, [f32]>, ArrayRetrievalError> {
         type D = f32;
         match self.dtype() {
@@ -115,6 +128,8 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         }
     }
 
+    /// Get a view of the data as [`f64`]. If the data are stored that way already, no
+    /// copy is required.
     fn to_f64(&'lifespan self) -> Result<Cow<'transient, [f64]>, ArrayRetrievalError> {
         type D = f64;
         match self.dtype() {
@@ -135,6 +150,8 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         }
     }
 
+    /// Get a view of the data as [`i32`]. If the data are stored that way already, no
+    /// copy is required.
     fn to_i32(&'lifespan self) -> Result<Cow<'transient, [i32]>, ArrayRetrievalError> {
         type D = i32;
         match self.dtype() {
@@ -155,6 +172,8 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
         }
     }
 
+    /// Get a view of the data as [`i64`]. If the data are stored that way already, no
+    /// copy is required.
     fn to_i64(&'lifespan self) -> Result<Cow<'transient, [i64]>, ArrayRetrievalError> {
         type D = i64;
         match self.dtype() {
@@ -207,6 +226,7 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
     }
 }
 
+/// A mutable byte array
 pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
     ByteArrayView<'transient, 'lifespan>
 {

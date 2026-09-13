@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::collections::hash_map::{Iter, IterMut};
 use std::collections::HashMap;
+use std::collections::hash_map::{Iter, IterMut};
 use std::convert::TryFrom;
 
 #[cfg(feature = "parallelism")]
@@ -11,12 +11,26 @@ use mzpeaks::Tolerance;
 
 use mzdata_param::Unit;
 
+use super::BinaryDataArrayType;
 use super::array::DataArray;
 use super::encodings::{ArrayRetrievalError, ArrayType, BinaryCompressionType};
 use super::traits::{ByteArrayView, ByteArrayViewMut};
-use super::BinaryDataArrayType;
 
 /// A collection of [`DataArray`]s that are identified by name.
+///
+/// # Examples
+/// ```
+/// use mzdata_bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray};
+///
+/// let mut map = BinaryArrayMap::new();
+/// assert!(!map.has_array(&ArrayType::MZArray));
+///
+/// let array = DataArray::from_name_and_type(&ArrayType::MZArray, BinaryDataArrayType::Float64);
+/// map.add(array);
+///
+/// assert!(map.has_array(&ArrayType::MZArray));
+/// assert_eq!(map.len(), 1);
+/// ```
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BinaryArrayMap {
@@ -88,6 +102,22 @@ impl BinaryArrayMap {
     /// Decode all [`DataArray`] in this map if they have not been decoded already so
     /// that they are ready for use. If there are many arrays and the `parallelism` feature
     /// is enabled, arrays may be decoded in parallel.
+    ///
+    /// # Examples
+    /// ```
+    /// use mzdata_bindata::{ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType, DataArray};
+    ///
+    /// let mut mz_array = DataArray::from_name_and_type(&ArrayType::MZArray, BinaryDataArrayType::Float64);
+    /// mz_array.extend(&[1.0f64, 2.0, 3.0]).unwrap();
+    /// mz_array.store_compressed(BinaryCompressionType::Zlib).unwrap();
+    ///
+    /// let mut map = BinaryArrayMap::new();
+    /// map.add(mz_array);
+    /// assert_eq!(map.get(&ArrayType::MZArray).unwrap().compression, BinaryCompressionType::Zlib);
+    ///
+    /// map.decode_all_arrays().unwrap();
+    /// assert_eq!(map.get(&ArrayType::MZArray).unwrap().compression, BinaryCompressionType::Decoded);
+    /// ```
     pub fn decode_all_arrays(&mut self) -> Result<(), ArrayRetrievalError> {
         #[cfg(not(feature = "parallelism"))]
         {
@@ -136,6 +166,8 @@ impl BinaryArrayMap {
     /// Decode a specific [`DataArray`] if it is present.
     ///
     /// This method may fail if decoding fails or if the array type is missing.
+    ///
+    /// See [`DataArray::decode_and_store`]
     pub fn decode_array(&mut self, array_type: &ArrayType) -> Result<(), ArrayRetrievalError> {
         if let Some(array) = self.get_mut(array_type) {
             array.decode_and_store()?;
@@ -170,7 +202,10 @@ impl BinaryArrayMap {
         self.byte_buffer_map.clear();
     }
 
-    /// Search for a specific m/z
+    /// Search for a specific m/z within a specified [`Tolerance`].
+    ///
+    /// This effectively calls [`BinaryArrayMap::mzs`] to get the m/z array and then
+    /// performs a binary search to find the best index within range, if one exists.
     pub fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize> {
         if let Ok(mzs) = self.mzs() {
             let (lower, _upper) = error_tolerance.bounds(query);
@@ -200,6 +235,19 @@ impl BinaryArrayMap {
     }
 
     /// Get a reference to the m/z array if it is present
+    ///
+    /// # Examples
+    /// ```
+    /// use mzdata_bindata::{ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray};
+    ///
+    /// let mut mz_array = DataArray::from_name_and_type(&ArrayType::MZArray, BinaryDataArrayType::Float64);
+    /// mz_array.extend(&[100.0f64, 200.0, 300.0]).unwrap();
+    ///
+    /// let mut map = BinaryArrayMap::new();
+    /// map.add(mz_array);
+    ///
+    /// assert_eq!(&*map.mzs().unwrap(), &[100.0f64, 200.0, 300.0][..]);
+    /// ```
     pub fn mzs(&'_ self) -> Result<Cow<'_, [f64]>, ArrayRetrievalError> {
         let mz_array = self
             .get(&ArrayType::MZArray)
@@ -209,6 +257,22 @@ impl BinaryArrayMap {
         Ok(mz_array)
     }
 
+    /// Re-order all arrays of matching length with respect to the provided index `mask` operating
+    /// on the decoded native value states.
+    ///
+    /// The mask would be created using an indirect sort from another array:
+    /// ```notest
+    /// let vals = self.mzs().unwrap();
+    /// let n = vals.len();
+    /// let mut mask: Vec<usize> = (0..n).into_iter().collect();
+    /// mask.sort_by(|i, j| {
+    ///     let a = vals[*i];
+    ///     let b = vals[*j];
+    ///     a.total_cmp(&b)
+    /// });
+    /// drop(vals);
+    /// self.sort_from_indices(mask)
+    /// ```
     pub fn sort_from_indices(&mut self, mut mask: Vec<usize>) -> Result<(), ArrayRetrievalError> {
         let n = mask.len();
         const TOMBSTONE: usize = usize::MAX;
@@ -253,7 +317,13 @@ impl BinaryArrayMap {
         Ok(())
     }
 
-    /// Sort all the arrays in the map by `name` if they are the same length
+    /// Sort all the arrays in the map by `name` if they are the same length. This operates
+    /// on the decoded state directly.
+    ///
+    /// This builds the sorting mask and then leaves [`Self::sort_from_indices`] to perform
+    /// the re-ordering.
+    ///
+    /// Not supported for [`BinaryDataArrayType::ASCII`] and [`BinaryDataArrayType::Unknown`].
     pub fn sort_by_array(&mut self, name: &ArrayType) -> Result<(), ArrayRetrievalError> {
         let query_axis = self
             .get(name)
@@ -294,7 +364,12 @@ impl BinaryArrayMap {
         self.sort_from_indices(mask)
     }
 
-    /// Get a mutable reference to the m/z array if it is present
+    /// Get a mutable reference to the m/z array if it is present.
+    ///
+    /// This method obtains the m/z array, calls [`DataArray::decode_and_store`] to force
+    /// the data to be stored natively in memory, and forces the storage to be
+    /// [`BinaryDataArrayType::Float64`] if not already. Finally it returns a mutable
+    /// view of that decoded dataas `&mut [f64]`
     pub fn mzs_mut(&mut self) -> Result<&mut [f64], ArrayRetrievalError> {
         if let Some(mz_array) = self.get_mut(&ArrayType::MZArray) {
             mz_array
@@ -317,16 +392,19 @@ impl BinaryArrayMap {
         Ok(intensities)
     }
 
-    /// Get a mutable reference to the intensity array if it is present
+    /// Get a mutable reference to the intensity array if it is present.
+    ///
+    /// See [`BinaryArrayMap::mzs_mut`] for an explanation of the intermediate steps,
+    /// save that the forced storage type is [`BinaryArrayDataType::Float32`].
     pub fn intensities_mut(&mut self) -> Result<&mut [f32], ArrayRetrievalError> {
-        if let Some(mz_array) = self.get_mut(&ArrayType::IntensityArray) {
-            mz_array
+        if let Some(arr) = self.get_mut(&ArrayType::IntensityArray) {
+            arr
                 .decode_and_store()
                 .inspect_err(|e| log::error!("Failed to decode intensity array: {e}"))?;
-            mz_array
+            arr
                 .store_as(BinaryDataArrayType::Float32)
                 .inspect_err(|e| log::error!("Failed to decode intensity array: {e}"))?;
-            mz_array.coerce_mut()
+            arr.coerce_mut()
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::IntensityArray))
         }
@@ -340,14 +418,17 @@ impl BinaryArrayMap {
         }
     }
 
-    /// Get a mutable reference to the charge array if it is present
+    /// Get a mutable reference to the charge array if it is present.
+    ///
+    /// See [`BinaryArrayMap::mzs_mut`] for an explanation of the intermediate steps,
+    /// save that the forced storage type is [`BinaryArrayDataType::Int32`].
     pub fn charge_mut(&mut self) -> Result<&mut [i32], ArrayRetrievalError> {
-        if let Some(mz_array) = self.get_mut(&ArrayType::ChargeArray) {
-            mz_array.decode_and_store()?;
-            mz_array
+        if let Some(arr) = self.get_mut(&ArrayType::ChargeArray) {
+            arr.decode_and_store()?;
+            arr
                 .store_as(BinaryDataArrayType::Int32)
                 .inspect_err(|e| log::error!("Failed to decode charge array: {e}"))?;
-            mz_array.coerce_mut()
+            arr.coerce_mut()
         } else {
             Err(ArrayRetrievalError::NotFound(ArrayType::ChargeArray))
         }
@@ -371,7 +452,9 @@ impl BinaryArrayMap {
         }
     }
 
-    /// Get a mutable reference to the ion mobility array if it is present
+    /// Get a mutable reference to the ion mobility array if it is present.
+    ///
+    /// See [`BinaryArrayMap::mzs_mut`] for an explanation of the intermediate steps.
     pub fn ion_mobility_mut(&mut self) -> Result<(&mut [f64], ArrayType), ArrayRetrievalError> {
         if let Some((array_type, data_array)) = self
             .byte_buffer_map
@@ -405,7 +488,6 @@ impl IntoIterator for BinaryArrayMap {
         self.byte_buffer_map.into_iter()
     }
 }
-
 
 #[cfg(feature = "mzsignal")]
 mod mzsignal_impl {
@@ -442,7 +524,7 @@ struct NonNaNF64(f64);
 
 impl std::hash::Hash for NonNaNF64 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        ((self.0 * 10000.0) as i64).hash(state);
+        self.0.to_bits().hash(state);
     }
 }
 
@@ -477,7 +559,6 @@ impl Ord for NonNaNF64 {
     }
 }
 
-
 macro_rules! _populate_stacked_array_from {
     ($im_dim:ident, $view:ident, $index_map:ident, $array_bins:ident, $array_type:ident, $array:ident) => {
         for (i_im, im) in $im_dim.iter() {
@@ -496,8 +577,12 @@ macro_rules! _populate_stacked_array_from {
     };
 }
 
-/// Represent a set of [`BinaryArrayMap`] that has been split across the
+/// Represent a set of [`BinaryArrayMap`] that has been split across an
 /// ion mobility dimension.
+///
+/// This effectively removes an ion mobility [`DataArray`] and for each unique
+/// value in that array, creates a new [`BinaryArrayMap`] with subsets of each
+/// other [`DataArray`] that co-occur at the same ion mobility coordinate.
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", serde_with::serde_as)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -512,6 +597,11 @@ pub struct BinaryArrayMap3D {
 }
 
 impl BinaryArrayMap3D {
+    /// Create an empty [`BinaryArrayMap3D`] with a defined ion mobility dimension
+    /// but no content at each ion mobility point.
+    ///
+    /// # Panics
+    /// If the ion mobility dimension contains a NaN value
     pub fn from_ion_mobility_dimension(
         ion_mobility_dimension: Vec<f64>,
         ion_mobility_type: ArrayType,
@@ -541,6 +631,11 @@ impl BinaryArrayMap3D {
         }
     }
 
+    /// Construct a [`BinaryArrayMap3D`] from a defined ion mobility dimension and
+    /// a [`Vec`] of [`BinaryArrayMap`] at each point.
+    ///
+    /// # Panics
+    /// If the ion mobility dimension contains a NaN value or `ion_mobility_dimension.len() != arrays.len()`
     pub fn from_ion_mobility_dimension_and_arrays(
         ion_mobility_dimension: Vec<f64>,
         ion_mobility_type: ArrayType,
@@ -559,6 +654,12 @@ impl BinaryArrayMap3D {
                 )
             })
             .collect();
+
+        assert_eq!(
+            ion_mobility_dimension.len(),
+            arrays.len(),
+            "The number of ion mobility points does not match the number of point-level maps!"
+        );
 
         Self {
             ion_mobility_dimension,
@@ -583,6 +684,11 @@ impl BinaryArrayMap3D {
         }
     }
 
+    /// Perform a binary search on the ion mobility dimension and find the nearest
+    /// point to `ion_mobility` within `error_tolerance` absolute distance.
+    ///
+    /// Returns the [`BinaryArrayMap`] at that point and the distance from `ion_mobility`
+    /// matched.
     pub fn search_ion_mobility(
         &self,
         ion_mobility: f64,
@@ -614,7 +720,41 @@ impl BinaryArrayMap3D {
         }
     }
 
-    /// Get the a mutable reference to the associated arrays at the requested ion mobility, if they exist
+    /// Perform a binary search on the ion mobility dimension and find the nearest
+    /// point to `ion_mobility` within `error_tolerance` absolute distance.
+    ///
+    /// Unlike [`Self::search_ion_mobility`], this returns the index in the ion mobility
+    /// dimension that matched and the ion mobility value at that index.
+    pub fn search_ion_mobility_index(&self, ion_mobility: f64, error_tolerance: f64) -> Option<(usize, f64)> {
+        match self
+            .ion_mobility_dimension
+            .binary_search_by(|x: &f64| x.total_cmp(&ion_mobility))
+        {
+            Ok(i) => {
+                let delta = ion_mobility - self.ion_mobility_dimension[i];
+                if delta.abs() <= error_tolerance {
+                    Some((i, self.ion_mobility_dimension[i]))
+                } else {
+                    None
+                }
+            }
+            Err(i) => {
+                if self.arrays.is_empty() {
+                    return None;
+                }
+                let delta = ion_mobility - self.ion_mobility_dimension[i];
+                if delta.abs() <= error_tolerance {
+                    Some((i, self.ion_mobility_dimension[i]))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    /// Get the a mutable reference to the associated arrays at the requested ion mobility, if they exist.
+    ///
+    /// The ion mobility value must be an *exact* match
     pub fn get_ion_mobility_mut(&mut self, ion_mobility: f64) -> Option<&mut BinaryArrayMap> {
         if let Some(i) = NonNaNF64::wrap(ion_mobility) {
             if let Some(i) = self.ion_mobility_index.get(&i) {
@@ -647,6 +787,10 @@ impl BinaryArrayMap3D {
 
     /// Flatten this array into a single [`BinaryArrayMap`].
     ///
+    /// The flattened map is sorted by m/z and ion mobility. If no m/z array is found,
+    /// *no* sorting is done, and the flattened order is left in roughly ion mobility sorted
+    /// order.
+    ///
     /// # Errors
     /// [`ArrayRetrievalError`] errors related to array decoding occur if
     /// any [`DataArray`] cannot be decoded, or if an expected array is absent.
@@ -666,10 +810,10 @@ impl BinaryArrayMap3D {
                         sink.extend_raw(&array.data).inspect_err(|e| {
                             log::error!("Failed to extend {key:?}: {e}");
                         })?;
-                    },
+                    }
                     None => {
                         destination.add(array.clone());
-                    },
+                    }
                 }
                 if matches!(key, ArrayType::MZArray) {
                     mz_size = Some(array.data_len()?);
@@ -691,7 +835,9 @@ impl BinaryArrayMap3D {
             let mut indices: Vec<usize> = Vec::with_capacity(mzs.len());
             indices.extend(0..mzs.len());
             indices.sort_by(|i, j| {
-                mzs[*i].total_cmp(&mzs[*j]).then_with(|| ims[*i].total_cmp(&ims[*j]))
+                mzs[*i]
+                    .total_cmp(&mzs[*j])
+                    .then_with(|| ims[*i].total_cmp(&ims[*j]))
             });
             Some(indices)
         } else {
@@ -702,7 +848,7 @@ impl BinaryArrayMap3D {
 
         destination.add(im_dim);
 
-        if let Some(sorter)  = sorter {
+        if let Some(sorter) = sorter {
             destination.sort_from_indices(sorter)?;
         } else if final_size > 0 {
             log::debug!("Unsorted unstack");
@@ -714,6 +860,9 @@ impl BinaryArrayMap3D {
     ///
     /// Any arrays that aren't the same length as the ion mobility dimension will be in
     /// [`BinaryArrayMap3D::additional_arrays`].
+    ///
+    /// This uses *exact* ion mobility values as keys, bit-level equality. If ion mobility
+    /// values are computed, they may vary at trivial bits and be equivalent, but not **equal**.
     ///
     /// # Errors
     /// [`ArrayRetrievalError`] errors related to array decoding occur if any [`DataArray`]
@@ -804,6 +953,7 @@ impl TryFrom<BinaryArrayMap> for BinaryArrayMap3D {
     }
 }
 
+/// A [`BinaryArrayMap3D`] aliases [`TryFrom`] on [`BinaryArrayMap`] with [`BinaryArrayMap3D::stack`]
 impl TryFrom<&BinaryArrayMap> for BinaryArrayMap3D {
     type Error = ArrayRetrievalError;
 
@@ -811,6 +961,25 @@ impl TryFrom<&BinaryArrayMap> for BinaryArrayMap3D {
         Self::stack(value)
     }
 }
+
+impl TryFrom<BinaryArrayMap3D> for BinaryArrayMap {
+    type Error = ArrayRetrievalError;
+
+    fn try_from(value: BinaryArrayMap3D) -> Result<Self, Self::Error> {
+        value.unstack()
+    }
+}
+
+/// A [`BinaryArrayMap`] aliases [`TryFrom`] on [`BinaryArrayMap3D`] with [`BinaryArrayMap3D::unstack`]
+impl TryFrom<&BinaryArrayMap3D> for BinaryArrayMap {
+    type Error = ArrayRetrievalError;
+
+    fn try_from(value: &BinaryArrayMap3D) -> Result<Self, Self::Error> {
+        value.unstack()
+    }
+}
+
+
 
 #[cfg(test)]
 mod test {

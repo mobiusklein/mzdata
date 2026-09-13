@@ -1,11 +1,7 @@
 use std::{collections::HashSet, convert::TryInto, mem};
 
 use mzpeaks::{
-    prelude::*,
-    feature::{ChargedFeature, Feature},
-    CentroidLike, CentroidPeak, CoordinateLike, DeconvolutedPeak, DeconvolutedPeakSet,
-    IonMobility,MZPeakSetType, Mass, PeakSet,
-    MZ,
+    CentroidLike, CentroidPeak, CoordinateLike, DeconvolutedPeak, DeconvolutedPeakSet, IonMobility, MZ, MZPeakSetType, Mass, PeakSet, feature::{ChargedFeature, Feature}, peak::{IonMobilityAwareCentroidPeak, IonMobilityAwareDeconvolutedPeak}, prelude::*,
 };
 
 use mzdata_param::Unit;
@@ -155,20 +151,47 @@ impl From<&DeconvolutedPeakSet> for BinaryArrayMap {
     }
 }
 
-#[derive(Debug, Clone)]
+/// Whether or not sufficient arrays are available in a [`BinaryArrayMap`] to
+/// construct a peak list using [`BuildFromArrayMap`] or [`BuildFromArrayMap3D`]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArraysAvailable {
+    /// The required arrays were not listed, so cannot say yes or no
     Unknown,
+    /// All the required arrays are present
     Ok,
+    /// The list off arrays that are missing
     MissingArrays(Vec<ArrayType>),
 }
 
+/// A trait for reconstructing a `Vec` of peaks or features from a [`BinaryArrayMap`].
+///
+/// This is the inverse of [`BuildArrayMapFrom`].
+///
+/// # Examples
+/// ```
+/// use mzpeaks::CentroidPeak;
+/// use mzdata_bindata::{ArraysAvailable, BinaryArrayMap, BuildFromArrayMap};
+///
+/// let empty = BinaryArrayMap::new();
+/// assert!(matches!(
+///     CentroidPeak::has_arrays_for(&empty),
+///     ArraysAvailable::MissingArrays(_)
+/// ));
+/// ```
 pub trait BuildFromArrayMap: Sized {
+    /// The arrays that are *required* to reconstruct this type
+    ///
+    /// The default implementation returns `None`.
     fn arrays_required() -> Option<Vec<ArrayType>> {
         None
     }
 
+    /// Try to build a [`Vec`] of [`Self`] from a [`BinaryArrayMap`].
+    ///
+    /// If arrays are absent or malformed, returns [`ArrayRetrievalError`]
     fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Vec<Self>, ArrayRetrievalError>;
 
+    /// A shortcut form of [`Self::try_from_arrays`] that panics if it fails
     fn from_arrays(arrays: &BinaryArrayMap) -> Vec<Self> {
         Self::try_from_arrays(arrays).unwrap()
     }
@@ -191,29 +214,87 @@ pub trait BuildFromArrayMap: Sized {
     }
 }
 
+/// A trait for converting a slice of peaks or features into a [`BinaryArrayMap`].
+///
+/// This is the inverse of [`BuildFromArrayMap`].
+///
+/// # Examples
+/// ```
+/// use mzpeaks::CentroidPeak;
+/// use mzdata_bindata::{ArrayType, BuildArrayMapFrom, BuildFromArrayMap};
+///
+/// let peaks = vec![
+///     CentroidPeak::new(500.0, 1200.0, 0),
+///     CentroidPeak::new(750.5, 800.0, 1),
+/// ];
+///
+/// let arrays = CentroidPeak::as_arrays(&peaks);
+/// assert!(arrays.has_array(&ArrayType::MZArray));
+/// assert!(arrays.has_array(&ArrayType::IntensityArray));
+///
+/// let roundtripped = CentroidPeak::try_from_arrays(&arrays).unwrap();
+/// assert_eq!(roundtripped.len(), 2);
+/// assert_eq!(roundtripped[0].mz, 500.0);
+/// ```
 pub trait BuildArrayMapFrom: Sized {
+    /// The [`ArrayType`] produced by this peak type when converted.
+    ///
+    /// The default implementation returns `None`.
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {
         None
     }
 
+    /// Serialize a slice of [`Self`] into a [`BinaryArrayMap`].
+    ///
+    /// This assumes that the operation cannot fail as all the data
+    /// is available in memory already.
     fn as_arrays(source: &[Self]) -> BinaryArrayMap;
 }
 
+/// An extension of [`BuildArrayMapFrom`] that produces [`BinaryArrayMap3D`]
+/// instead.
+///
+/// It is intended for use with ion mobility frames like [`MultiLayerIonMobilityFrame`](mzdata::MultiLayerIonMobilityFrame)
+/// and feature types like [`Feature`](mzpeaks::feature::Feature).
 pub trait BuildArrayMap3DFrom: BuildArrayMapFrom {
+    /// Serialize a slice of [`Self`] into a [`BinaryArrayMap3D`].
+    ///
+    /// The default implementation just calls [`BuildArrayMapFrom::as_arrays`] and
+    /// then reshapes them into a [`BinaryArrayMap3D`]. This leverages the requirement
+    /// that a flat [`BinaryArrayMap`] can already be built from the same type, but may
+    /// be more expensive than expected because it then makes copies of all of the data
+    /// to re-arrange in a 3D layout.
+    ///
+    /// # Panics
+    /// The default implementation panics if the intermediate [`BinaryArrayMap`] cannot
+    /// actually be converted into a [`BinaryArrayMap3D`]
     fn as_arrays_3d(source: &[Self]) -> BinaryArrayMap3D {
         BuildArrayMapFrom::as_arrays(source).try_into().unwrap()
     }
 }
 
+/// An extension of [`BuildFromArrayMap`] that consumes [`BinaryArray3D`]
+/// to build a [`Vec`] of [`Self`].
+///
+/// It is intended for use with ion mobility frames like [`MultiLayerIonMobilityFrame`](mzdata::MultiLayerIonMobilityFrame)
+/// and feature types like [`Feature`](mzpeaks::feature::Feature).
 pub trait BuildFromArrayMap3D: BuildFromArrayMap {
+    /// Try to consume a [`BinaryArrayMap3D`] to build a `Vec` of [`Self`].
+    ///
+    /// The default implementation calls [`BinaryArrayMap3D::unstack`] and tries
+    /// to use [`BuildFromArrayMap::try_from_arrays`]. A direct implementation
+    /// would be much more efficient.
     fn try_from_arrays_3d(arrays: &BinaryArrayMap3D) -> Result<Vec<Self>, ArrayRetrievalError> {
         BuildFromArrayMap::try_from_arrays(&arrays.unstack()?)
     }
 
+    /// A shortcut form of [`Self::try_from_arrays_3d`] that panics if it fails
     fn from_arrays_3d(arrays: &BinaryArrayMap3D) -> Vec<Self> {
         Self::try_from_arrays_3d(arrays).unwrap()
     }
 
+    /// A pre-emptive check for the presence of the required arrays, particularly
+    /// across all ion mobility points.
     fn has_arrays_3d_for(arrays: &BinaryArrayMap3D) -> ArraysAvailable {
         if let Some(arrays_required) = Self::arrays_required() {
             let arrays_required: Vec<_> = arrays_required
@@ -251,7 +332,10 @@ pub trait BuildFromArrayMap3D: BuildFromArrayMap {
 
 // Basic peaks
 
+/// The basic [`CentroidPeak`] implements [`BuildArrayMapFrom`]
 impl BuildArrayMapFrom for CentroidPeak {
+
+    /// [`CentroidPeak`] produces [`ArrayType::MZArray`] and [`ArrayType::IntensityArray`]
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {
         Some(vec![ArrayType::MZArray, ArrayType::IntensityArray])
     }
@@ -309,11 +393,17 @@ impl BuildFromArrayMap for CentroidPeak {
         Ok(peaks)
     }
 
+    /// [`CentroidPeak`] requires [`ArrayType::MZArray`] and [`ArrayType::IntensityArray`]
     fn arrays_required() -> Option<Vec<ArrayType>> {
         Some(vec![ArrayType::MZArray, ArrayType::IntensityArray])
     }
 }
 
+/// The basic [`DeconvolutedPeak`] implements [`BuildArrayMapFrom`].
+///
+/// It produces the much more common [`ArrayType::MZArray`] instead of
+/// [`ArrayType::MassArray`] for compatibility with other tools, and assumes
+/// that the charge carrier is a proton.
 impl BuildArrayMapFrom for DeconvolutedPeak {
     fn as_arrays(source: &[Self]) -> BinaryArrayMap {
         let mut arrays = BinaryArrayMap::new();
@@ -363,6 +453,8 @@ impl BuildArrayMapFrom for DeconvolutedPeak {
         arrays
     }
 
+    /// [`CentroidPeak`] produces [`ArrayType::MZArray`], [`ArrayType::IntensityArray`]
+    /// and [`ArrayType::ChargeArray`]
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {
         Some(vec![
             ArrayType::MZArray,
@@ -372,6 +464,11 @@ impl BuildArrayMapFrom for DeconvolutedPeak {
     }
 }
 
+
+/// The basic [`DeconvolutedPeak`] implements [`BuildFromArrayMap`].
+///
+/// It assumes that the charge carrier was a proton when converting to neutral mass
+/// from [`ArrayType::MZArray`].
 impl BuildFromArrayMap for DeconvolutedPeak {
     fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Vec<Self>, ArrayRetrievalError> {
         let mz_array = arrays.mzs()?;
@@ -398,7 +495,18 @@ impl BuildFromArrayMap for DeconvolutedPeak {
 
 // Ion mobility features
 
+/// [`Feature`] with an [`IonMobility`] dimension implement
+/// [`BuildArrayMapFrom`].
+///
+/// It uses a non-standard "feature identifier array" which assigns
+/// a unique integer identifier to all points belonging to the same
+/// [`Feature`].
+///
+/// It also produces [`ArrayType::RawIonMobilityArray`] which does not have
+/// an associated [`Unit`]. The caller *should* update this if context is available.
 impl BuildArrayMapFrom for Feature<MZ, IonMobility> {
+    /// [`Feature`] produces [`ArrayType::MZArray`] and [`ArrayType::IntensityArray`],
+    /// [`ArrayType::RawIonMobilityArray`], and a non-standard "feature identifier array"
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {
         Some(vec![
             ArrayType::MZArray,
@@ -408,6 +516,12 @@ impl BuildArrayMapFrom for Feature<MZ, IonMobility> {
         ])
     }
 
+    /// [`Feature`] uses a non-standard "feature identifier array" which assigns
+    /// a unique integer identifier to all points belonging to the same
+    /// [`Feature`].
+    ///
+    /// It also produces [`ArrayType::RawIonMobilityArray`] which does not have
+    /// an associated [`Unit`]. The caller *should* update these for consistency
     fn as_arrays(source: &[Self]) -> BinaryArrayMap {
         let mut arrays = BinaryArrayMap::new();
         let n: usize = source.iter().map(|f| f.len()).sum();
@@ -471,12 +585,29 @@ impl BuildArrayMapFrom for Feature<MZ, IonMobility> {
     }
 }
 
+/// [`Feature`] with an [`IonMobility`] dimension implement
+/// [`BuildFromArrayMap`].
+///
+/// It requires a non-standard "feature identifier array" which assigns
+/// a unique integer identifier to all points belonging to the same
+/// [`Feature`].
+///
+/// While it explicitly requires [`ArrayType::RawIonMobilityArray`], it will accept
+/// any raw ion mobility array type.
 impl BuildFromArrayMap for Feature<MZ, IonMobility> {
+    /// [`Feature`] requires [`ArrayType::MZArray`] and [`ArrayType::IntensityArray`],
+    /// [`ArrayType::RawIonMobilityArray`], and a non-standard "feature identifier array"
+    fn arrays_required() -> Option<Vec<ArrayType>> {
+        Self::default().arrays_included()
+    }
+
     fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Vec<Self>, ArrayRetrievalError> {
         let mz_array = arrays.mzs()?;
         let intensity_array = arrays.intensities()?;
         let im_array = arrays
             .get(&ArrayType::RawIonMobilityArray)
+            .or_else(|| arrays.get(&ArrayType::RawDriftTimeArray))
+            .or_else(|| arrays.get(&ArrayType::RawInverseReducedIonMobilityArray))
             .ok_or(ArrayRetrievalError::NotFound(
                 ArrayType::RawIonMobilityArray,
             ))?
@@ -511,7 +642,20 @@ impl BuildFromArrayMap for Feature<MZ, IonMobility> {
     }
 }
 
+/// [`ChargedFeature`] with an [`IonMobility`] dimension implement
+/// [`BuildArrayMapFrom`].
+///
+/// It uses a non-standard "feature identifier array" which assigns
+/// a unique integer identifier to all points belonging to the same
+/// [`Feature`].
+///
+/// It also produces [`ArrayType::RawIonMobilityArray`] which does not have
+/// an associated [`Unit`]. The caller *should* update this if context is available.
 impl BuildArrayMapFrom for ChargedFeature<Mass, IonMobility> {
+
+    /// [`ChargedFeature`] produces [`ArrayType::MZArray`], [`ArrayType::ChargeArray`],
+    /// [`ArrayType::IntensityArray`], [`ArrayType::RawIonMobilityArray`], and a
+    /// non-standard "feature identifier array"
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {
         Some(vec![
             ArrayType::MZArray,
@@ -522,6 +666,15 @@ impl BuildArrayMapFrom for ChargedFeature<Mass, IonMobility> {
         ])
     }
 
+    /// [`ChargedFeature`] uses a non-standard "feature identifier array" which assigns
+    /// a unique integer identifier to all points belonging to the same
+    /// [`ChargedFeature`].
+    ///
+    /// Like [`DeconvolutedPeak`], [`ChargedFeature`] will compute its m/z value from
+    /// neutral mass and charge, and assumes that the charge carrier is a proton.
+    ///
+    /// It also produces [`ArrayType::RawIonMobilityArray`] which does not have
+    /// an associated [`Unit`]. The caller *should* update these for consistency
     fn as_arrays(source: &[Self]) -> BinaryArrayMap {
         let mut arrays = BinaryArrayMap::new();
         let n: usize = source.iter().map(|f| f.len()).sum();
@@ -592,12 +745,32 @@ impl BuildArrayMapFrom for ChargedFeature<Mass, IonMobility> {
     }
 }
 
+/// [`ChargedFeature`] with an [`IonMobility`] dimension implement
+/// [`BuildFromArrayMap`].
+///
+/// It requires a non-standard "feature identifier array" which assigns
+/// a unique integer identifier to all points belonging to the same
+/// [`Feature`].
+///
+/// Like [`DeconvolutedPeak`], [`ChargedFeature`] will compute its neutral mass from
+/// m/z and assumes that the charge carrier is a proton.
+///
+/// While it explicitly requires [`ArrayType::RawIonMobilityArray`], it will accept
+/// any raw ion mobility array type.
 impl BuildFromArrayMap for ChargedFeature<Mass, IonMobility> {
+    /// [`ChargedFeature`] requires [`ArrayType::MZArray`], [`ArrayType::ChargeArray`] and [`ArrayType::IntensityArray`],
+    /// [`ArrayType::RawIonMobilityArray`], and a non-standard "feature identifier array"
+    fn arrays_required() -> Option<Vec<ArrayType>> {
+        Self::default().arrays_included()
+    }
+
     fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Vec<Self>, ArrayRetrievalError> {
         let mz_array = arrays.mzs()?;
         let intensity_array = arrays.intensities()?;
         let im_array = arrays
             .get(&ArrayType::RawIonMobilityArray)
+            .or_else(|| arrays.get(&ArrayType::RawDriftTimeArray))
+            .or_else(|| arrays.get(&ArrayType::RawInverseReducedIonMobilityArray))
             .ok_or(ArrayRetrievalError::NotFound(
                 ArrayType::RawIonMobilityArray,
             ))?
@@ -641,6 +814,7 @@ impl BuildFromArrayMap for ChargedFeature<Mass, IonMobility> {
     }
 }
 
+/// [`Feature`] uses the default [`BuildArrayMap3DFrom`] implementation.
 impl BuildArrayMap3DFrom for Feature<MZ, IonMobility> {}
 
 impl BuildFromArrayMap3D for Feature<MZ, IonMobility> {
@@ -690,6 +864,7 @@ impl BuildFromArrayMap3D for Feature<MZ, IonMobility> {
     }
 }
 
+/// [`ChargedFeature`] uses the default [`BuildArrayMap3DFrom`] implementation.
 impl BuildArrayMap3DFrom for ChargedFeature<Mass, IonMobility> {}
 
 impl BuildFromArrayMap3D for ChargedFeature<Mass, IonMobility> {
@@ -744,12 +919,13 @@ impl BuildFromArrayMap3D for ChargedFeature<Mass, IonMobility> {
 
 // Ion mobility-aware peaks
 
-impl BuildArrayMapFrom for mzpeaks::peak::IonMobilityAwareCentroidPeak {
+/// TODO
+impl BuildArrayMapFrom for IonMobilityAwareCentroidPeak {
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {
         Some(vec![
             ArrayType::MZArray,
             ArrayType::IntensityArray,
-            ArrayType::IonMobilityArray,
+            ArrayType::MeanIonMobilityArray,
         ])
     }
 
@@ -771,7 +947,7 @@ impl BuildArrayMapFrom for mzpeaks::peak::IonMobilityAwareCentroidPeak {
         intensity_array.unit = Unit::DetectorCounts;
 
         let mut im_array = DataArray::from_name_type_size(
-            &ArrayType::IonMobilityArray,
+            &ArrayType::MeanIonMobilityArray,
             BinaryDataArrayType::Float64,
             source.len() * BinaryDataArrayType::Float64.size_of(),
         );
@@ -802,7 +978,8 @@ impl BuildArrayMapFrom for mzpeaks::peak::IonMobilityAwareCentroidPeak {
     }
 }
 
-impl BuildFromArrayMap for mzpeaks::peak::IonMobilityAwareCentroidPeak {
+/// TODO
+impl BuildFromArrayMap for IonMobilityAwareCentroidPeak {
     fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Vec<Self>, ArrayRetrievalError> {
         let mz_array = arrays.mzs()?;
         let intensity_array = arrays.intensities()?;
@@ -814,7 +991,7 @@ impl BuildFromArrayMap for mzpeaks::peak::IonMobilityAwareCentroidPeak {
             .zip(intensity_array.iter().zip(im_array.iter()))
             .enumerate()
         {
-            peaks.push(mzpeaks::peak::IonMobilityAwareCentroidPeak {
+            peaks.push(IonMobilityAwareCentroidPeak {
                 mz: *mz,
                 intensity: *intensity,
                 index: i as u32,
@@ -833,13 +1010,14 @@ impl BuildFromArrayMap for mzpeaks::peak::IonMobilityAwareCentroidPeak {
     }
 }
 
-impl BuildArrayMapFrom for mzpeaks::peak::IonMobilityAwareDeconvolutedPeak {
+/// TODO
+impl BuildArrayMapFrom for IonMobilityAwareDeconvolutedPeak {
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {
         Some(vec![
             ArrayType::MZArray,
             ArrayType::IntensityArray,
             ArrayType::ChargeArray,
-            ArrayType::IonMobilityArray,
+            ArrayType::MeanIonMobilityArray,
         ])
     }
 
@@ -867,7 +1045,7 @@ impl BuildArrayMapFrom for mzpeaks::peak::IonMobilityAwareDeconvolutedPeak {
         );
 
         let mut im_array = DataArray::from_name_type_size(
-            &ArrayType::IonMobilityArray,
+            &ArrayType::MeanIonMobilityArray,
             BinaryDataArrayType::Float64,
             source.len() * BinaryDataArrayType::Float64.size_of(),
         );
@@ -898,7 +1076,8 @@ impl BuildArrayMapFrom for mzpeaks::peak::IonMobilityAwareDeconvolutedPeak {
     }
 }
 
-impl BuildFromArrayMap for mzpeaks::peak::IonMobilityAwareDeconvolutedPeak {
+/// TODO
+impl BuildFromArrayMap for IonMobilityAwareDeconvolutedPeak {
     fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Vec<Self>, ArrayRetrievalError> {
         let mz_array = arrays.mzs()?;
         let intensity_array = arrays.intensities()?;
@@ -916,7 +1095,7 @@ impl BuildFromArrayMap for mzpeaks::peak::IonMobilityAwareDeconvolutedPeak {
             .enumerate()
         {
             let mass = neutral_mass(*mz, *charge);
-            peaks.push(mzpeaks::peak::IonMobilityAwareDeconvolutedPeak {
+            peaks.push(IonMobilityAwareDeconvolutedPeak {
                 neutral_mass: mass,
                 intensity: *intensity,
                 index: i as u32,
