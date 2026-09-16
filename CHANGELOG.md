@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.67.0] - 2026-09-16
+
+### Changed
+
+- TimsTOF calibration credits m/z model to `rustims`, use the same impl for model types 1 and 2
+
+### Documentation
+
+- Massive update to the `mzdata_bindata` docs
+- Minor update to calibration
+
 ## [0.66.7] - 2026-09-11
 
 ### Added
@@ -1240,7 +1251,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.66.7...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.67.0...HEAD
+[0.67.0]: https://github.com/mobiusklein/mzdata/compare/v0.66.7...v0.67.0
 [0.66.7]: https://github.com/mobiusklein/mzdata/compare/v0.66.6...v0.66.7
 [0.66.6]: https://github.com/mobiusklein/mzdata/compare/v0.66.5...v0.66.6
 [0.66.5]: https://github.com/mobiusklein/mzdata/compare/v0.66.4...v0.66.5
