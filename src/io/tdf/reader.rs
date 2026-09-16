@@ -719,6 +719,13 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     pub fn calibration_models_mut(&mut self) -> &mut CalibrationParameters {
         &mut self.calibration_models
     }
+
+    /// Enable or disable custom m/z recalibration models.
+    ///
+    /// If disabled, the basic quadratic model from [`timsrust`] is used.
+    pub fn use_custom_mz_calibration(&mut self, flag: bool) {
+        self.calibration_models.mz_enabled = flag;
+    }
 }
 
 // Metadata construction routine
@@ -1364,6 +1371,25 @@ impl<
                 _dp: PhantomData,
             }
         })
+    }
+
+    /// Get immutable access to the collection of calibration models for m/z and ion mobility
+    pub fn calibration_models(&self) -> &CalibrationParameters {
+        self.frame_reader.calibration_models()
+    }
+
+    /// Get mutable access to the collection of calibration models for m/z and ion mobility.
+    /// Care *MUST* be taken when configuring these to be consistent with the inferred Bruker
+    /// models' equations.
+    pub fn calibration_models_mut(&mut self) -> &mut CalibrationParameters {
+        self.frame_reader.calibration_models_mut()
+    }
+
+    /// Enable or disable custom m/z recalibration models.
+    ///
+    /// If disabled, the basic quadratic model from [`timsrust`] is used.
+    pub fn use_custom_mz_calibration(&mut self, flag: bool) {
+        self.calibration_models_mut().mz_enabled = flag;
     }
 
     /// The number of spectra available

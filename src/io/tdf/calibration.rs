@@ -1,8 +1,10 @@
 //! The majority of this code is adapted from https://github.com/jspaezp/timsrust-calibration,
-//! distributed under the Apache-2.0 license.
+//! distributed under the Apache-2.0 license, and https://github.com/theGreatHerrLebert/rustims/blob/main/rustdf/src/data/calibration.rs,
+//! and covered under the MIT license attributed to the author there.
 //!
 //! It is replicated to be compatible with `timsrust` v0.4.1 instead of v0.5+ which introduces
-//! greater complexity, and to avoid adding a second SQLite3 implementation.
+//! greater complexity, and to avoid adding a second SQLite3 implementation, nor does it use
+//! the Bruker SDK.
 use mzdata_param::{curie, Param, Unit, Value};
 use rusqlite::Connection;
 use thiserror::Error;
@@ -487,15 +489,87 @@ impl MzCalibrationModel2 {
         Self { model_type, c0, beta, c2, c3, c4, digitizer_timebase, digitizer_delay }
     }
 
+    pub fn convert_f6_wide<const N: usize>(&self, idx: &[f64; N]) -> [f64; N] {
+        let mut tof: [f64; N] = [0.0; N];
+
+        for (v, dst) in idx.iter().zip(tof.iter_mut()) {
+            *dst = v.mul_add(self.digitizer_timebase, self.digitizer_delay)
+        }
+
+        let mut s0 = tof.map(|v| (v - self.c0) / self.beta);
+
+        if self.c3 != 0.0 {
+            // The Taylor expansion of the polynomial as shown in `rustims`
+            let c2_2 = self.c2 * 2.0;
+            let c3_3 = self.c3 * 3.0;
+            let mut mask: [u8; N] = [0; N];
+            for _ in 0..8 {
+                if mask.iter().copied().sum::<u8>() as usize == N { break }
+                for (i, s) in s0.iter_mut().enumerate() {
+                    // let f = self.c0 + self.beta * s + self.c2 * s.powi(2) + self.c3 * s.powi(3) - tof;
+                    // let deriv_f = self.beta + 2.0 * self.c2 * s + 3.0 * self.c3 * s.powi(2);
+                    if mask[i] == 1 { continue }
+                    let s2 = s.powi(2);
+
+                    // linear combination to solve
+                    let f1 = s.mul_add(self.beta, self.c0);
+                    let f2 = s2 * self.c2;
+                    let f3 = s.powi(3).mul_add(self.c3, -tof[i]);
+                    let f = f1 + f2 + f3;
+
+                    // derivative of f
+                    let df1 = s.mul_add(c2_2, self.beta);
+                    let df2 = s2 * c3_3;
+                    let deriv_f = df1 + df2;
+
+                    let step = if deriv_f == 0.0 { 0.0 } else { f / deriv_f };
+                    if step.abs() < 1e-12 { mask[i] = 1 }
+                    *s -= step;
+                }
+            }
+        } else if self.c2 != 0.0 {
+            let beta2 = self.beta.powi(2);
+            let c2_4 = self.c2 * 4.0;
+
+            for (i, s) in s0.iter_mut().enumerate() {
+                let c0_sub_tofi = self.c0 - tof[i];
+                let d = c0_sub_tofi.mul_add(c2_4, -beta2);
+                if d >= 0.0 {
+                    let q = -0.5 * (self.beta + d.sqrt());
+                    *s = c0_sub_tofi / q
+                }
+            }
+        }
+
+        s0.map(|v| v.mul_add(v, -self.c4))
+    }
+
     pub fn convert_f64(&self, idx: f64) -> f64 {
-        let tof = (idx * self.digitizer_timebase) + self.digitizer_delay;
+        let tof = idx.mul_add(self.digitizer_timebase, self.digitizer_delay);
         let inner = tof - self.c0;
         let s0 = inner / self.beta;
         let refined = if self.c3 != 0.0 {
+            // The Taylor expansion of the polynomial as shown in `rustims`
             let mut s = s0;
+            let c2_2 = self.c2 * 2.0;
+            let c3_3 = self.c3 * 3.0;
             for _ in 0..8 {
-                let f = self.c0 + self.beta * s + self.c2 * s.powi(2) + self.c3 * s.powi(3) - tof;
-                let deriv_f = self.beta + 2.0 * self.c2 * s + 3.0 * self.c3 * s.powi(2);
+                // let f = self.c0 + self.beta * s + self.c2 * s.powi(2) + self.c3 * s.powi(3) - tof;
+                // let deriv_f = self.beta + 2.0 * self.c2 * s + 3.0 * self.c3 * s.powi(2);
+
+                let s2 = s.powi(2);
+
+                // linear combination to solve
+                let f1 = s.mul_add(self.beta, self.c0);
+                let f2 = s2 * self.c2;
+                let f3 = s.powi(3).mul_add(self.c3, -tof);
+                let f = f1 + f2 + f3;
+
+                // derivative of f
+                let df1 = s.mul_add(c2_2, self.beta);
+                let df2 = s2 * c3_3;
+                let deriv_f = df1 + df2;
+
                 if deriv_f == 0.0 {
                     break
                 }
@@ -849,5 +923,10 @@ mod test_mz {
         // round trip
         let back = conv.invert(mz_max);
         assert!(((back as u32) as i64 - 636029).abs() <= 1);
+
+        let out = conv.convert_f6_wide::<2>(&[0f64, 636029.0]);
+        assert!((out[0] - 99.990834).abs() < TOL, "mz0={}", out[0]);
+        assert!((out[1] - 1700.005).abs() < TOL, "mz_max={}", out[1]);
+
     }
 }

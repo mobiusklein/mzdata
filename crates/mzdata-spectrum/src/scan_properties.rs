@@ -247,18 +247,20 @@ pub struct ScanWindow {
 }
 
 impl ScanWindow {
-    pub fn new(lower_bound: f32, upper_bound: f32) -> Self {
+    pub const fn new(lower_bound: f32, upper_bound: f32) -> Self {
         Self {
             lower_bound,
             upper_bound,
         }
     }
 
+    /// Test if `point` is between [`Self::lower_bound`] and [`Self::upper_bound`]
     pub fn contains<F: Float>(&self, point: F) -> bool {
         let point = point.to_f32().unwrap();
         self.lower_bound <= point && point <= self.upper_bound
     }
 
+    /// Test if [`Self::lower_bound`] and [`Self::upper_bound`] are both equal to 0.
     pub fn is_empty(&self) -> bool {
         self.lower_bound == 0.0 && self.upper_bound == 0.0
     }
@@ -280,7 +282,9 @@ pub struct ScanEvent {
     /// The identifier of the [`InstrumentConfiguration`](crate::meta::InstrumentConfiguration) associated
     /// with the event
     pub instrument_configuration_id: u32,
+    /// Lazily initialized [`ParamList`]
     pub params: Option<Box<ParamList>>,
+    /// The identifier for another spectrum in the current run or another file.
     pub spectrum_reference: Option<Box<str>>,
 }
 
@@ -427,20 +431,27 @@ impl ScanCombination {
 /// Describe the series of acquisition events that constructed the spectrum
 /// being described.
 pub struct Acquisition {
+    /// The list of scans that were acquired and combined to make a spectrum
     pub scans: ScanEventList,
+    /// How the scans were combined to make the single spectrum.
     pub combination: ScanCombination,
+    /// Lazily initialized [`ParamList`]
     pub params: Option<Box<ParamList>>,
 }
 
 impl Acquisition {
+    /// Get the [`ScanEvent::start_time`] of [`Self::first_scan`] or 0.0 if empty.
     pub fn start_time(&self) -> f64 {
         self.first_scan().map(|v| v.start_time).unwrap_or_default()
     }
 
+    /// An alias of `self.scans.first()`
     pub fn first_scan(&self) -> Option<&ScanEvent> {
         self.scans.first()
     }
 
+    /// If the `self.scans.is_empty()`, create a new default [`ScanEvent`], and then
+    /// `self.scans.first_mut()`
     pub fn first_scan_mut(&mut self) -> Option<&mut ScanEvent> {
         if self.scans.is_empty() {
             self.scans.push(ScanEvent::default());
@@ -448,10 +459,13 @@ impl Acquisition {
         self.scans.first_mut()
     }
 
+    /// As [`Self::first_scan`] but for `last`
     pub fn last_scan(&self) -> Option<&ScanEvent> {
         self.scans.last()
     }
 
+    /// As [`Self::first_scan_mut`] but for `last`. Also creates a [`ScanEvent`]
+    /// if it is missing.
     pub fn last_scan_mut(&mut self) -> Option<&mut ScanEvent> {
         if self.scans.is_empty() {
             self.scans.push(ScanEvent::default());
@@ -459,6 +473,7 @@ impl Acquisition {
         self.scans.last_mut()
     }
 
+    /// Get the list of [`InstrumentConfiguration::id`] referenced by this set of scans
     pub fn instrument_configuration_ids(&self) -> Vec<u32> {
         self.scans
             .iter()
@@ -466,18 +481,22 @@ impl Acquisition {
             .collect()
     }
 
-    pub fn len(&self) -> usize {
+    /// The number of scans in the acquisition
+    pub const fn len(&self) -> usize {
         self.scans.len()
     }
 
+    /// An alias for `self.scans.is_empty()`
     pub fn is_empty(&self) -> bool {
         self.scans.is_empty()
     }
 
+    /// Iterate over references in [`Self::scans`]
     pub fn iter(&self) -> std::slice::Iter<'_, ScanEvent> {
         self.scans.iter()
     }
 
+    /// Iterate over mutable references in [`Self::scans`]
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, ScanEvent> {
         self.scans.iter_mut()
     }
@@ -502,10 +521,12 @@ pub trait IonProperties {
 pub struct SelectedIon {
     /// The selected ion's m/z as reported, may not be the monoisotopic peak.
     pub mz: f64,
+    /// The reported intensity of the selected ion's peak
     pub intensity: f32,
     /// The reported precursor ion's charge state. May be absent in
     /// some source files.
     pub charge: Option<i32>,
+    /// Additional lazily initialized [`ParamList`]
     pub params: Option<Box<ParamList>>,
 }
 
@@ -533,7 +554,9 @@ impl IonMobilityMeasure for SelectedIon {}
 /// Describes the activation method used to dissociate the precursor ion
 pub struct Activation {
     _methods: Vec<DissociationMethodTerm>,
+    /// The energy used to dissociate the precursor(s). This will eventually cease to be a raw `f32`.
     pub energy: f32,
+    /// Any additional [`Param`] describing the activation process
     pub params: ParamList,
 }
 
@@ -573,6 +596,8 @@ impl Activation {
         }
     }
 
+    /// Translate an integer accession ID into a [`DissociationMethodTerm`] if possible to detect
+    /// if it refers to a dissociation method.
     pub fn accession_to_activation(accession: AccessionIntCode) -> bool {
         DissociationMethodTerm::from_accession(accession).is_some()
     }
@@ -589,6 +614,11 @@ impl Activation {
         }
         self.params = rest;
         self._methods = methods;
+    }
+
+    /// The energy used to dissociate the precursor(s)
+    pub fn energy(&self) -> f32 {
+        self.energy
     }
 }
 
@@ -819,7 +849,9 @@ impl Display for SignalContinuity {
 /// or [`Precursor`] in an argument context.
 #[derive(Debug)]
 pub enum AsPrecursorCollection {
+    /// A single [`Precursor`]
     Single(Option<Precursor>),
+    /// Multiple [`Precursor`], denoting higher order MSn
     Multiple(Vec<Precursor>),
 }
 
@@ -969,20 +1001,30 @@ impl_param_described_deferred!(SelectedIon, Acquisition, ScanEvent);
 pub enum ChromatogramType {
     #[default]
     Unknown,
+    /// The sum of all intensity at each time point
     TotalIonCurrentChromatogram,
+    /// The most intense peak at each time point
     BasePeakChromatogram,
+    /// The intensity of selected ion at each time point
     SelectedIonCurrentChromatogram,
+    /// The intensity of selected ion at each time point
     SelectedIonMonitoringChromatogram,
+    /// The intensity of selected ion and its products at each time point
     SelectedReactionMonitoringChromatogram,
     AbsorptionChromatogram,
     EmissionChromatogram,
+    /// The flow rate at each time point
     FlowRateChromatogram,
+    /// The pressure at each time point
     PressureChromatogram,
+    /// The temperature of an element at each time point
     TemperatureChromatogram,
+    /// The intensity of the signal for a specific wavelength of EMR at each time point
     ElectromagneticRadiationChromatogram,
 }
 
 impl ChromatogramType {
+    /// Construct a [`ChromatogramType`] from a PSI-MS controlled vocabulary ID
     pub fn from_accession(accession: AccessionIntCode) -> Option<Self> {
         let tp = match accession {
             1000235 => Self::TotalIonCurrentChromatogram,
@@ -1002,6 +1044,7 @@ impl ChromatogramType {
         Some(tp)
     }
 
+    /// Construct a [`ChromatogramType`] from a PSI-MS controlled vocabulary [`CURIE`]
     pub fn from_curie(curie: CURIE) -> Option<Self> {
         match curie.controlled_vocabulary() {
             ControlledVocabulary::MS => Self::from_accession(curie.accession_int()),
@@ -1009,6 +1052,7 @@ impl ChromatogramType {
         }
     }
 
+    /// Test if the chromatogram is a measure of EMR
     pub fn is_electromagnetic_radiation(&self) -> bool {
         matches!(
             self,
@@ -1018,6 +1062,7 @@ impl ChromatogramType {
         )
     }
 
+    /// Test if the chromatogram is an aggregation across multiple elements
     pub fn is_aggregate(&self) -> bool {
         matches!(
             self,
@@ -1028,6 +1073,7 @@ impl ChromatogramType {
         )
     }
 
+    /// Test if the chromatogram tracks an ionization process
     pub fn is_ion_current(&self) -> bool {
         matches!(
             self,
@@ -1039,6 +1085,7 @@ impl ChromatogramType {
         )
     }
 
+    /// Convert this [`ChromatogramType`] to a [`CURIE`]
     pub fn to_curie(&self) -> CURIE {
         match self {
             Self::TotalIonCurrentChromatogram => CURIE::new(ControlledVocabulary::MS, 1000235),
@@ -1086,29 +1133,43 @@ impl Product {
 
 /// The set of descriptive metadata that give context for how a chromatogram was
 /// recorded.
+///
+/// Chromatograms record measures over time, and may be derived from mass spectra or
+/// other forms of detectors.
 #[derive(Debug, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChromatogramDescription {
+    /// The locally unique identifier for this chromatogram
     pub id: String,
+    /// The ordinal index for this chromatogram
     pub index: usize,
+    /// The MS level, if any, for this chromatogram
     pub ms_level: Option<u8>,
+    /// The MS polarity, if any, for this chromatogram
     pub polarity: ScanPolarity,
+    /// The kind of chromatogram this is
     pub chromatogram_type: ChromatogramType,
 
+    /// Additional [`Param`] that describe this chromatogram
     pub params: ParamList,
+    /// Any [`Precursor`] that describe the derivation of this chromatogram
     pub precursor: Vec<Precursor>,
+    /// Any reaction monitoring linked to this chromatogram
     pub products: Vec<Product>,
 }
 
 impl ChromatogramDescription {
+    /// See [`ChromatogramType::is_aggregate`]
     pub fn is_aggregate(&self) -> bool {
         self.chromatogram_type.is_aggregate()
     }
 
+    /// See [`ChromatogramType::is_electromagnetic_radiation`]
     pub fn is_electromagnetic_radiation(&self) -> bool {
         self.chromatogram_type.is_electromagnetic_radiation()
     }
 
+    /// See [`ChromatogramType::is_ion_current`]
     pub fn is_ion_current(&self) -> bool {
         self.chromatogram_type.is_ion_current()
     }
