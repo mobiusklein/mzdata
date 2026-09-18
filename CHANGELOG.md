@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.67.1] - 2026-09-18
+
+### Added
+
+- Add `BinaryArrayMap3D::params_of` and siblings to bridge the gap between the parameter lists of `DataArray` that are split across the ion mobility dimension.
+
+### Fixed
+
+- Allow TDF readers to opt in to export their calibration models as CV parameters. They will use provisional IDs until ready.
+
 ## [0.67.0] - 2026-09-16
 
 ### Changed
@@ -1251,7 +1261,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.67.0...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.67.1...HEAD
+[0.67.1]: https://github.com/mobiusklein/mzdata/compare/v0.67.0...v0.67.1
 [0.67.0]: https://github.com/mobiusklein/mzdata/compare/v0.66.7...v0.67.0
 [0.66.7]: https://github.com/mobiusklein/mzdata/compare/v0.66.6...v0.66.7
 [0.66.6]: https://github.com/mobiusklein/mzdata/compare/v0.66.5...v0.66.6
