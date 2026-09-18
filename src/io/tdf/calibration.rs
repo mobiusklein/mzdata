@@ -383,8 +383,8 @@ impl TimsCalibrationModel2 {
     /// Convert the model to a [`Param`] that can be used to pass the values around in a tagged generic container
     pub fn as_param(&self) -> Param {
         Param::builder()
-            .curie(curie!(MS:1003824))
-            .name("linear grid interpolation?")
+            .curie(curie!(MS:9999001))
+            .name("rustims-approximated Bruker timsTOF ion mobility grid model")
             .value(Value::List(Box::new(
                 [self.c6, self.c7, self.offset, self.slope].map(Value::Float),
             )))
@@ -603,8 +603,8 @@ impl MzCalibrationModel2 {
     /// Convert the model to a [`Param`] that can be used to pass the values around in a tagged generic container
     pub fn as_param(&self) -> Param {
         Param::builder()
-            .curie(curie!(MS:1003825))
-            .name("square root grid interpolation?")
+            .curie(curie!(MS:9999002))
+            .name("rustims-approximated Bruker timsTOF m/z grid model")
             .value(Value::List(Box::new(
                 [
                     self.c0,

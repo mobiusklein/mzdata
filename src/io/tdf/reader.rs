@@ -152,6 +152,7 @@ pub struct TDFFrameReaderType<
     index: usize,
     offset_index: OffsetIndex,
     calibration_models: CalibrationParameters,
+    export_models_as_params: bool,
     /// The description of the file's contents and the previous data files that were
     /// consumed to produce it.
     pub(crate) file_description: FileDescription,
@@ -293,7 +294,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             softwares: Vec::new(),
             data_processings: Vec::new(),
             samples: Vec::new(),
-
+            export_models_as_params: false,
             run: MassSpectrometryRun::default(),
             detail_level,
 
@@ -647,7 +648,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                 descr.precursor = index_to_precursor(entry, &self.metadata, parent_entry);
             }
 
-            let arrays = if !matches!(self.detail_level, DetailLevel::MetadataOnly) {
+            let mut arrays = if !matches!(self.detail_level, DetailLevel::MetadataOnly) {
                 if let Some(pasef) = entry.pasef_msms() {
                     log::trace!(
                         "Extracting {index} as PasefFrameMsMs with range {:?}",
@@ -685,7 +686,15 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             } else {
                 None
             };
-
+            if self.export_models_as_params {
+                let (mz_model, im_model) = self.calibration_parameters_for(descr.index);
+                descr.add_param(mz_model.clone());
+                descr.add_param(im_model.clone());
+                if let Some(a) = arrays.as_mut() {
+                    a.params_of_entry(ArrayType::MZArray).or_default().push(mz_model);
+                    a.params_of_entry(a.ion_mobility_type.clone()).or_default().push(im_model);
+                }
+            }
             let frame = MultiLayerIonMobilityFrame::new(arrays, None, None, descr);
             Ok(Some(frame))
         } else {
@@ -725,6 +734,16 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     /// If disabled, the basic quadratic model from [`timsrust`] is used.
     pub fn use_custom_mz_calibration(&mut self, flag: bool) {
         self.calibration_models.mz_enabled = flag;
+    }
+
+    /// Export the calibration models as parameters on the associated arrays and on the top-level [`IonMobilityFrameDescription`], or not.
+    pub fn export_models_as_params(&self) -> bool {
+        self.export_models_as_params
+    }
+
+    /// Set whether to export the calibration models as parameters on the associated arrays and on the top-level [`IonMobilityFrameDescription`], or not.
+    pub fn set_export_models_as_params(&mut self, export_models_as_params: bool) {
+        self.export_models_as_params = export_models_as_params;
     }
 }
 
@@ -1117,7 +1136,7 @@ pub type TDFFrameReader =
 ///
 /// It can sum over ion mobility spectra, consolidating features into peaks. Enable this
 /// behavior by [`Self::set_consolidate_peaks`] `true`. The granularity of the merging
-/// in the m/z dimension [`Self::peak_merging_tolerance`].
+/// in the m/z dimension is controlled by [`Self::peak_merging_tolerance`].
 #[derive(Debug)]
 pub struct TDFSpectrumReaderType<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
@@ -1169,6 +1188,7 @@ impl<
             run: view.run,
             _c: PhantomData,
             _d: PhantomData,
+            export_models_as_params: false,
         })
     }
 }
@@ -1392,6 +1412,17 @@ impl<
         self.calibration_models_mut().mz_enabled = flag;
     }
 
+
+    /// Export the calibration models as parameters on the associated arrays and on the top-level [`IonMobilityFrameDescription`], or not.
+    pub fn export_models_as_params(&self) -> bool {
+        self.frame_reader.export_models_as_params()
+    }
+
+    /// Set whether to export the calibration models as parameters on the associated arrays and on the top-level [`IonMobilityFrameDescription`], or not.
+    pub fn set_export_models_as_params(&mut self, export_models_as_params: bool) {
+        self.frame_reader.set_export_models_as_params(export_models_as_params);
+    }
+
     /// The number of spectra available
     pub fn len(&self) -> usize {
         self.frame_reader.len()
@@ -1476,10 +1507,14 @@ impl<
         self.frame_reader.get_trace_reader()
     }
 
+    /// Indicate whether or not to remove the ion mobility dimension from the peak list and merge
+    /// m/z values at adjacent ion mobilities
     pub fn will_consolidate_peaks(&self) -> bool {
         self.do_consolidate_peaks
     }
 
+    /// Set whether or not to remove the ion mobility dimension from the peak list and merge
+    /// m/z values at adjacent ion mobilities.
     pub fn set_consolidate_peaks(&mut self, do_consolidate_peaks: bool) {
         self.do_consolidate_peaks = do_consolidate_peaks;
     }
@@ -1843,6 +1878,8 @@ mod test {
         let mut reader = TDFFrameReader::new("test/data/diaPASEF.d")
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
+        reader.set_export_models_as_params(true);
+
         assert_eq!(reader.calibration_models.mz.len(), 2);
         assert_eq!(reader.calibration_models.tims.len(), 1);
 
@@ -1850,6 +1887,9 @@ mod test {
         assert!(s.features.is_none());
         assert_eq!(s.signal_continuity(), SignalContinuity::Centroid);
         assert_eq!(s.ms_level(), 1);
+
+        assert_eq!(s.raw_arrays().unwrap().params_of(&ArrayType::MZArray).unwrap().len(), 1);
+        assert_eq!(s.raw_arrays().unwrap().params_of(&ArrayType::MeanInverseReducedIonMobilityArray).unwrap().len(), 1);
 
         let s = reader.get_frame_by_index(1).unwrap();
         assert!(s.features.is_none());
