@@ -6,3 +6,4 @@ test.mzML
 tmp.mzML
 *.sh
 *.py
+*docs.md

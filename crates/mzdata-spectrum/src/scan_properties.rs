@@ -49,9 +49,33 @@ impl Display for IsolationWindowState {
 /// A helper type that wraps an existing mutable reference to [`IsolationWindow`]
 /// that runs through a state machine updating fields depending upon the accumulated
 /// state of the isolation window.
+///
+/// If relative offsets are used, they will materialize +/- relative to [`Self::target`].
+/// If the deprecated absolute limits are used, they are taken as-is. The relative and
+/// absolute APIs should not be mixed as the state machine does not track absolute/relative
+/// bounds independently.
+///
+/// ```
+/// use mzdata_spectrum::{IsolationWindow, IsolationWindowBuilder};
+///
+/// let mut state = IsolationWindow::default();
+/// IsolationWindowBuilder(&mut state)
+///     .lower_offset(2.0)
+///     .upper_offset(3.0)
+///     .target(500.0);
+/// assert_eq!(state.lower_bound, 498.0);
+/// assert_eq!(state.upper_bound, 503.0);
+/// assert_eq!(state.target, 500.0);
+/// ```
 pub struct IsolationWindowBuilder<'a>(pub &'a mut IsolationWindow);
 
 impl<'a> IsolationWindowBuilder<'a> {
+
+    /// Get the current state of the isolation window
+    pub const fn flags(&self) -> IsolationWindowState {
+        self.0.flags
+    }
+
     /// Set the target value
     pub const fn target(self, value: f32) -> Self {
         self.0.target = value;
@@ -69,7 +93,10 @@ impl<'a> IsolationWindowBuilder<'a> {
         self
     }
 
-    /// Set the lower offset relative to the target
+    /// Set the lower offset relative to the [`Self::target`]
+    ///
+    /// # Panics
+    /// If one of the bounds is already explicit and the target is not specified
     pub const fn lower_offset(self, lower_bound: f32) -> Self {
         match self.0.flags {
             IsolationWindowState::Unknown => {
@@ -83,12 +110,22 @@ impl<'a> IsolationWindowBuilder<'a> {
             IsolationWindowState::Complete => {
                 self.0.lower_bound = self.0.target - lower_bound;
             }
+            IsolationWindowState::Explicit => {
+                if self.0.target == 0.0 {
+                    panic!("Mixed relative and absolute isolation window bounds could not be resolvd. Explicit and relative bounds specified before target");
+                } else {
+                    self.0.lower_bound = self.0.target - lower_bound;
+                }
+            }
             _ => {}
         }
         self
     }
 
-    /// Set the upper offset relative to the target
+    /// Set the upper offset relative to the [`Self::target`]
+    ///
+    /// # Panics
+    /// If one of the bounds is already explicit and the target is not specified
     pub const fn upper_offset(self, upper_bound: f32) -> Self {
         match self.0.flags {
             IsolationWindowState::Unknown => {
@@ -101,6 +138,13 @@ impl<'a> IsolationWindowBuilder<'a> {
             IsolationWindowState::Complete => {
                 self.0.upper_bound = self.0.target + upper_bound;
             }
+            IsolationWindowState::Explicit => {
+                if self.0.target == 0.0 {
+                    panic!("Mixed relative and absolute isolation window bounds could not be resolvd. Explicit and relative bounds specified before target");
+                } else {
+                    self.0.upper_bound = self.0.target + upper_bound;
+                }
+            }
             _ => {}
         }
         self
@@ -108,17 +152,15 @@ impl<'a> IsolationWindowBuilder<'a> {
 
     /// Set the explicit lower limit
     pub const fn lower_limit(self, lower_bound: f32) -> Self {
-        if matches!(
-            self.0.flags,
-            IsolationWindowState::Unknown
-                | IsolationWindowState::Explicit
-                | IsolationWindowState::Complete
-        ) {
-            self.0.flags = IsolationWindowState::Explicit;
-            self.0.lower_bound = lower_bound;
-            if self.0.upper_bound != 0.0 && self.0.target != 0.0 {
-                self.0.flags = IsolationWindowState::Complete
-            }
+        match self.0.flags {
+            IsolationWindowState::Unknown | IsolationWindowState::Explicit | IsolationWindowState::Complete | IsolationWindowState::Offset => {
+                self.0.flags = IsolationWindowState::Explicit;
+                self.0.lower_bound = lower_bound;
+                if self.0.upper_bound != 0.0 && self.0.target != 0.0 {
+                    self.0.flags = IsolationWindowState::Complete
+                }
+            },
+            IsolationWindowState::NoIsolation => {},
         }
         self
     }
@@ -129,6 +171,7 @@ impl<'a> IsolationWindowBuilder<'a> {
             self.0.flags,
             IsolationWindowState::Unknown
                 | IsolationWindowState::Explicit
+                | IsolationWindowState::Offset
                 | IsolationWindowState::Complete
         ) {
             self.0.flags = IsolationWindowState::Explicit;
@@ -153,6 +196,12 @@ impl<'a> IsolationWindowBuilder<'a> {
             IsolationWindowState::Complete | IsolationWindowState::NoIsolation
         )
     }
+
+    /// Set the isolation window unit
+    pub const fn unit(self, unit: Unit) -> Self {
+        *self.0.unit_mut() = unit;
+        self
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -174,6 +223,7 @@ pub struct IsolationWindow {
     /// window from the source file.
     #[cfg_attr(feature = "serde", serde(skip))]
     pub flags: IsolationWindowState,
+    unit: Unit
 }
 
 impl IsolationWindow {
@@ -188,7 +238,18 @@ impl IsolationWindow {
             lower_bound,
             upper_bound,
             flags,
+            unit: Unit::Unknown
         }
+    }
+
+    /// Get the unit of the isolation window
+    pub const fn unit(&self) -> Unit {
+        self.unit
+    }
+
+    /// Get mutable access to unit of the isolation window
+    pub const fn unit_mut(&mut self) -> &mut Unit {
+        &mut self.unit
     }
 
     /// Create an isolation window that is in the "no isolation" state.
@@ -299,7 +360,17 @@ pub(crate) const ION_MOBILITY_SCAN_TERMS: [CURIE; 4] = [
     curie!(MS:1003371),
 ];
 
+/// Describes an entity that may have a point-level ion mobility coordinate.
+///
+/// The default implementation searches for the following ion mobility kinds in attached
+/// [`Param`]s:
+/// - MS:1002476 ion mobility drift time (milliseconds)
+/// - MS:1002815 inverse reduced ion mobility (Vs/cm^2)
+/// - MS:1001581 FAIMS compensation voltage (volts)
+/// - MS:1003371 SELEXION compensation voltage (volts)
 pub trait IonMobilityMeasure: ParamDescribed {
+
+    /// Get the ion mobility coordinate, if one is available.
     fn ion_mobility(&'_ self) -> Option<f64> {
         for u in ION_MOBILITY_SCAN_TERMS {
             if let Some(v) = self.get_param_by_curie(&u).map(|p| p.value()) {
@@ -312,10 +383,13 @@ pub trait IonMobilityMeasure: ParamDescribed {
         None
     }
 
+    /// Test if an ion mobility value is present
     fn has_ion_mobility(&self) -> bool {
         self.ion_mobility().is_some()
     }
 
+    /// Get the raw [`Param`] representation of the ion mobility measure
+    /// with the unit
     fn ion_mobility_type(&self) -> Option<&Param> {
         for u in ION_MOBILITY_SCAN_TERMS {
             if let Some(v) = self.get_param_by_curie(&u) {
@@ -1062,14 +1136,13 @@ impl ChromatogramType {
         )
     }
 
-    /// Test if the chromatogram is an aggregation across multiple elements
+    /// Test if the chromatogram is an aggregation across multiple elements, specifically
+    /// [`Self::TotalIonCurrentChromatogram`] or [`Self::BasePeakChromatogram`]
     pub fn is_aggregate(&self) -> bool {
         matches!(
             self,
             Self::TotalIonCurrentChromatogram
                 | Self::BasePeakChromatogram
-                | Self::PressureChromatogram
-                | Self::FlowRateChromatogram
         )
     }
 

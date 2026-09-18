@@ -64,7 +64,7 @@ pub trait SpectrumGrouping<
         }
     }
 
-    /// The lowest MS level in the group
+    /// The lowest MS level in the group. Returns [`None`] if the group is empty or the MS level is 0.
     fn lowest_ms_level(&self) -> Option<u8> {
         let prec_level = self.precursor().map(|p| p.ms_level()).unwrap_or(u8::MAX);
         let val = self
@@ -78,7 +78,7 @@ pub trait SpectrumGrouping<
         }
     }
 
-    /// The highest MS level in the group
+    /// The highest MS level in the group. Returns [`None`] if the group is empty or the MS level is 0.
     fn highest_ms_level(&self) -> Option<u8> {
         let prec_level = self
             .precursor()
@@ -149,6 +149,8 @@ where
     }
 }
 
+/// [`SpectrumGroup`] are traversed visiting [`SpectrumGroup::precursor`]
+/// if it exists and then every entry in [`SpectrumGroup::products`]
 pub struct SpectrumGroupIntoIter<
     C: CentroidLike = CentroidPeak,
     D: DeconvolutedCentroidLike = DeconvolutedPeak,
@@ -236,7 +238,9 @@ impl<
     }
 }
 
-/// Iterate over the spectra in [`SpectrumGroup`]
+/// Iterate over the spectra in [`SpectrumGroup`]. [`SpectrumGroup`] are traversed
+/// visiting [`SpectrumGroup::precursor`] if it exists and then every entry
+/// in [`SpectrumGroup::products`]
 pub struct SpectrumGroupIter<
     'a,
     C: CentroidLike = CentroidPeak,

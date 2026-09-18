@@ -262,7 +262,7 @@ exclude = ["crates/pymzdata"]
 
 [workspace.package]
 
-version = "0.67.0"
+version = "0.67.1"
 
 keywords = ['mass-spectrometry', 'mzml', 'mgf']
 

@@ -794,7 +794,10 @@ impl<C: CentroidLike> CentroidSpectrumType<C> {
     }
 
     /// Convert a [`CentroidSpectrumType`] into a [`MultiLayerSpectrum`] over any peak type, but
-    /// recode the peak list as [`DataArray`], potentially losing information.
+    /// recode the peak list as [`DataArray`], potentially losing information if the new peak types
+    /// do not re-use the same [`ArrayType`] during peak reconstruction.
+    ///
+    /// For example, reinterpreting [`mzsignal::FittedPeak`] to [`mzpeaks::CentroidPeak`] will convert
     pub fn reinterpret<C1, D1>(self) -> Result<MultiLayerSpectrum<C1, D1>, SpectrumConversionError>
     where
         C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
@@ -894,8 +897,9 @@ impl<D: DeconvolutedCentroidLike> DeconvolutedSpectrumType<D> {
         Ok(val)
     }
 
-    /// Convert a [`DeconvolutedSpectrumType`] into a [`MultiLayerSpectrum`] over any peak type, but
-    /// recode the peak list as [`DataArray`], potentially losing information.
+    /// Convert a [`CentroidSpectrumType`] into a [`MultiLayerSpectrum`] over any peak type, but
+    /// recode the peak list as [`DataArray`], potentially losing information if the new peak types
+    /// do not re-use the same [`ArrayType`] during peak reconstruction.
     pub fn reinterpret<C1, D1>(self) -> MultiLayerSpectrum<C1, D1>
     where
         C1: CentroidLike + BuildArrayMapFrom + BuildFromArrayMap,
@@ -1092,7 +1096,14 @@ where
     C: BuildFromArrayMap + BuildArrayMapFrom,
     D: BuildFromArrayMap + BuildArrayMapFrom,
 {
-    /// Convert a spectrum into a [`CentroidSpectrumType`]
+    /// Convert a spectrum into a [`CentroidSpectrumType`].
+    ///
+    /// This will try the following steps to get the peak list to use in the new instance:
+    ///   1. If the `peaks` field is populated, use it directly .
+    ///   2. If the [`Self::signal_continuity`] is [`SignalContinuity::Centroid`] and
+    ///      [`Self::arrays`] is populated, attempt [`C::try_from_arrays`] to build
+    ///      the peak list from the raw arrays. Otherwise assume the peak list is empty.
+    ///   3. Fail with [`SpectrumConversionError::NotCentroided`]
     pub fn into_centroid(self) -> Result<CentroidSpectrumType<C>, SpectrumConversionError> {
         if let Some(peaks) = self.peaks {
             let mut result = CentroidSpectrumType::<C> {
@@ -1200,7 +1211,8 @@ where
     }
 
     /// Convert a [`MultiLayerSpectrum`] with one set of peak types to another with any peak type, but
-    /// recode the peak list as [`DataArray`] as an intermediary, potentially losing information.
+    /// recode the peak list as [`DataArray`] as an intermediary, potentially losing information if
+    /// the new peak types do not re-use the same [`ArrayType`] during peak reconstruction.
     ///
     /// ## Note
     /// Peak data is not actually reconstructed from the intermediate data arrays. If that is desired,

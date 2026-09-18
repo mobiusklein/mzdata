@@ -34,9 +34,13 @@ pub enum FeatureDataLevel<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
 > {
+    /// No feature-level data is available
     Missing,
+    /// Raw [`BinaryArrayMap3D`] exists, but no features are extracted
     RawData(BinaryArrayMap3D),
+    /// Extracted m/z [`FeatureMap`] exists
     Centroid(FeatureMap<MZ, IonMobility, C>),
+    /// Extracted and neutral mass deconvoluted [`FeatureMap`] exists
     Deconvoluted(FeatureMap<Mass, IonMobility, D>),
 }
 
@@ -48,9 +52,13 @@ pub enum RefFeatureDataLevel<
     C: FeatureLike<MZ, IonMobility> = Feature<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge = ChargedFeature<Mass, IonMobility>,
 > {
+    /// No feature-level data is available
     Missing,
+    /// Raw [`BinaryArrayMap3D`] exists, but no features are extracted
     RawData(&'a BinaryArrayMap3D),
+    /// Extracted m/z [`FeatureMap`] exists
     Centroid(&'a FeatureMap<MZ, IonMobility, C>),
+    /// Extracted and neutral mass deconvoluted [`FeatureMap`] exists
     Deconvoluted(&'a FeatureMap<Mass, IonMobility, D>),
 }
 
@@ -347,6 +355,10 @@ impl<
     D: FeatureLike<Mass, IonMobility> + KnownCharge + BuildFromArrayMap3D,
 > MultiLayerIonMobilityFrame<C, D>
 {
+    /// Try to build extracted feature maps from the raw [`BinaryArrayMap3D`]
+    ///
+    /// This fails if the [`BinaryArrayMap3D`] is not present, or if the required
+    /// arrays for `C` and `D` are absent.
     pub fn try_build_features(
         &mut self,
     ) -> Result<RefFeatureDataLevel<'_, C, D>, SpectrumConversionError> {
@@ -455,6 +467,11 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     }
 }
 
+/// [`RawSpectrum`] instances can be converted to [`MultiLayerIonMobilityFrame`] by
+/// using [`BinaryArrayMap3D::stack`] on the flat [`RawSpectrum::arrays`].
+///
+/// # Errors
+/// This will fail if [`BinaryArrayMap3D::stack`] fails
 impl<CFeat: FeatureLike<MZ, IonMobility>, DFeat: FeatureLike<Mass, IonMobility> + KnownCharge>
     TryFrom<RawSpectrum> for MultiLayerIonMobilityFrame<CFeat, DFeat>
 {
@@ -473,6 +490,11 @@ impl<CFeat: FeatureLike<MZ, IonMobility>, DFeat: FeatureLike<Mass, IonMobility> 
     }
 }
 
+/// [`MultiLayerSpectrum`] instances can be converted to [`MultiLayerIonMobilityFrame`] by
+/// using [`BinaryArrayMap3D::stack`] on the flat [`MultiLayerSpectrum::arrays`].
+///
+/// # Errors
+/// This will fail if [`BinaryArrayMap3D::stack`] fails
 impl<
     CFeat: FeatureLike<MZ, IonMobility>,
     DFeat: FeatureLike<Mass, IonMobility> + KnownCharge,
@@ -499,19 +521,23 @@ impl<
     }
 }
 
+/// A [`MultiLayerIonMobilityFrame`] can be converted to [`RawSpectrum`] by flattening
+/// the feature data into a [`BinaryArrayMap`].
 impl<
     C: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
     D: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
-> From<MultiLayerIonMobilityFrame<C, D>> for RawSpectrum
+> TryFrom<MultiLayerIonMobilityFrame<C, D>> for RawSpectrum
 {
-    fn from(value: MultiLayerIonMobilityFrame<C, D>) -> Self {
+    type Error = ArrayRetrievalError;
+
+    fn try_from(value: MultiLayerIonMobilityFrame<C, D>) -> Result<Self, Self::Error> {
         let im_unit = value.ion_mobility_unit();
         let mut arrays = if let Some(d) = value.deconvoluted_features {
-            BuildArrayMap3DFrom::as_arrays_3d(&d[..]).unstack().unwrap()
+            BuildArrayMap3DFrom::as_arrays_3d(&d[..]).unstack()?
         } else if let Some(c) = value.features {
-            BuildArrayMap3DFrom::as_arrays_3d(&c[..]).unstack().unwrap()
+            BuildArrayMap3DFrom::as_arrays_3d(&c[..]).unstack()?
         } else if let Some(arrays) = value.arrays {
-            arrays.unstack().unwrap()
+            arrays.unstack()?
         } else {
             BinaryArrayMap::default()
         };
@@ -524,20 +550,25 @@ impl<
 
         let descr = value.description.into();
 
-        RawSpectrum::new(descr, arrays)
+        Ok(RawSpectrum::new(descr, arrays))
     }
 }
 
+
+/// A [`MultiLayerIonMobilityFrame`] can be converted to [`MultiLayerSpectrum`] by flattening
+/// the feature data into a [`BinaryArrayMap`].
 impl<
     CFeat: FeatureLike<MZ, IonMobility> + BuildArrayMap3DFrom,
     DFeat: FeatureLike<Mass, IonMobility> + KnownCharge + BuildArrayMap3DFrom,
     CPeak: CentroidLike + BuildFromArrayMap,
     DPeak: DeconvolutedCentroidLike + BuildFromArrayMap,
-> From<MultiLayerIonMobilityFrame<CFeat, DFeat>> for MultiLayerSpectrum<CPeak, DPeak>
+> TryFrom<MultiLayerIonMobilityFrame<CFeat, DFeat>> for MultiLayerSpectrum<CPeak, DPeak>
 {
-    fn from(value: MultiLayerIonMobilityFrame<CFeat, DFeat>) -> Self {
-        let raw: RawSpectrum = value.into();
-        raw.into()
+    type Error = ArrayRetrievalError;
+
+    fn try_from(value: MultiLayerIonMobilityFrame<CFeat, DFeat>) -> Result<Self, Self::Error> {
+        let raw: RawSpectrum = value.try_into()?;
+        Ok(raw.into())
     }
 }
 

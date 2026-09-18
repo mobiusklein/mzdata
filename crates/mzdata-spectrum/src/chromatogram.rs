@@ -8,6 +8,11 @@ use crate::scan_properties::{
 use mzpeaks::coordinate::{Time, MZ};
 use mzpeaks::feature::{FeatureView, SimpleFeature, TimeInterval};
 
+
+/// Chromatograms record measures over time, and may be derived from mass spectra or
+/// other forms of detectors.
+///
+/// Chromatograms might be better called "traces".
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Chromatogram {

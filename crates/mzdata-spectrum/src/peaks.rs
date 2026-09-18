@@ -20,15 +20,16 @@ trait SummaryOps {
     /// Compute the total ion current for a spectrum
     fn tic(&self) -> f32;
 
+    /// Find the point coordinate within the peak layer's coordinate system.
+    ///
+    /// **NOTE**: There is no guarantee that values are stored in m/z order.
     fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize>;
 
     /// Find the number of points in a profile spectrum, or the number of peaks
     /// for a centroid spectrum
     fn len(&self) -> usize;
 
-    /// Get the `i`th point in the peak data.
-    ///
-    /// **NOTE**: There is no guarantee that values are stored in m/z order.
+    /// Get the `i`th point in the peak data, ordered by the peak layer's coordinate system.
     fn get(&self, i: usize) -> Option<MZPoint>;
 
     /// Compute summary information about the peak data's m/z range, base peak, total ion current,
@@ -295,9 +296,13 @@ pub enum PeakDataLevel<
     C: CentroidLike = CentroidPeak,
     D: DeconvolutedCentroidLike = DeconvolutedPeak,
 > {
+    /// No signal data is present
     Missing,
+    /// Raw [`BinaryArrayMap`] exists
     RawData(BinaryArrayMap),
+    /// A m/z centroid peak list exists
     Centroid(MZPeakSetType<C>),
+    /// A neutral mass peak list exists
     Deconvoluted(MassPeakSetType<D>),
 }
 
@@ -382,8 +387,8 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> PeakDataLevel<C, D> {
 
     /// Iterate over [`MZPoint`](mzpeaks::peak::MZPoint) data encoded in the peak data.
     ///
-    /// **NOTE**: Values are produced in the order they are stored, so the data are not guaranteed
-    /// to be ordered by m/z.
+    /// **NOTE**: The [`Self::Deconvoluted`] layer uses the neutral mass coordinate system compared to the others, it should
+    /// be explicitly tested against.
     pub fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize> {
         match self {
             Self::Missing => None,
@@ -562,9 +567,13 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for PeakDataIterDisp
 /// An variant for dispatching to different strategies of computing
 /// common statistics of different levels of peak data.
 pub enum RefPeakDataLevel<'a, C: CentroidLike, D: DeconvolutedCentroidLike> {
+    /// No signal data is present
     Missing,
+    /// Raw [`BinaryArrayMap`] exists
     RawData(&'a BinaryArrayMap),
+    /// A m/z centroid peak list exists
     Centroid(&'a MZPeakSetType<C>),
+    /// A neutral mass peak list exists
     Deconvoluted(&'a MassPeakSetType<D>),
 }
 
@@ -633,7 +642,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataLevel<'_, C, D> {
 
     /// Find the point coordinate within the peak layer's coordinate system.
     ///
-    /// **NOTE**: The [`Self::Deconvoluted`] layer uses a different coordinate system compared to the others, it should
+    /// **NOTE**: The [`Self::Deconvoluted`] layer uses the neutral mass coordinate system compared to the others, it should
     /// be explicitly tested against.
     pub fn search(&self, query: f64, error_tolerance: Tolerance) -> Option<usize> {
         match self {

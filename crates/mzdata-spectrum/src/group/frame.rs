@@ -67,7 +67,7 @@ pub trait IonMobilityFrameGrouping<
         }
     }
 
-    /// The lowest MS level in the group
+    /// The lowest MS level in the group. Returns [`None`] if the group is empty or the MS level is 0.
     fn lowest_ms_level(&self) -> Option<u8> {
         let prec_level = self.precursor().map(|p| p.ms_level()).unwrap_or(u8::MAX);
         let val = self
@@ -81,7 +81,7 @@ pub trait IonMobilityFrameGrouping<
         }
     }
 
-    /// The highest MS level in the group
+    /// The highest MS level in the group. Returns [`None`] if the group is empty or the MS level is 0.
     fn highest_ms_level(&self) -> Option<u8> {
         let prec_level = self
             .precursor()
@@ -262,7 +262,8 @@ impl<
     }
 }
 
-/// Iterate over the spectra in [`IonMobilityFrameGroup`]
+/// Iterate over the spectra in [`IonMobilityFrameGroup`] visiting [`IonMobilityFrameGroup::precursor`]
+/// if it exists and then every entry in [`IonMobilityFrameGroup::products`]
 pub struct IonMobilityFrameGroupIter<
     'a,
     C: FeatureLike<MZ, IonMobility>,
@@ -353,6 +354,8 @@ impl<
     }
 }
 
+/// [`IonMobilityFrameGroup`] are traversed visiting [`IonMobilityFrameGroup::precursor`]
+/// if it exists and then every entry in [`IonMobilityFrameGroup::products`]
 impl<C, D, S> IntoIterator for IonMobilityFrameGroup<C, D, S>
 where
     C: FeatureLike<MZ, IonMobility>,
@@ -383,6 +386,8 @@ where
         }
     }
 
+    /// [`IonMobilityFrameGroup`] are traversed visiting [`IonMobilityFrameGroup::precursor`]
+    /// if it exists and then every entry in [`IonMobilityFrameGroup::products`]
     pub fn iter(&'a self) -> IonMobilityFrameGroupIter<'a, C, D, S, Self> {
         IonMobilityFrameGroupIter::new(self)
     }

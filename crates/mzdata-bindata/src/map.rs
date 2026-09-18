@@ -9,7 +9,7 @@ use rayon::prelude::*;
 
 use mzpeaks::Tolerance;
 
-use mzdata_param::Unit;
+use mzdata_param::{Param, ParamDescribed, Unit};
 
 use super::BinaryDataArrayType;
 use super::array::DataArray;
@@ -583,6 +583,12 @@ macro_rules! _populate_stacked_array_from {
 /// This effectively removes an ion mobility [`DataArray`] and for each unique
 /// value in that array, creates a new [`BinaryArrayMap`] with subsets of each
 /// other [`DataArray`] that co-occur at the same ion mobility coordinate.
+///
+/// Because [`BinaryArrayMap3D`] spreads [`DataArray`] over multiple ion mobility
+/// bins, it cannot share a single [`ParamList`] for each of the dimensions. Instead,
+/// all split [`ArrayType`] have their [`ParamList`] moved to separate storage accessed
+/// using [`params_of`] and its siblins. These [`ParamList`] will be propagated by [`Self::stack`]
+/// and [`BinaryArrayMap3D::unstack`] as appropriate.
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", serde_with::serde_as)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -594,6 +600,7 @@ pub struct BinaryArrayMap3D {
     pub additional_arrays: BinaryArrayMap,
     #[cfg_attr(feature = "serde", serde_as(as = "Vec<(_, _)>"))]
     ion_mobility_index: HashMap<NonNaNF64, usize>,
+    parameters_of: HashMap<ArrayType, mzdata_param::ParamList>
 }
 
 impl BinaryArrayMap3D {
@@ -628,6 +635,7 @@ impl BinaryArrayMap3D {
             arrays,
             ion_mobility_index,
             additional_arrays: Default::default(),
+            parameters_of: Default::default(),
         }
     }
 
@@ -668,7 +676,47 @@ impl BinaryArrayMap3D {
             arrays,
             ion_mobility_index,
             additional_arrays: Default::default(),
+            parameters_of: Default::default(),
         }
+    }
+
+    /// Get a reference to the [`ParamList`] for the specified [`ArrayType`], if one exists.
+    ///
+    /// # See also
+    /// - [`Self::params_of_mut`] to mutate existing [`ParamList`] for extant [`ArrayType`]
+    /// - [`Self::insert_params_of`] to create or overwrite the [`ParamList`] for an [`ArrayType`]
+    pub fn params_of(&self, array_type: &ArrayType) -> Option<&Vec<Param>> {
+        self.parameters_of.get(array_type)
+    }
+
+    /// Get a mutable reference to the [`ParamList`] for the specified [`ArrayType`], if one exists.
+    ///
+    /// # See also
+    /// - [`Self::params_of`] to read existing [`ParamList`] for extant [`ArrayType`]
+    /// - [`Self::insert_params_of`] to create or overwrite the [`ParamList`] for an [`ArrayType`]
+    /// - [`Self::params_of_entry`] to create or modify the [`ParamList`] using a lower
+    /// level Entry API
+    pub fn params_of_mut(&mut self, array_type: &ArrayType) -> Option<&mut Vec<Param>> {
+        self.parameters_of.get_mut(array_type)
+    }
+
+    /// A lower level create or update version of [`Self::insert_params_of`] that uses the
+    /// underlying [`HashMap`]'s Entry API
+    pub fn params_of_entry(&mut self, array_type: ArrayType) -> std::collections::hash_map::Entry<'_, ArrayType, Vec<Param>> {
+        self.parameters_of.entry(array_type)
+    }
+
+    /// Set the [`ParamList`] for the specified [`ArrayType`].
+    ///
+    /// Returns any previous [`ParamList`] associated with that [`ArrayType`].
+    ///
+    /// # See also
+    /// - [`Self::params_of`] to read existing [`ParamList`] for extant [`ArrayType`]
+    /// - [`Self::params_of_mut`] to mutate existing [`ParamList`] for extant [`ArrayType`]
+    /// - [`Self::params_of_entry`] to create or modify the [`ParamList`] using a lower
+    /// level Entry API
+    pub fn insert_params_of(&mut self, array_type: ArrayType, params: Vec<Param>) -> Option<Vec<Param>> {
+        self.parameters_of.insert(array_type, params)
     }
 
     /// Get the associated arrays at the requested ion mobility, if they exist
@@ -853,6 +901,12 @@ impl BinaryArrayMap3D {
         } else if final_size > 0 {
             log::debug!("Unsorted unstack");
         }
+
+        for (k, v) in destination.iter_mut(){
+            if let Some(pars) = self.parameters_of.get(k) {
+                v.params_mut().extend(pars.iter().cloned());
+            }
+        }
         Ok(destination)
     }
 
@@ -902,6 +956,9 @@ impl BinaryArrayMap3D {
                 this.additional_arrays.add(array.clone());
                 continue;
             }
+            if !array.params().is_empty() {
+                this.parameters_of.insert(array_type.clone(), array.params().to_vec());
+            }
             match array.dtype() {
                 BinaryDataArrayType::Unknown => {
                     panic!("Cannot re-sort opaque or unknown dimension data types")
@@ -948,6 +1005,7 @@ impl BinaryArrayMap3D {
 impl TryFrom<BinaryArrayMap> for BinaryArrayMap3D {
     type Error = ArrayRetrievalError;
 
+    /// A wrapper around [`BinaryArrayMap3D::stack`]
     fn try_from(value: BinaryArrayMap) -> Result<Self, Self::Error> {
         Self::stack(&value)
     }

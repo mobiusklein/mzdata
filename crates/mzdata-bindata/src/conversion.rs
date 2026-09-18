@@ -1,18 +1,22 @@
 use std::{collections::HashSet, convert::TryInto, mem};
 
 use mzpeaks::{
-    CentroidLike, CentroidPeak, CoordinateLike, DeconvolutedPeak, DeconvolutedPeakSet, IonMobility, MZ, MZPeakSetType, Mass, PeakSet, feature::{ChargedFeature, Feature}, peak::{IonMobilityAwareCentroidPeak, IonMobilityAwareDeconvolutedPeak}, prelude::*,
+    CentroidLike, CentroidPeak, CoordinateLike, DeconvolutedPeak, DeconvolutedPeakSet, IonMobility,
+    MZ, MZPeakSetType, Mass, PeakSet,
+    feature::{ChargedFeature, Feature},
+    peak::{IonMobilityAwareCentroidPeak, IonMobilityAwareDeconvolutedPeak},
+    prelude::*,
 };
 
 use mzdata_param::Unit;
 
-use crate::{utils::{mass_charge_ratio, neutral_mass}};
+use crate::utils::{mass_charge_ratio, neutral_mass};
 
 use super::{
-    array::DataArray,
-    encodings::{ArrayRetrievalError, ArrayType, BinaryCompressionType, BinaryDataArrayType},
-    map::BinaryArrayMap,
     BinaryArrayMap3D, ByteArrayView,
+    array::DataArray,
+    encodings::{ArrayRetrievalError, ArrayType, BinaryDataArrayType},
+    map::BinaryArrayMap,
 };
 
 impl From<&PeakSet> for BinaryArrayMap {
@@ -30,9 +34,6 @@ impl From<&PeakSet> for BinaryArrayMap {
             BinaryDataArrayType::Float32,
             peaks.len() * BinaryDataArrayType::Float32.size_of(),
         );
-
-        mz_array.compression = BinaryCompressionType::Decoded;
-        intensity_array.compression = BinaryCompressionType::Decoded;
 
         for p in peaks.iter() {
             let mz: f64 = p.coordinate();
@@ -124,10 +125,6 @@ impl From<&DeconvolutedPeakSet> for BinaryArrayMap {
             BinaryDataArrayType::Int32,
             peaks.len() * BinaryDataArrayType::Int32.size_of(),
         );
-
-        mz_array.compression = BinaryCompressionType::Decoded;
-        intensity_array.compression = BinaryCompressionType::Decoded;
-        charge_array.compression = BinaryCompressionType::Decoded;
 
         for p in peaks.iter() {
             let mz: f64 = p.mz();
@@ -334,7 +331,6 @@ pub trait BuildFromArrayMap3D: BuildFromArrayMap {
 
 /// The basic [`CentroidPeak`] implements [`BuildArrayMapFrom`]
 impl BuildArrayMapFrom for CentroidPeak {
-
     /// [`CentroidPeak`] produces [`ArrayType::MZArray`] and [`ArrayType::IntensityArray`]
     fn arrays_included(&self) -> Option<Vec<ArrayType>> {
         Some(vec![ArrayType::MZArray, ArrayType::IntensityArray])
@@ -356,9 +352,6 @@ impl BuildArrayMapFrom for CentroidPeak {
             source.len() * BinaryDataArrayType::Float32.size_of(),
         );
         intensity_array.unit = Unit::DetectorCounts;
-
-        mz_array.compression = BinaryCompressionType::Decoded;
-        intensity_array.compression = BinaryCompressionType::Decoded;
 
         for p in source.iter() {
             let mz: f64 = p.coordinate();
@@ -428,10 +421,6 @@ impl BuildArrayMapFrom for DeconvolutedPeak {
             source.len() * BinaryDataArrayType::Int32.size_of(),
         );
 
-        mz_array.compression = BinaryCompressionType::Decoded;
-        intensity_array.compression = BinaryCompressionType::Decoded;
-        charge_array.compression = BinaryCompressionType::Decoded;
-
         for p in source.iter() {
             let mz: f64 = p.mz();
             let inten: f32 = p.intensity();
@@ -463,7 +452,6 @@ impl BuildArrayMapFrom for DeconvolutedPeak {
         ])
     }
 }
-
 
 /// The basic [`DeconvolutedPeak`] implements [`BuildFromArrayMap`].
 ///
@@ -551,11 +539,6 @@ impl BuildArrayMapFrom for Feature<MZ, IonMobility> {
             BinaryDataArrayType::Int32,
             n * BinaryDataArrayType::Int32.size_of(),
         );
-
-        mz_array.compression = BinaryCompressionType::Decoded;
-        intensity_array.compression = BinaryCompressionType::Decoded;
-        ion_mobility_array.compression = BinaryCompressionType::Decoded;
-        marker_array.compression = BinaryCompressionType::Decoded;
 
         let mut acc = Vec::with_capacity(n);
         source.iter().enumerate().for_each(|(i, f)| {
@@ -652,7 +635,6 @@ impl BuildFromArrayMap for Feature<MZ, IonMobility> {
 /// It also produces [`ArrayType::RawIonMobilityArray`] which does not have
 /// an associated [`Unit`]. The caller *should* update this if context is available.
 impl BuildArrayMapFrom for ChargedFeature<Mass, IonMobility> {
-
     /// [`ChargedFeature`] produces [`ArrayType::MZArray`], [`ArrayType::ChargeArray`],
     /// [`ArrayType::IntensityArray`], [`ArrayType::RawIonMobilityArray`], and a
     /// non-standard "feature identifier array"
@@ -710,11 +692,6 @@ impl BuildArrayMapFrom for ChargedFeature<Mass, IonMobility> {
             BinaryDataArrayType::Int32,
             n * BinaryDataArrayType::Int32.size_of(),
         );
-
-        mz_array.compression = BinaryCompressionType::Decoded;
-        intensity_array.compression = BinaryCompressionType::Decoded;
-        ion_mobility_array.compression = BinaryCompressionType::Decoded;
-        marker_array.compression = BinaryCompressionType::Decoded;
 
         let mut acc = Vec::with_capacity(n);
         source.iter().enumerate().for_each(|(i, f)| {
@@ -952,10 +929,6 @@ impl BuildArrayMapFrom for IonMobilityAwareCentroidPeak {
             source.len() * BinaryDataArrayType::Float64.size_of(),
         );
 
-        mz_array.compression = BinaryCompressionType::Decoded;
-        intensity_array.compression = BinaryCompressionType::Decoded;
-        im_array.compression = BinaryCompressionType::Decoded;
-
         for p in source.iter() {
             let mz: f64 = p.mz();
             let inten: f32 = p.intensity();
@@ -1050,11 +1023,6 @@ impl BuildArrayMapFrom for IonMobilityAwareDeconvolutedPeak {
             source.len() * BinaryDataArrayType::Float64.size_of(),
         );
 
-        mz_array.compression = BinaryCompressionType::Decoded;
-        intensity_array.compression = BinaryCompressionType::Decoded;
-        im_array.compression = BinaryCompressionType::Decoded;
-        charge_array.compression = BinaryCompressionType::Decoded;
-
         for p in source.iter() {
             let mz: f64 = p.mz();
             let inten: f32 = p.intensity();
@@ -1113,5 +1081,91 @@ impl BuildFromArrayMap for IonMobilityAwareDeconvolutedPeak {
             ArrayType::ChargeArray,
             ArrayType::IonMobilityArray,
         ])
+    }
+}
+
+#[cfg(feature = "mzsignal")]
+/// [`mzsignal::FittedPeak`] implements [`BuildArrayMapFrom`], which will
+/// produce [`ArrayType::MZArray`], [`ArrayType::IntensityArray`], and
+/// [`ArrayType::SignalToNoiseArray`]. All other properties will be lost
+impl BuildArrayMapFrom for mzsignal::FittedPeak {
+    fn arrays_included(&self) -> Option<Vec<ArrayType>> {
+        Some(vec![
+            ArrayType::MZArray,
+            ArrayType::IntensityArray,
+            ArrayType::SignalToNoiseArray,
+        ])
+    }
+
+    fn as_arrays(source: &[Self]) -> BinaryArrayMap {
+        let mut arrays = BinaryArrayMap::new();
+
+        let mut mz_array = DataArray::from_name_type_size(
+            &ArrayType::MZArray,
+            BinaryDataArrayType::Float64,
+            source.len() * BinaryDataArrayType::Float64.size_of(),
+        );
+        mz_array.unit = Unit::MZ;
+
+        let mut intensity_array = DataArray::from_name_type_size(
+            &ArrayType::IntensityArray,
+            BinaryDataArrayType::Float32,
+            source.len() * BinaryDataArrayType::Float32.size_of(),
+        );
+        intensity_array.unit = Unit::DetectorCounts;
+
+        let mut snr_array = DataArray::from_name_type_size(
+            &ArrayType::SignalToNoiseArray,
+            BinaryDataArrayType::Float32,
+            source.len() * BinaryDataArrayType::Float32.size_of(),
+        );
+
+        for p in source.iter() {
+            let mz: f64 = p.coordinate();
+            let inten: f32 = p.intensity();
+            mz_array.push(mz).unwrap();
+            intensity_array.push(inten).unwrap();
+            snr_array.push(p.signal_to_noise).unwrap();
+        }
+
+        arrays.add(mz_array);
+        arrays.add(intensity_array);
+        arrays.add(snr_array);
+        arrays
+    }
+}
+
+#[cfg(feature = "mzsignal")]
+/// [`mzsignal::FittedPeak`] implements [`BuildFromArrayMap`], which will
+/// use [`ArrayType::MZArray`], [`ArrayType::IntensityArray`], and
+/// look for [`ArrayType::SignalToNoiseArray`] but will default to 0.0 if it
+/// is absent. All other properties are forced to 0.0.
+impl BuildFromArrayMap for mzsignal::FittedPeak {
+    fn arrays_required() -> Option<Vec<ArrayType>> {
+        CentroidPeak::arrays_required()
+    }
+
+    fn try_from_arrays(arrays: &BinaryArrayMap) -> Result<Vec<Self>, ArrayRetrievalError> {
+        let mzs = arrays.mzs()?;
+        let intens = arrays.intensities()?;
+        let snrs = arrays
+            .get(&ArrayType::SignalToNoiseArray)
+            .and_then(|a| a.to_f32().ok());
+
+        let n = mzs.len();
+
+        let mut out = Vec::with_capacity(n);
+        for (i, (mz, inten)) in mzs.iter().copied().zip(intens.iter().copied()).enumerate() {
+            out.push(mzsignal::FittedPeak::new(
+                mz,
+                inten,
+                0,
+                snrs.as_ref()
+                    .and_then(|v| v.get(i).copied())
+                    .unwrap_or_default(),
+                0.0,
+            ))
+        }
+        Ok(out)
     }
 }
