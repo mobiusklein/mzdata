@@ -2469,7 +2469,7 @@ dependencies = [
 
 [[package]]
 name = "mzdata-spectra"
-version = "0.67.0"
+version = "0.67.1"
 dependencies = [
  "mzdata",
 ]
