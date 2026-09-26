@@ -105,9 +105,52 @@ pub enum MzMLParserState {
     ChromatogramDone,
     ChromatogramListDone,
 
+    Other,
     ParserError,
     EOF,
 }
+
+
+static MZML_TAGS_TO_STATE: phf::Map<&'static [u8], MzMLParserState> = phf::phf_map! {
+    b"softwareList" => MzMLParserState::SoftwareList,
+    b"precursor" => MzMLParserState::Precursor,
+    b"sourceFileList" => MzMLParserState::SourceFileList,
+    b"software" => MzMLParserState::Software,
+    b"spectrumList" => MzMLParserState::SpectrumList,
+    b"chromatogramList" => MzMLParserState::ChromatogramList,
+    b"chromatogram" => MzMLParserState::Chromatogram,
+    b"analyzer" => MzMLParserState::Analyzer,
+    b"spectrum" => MzMLParserState::Spectrum,
+    b"scanList" => MzMLParserState::ScanList,
+    b"selectedIonList" => MzMLParserState::SelectedIonList,
+    b"binary" => MzMLParserState::Binary,
+    b"fileDescription" => MzMLParserState::FileDescription,
+    b"binaryDataArrayList" => MzMLParserState::BinaryDataArrayList,
+    b"dataProcessingList" => MzMLParserState::DataProcessingList,
+    b"source" => MzMLParserState::Source,
+    b"precursorList" => MzMLParserState::PrecursorList,
+    b"scan" => MzMLParserState::Scan,
+    b"processingMethod" => MzMLParserState::ProcessingMethod,
+    b"activation" => MzMLParserState::Activation,
+    b"sourceFile" => MzMLParserState::SourceFile,
+    b"selectedIon" => MzMLParserState::SelectedIon,
+    b"dataProcessing" => MzMLParserState::DataProcessing,
+    b"instrumentConfiguration" => MzMLParserState::InstrumentConfiguration,
+    b"binaryDataArray" => MzMLParserState::BinaryDataArray,
+    b"scanWindow" => MzMLParserState::ScanWindow,
+    b"detector" => MzMLParserState::Detector,
+    b"instrumentConfigurationList" => MzMLParserState::InstrumentConfigurationList,
+    b"run" => MzMLParserState::Run,
+    b"scanWindowList" => MzMLParserState::ScanWindowList,
+    b"isolationWindow" => MzMLParserState::IsolationWindow,
+    b"componentList" => MzMLParserState::ComponentList,
+};
+
+
+pub(crate) fn tag_to_state(tag: &[u8]) -> Option<MzMLParserState> {
+    MZML_TAGS_TO_STATE.get(tag).copied()
+}
+
 
 impl Display for MzMLParserState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

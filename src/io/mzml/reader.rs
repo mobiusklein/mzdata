@@ -20,21 +20,14 @@ use quick_xml::{
 };
 
 use crate::{
-    io::{utils::DetailLevel, Generic3DIonMobilityFrameSource, IntoIonMobilityFrameSource},
-    meta::{
+    io::{Generic3DIonMobilityFrameSource, IntoIonMobilityFrameSource, mzml::reading_shared::tag_to_state, utils::DetailLevel}, meta::{
         DataProcessing, DissociationEnergyTerm, FileDescription, InstrumentConfiguration,
         MSDataFileMetadata, MassSpectrometryRun, Sample, ScanSettings, Software,
-    },
-    params::{Param, ParamList, Unit},
-    prelude::{ParamLike, *},
-    spectrum::{
-        bindata::{
+    }, params::{Param, ParamList, Unit}, prelude::{ParamLike, *}, spectrum::{
+        Chromatogram, ChromatogramLike, HasIonMobility, bindata::{
             ArrayType, BinaryArrayMap, BinaryCompressionType, BinaryDataArrayType,
             BuildArrayMapFrom, BuildFromArrayMap, DataArray,
-        },
-        scan_properties::*,
-        spectrum_types::{CentroidSpectrumType, MultiLayerSpectrum, RawSpectrum, Spectrum},
-        HasIonMobility, {Chromatogram, ChromatogramLike},
+        }, scan_properties::*, spectrum_types::{CentroidSpectrumType, MultiLayerSpectrum, RawSpectrum, Spectrum},
     },
 };
 
@@ -877,221 +870,224 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
 {
     fn start_element(&mut self, event: &BytesStart, state: MzMLParserState) -> ParserResult {
         let elt_name = event.name();
-        match elt_name.as_ref() {
-            b"spectrum" => {
-                self.set_entry_type(EntryType::Spectrum);
-                for attr_parsed in event.attributes() {
-                    match attr_parsed {
-                        Ok(attr) => match attr.key.as_ref() {
-                            b"id" => {
-                                self.entry_id = match attr
-                                    .normalized_value(XmlVersion::Implicit1_0)
-                                    .map(|v| v.to_string())
-                                    .or_else(|e| {
-                                        log::trace!(
-                                            "Detected non-UTF8 character in spectrum id: {e}"
+        let tag = tag_to_state(elt_name.as_ref());
+        if let Some(tag) = tag {
+            match tag {
+                MzMLParserState::Spectrum => {
+                    self.set_entry_type(EntryType::Spectrum);
+                    for attr_parsed in event.attributes() {
+                        match attr_parsed {
+                            Ok(attr) => match attr.key.as_ref() {
+                                b"id" => {
+                                    self.entry_id = match attr
+                                        .normalized_value(XmlVersion::Implicit1_0)
+                                        .map(|v| v.to_string())
+                                        .or_else(|e| {
+                                            log::trace!(
+                                                "Detected non-UTF8 character in spectrum id: {e}"
+                                            );
+                                            Ok(escape(decode_latin1(&attr.value).as_ref()).into())
+                                        }) {
+                                        Ok(value) => value,
+                                        Err(e) => {
+                                            return Err(xml_error!(
+                                                state,
+                                                e,
+                                                "Failed to decode spectrum id".into()
+                                            ))
+                                        }
+                                    };
+                                    trace!("Stored spectrum id = {}", self.entry_id);
+                                }
+                                b"index" => {
+                                    self.index = String::from_utf8_lossy(&attr.value)
+                                        .parse::<usize>()
+                                        .expect("Failed to parse index");
+                                    trace!("Stored spectrum index = {}", self.index);
+                                }
+                                b"dataProcessingRef" => {
+                                    let ident: Box<str> = String::from_utf8_lossy(&attr.value).into();
+                                    self.spectrum_data_processing_ref = Some(ident);
+                                }
+                                _ => {}
+                            },
+                            Err(msg) => {
+                                return Err(self.handle_xml_error(msg.into(), state));
+                            }
+                        }
+                    }
+                    return Ok(MzMLParserState::Spectrum);
+                }
+                MzMLParserState::SpectrumList => {
+                    return Ok(MzMLParserState::SpectrumList);
+                }
+                MzMLParserState::ScanList => {
+                    return Ok(MzMLParserState::ScanList);
+                }
+                MzMLParserState::Scan => {
+                    let mut scan_event = ScanEvent::default();
+                    for attr_parsed in event.attributes() {
+                        match attr_parsed {
+                            Ok(attr) => {
+                                if attr.key.as_ref() == b"instrumentConfigurationRef" {
+                                    scan_event.instrument_configuration_id = self
+                                        .instrument_id_map
+                                        .as_mut()
+                                        .expect("An instrument ID map was not provided")
+                                        .get(
+                                            &attr
+                                                .normalized_value(XmlVersion::Implicit1_0)
+                                                .expect("Error decoding id"),
                                         );
-                                        Ok(escape(decode_latin1(&attr.value).as_ref()).into())
-                                    }) {
-                                    Ok(value) => value,
-                                    Err(e) => {
-                                        return Err(xml_error!(
-                                            state,
-                                            e,
-                                            "Failed to decode spectrum id".into()
-                                        ))
-                                    }
-                                };
-                                trace!("Stored spectrum id = {}", self.entry_id);
-                            }
-                            b"index" => {
-                                self.index = String::from_utf8_lossy(&attr.value)
-                                    .parse::<usize>()
-                                    .expect("Failed to parse index");
-                                trace!("Stored spectrum index = {}", self.index);
-                            }
-                            b"dataProcessingRef" => {
-                                let ident: Box<str> = String::from_utf8_lossy(&attr.value).into();
-                                self.spectrum_data_processing_ref = Some(ident);
-                            }
-                            _ => {}
-                        },
-                        Err(msg) => {
-                            return Err(self.handle_xml_error(msg.into(), state));
-                        }
-                    }
-                }
-                return Ok(MzMLParserState::Spectrum);
-            }
-            b"spectrumList" => {
-                return Ok(MzMLParserState::SpectrumList);
-            }
-            b"scanList" => {
-                return Ok(MzMLParserState::ScanList);
-            }
-            b"scan" => {
-                let mut scan_event = ScanEvent::default();
-                for attr_parsed in event.attributes() {
-                    match attr_parsed {
-                        Ok(attr) => {
-                            if attr.key.as_ref() == b"instrumentConfigurationRef" {
-                                scan_event.instrument_configuration_id = self
-                                    .instrument_id_map
-                                    .as_mut()
-                                    .expect("An instrument ID map was not provided")
-                                    .get(
-                                        &attr
-                                            .normalized_value(XmlVersion::Implicit1_0)
-                                            .expect("Error decoding id"),
-                                    );
-                            } else if attr.key.as_ref() == b"spectrumRef" {
-                                let sref = attr
-                                    .normalized_value(XmlVersion::Implicit1_0)
-                                    .expect("Error decoding spectrumRef");
-                                scan_event.spectrum_reference = Some(sref.into());
-                            }
-                        }
-                        Err(msg) => return Err(self.handle_xml_error(msg.into(), state)),
-                    }
-                }
-                self.acquisition.scans.push(scan_event);
-                return Ok(MzMLParserState::Scan);
-            }
-            b"scanWindow" => {
-                let window = ScanWindow::default();
-                self.acquisition
-                    .last_scan_mut()
-                    .expect("Scan window without scan")
-                    .scan_windows
-                    .push(window);
-                return Ok(MzMLParserState::ScanWindow);
-            }
-            b"scanWindowList" => {
-                return Ok(MzMLParserState::ScanWindowList);
-            }
-            b"precursorList" => {
-                return Ok(MzMLParserState::PrecursorList);
-            }
-            b"precursor" => {
-                self.has_precursor = true;
-                self.new_precursor_mut();
-                for attr_parsed in event.attributes() {
-                    match attr_parsed {
-                        Ok(attr) => {
-                            if attr.key.as_ref() == b"spectrumRef" {
-                                self.precursor_mut().precursor_id = Some(
-                                    attr.normalized_value(XmlVersion::Implicit1_0)
-                                        .expect("Error decoding id")
-                                        .to_string(),
-                                );
-                            }
-                        }
-                        Err(msg) => {
-                            return Err(self.handle_xml_error(msg.into(), state));
-                        }
-                    }
-                }
-                return Ok(MzMLParserState::Precursor);
-            }
-            b"productList" => {
-                return Ok(MzMLParserState::ProductList);
-            }
-            b"product" => {
-                self.new_product();
-                return Ok(MzMLParserState::Product);
-            }
-            b"isolationWindow" => {
-                if matches!(state, MzMLParserState::Product) {
-                    return Ok(MzMLParserState::ProductIsolationWindow);
-                } else {
-                    return Ok(MzMLParserState::IsolationWindow);
-                }
-            }
-            b"selectedIonList" => {
-                return Ok(MzMLParserState::SelectedIonList);
-            }
-            b"selectedIon" => {
-                return Ok(MzMLParserState::SelectedIon);
-            }
-            b"activation" => {
-                return Ok(MzMLParserState::Activation);
-            }
-            b"binaryDataArrayList" => {
-                return Ok(MzMLParserState::BinaryDataArrayList);
-            }
-            b"binaryDataArray" => {
-                let mut dp_set = false;
-                for attr_parsed in event.attributes() {
-                    match attr_parsed {
-                        Ok(attr) => {
-                            if attr.key.as_ref() == b"dataProcessingRef" {
-                                match attr.normalized_value(XmlVersion::Implicit1_0) {
-                                    Ok(v) => {
-                                        self.current_array
-                                            .set_data_processing_reference(Some(v.into()));
-                                        dp_set = true;
-                                        break;
-                                    }
-                                    Err(msg) => return Err(self.handle_xml_error(msg, state)),
+                                } else if attr.key.as_ref() == b"spectrumRef" {
+                                    let sref = attr
+                                        .normalized_value(XmlVersion::Implicit1_0)
+                                        .expect("Error decoding spectrumRef");
+                                    scan_event.spectrum_reference = Some(sref.into());
                                 }
                             }
-                        }
-                        Err(msg) => {
-                            return Err(self.handle_xml_error(msg.into(), state));
+                            Err(msg) => return Err(self.handle_xml_error(msg.into(), state)),
                         }
                     }
+                    self.acquisition.scans.push(scan_event);
+                    return Ok(MzMLParserState::Scan);
                 }
-                if !dp_set {
-                    if let Some(dp_ref) = self.spectrum_data_processing_ref.as_ref() {
-                        self.current_array
-                            .set_data_processing_reference(Some(dp_ref.clone()));
-                    } else if let Some(dp_ref) = self.run_level_data_processing.as_ref() {
-                        self.current_array
-                            .set_data_processing_reference(Some(dp_ref.clone()));
+                MzMLParserState::ScanWindow => {
+                    let window = ScanWindow::default();
+                    self.acquisition
+                        .last_scan_mut()
+                        .expect("Scan window without scan")
+                        .scan_windows
+                        .push(window);
+                    return Ok(MzMLParserState::ScanWindow);
+                }
+                MzMLParserState::ScanWindowList => {
+                    return Ok(MzMLParserState::ScanWindowList);
+                }
+                MzMLParserState::PrecursorList => {
+                    return Ok(MzMLParserState::PrecursorList);
+                }
+                MzMLParserState::Precursor => {
+                    self.has_precursor = true;
+                    self.new_precursor_mut();
+                    for attr_parsed in event.attributes() {
+                        match attr_parsed {
+                            Ok(attr) => {
+                                if attr.key.as_ref() == b"spectrumRef" {
+                                    self.precursor_mut().precursor_id = Some(
+                                        attr.normalized_value(XmlVersion::Implicit1_0)
+                                            .expect("Error decoding id")
+                                            .to_string(),
+                                    );
+                                }
+                            }
+                            Err(msg) => {
+                                return Err(self.handle_xml_error(msg.into(), state));
+                            }
+                        }
+                    }
+                    return Ok(MzMLParserState::Precursor);
+                }
+                MzMLParserState::ProductList => {
+                    return Ok(MzMLParserState::ProductList);
+                }
+                MzMLParserState::Product => {
+                    self.new_product();
+                    return Ok(MzMLParserState::Product);
+                }
+                MzMLParserState::IsolationWindow => {
+                    if matches!(state, MzMLParserState::Product) {
+                        return Ok(MzMLParserState::ProductIsolationWindow);
+                    } else {
+                        return Ok(MzMLParserState::IsolationWindow);
                     }
                 }
+                MzMLParserState::SelectedIonList => {
+                    return Ok(MzMLParserState::SelectedIonList);
+                }
+                MzMLParserState::SelectedIon => {
+                    return Ok(MzMLParserState::SelectedIon);
+                }
+                MzMLParserState::Activation => {
+                    return Ok(MzMLParserState::Activation);
+                }
+                MzMLParserState::BinaryDataArrayList => {
+                    return Ok(MzMLParserState::BinaryDataArrayList);
+                }
+                MzMLParserState::BinaryDataArray => {
+                    let mut dp_set = false;
+                    for attr_parsed in event.attributes() {
+                        match attr_parsed {
+                            Ok(attr) => {
+                                if attr.key.as_ref() == b"dataProcessingRef" {
+                                    match attr.normalized_value(XmlVersion::Implicit1_0) {
+                                        Ok(v) => {
+                                            self.current_array
+                                                .set_data_processing_reference(Some(v.into()));
+                                            dp_set = true;
+                                            break;
+                                        }
+                                        Err(msg) => return Err(self.handle_xml_error(msg, state)),
+                                    }
+                                }
+                            }
+                            Err(msg) => {
+                                return Err(self.handle_xml_error(msg.into(), state));
+                            }
+                        }
+                    }
+                    if !dp_set {
+                        if let Some(dp_ref) = self.spectrum_data_processing_ref.as_ref() {
+                            self.current_array
+                                .set_data_processing_reference(Some(dp_ref.clone()));
+                        } else if let Some(dp_ref) = self.run_level_data_processing.as_ref() {
+                            self.current_array
+                                .set_data_processing_reference(Some(dp_ref.clone()));
+                        }
+                    }
 
-                return Ok(MzMLParserState::BinaryDataArray);
-            }
-            b"binary" => {
-                return Ok(MzMLParserState::Binary);
-            }
-            b"chromatogramList" => return Ok(MzMLParserState::ChromatogramList),
-            b"chromatogram" => {
-                self.set_entry_type(EntryType::Chromatogram);
-                for attr_parsed in event.attributes() {
-                    match attr_parsed {
-                        Ok(attr) => match attr.key.as_ref() {
-                            b"id" => {
-                                self.entry_id = attr
-                                    .normalized_value(XmlVersion::Implicit1_0)
-                                    .map(|v| v.to_string())
-                                    .or_else(|_| -> Result<String, quick_xml::Error> {
-                                        log::trace!(
-                                            "Detected non-UTF8 character in chromatogram id"
-                                        );
-                                        Ok(escape(decode_latin1(&attr.value).as_ref()).into())
-                                    })
-                                    .unwrap();
-                                trace!("Stored chromatogram id = {}", self.entry_id);
+                    return Ok(MzMLParserState::BinaryDataArray);
+                }
+                MzMLParserState::Binary => {
+                    return Ok(MzMLParserState::Binary);
+                }
+                MzMLParserState::ChromatogramList => return Ok(MzMLParserState::ChromatogramList),
+                MzMLParserState::Chromatogram => {
+                    self.set_entry_type(EntryType::Chromatogram);
+                    for attr_parsed in event.attributes() {
+                        match attr_parsed {
+                            Ok(attr) => match attr.key.as_ref() {
+                                b"id" => {
+                                    self.entry_id = attr
+                                        .normalized_value(XmlVersion::Implicit1_0)
+                                        .map(|v| v.to_string())
+                                        .or_else(|_| -> Result<String, quick_xml::Error> {
+                                            log::trace!(
+                                                "Detected non-UTF8 character in chromatogram id"
+                                            );
+                                            Ok(escape(decode_latin1(&attr.value).as_ref()).into())
+                                        })
+                                        .unwrap();
+                                    trace!("Stored chromatogram id = {}", self.entry_id);
+                                }
+                                b"index" => {
+                                    self.index = String::from_utf8_lossy(&attr.value)
+                                        .parse::<usize>()
+                                        .expect("Failed to parse index");
+                                    trace!("Stored chromatogram index = {}", self.index);
+                                }
+                                _ => {}
+                            },
+                            Err(msg) => {
+                                return Err(self.handle_xml_error(msg.into(), state));
                             }
-                            b"index" => {
-                                self.index = String::from_utf8_lossy(&attr.value)
-                                    .parse::<usize>()
-                                    .expect("Failed to parse index");
-                                trace!("Stored chromatogram index = {}", self.index);
-                            }
-                            _ => {}
-                        },
-                        Err(msg) => {
-                            return Err(self.handle_xml_error(msg.into(), state));
                         }
                     }
+                    return Ok(MzMLParserState::Chromatogram);
                 }
-                return Ok(MzMLParserState::Chromatogram);
+                _ => {}
             }
-            _ => {}
-        };
+        }
         Ok(state)
     }
 
@@ -1256,49 +1252,51 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
     }
 
     fn end_element(&mut self, event: &BytesEnd, state: MzMLParserState) -> ParserResult {
-        let elt_name = event.name();
-        match elt_name.as_ref() {
-            b"spectrum" => return Ok(MzMLParserState::SpectrumDone),
-            b"chromatogram" => return Ok(MzMLParserState::ChromatogramDone),
-            b"scanList" => return Ok(MzMLParserState::Spectrum),
-            b"scan" => return Ok(MzMLParserState::ScanList),
-            b"scanWindow" => return Ok(MzMLParserState::ScanWindowList),
-            b"scanWindowList" => return Ok(MzMLParserState::Scan),
-            b"precursorList" => return Ok(MzMLParserState::Spectrum),
-            b"precursor" => return Ok(MzMLParserState::PrecursorList),
-            b"isolationWindow" => {
-                if matches!(state, MzMLParserState::ProductIsolationWindow) {
-                    return Ok(MzMLParserState::Product);
-                } else {
-                    return Ok(MzMLParserState::Precursor);
+        let tag = tag_to_state(event.as_ref());
+        if let Some(tag) = tag {
+            match tag {
+                MzMLParserState::Spectrum => return Ok(MzMLParserState::SpectrumDone),
+                MzMLParserState::Chromatogram => return Ok(MzMLParserState::ChromatogramDone),
+                MzMLParserState::ScanList => return Ok(MzMLParserState::Spectrum),
+                MzMLParserState::Scan => return Ok(MzMLParserState::ScanList),
+                MzMLParserState::ScanWindow => return Ok(MzMLParserState::ScanWindowList),
+                MzMLParserState::ScanWindowList => return Ok(MzMLParserState::Scan),
+                MzMLParserState::PrecursorList => return Ok(MzMLParserState::Spectrum),
+                MzMLParserState::Precursor => return Ok(MzMLParserState::PrecursorList),
+                MzMLParserState::IsolationWindow => {
+                    if matches!(state, MzMLParserState::ProductIsolationWindow) {
+                        return Ok(MzMLParserState::Product);
+                    } else {
+                        return Ok(MzMLParserState::Precursor);
+                    }
                 }
-            }
-            b"product" => return Ok(MzMLParserState::ProductList),
-            b"productList" => return Ok(MzMLParserState::Spectrum),
-            b"selectedIonList" => return Ok(MzMLParserState::Precursor),
-            b"selectedIon" => return Ok(MzMLParserState::SelectedIonList),
-            b"activation" => return Ok(MzMLParserState::Precursor),
-            b"binaryDataArrayList" => {
-                return Ok(MzMLParserState::Spectrum);
-            }
-            b"binaryDataArray" => {
-                let mut array = mem::take(&mut self.current_array);
-                if self.detail_level == DetailLevel::Full {
-                    array.decode_and_store().map_err(|e| {
-                        let new_err =
-                            MzMLParserError::ArrayDecodingError(state, array.name.clone(), e);
-                        log::error!("Failed to decode mzML array: {new_err}");
-                        new_err
-                    })?;
+                MzMLParserState::Product => return Ok(MzMLParserState::ProductList),
+                MzMLParserState::ProductList => return Ok(MzMLParserState::Spectrum),
+                MzMLParserState::SelectedIonList => return Ok(MzMLParserState::Precursor),
+                MzMLParserState::SelectedIon => return Ok(MzMLParserState::SelectedIonList),
+                MzMLParserState::Activation => return Ok(MzMLParserState::Precursor),
+                MzMLParserState::BinaryDataArrayList => {
+                    return Ok(MzMLParserState::Spectrum);
                 }
-                self.arrays.add(array);
-                return Ok(MzMLParserState::BinaryDataArrayList);
-            }
-            b"binary" => return Ok(MzMLParserState::BinaryDataArray),
-            b"spectrumList" => return Ok(MzMLParserState::SpectrumListDone),
-            b"chromatogramList" => return Ok(MzMLParserState::ChromatogramListDone),
-            _ => {}
-        };
+                MzMLParserState::BinaryDataArray => {
+                    let mut array = mem::take(&mut self.current_array);
+                    if self.detail_level == DetailLevel::Full {
+                        array.decode_and_store().map_err(|e| {
+                            let new_err =
+                                MzMLParserError::ArrayDecodingError(state, array.name.clone(), e);
+                            log::error!("Failed to decode mzML array: {new_err}");
+                            new_err
+                        })?;
+                    }
+                    self.arrays.add(array);
+                    return Ok(MzMLParserState::BinaryDataArrayList);
+                }
+                MzMLParserState::Binary => return Ok(MzMLParserState::BinaryDataArray),
+                MzMLParserState::SpectrumList => return Ok(MzMLParserState::SpectrumListDone),
+                MzMLParserState::ChromatogramList => return Ok(MzMLParserState::ChromatogramListDone),
+                _ => {}
+            };
+        }
         Ok(state)
     }
 

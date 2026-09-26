@@ -59,7 +59,7 @@ checksum = ["dep:sha1", "dep:hex"]
 cv = ["mzdata-param/cv", "mzdata-param/static_data", "mzdata-meta/cv", "dep:mzcv"]
 
 mgf = []
-mzml = ["dep:quick-xml", "checksum", "dep:memchr", "dep:encoding_rs"]
+mzml = ["dep:quick-xml", "checksum", "dep:memchr", "dep:encoding_rs", "dep:phf"]
 imzml = ["mzml", "dep:uuid", "mzdata-param/imzml"]
 
 numpress = ["mzdata-bindata/numpress"]
@@ -211,6 +211,7 @@ encoding_rs = { version = "0.8.35", optional = true }
 libloading = { version = "0.8.6", optional = true }
 
 mzcv = { workspace = true, optional = true }
+phf = { workspace = true, optional = true }
 
 
 [dev-dependencies]
@@ -300,6 +301,7 @@ thiserror = "2.0.2"
 log = "0.4.20"
 identity-hash = "0.1.0"
 num-traits = "0.2"
+phf = { version = "0.14.0", features = ["macros"] }
 
 # serialization
 serde = { version = "1.0", features = ["derive"] }
