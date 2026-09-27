@@ -1019,6 +1019,26 @@ impl<
     }
 }
 
+impl<
+        R: AsyncReadType + AsyncSeek + AsyncSeekExt + Unpin + Send,
+        C: CentroidLike + Send + Sync + BuildFromArrayMap,
+        D: DeconvolutedCentroidLike + Send + Sync + BuildFromArrayMap,
+    > AsyncChromatogramSource for MzMLReaderType<R, C, D>
+{
+    fn get_chromatogram_by_id(&mut self, id: &str) -> impl std::future::Future<Output = Option<Chromatogram>> {
+        self.get_chromatogram_by_id(id)
+    }
+
+    fn get_chromatogram_by_index(&mut self, index: usize) -> impl std::future::Future<Output = Option<Chromatogram>> {
+        self.get_chromatogram_by_index(index)
+    }
+
+    fn count_chromatograms(&self) -> usize {
+        self.chromatogram_index.len()
+    }
+}
+
+
 #[cfg(feature = "async")]
 impl<
         C: CentroidLike + Send + Sync + BuildFromArrayMap,

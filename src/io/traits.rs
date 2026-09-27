@@ -28,6 +28,9 @@ pub use crate::spectrum::group::{SpectrumGrouping, IonMobilityFrameGrouping};
 pub use spectrum::{AsyncSpectrumSource, AsyncRandomAccessSpectrumIterator, SpectrumStream};
 
 #[cfg(feature = "async_partial")]
+pub use chromatogram::AsyncChromatogramSource;
+
+#[cfg(feature = "async_partial")]
 pub use frame::{
     AsyncGeneric3DIonMobilityFrameSource, AsyncIntoIonMobilityFrameSource,
     AsyncIonMobilityFrameSource, AsyncRandomAccessIonMobilityFrameIterator, IonMobilityFrameStream,

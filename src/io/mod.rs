@@ -3,13 +3,13 @@
 //! There are many data file formats for recording mass spectrometry data.
 //!
 
+#[cfg(feature = "imzml")]
+pub mod imzml;
 mod infer_format;
 pub mod mgf;
 pub mod mzml;
 #[cfg(feature = "mzmlb")]
 pub mod mzmlb;
-#[cfg(feature = "imzml")]
-pub mod imzml;
 mod offset_index;
 #[cfg(feature = "proxi")]
 pub mod proxi;
@@ -20,9 +20,9 @@ mod utils;
 pub(crate) mod compression;
 
 pub use crate::io::infer_format::{
-    infer_format, infer_from_path, infer_from_stream, IMMZReaderType, MZReader, MZReaderBuilder,
-    MZReaderType, MassSpectrometryFormat, MassSpectrometryReadWriteProcess, Sink, Source,
-    _SourceFileExt,
+    _SourceFileExt, infer_format, infer_from_path, infer_from_stream, IMMZReaderType, MZReader,
+    MZReaderBuilder, MZReaderType, MassSpectrometryFormat, MassSpectrometryReadWriteProcess, Sink,
+    Source,
 };
 
 #[cfg(feature = "mgf")]
@@ -53,12 +53,10 @@ pub use crate::io::traits::{
 };
 
 #[cfg(feature = "async_partial")]
-pub use crate::io::traits::{AsyncSpectrumSource, AsyncRandomAccessSpectrumIterator, SpectrumStream};
-
-#[cfg(feature = "async_partial")]
 pub use crate::io::traits::{
-    AsyncGeneric3DIonMobilityFrameSource, AsyncIntoIonMobilityFrameSource,
-    AsyncIonMobilityFrameSource, AsyncRandomAccessIonMobilityFrameIterator, IonMobilityFrameStream,
+    AsyncChromatogramSource, AsyncGeneric3DIonMobilityFrameSource, AsyncIntoIonMobilityFrameSource,
+    AsyncIonMobilityFrameSource, AsyncRandomAccessIonMobilityFrameIterator,
+    AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource, IonMobilityFrameStream, SpectrumStream,
 };
 
 #[cfg(feature = "mzsignal")]
@@ -94,13 +92,11 @@ pub mod tdf;
 
 pub mod usi;
 
-
 // A location to re-export the symbols needed to make mz_read and
 // mz_write macros behave properly in other crates.
 #[doc(hidden)]
 pub mod _impl {
     pub use super::shorthand::*;
-
 }
 
 #[cfg(feature = "parallelism")]
