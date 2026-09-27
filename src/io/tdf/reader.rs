@@ -4,6 +4,7 @@ use std::{
 };
 
 use chrono::DateTime;
+use mzdata_param::ControlledVocabulary::MS;
 
 #[allow(unused)]
 use crate::io::checksum_file;
@@ -688,8 +689,6 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             };
             if self.export_models_as_params {
                 let (mz_model, im_model) = self.calibration_parameters_for(descr.index);
-                descr.add_param(mz_model.clone());
-                descr.add_param(im_model.clone());
                 if let Some(a) = arrays.as_mut() {
                     a.params_of_entry(ArrayType::MZArray).or_default().push(mz_model);
                     a.params_of_entry(a.ion_mobility_type.clone()).or_default().push(im_model);
@@ -1676,13 +1675,20 @@ fn frame_to_description(
         let im_low = metadata.im_converter.convert(pasef.scan_start as u32);
         let im_high = metadata.im_converter.convert(pasef.scan_end as u32);
 
+
         descr.add_param(
-            Param::new_key_value("ion mobility lower limit", im_low)
-                .with_unit_t(&Unit::VoltSecondPerSquareCentimeter),
+            MS.const_param(
+                "lowest observed ion mobility",
+                mzdata_param::ValueRef::Float(im_low),
+                1003437,
+                Unit::VoltSecondPerSquareCentimeter).into()
         );
         descr.add_param(
-            Param::new_key_value("ion mobility upper limit", im_high)
-                .with_unit_t(&Unit::VoltSecondPerSquareCentimeter),
+            MS.const_param(
+                "highest observed ion mobility",
+                mzdata_param::ValueRef::Float(im_high),
+                1003438,
+                Unit::VoltSecondPerSquareCentimeter).into()
         );
 
         if frame_slice.is_none() {
@@ -1695,12 +1701,19 @@ fn frame_to_description(
         let im_high = metadata.im_converter.convert(pasef.scan_end as u32);
 
         descr.add_param(
-            Param::new_key_value("ion mobility lower limit", im_low)
-                .with_unit_t(&Unit::VoltSecondPerSquareCentimeter),
+            MS.const_param(
+                "lowest observed ion mobility",
+                mzdata_param::ValueRef::Float(im_low),
+                1003437,
+                Unit::VoltSecondPerSquareCentimeter).into()
         );
+
         descr.add_param(
-            Param::new_key_value("ion mobility upper limit", im_high)
-                .with_unit_t(&Unit::VoltSecondPerSquareCentimeter),
+            MS.const_param(
+                "highest observed ion mobility",
+                mzdata_param::ValueRef::Float(im_high),
+                1003438,
+                Unit::VoltSecondPerSquareCentimeter).into()
         );
 
         scan.add_param(
