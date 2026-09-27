@@ -490,25 +490,21 @@ impl MzCalibrationModel2 {
     }
 
     pub fn convert_f6_wide<const N: usize>(&self, idx: &[f64; N]) -> [f64; N] {
-        let mut tof: [f64; N] = [0.0; N];
+        let mut tof = [0.0; N];
 
         for (v, dst) in idx.iter().zip(tof.iter_mut()) {
             *dst = v.mul_add(self.digitizer_timebase, self.digitizer_delay)
         }
 
         let mut s0 = tof.map(|v| (v - self.c0) / self.beta);
-
         if self.c3 != 0.0 {
             // The Taylor expansion of the polynomial as shown in `rustims`
             let c2_2 = self.c2 * 2.0;
             let c3_3 = self.c3 * 3.0;
-            let mut mask: [u8; N] = [0; N];
             for _ in 0..8 {
-                if mask.iter().copied().sum::<u8>() as usize == N { break }
                 for (i, s) in s0.iter_mut().enumerate() {
                     // let f = self.c0 + self.beta * s + self.c2 * s.powi(2) + self.c3 * s.powi(3) - tof;
                     // let deriv_f = self.beta + 2.0 * self.c2 * s + 3.0 * self.c3 * s.powi(2);
-                    if mask[i] == 1 { continue }
                     let s2 = s.powi(2);
 
                     // linear combination to solve
@@ -519,12 +515,10 @@ impl MzCalibrationModel2 {
 
                     // derivative of f
                     let df1 = s.mul_add(c2_2, self.beta);
-                    let df2 = s2 * c3_3;
-                    let deriv_f = df1 + df2;
+                    let deriv_f = s2.mul_add(c3_3, df1);
 
                     let step = if deriv_f == 0.0 { 0.0 } else { f / deriv_f };
-                    if step.abs() < 1e-12 { mask[i] = 1 }
-                    *s -= step;
+                    *s -= if step.abs() < 1e-12 { 0.0 } else { step };
                 }
             }
         } else if self.c2 != 0.0 {
@@ -598,6 +592,18 @@ impl MzCalibrationModel2 {
         let lin = (mz + self.c4).max(0.0).sqrt();
         let tof = self.c0 + self.beta * lin + self.c2 * lin.powi(2) + self.c3 * lin.powi(3);
         (tof - self.digitizer_delay) / self.digitizer_timebase
+    }
+
+    pub fn invert_wide<const N: usize>(&self, mz: &[f64; N]) -> [f64; N] {
+        let lin = mz.map(|v| (v + self.c4).max(0.0)).map(|v| v.sqrt());
+        let mut t1 = lin.map(|v| v.mul_add(self.beta, self.c0));
+        let t2 = lin.map(|v| v.powi(2) * self.c2);
+        let t3 = lin.map(|v| v.powi(3) * self.c3);
+        for ((t, a), b) in t1.iter_mut().zip(t2).zip(t3) {
+            *t += a;
+            *t += b;
+        }
+        t1.map(|v| (v - self.digitizer_delay) /self.digitizer_timebase)
     }
 
     /// Convert the model to a [`Param`] that can be used to pass the values around in a tagged generic container
