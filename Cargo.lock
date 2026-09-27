@@ -2395,6 +2395,7 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.5",
  "phf",
+ "pin-project-lite",
  "quick-xml",
  "rayon",
  "regex",

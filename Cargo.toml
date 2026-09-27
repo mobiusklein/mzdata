@@ -132,6 +132,7 @@ async_partial = [
     "dep:tokio",
     "quick-xml/async-tokio",
     "dep:futures",
+    "dep:pin-project-lite"
 ]
 
 proxi = ["dep:reqwest", "serde"]
@@ -182,6 +183,7 @@ base64-simd = { workspace = true }
 
 # Async reader features
 tokio = { version = "1.42", optional = true, features = ["macros"] }
+pin-project-lite = { version = "0.2.17", optional = true }
 
 # mzMLb-related features
 hdf5 = { version = "0.8.1", optional = true, features = ["blosc", "lzf"] }

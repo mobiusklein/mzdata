@@ -89,6 +89,9 @@ pub use group::{
     SpectrumGroupIntoIter, SpectrumGroupIter, SpectrumGrouping, SpectrumGroupingIterator,
 };
 
+#[cfg(feature = "async_partial")]
+pub use group::SpectrumGroupingStream;
+
 #[cfg(feature = "mzsignal")]
 pub use group::{
     average_spectra, DeferredSpectrumAveragingIterator, SpectrumAveragingIterator,
