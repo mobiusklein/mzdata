@@ -157,7 +157,7 @@ indexmap = { version = "2.0.0", features = ["serde"] }
 
 chrono = { workspace = true }
 bitflags = { workspace = true }
-identity-hash = { workspace = true }
+identity-hash.workspace = true
 
 mzpeaks = { workspace = true }
 

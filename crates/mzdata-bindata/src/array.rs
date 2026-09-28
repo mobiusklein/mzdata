@@ -750,6 +750,8 @@ impl<'transient, 'lifespan: 'transient> DataArray {
     /// Recode the stored data as the requested binary data type.
     ///
     /// This is a no-op if the [`Self::dtype`] matches the `dtype` argument.
+    /// The data will be decoded and decompressed after this call ends. Any previous
+    /// compression will need to be re-applied.
     ///
     /// ## Note
     /// When down-casting to a lower precision type, e.g. `f64` to `f32`, data may be lost.
@@ -758,7 +760,7 @@ impl<'transient, 'lifespan: 'transient> DataArray {
         if self.dtype == dtype {
             return Ok(self.data.len());
         }
-        match dtype {
+        let z = match dtype {
             BinaryDataArrayType::Float32 => {
                 let view = self.to_f32()?;
                 #[cfg(target_endian = "big")]
@@ -825,7 +827,9 @@ impl<'transient, 'lifespan: 'transient> DataArray {
                 }
             }
             _ => Ok(0),
-        }
+        }?;
+        self.compression = BinaryCompressionType::Decoded;
+        Ok(z)
     }
 
     /// Test if the the array describes an ion mobility quantity.

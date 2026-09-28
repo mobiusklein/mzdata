@@ -52,4 +52,4 @@ bytemuck = { workspace = true, features = ["extern_crate_alloc", "min_const_gene
 base64-simd = { workspace = true }
 
 rayon = { workspace = true, optional = true}
-
+identity-hash = {workspace = true}

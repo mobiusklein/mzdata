@@ -3,7 +3,10 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::hash_map::{Iter, IterMut};
 use std::convert::TryFrom;
+use std::ffi::c_void;
+use std::hash::BuildHasherDefault;
 
+use identity_hash::IdentityHasher;
 #[cfg(feature = "parallelism")]
 use rayon::prelude::*;
 
@@ -276,6 +279,77 @@ impl BinaryArrayMap {
     pub fn sort_from_indices(&mut self, mut mask: Vec<usize>) -> Result<(), ArrayRetrievalError> {
         let n = mask.len();
         const TOMBSTONE: usize = usize::MAX;
+        let mut tracks: Vec<(*mut c_void, BinaryDataArrayType)> = Vec::new();
+        for (_, v) in self.iter_mut() {
+            if v.data_len()? != n {
+                continue;
+            }
+            match v.dtype {
+                BinaryDataArrayType::Float64 => {
+                    let view = v.coerce_mut::<f64>()?;
+                    tracks.push((view.as_mut_ptr() as *mut c_void, v.dtype))
+                }
+                BinaryDataArrayType::Float32 => {
+                    let view = v.coerce_mut::<f32>()?;
+                    tracks.push((view.as_mut_ptr() as *mut c_void, v.dtype))
+                }
+                BinaryDataArrayType::Int64 => {
+                    let view = v.coerce_mut::<i64>()?;
+                    tracks.push((view.as_mut_ptr() as *mut c_void, v.dtype))
+                }
+                BinaryDataArrayType::Int32 => {
+                    let view = v.coerce_mut::<i32>()?;
+                    tracks.push((view.as_mut_ptr() as *mut c_void, v.dtype))
+                }
+                BinaryDataArrayType::ASCII => todo!(),
+                BinaryDataArrayType::Unknown => todo!(),
+            }
+        }
+
+        for idx in 0..n {
+            if mask[idx] != TOMBSTONE {
+                let mut current_idx = idx;
+                loop {
+                    let next_idx = mask[current_idx];
+                    mask[current_idx] = TOMBSTONE;
+                    if mask[next_idx] == TOMBSTONE {
+                        break;
+                    }
+                    for (dat, dtype) in tracks.iter_mut () {
+                        match dtype {
+                            BinaryDataArrayType::Float64 => {
+                                unsafe {
+                                    let v = core::slice::from_raw_parts_mut(*dat as *mut f64, n);
+                                    v.swap(current_idx, next_idx);
+                                }
+                            },
+                            BinaryDataArrayType::Float32 => {
+                                unsafe {
+                                    let v = core::slice::from_raw_parts_mut(*dat as *mut f32, n);
+                                    v.swap(current_idx, next_idx);
+                                }
+                            },
+                            BinaryDataArrayType::Int64 => {
+                                unsafe {
+                                    let v = core::slice::from_raw_parts_mut(*dat as *mut i64, n);
+                                    v.swap(current_idx, next_idx);
+                                }
+                            },
+                            BinaryDataArrayType::Int32 => {
+                                unsafe {
+                                    let v = core::slice::from_raw_parts_mut(*dat as *mut i32, n);
+                                    v.swap(current_idx, next_idx);
+                                }
+                            },
+                            BinaryDataArrayType::Unknown => todo!(),
+                            BinaryDataArrayType::ASCII => todo!(),
+                        }
+                    }
+                    current_idx = next_idx;
+                }
+            }
+        }
+        /*
         for idx in 0..n {
             if mask[idx] != TOMBSTONE {
                 let mut current_idx = idx;
@@ -314,6 +388,7 @@ impl BinaryArrayMap {
                 }
             }
         }
+        */
         Ok(())
     }
 
@@ -524,9 +599,11 @@ struct NonNaNF64(f64);
 
 impl std::hash::Hash for NonNaNF64 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.to_bits().hash(state);
+        state.write_u64(self.0.to_bits());
     }
 }
+
+impl identity_hash::IdentityHashable for NonNaNF64 {}
 
 impl From<f64> for NonNaNF64 {
     fn from(value: f64) -> Self {
@@ -599,7 +676,7 @@ pub struct BinaryArrayMap3D {
     pub arrays: Vec<BinaryArrayMap>,
     pub additional_arrays: BinaryArrayMap,
     #[cfg_attr(feature = "serde", serde_as(as = "Vec<(_, _)>"))]
-    ion_mobility_index: HashMap<NonNaNF64, usize>,
+    ion_mobility_index: HashMap<NonNaNF64, usize, BuildHasherDefault<IdentityHasher<NonNaNF64>>>,
     parameters_of: HashMap<ArrayType, mzdata_param::ParamList>
 }
 
@@ -614,7 +691,7 @@ impl BinaryArrayMap3D {
         ion_mobility_type: ArrayType,
         ion_mobility_unit: Unit,
     ) -> BinaryArrayMap3D {
-        let ion_mobility_index: HashMap<_, _> = ion_mobility_dimension
+        let ion_mobility_index: HashMap<_, _, BuildHasherDefault<IdentityHasher<NonNaNF64>>> = ion_mobility_dimension
             .iter()
             .copied()
             .enumerate()
@@ -650,7 +727,7 @@ impl BinaryArrayMap3D {
         ion_mobility_unit: Unit,
         arrays: Vec<BinaryArrayMap>,
     ) -> BinaryArrayMap3D {
-        let ion_mobility_index: HashMap<_, _> = ion_mobility_dimension
+        let ion_mobility_index: HashMap<_, _, _> = ion_mobility_dimension
             .iter()
             .copied()
             .enumerate()
@@ -937,7 +1014,7 @@ impl BinaryArrayMap3D {
 
         let mut im_axis = Vec::with_capacity(200);
         let mut last_v = im_dim.first().unwrap().1 - 1.0;
-        let mut index_map = HashMap::new();
+        let mut index_map = HashMap::default();
         for (_, v) in im_dim.iter() {
             if v.total_cmp(&last_v).is_gt() {
                 last_v = *v;
@@ -1081,6 +1158,44 @@ mod test {
             map.get(&ArrayType::MZArray).unwrap().compression,
             BinaryCompressionType::Decoded
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_sort_from() -> io::Result<()> {
+        let mut arr = make_array_from_file()?;
+        let dat = arr.coerce_mut::<f64>()?;
+        dat.reverse();
+
+        let mut arr2 = make_array_from_file()?;
+        arr2.name = ArrayType::TimeArray;
+        arr2.store_as(BinaryDataArrayType::Float32)?;
+        let dat = arr2.coerce_mut::<f32>()?;
+        dat.reverse();
+
+        let mut map = BinaryArrayMap::new();
+        map.add(arr);
+        map.add(arr2);
+        map.sort_by_array(&ArrayType::MZArray)?;
+        let arr = map.mzs()?;
+        let (_, state) = arr.iter().copied().fold((-f64::INFINITY, true), |(last, state), next|{
+            if !state {
+                (last, state)
+            } else {
+                (next, last <= next)
+            }
+        });
+        assert!(state, "Failed to sort m/z array {arr:?}");
+
+        let arr = map.get(&ArrayType::TimeArray).unwrap().to_f64()?;
+        let (_, state) = arr.iter().copied().fold((-f64::INFINITY, true), |(last, state), next|{
+            if !state {
+                (last, state)
+            } else {
+                (next, last <= next)
+            }
+        });
+        assert!(state, "Failed to sort parallel array {arr:?}");
         Ok(())
     }
 }
