@@ -425,24 +425,8 @@ impl<
 
     /// Retrieve a spectrum by it's native ID
     pub async fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
-        let offset = self.index.get(id)?;
         let index = self.index.index_of(id)?;
-        let start = self
-            .handle
-            .stream_position()
-            .await
-            .expect("Failed to save checkpoint");
-        self.seek(SeekFrom::Start(offset))
-            .await
-            .expect("Failed to move seek to offset");
-        let result = self.read_next().await;
-        self.seek(SeekFrom::Start(start))
-            .await
-            .expect("Failed to restore offset");
-        result.map(|mut scan| {
-            scan.description.index = index;
-            scan
-        })
+        self.get_spectrum_by_index(index).await
     }
 
     /// Retrieve a spectrum by it's integer index
@@ -457,14 +441,17 @@ impl<
             .await
             .expect("Failed to save checkpoint");
         self.seek(SeekFrom::Start(byte_offset)).await.ok()?;
+        let state = std::mem::replace(&mut self.state, MGFParserState::Start);
+        let read_counter = std::mem::replace(&mut self.read_counter, index);
+        let error = self.error.take();
         let result = self.read_next().await;
+        self.state = state;
+        self.read_counter = read_counter;
+        self.error = error;
         self.seek(SeekFrom::Start(start))
             .await
             .expect("Failed to restore offset");
-        result.map(|mut scan| {
-            scan.description.index = index;
-            scan
-        })
+        result
     }
 
     /// Return the data stream to the beginning
@@ -473,6 +460,9 @@ impl<
             .seek(SeekFrom::Start(0))
             .await
             .expect("Failed to reset file stream");
+        self.state = MGFParserState::Start;
+        self.error = None;
+        self.read_counter = 0;
     }
 
     pub fn get_index(&self) -> &OffsetIndex {
@@ -533,32 +523,31 @@ impl<
     > AsyncRandomAccessSpectrumIterator<C, D, MultiLayerSpectrum<C, D>> for MGFReaderType<R, C, D> {
 
     async fn start_from_id(&mut self, id: &str) -> Result<&mut Self, SpectrumAccessError> {
-        let idx = match self._offset_of_id(id) {
-            Some(i) => i,
-            None => return Err(crate::io::SpectrumAccessError::SpectrumIdNotFound(id.to_string())),
-        };
-
-        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
-        Ok(self)
+        let index = self
+            .index
+            .index_of(id)
+            .ok_or_else(|| SpectrumAccessError::SpectrumIdNotFound(id.to_string()))?;
+        self.start_from_index(index).await
     }
 
     async fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
-        let idx = match self._offset_of_index(index) {
-            Some(i) => i,
-            None => return Err(crate::io::SpectrumAccessError::SpectrumIndexNotFound(index)),
-        };
-
-        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        let offset = self
+            ._offset_of_index(index)
+            .ok_or(SpectrumAccessError::SpectrumIndexNotFound(index))?;
+        self.seek(SeekFrom::Start(offset))
+            .await
+            .map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
+        self.state = MGFParserState::Start;
+        self.error = None;
+        self.read_counter = index;
         Ok(self)
     }
 
     async fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
-        let idx = match self._offset_of_time(time).await {
-            Some(i) => i,
-            None => return Err(crate::io::SpectrumAccessError::SpectrumNotFound),
-        };
-
-        self.handle.seek(SeekFrom::Start(idx)).await.map_err(|e| SpectrumAccessError::IOError(Some(e)))?;
-        Ok(self)
+        let scan = self
+            .get_spectrum_by_time(time)
+            .await
+            .ok_or(SpectrumAccessError::SpectrumNotFound)?;
+        self.start_from_index(scan.index()).await
     }
 }
