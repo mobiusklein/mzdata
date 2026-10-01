@@ -16,6 +16,7 @@ serde = [
     "dep:serde_json",
     "dep:serde_with",
     "mzdata-bindata/serde",
+    "mzdata-meta/serde",
     "mzdata-param/serde",
     "mzpeaks/serde",
     "mzsignal?/serde",

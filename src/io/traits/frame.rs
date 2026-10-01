@@ -24,7 +24,8 @@ use crate::{
 };
 
 use super::{
-    IonMobilityFrameGrouping, RandomAccessSpectrumIterator, SpectrumAccessError, SpectrumSource,
+    util::DetailLevelGuard, IonMobilityFrameGrouping, RandomAccessSpectrumIterator,
+    SpectrumAccessError, SpectrumSource,
 };
 
 /// An analog of [`SpectrumSource`] for [`IonMobilityFrameLike`] producing types
@@ -1002,14 +1003,14 @@ pub trait IntoIonMobilityFrameSource<C: CentroidLike, D: DeconvolutedCentroidLik
     /// for the presence of ion mobility data.
     fn has_ion_mobility(&mut self) -> Option<HasIonMobility> {
         let details = *self.detail_level();
-        self.set_detail_level(DetailLevel::Lazy);
-        let n = self.len();
+        let reader = DetailLevelGuard::new(self, details, Self::set_detail_level);
+        reader.source.set_detail_level(DetailLevel::Lazy);
+        let n = reader.source.len();
         // `step_by` panics on a zero step, so bail out before computing one.
         if n == 0 {
-            self.set_detail_level(details);
             return Some(HasIonMobility::None);
         }
-        let mut handle = self.iter();
+        let mut handle = reader.source.iter();
         let mut status = HasIonMobility::None;
         let step_size = if n > 100 { n / 100 } else { n };
         for i in (0..n).step_by(step_size) {
@@ -1020,7 +1021,6 @@ pub trait IntoIonMobilityFrameSource<C: CentroidLike, D: DeconvolutedCentroidLik
                 break;
             }
         }
-        self.set_detail_level(details);
         Some(status)
     }
 }
@@ -1086,35 +1086,42 @@ mod async_traits {
                 let mut hi: usize = n;
 
                 let mut best_error: f64 = f64::INFINITY;
-                let mut best_match: Option<S> = None;
+                let mut best_match: Option<(usize, S)> = None;
 
                 if lo == hi {
                     return None;
                 }
 
                 let original_detail_level = *self.detail_level();
-                self.set_detail_level(DetailLevel::MetadataOnly);
+                let reader =
+                    DetailLevelGuard::new(self, original_detail_level, Self::set_detail_level);
+                reader.source.set_detail_level(DetailLevel::MetadataOnly);
+                let search_detail_level = *reader.source.detail_level();
                 while hi != lo {
                     let mid = (hi + lo) / 2;
-                    let scan = self.get_frame_by_index(mid).await?;
+                    let scan = reader.source.get_frame_by_index(mid).await?;
                     let scan_time = scan.start_time();
                     let err = (scan_time - time).abs();
 
                     if err < best_error {
                         best_error = err;
-                        best_match = Some(scan);
+                        best_match = Some((mid, scan));
                     }
                     if hi.saturating_sub(1) == lo {
-                        self.set_detail_level(original_detail_level);
-                        return best_match;
+                        break;
                     } else if scan_time > time {
                         hi = mid;
                     } else {
                         lo = mid;
                     }
                 }
-                self.set_detail_level(original_detail_level);
-                best_match
+                drop(reader);
+                let (index, scan) = best_match?;
+                if original_detail_level == search_detail_level {
+                    Some(scan)
+                } else {
+                    self.get_frame_by_index(index).await
+                }
             }
         }
 
@@ -1153,8 +1160,11 @@ mod async_traits {
         #[allow(async_fn_in_trait)]
         async fn _offset_of_time(&mut self, time: f64) -> Option<u64> {
             {
-                match self.get_frame_by_time(time).await {
-                    Some(scan) => self._offset_of_index(scan.index()),
+                let saved = *self.detail_level();
+                let reader = DetailLevelGuard::new(self, saved, Self::set_detail_level);
+                reader.source.set_detail_level(DetailLevel::MetadataOnly);
+                match reader.source.get_frame_by_time(time).await {
+                    Some(scan) => reader.source._offset_of_index(scan.index()),
                     None => None,
                 }
             }
@@ -1463,24 +1473,23 @@ mod async_traits {
         #[allow(async_fn_in_trait)]
         async fn has_ion_mobility(&mut self) -> Option<HasIonMobility> {
             let details = *self.detail_level();
-            self.set_detail_level(DetailLevel::Lazy);
-            let n = self.len();
+            let reader = DetailLevelGuard::new(self, details, Self::set_detail_level);
+            reader.source.set_detail_level(DetailLevel::Lazy);
+            let n = reader.source.len();
             // `step_by` panics on a zero step, so bail out before computing one.
             if n == 0 {
-                self.set_detail_level(details);
                 return Some(HasIonMobility::None);
             }
             let mut status = HasIonMobility::None;
             let step_size = if n > 100 { n / 100 } else { n };
             for i in (0..n).step_by(step_size) {
-                let spec = self.get_spectrum_by_index(i).await?;
+                let spec = reader.source.get_spectrum_by_index(i).await?;
                 let cls = spec.has_ion_mobility_class();
                 status = status.max(cls);
                 if status > HasIonMobility::None {
                     break;
                 }
             }
-            self.set_detail_level(details);
             Some(status)
         }
     }
@@ -1501,6 +1510,101 @@ mod async_trait_tests {
     use crate::io::traits::{AsyncRandomAccessSpectrumIterator, AsyncSpectrumSource};
     use futures::StreamExt;
     use mzpeaks::{CentroidPeak, DeconvolutedPeak};
+
+    struct TestFrames {
+        level: DetailLevel,
+        index: OffsetIndex,
+        fail_on: Option<DetailLevel>,
+        pending_on: Option<DetailLevel>,
+    }
+
+    impl AsyncIonMobilityFrameSource for TestFrames {
+        async fn reset(&mut self) {}
+        fn detail_level(&self) -> &DetailLevel {
+            &self.level
+        }
+        fn set_detail_level(&mut self, level: DetailLevel) {
+            self.level = level;
+        }
+        async fn get_frame_by_id(&mut self, _id: &str) -> Option<MultiLayerIonMobilityFrame> {
+            self.get_frame_by_index(0).await
+        }
+        async fn get_frame_by_index(&mut self, index: usize) -> Option<MultiLayerIonMobilityFrame> {
+            if self.pending_on == Some(self.level) {
+                std::future::pending::<()>().await;
+            }
+            if self.fail_on == Some(self.level) || index != 0 {
+                return None;
+            }
+            let description = crate::spectrum::IonMobilityFrameDescription {
+                index: 42,
+                ..Default::default()
+            };
+            let features = (self.level != DetailLevel::MetadataOnly).then(|| {
+                mzpeaks::feature_map::FeatureMap::new(vec![Feature::new(
+                    vec![100.0],
+                    vec![1.0],
+                    vec![10.0],
+                )])
+            });
+            Some(MultiLayerIonMobilityFrame {
+                description,
+                features,
+                arrays: None,
+                deconvoluted_features: None,
+            })
+        }
+        fn get_index(&self) -> &OffsetIndex {
+            &self.index
+        }
+        fn set_index(&mut self, index: OffsetIndex) {
+            self.index = index;
+        }
+        async fn read_next_frame(&mut self) -> Option<MultiLayerIonMobilityFrame> {
+            self.get_frame_by_index(0).await
+        }
+    }
+
+    #[tokio::test]
+    async fn test_time_lookup_detail_level() {
+        use std::future::Future;
+        use std::task::{Context, Poll};
+        let mut index = OffsetIndex::new("frame".into());
+        index.insert("frame", 0);
+        index.init = true;
+        let mut reader = TestFrames {
+            level: DetailLevel::Full,
+            index,
+            fail_on: None,
+            pending_on: None,
+        };
+        for level in [
+            DetailLevel::Full,
+            DetailLevel::Lazy,
+            DetailLevel::MetadataOnly,
+        ] {
+            reader.level = level;
+            let frame = reader.get_frame_by_time(0.0).await.unwrap();
+            assert_eq!(frame.description.index, 42);
+            assert_eq!(frame.features.is_some(), level != DetailLevel::MetadataOnly);
+            assert_eq!(reader.level, level);
+        }
+        reader.level = DetailLevel::Full;
+        for level in [DetailLevel::Full, DetailLevel::MetadataOnly] {
+            reader.fail_on = Some(level);
+            assert!(reader.get_frame_by_time(0.0).await.is_none());
+            assert_eq!(reader.level, DetailLevel::Full);
+        }
+        reader.fail_on = None;
+        for level in [DetailLevel::Full, DetailLevel::MetadataOnly] {
+            reader.pending_on = Some(level);
+            let mut future = Box::pin(reader.get_frame_by_time(0.0));
+            let mut context = Context::from_waker(futures::task::noop_waker_ref());
+            assert!(matches!(future.as_mut().poll(&mut context), Poll::Pending));
+            drop(future);
+            assert_eq!(reader.level, DetailLevel::Full);
+        }
+    }
 
     /// The provided methods must be callable via the trait alone, and `as_stream`
     /// must return an [`Unpin`] stream so `next()` works without pinning it first.
