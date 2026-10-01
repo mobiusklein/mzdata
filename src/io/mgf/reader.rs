@@ -15,7 +15,7 @@ use mzpeaks::{CentroidLike, CentroidPeak, DeconvolutedCentroidLike, Deconvoluted
 use super::super::{
     offset_index::OffsetIndex,
     traits::{
-        ChromatogramSource, MZFileReader, RandomAccessSpectrumIterator, SeekRead,
+        ChromatogramSource, DetailLevelGuard, MZFileReader, RandomAccessSpectrumIterator, SeekRead,
         SpectrumAccessError, SpectrumSource,
     },
     utils::DetailLevel,
@@ -1049,7 +1049,12 @@ impl<
     }
 
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
-        let scan = self.get_spectrum_by_time(time);
+        let scan = {
+            let saved = self.detail_level;
+            let reader = DetailLevelGuard::new(self, saved, Self::set_detail_level);
+            reader.source.set_detail_level(DetailLevel::MetadataOnly);
+            reader.source.get_spectrum_by_time(time)
+        };
         let index = match scan {
             Some(scan) => scan.index(),
             None => return Err(SpectrumAccessError::SpectrumNotFound),
