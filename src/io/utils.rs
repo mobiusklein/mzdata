@@ -152,11 +152,22 @@ impl<R: io::Read> PreBufferedStream<R> {
 
 #[cfg(feature = "checksum")]
 /// Compute a SHA-1 digest of a file path
+///
+/// Returns an error if the file cannot be opened or fully read.
 pub fn checksum_file(path: &PathBuf) -> io::Result<String> {
+    checksum_reader(io::BufReader::new(fs::File::open(path)?))
+}
+
+#[cfg(feature = "checksum")]
+fn checksum_reader(mut reader: impl io::Read) -> io::Result<String> {
     let mut checksum = sha1::Sha1::new();
-    let mut reader = io::BufReader::new(fs::File::open(path)?);
     let mut buf = vec![0; 2usize.pow(20)];
-    while let Ok(i) = reader.read(&mut buf) {
+    loop {
+        let i = match reader.read(&mut buf) {
+            Ok(i) => i,
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+            Err(err) => return Err(err),
+        };
         if i == 0 {
             break;
         }
@@ -199,8 +210,9 @@ impl<T: io::Write> SHA1HashingStream<T> {
 #[cfg(feature = "checksum")]
 impl<T: io::Write> io::Write for SHA1HashingStream<T> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.context.update(buf);
-        self.stream.write(buf)
+        let wrote = self.stream.write(buf)?;
+        self.context.update(&buf[..wrote]);
+        Ok(wrote)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -435,6 +447,118 @@ mod test {
             spec.index() + 1
         });
 
+        Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "checksum"))]
+mod checksum_tests {
+    use super::*;
+
+    struct ShortWriter {
+        bytes: Vec<u8>,
+        limit: usize,
+        error: Option<io::ErrorKind>,
+    }
+
+    impl io::Write for ShortWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            if let Some(kind) = self.error.take() {
+                return Err(kind.into());
+            }
+            let n = buf.len().min(self.limit);
+            self.bytes.extend_from_slice(&buf[..n]);
+            Ok(n)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn hash_accepted_bytes() {
+        use io::Write;
+
+        for limit in [0, 3, usize::MAX] {
+            let mut stream = SHA1HashingStream::new(ShortWriter {
+                bytes: Vec::new(),
+                limit,
+                error: None,
+            });
+            let result = stream.write_all(b"abcdef");
+            assert_eq!(result.is_ok(), limit != 0);
+            assert_eq!(
+                stream.compute().finalize(),
+                sha1::Sha1::digest(&stream.stream.bytes)
+            );
+
+            stream.stream.error = Some(io::ErrorKind::Other);
+            assert_eq!(
+                stream.write(b"rejected").unwrap_err().kind(),
+                io::ErrorKind::Other
+            );
+            assert_eq!(
+                stream.compute().finalize(),
+                sha1::Sha1::digest(&stream.stream.bytes)
+            );
+        }
+    }
+
+    #[test]
+    fn checksum_read_errors() {
+        struct Reader(std::vec::IntoIter<io::Result<&'static [u8]>>);
+
+        impl io::Read for Reader {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                let bytes = self.0.next().unwrap_or(Ok(b""))?;
+                buf[..bytes.len()].copy_from_slice(bytes);
+                Ok(bytes.len())
+            }
+        }
+
+        let reader = Reader(
+            vec![
+                Err(io::ErrorKind::Interrupted.into()),
+                Ok(&b"abc"[..]),
+                Ok(&b"def"[..]),
+            ]
+            .into_iter(),
+        );
+        assert_eq!(
+            checksum_reader(reader).unwrap(),
+            hex::encode(sha1::Sha1::digest(b"abcdef"))
+        );
+        for prefix in [b"".as_slice(), b"abc".as_slice()] {
+            let mut reads = Vec::new();
+            if !prefix.is_empty() {
+                reads.push(Ok(prefix));
+            }
+            reads.push(Err(io::ErrorKind::Other.into()));
+            let reader = Reader(reads.into_iter());
+            assert_eq!(
+                checksum_reader(reader).unwrap_err().kind(),
+                io::ErrorKind::Other
+            );
+        }
+    }
+
+    #[test]
+    fn checksum_files() -> io::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("input");
+        for bytes in [Vec::new(), vec![42; 2usize.pow(20) + 1]] {
+            fs::write(&path, &bytes)?;
+            assert_eq!(
+                checksum_file(&path)?,
+                hex::encode(sha1::Sha1::digest(&bytes))
+            );
+        }
+        fs::remove_file(&path)?;
+        assert_eq!(
+            checksum_file(&path).unwrap_err().kind(),
+            io::ErrorKind::NotFound
+        );
         Ok(())
     }
 }
