@@ -598,9 +598,13 @@ impl<'inner, C: CentroidLike, D: DeconvolutedCentroidLike>
         description.acquisition = self.acquisition;
         if self.has_precursor {
             description.precursor = self.precursor;
+        } else {
+            description.precursor.clear();
         }
 
         spectrum.arrays = Some(self.arrays);
+        spectrum.peaks = None;
+        spectrum.deconvoluted_peaks = None;
     }
 
     fn fill_spectrum<P: ParamLike + Into<Param> + ParamValue>(&mut self, param: P) {
@@ -1775,7 +1779,7 @@ impl<
         }
     }
 
-    /// Populate a new [`Spectrum`] in-place on the next available spectrum data.
+    /// Read the next spectrum into `spectrum`, replacing its previous contents.
     /// This allocates memory to build the spectrum's attributes but then moves it
     /// into `spectrum` rather than copying it.
     pub fn read_into(
@@ -2486,6 +2490,39 @@ mod test {
     use crate::spectrum::spectrum_types::SpectrumLike;
     use std::fs;
     use std::path;
+
+    #[test]
+    fn test_read_into_replaces_spectrum() {
+        for level in [
+            DetailLevel::Full,
+            DetailLevel::Lazy,
+            DetailLevel::MetadataOnly,
+        ] {
+            let mut reader = MzMLReader::open_path("test/data/small.mzML").unwrap();
+            let mut reference = MzMLReader::open_path("test/data/small.mzML").unwrap();
+            reader.set_detail_level(level);
+            reference.set_detail_level(level);
+            let mut spectrum = MultiLayerSpectrum::default();
+            for _ in 0..48 {
+                let expected = reference.read_next().unwrap();
+                reader.read_into(&mut spectrum).unwrap();
+                assert_eq!(spectrum.description, expected.description);
+                assert_eq!(spectrum.peaks, expected.peaks);
+                assert_eq!(spectrum.deconvoluted_peaks, expected.deconvoluted_peaks);
+                let actual = spectrum.arrays.as_ref().unwrap();
+                let expected = expected.arrays.as_ref().unwrap();
+                assert_eq!(actual.len(), expected.len());
+                for (name, array) in expected.iter() {
+                    let actual = actual.get(name).unwrap();
+                    assert_eq!(actual.dtype, array.dtype);
+                    assert_eq!(actual.compression, array.compression);
+                    assert_eq!(actual.unit, array.unit);
+                    assert_eq!(actual.params, array.params);
+                    assert!(actual.data == array.data);
+                }
+            }
+        }
+    }
 
     fn test_metadata<T: MSDataFileMetadata>(reader: &T) {
         assert_eq!(reader.data_processings().len(), 1);
