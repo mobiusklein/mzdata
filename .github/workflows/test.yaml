@@ -8,6 +8,50 @@ env:
 name: Test
 jobs:
 
+  test-features:
+    name: Feature tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+      - name: Test serde features independently
+        shell: bash
+        run: |
+          for package in mzdata-bindata mzdata-meta mzdata-spectrum; do
+            cargo test --locked -p "$package" --no-default-features --features serde --lib
+          done
+      - name: Test compression features independently
+        shell: bash
+        run: |
+          for backend in zlib zlib-ng-compat zlib-ng zlib-rs miniz_oxide; do
+            cargo test --locked -p mzdata --no-default-features --features "mgf,mzml,$backend" --lib
+            features=$(cargo tree --locked -p mzdata --no-default-features \
+              --features "mgf,mzml,$backend" -i flate2 \
+              -e normal,build --depth 0 --format '{f}')
+            case "$backend" in
+              zlib-rs|miniz_oxide)
+                if [[ ",$features," == *,any_c_zlib,* ]]; then
+                  echo "Unexpected C zlib backend for $backend: $features" >&2
+                  exit 1
+                fi
+                ;;
+              zlib-ng)
+                if [[ ",$features," == *,libz-sys,* ]]; then
+                  echo "Unexpected libz-sys dependency for zlib-ng: $features" >&2
+                  exit 1
+                fi
+                ;;
+            esac
+          done
+
   test:
     strategy:
       matrix:

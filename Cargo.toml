@@ -83,9 +83,9 @@ parallelism = ["dep:rayon", "mzsignal?/parallelism", "mzdata-spectrum/parallelis
 # After substantial testing, zlib-ng-compat is the winner for speed and size on
 # a variety of real-world data.
 zlib = ["flate2/zlib", "mzdata-bindata/zlib", "mzdata-spectrum/zlib"]
-zlib-ng-compat = ["flate2/zlib-ng-compat", "mzdata-bindata/zlib-ng-compat", "mzdata-spectrum/zlib"]
-zlib-ng = ["flate2/zlib-ng", "mzdata-bindata/zlib-ng", "mzdata-spectrum/zlib"]
-zlib-rs = ["flate2/zlib-rs", "mzdata-bindata/zlib-rs", "mzdata-spectrum/zlib"]
+zlib-ng-compat = ["flate2/zlib-ng-compat", "mzdata-bindata/zlib-ng-compat", "mzdata-spectrum/zlib-ng-compat"]
+zlib-ng = ["flate2/zlib-ng", "mzdata-bindata/zlib-ng", "mzdata-spectrum/zlib-ng"]
+zlib-rs = ["flate2/zlib-rs", "mzdata-bindata/zlib-rs", "mzdata-spectrum/zlib-rs"]
 miniz_oxide = ["flate2/rust_backend", "mzdata-bindata/miniz_oxide", "mzdata-spectrum/miniz_oxide"]
 zstd = ["dep:zstd", "mzdata-bindata/zstd", "mzdata-spectrum/zstd"]
 
