@@ -149,43 +149,82 @@ pub fn infer_from_path<P: Into<path::PathBuf>>(path: P) -> (MassSpectrometryForm
 
 /// Given a stream of bytes, infer the file format and whether or not the
 /// stream is GZIP compressed. This assumes the stream is seekable.
+/// The stream position is restored even if inference fails. If restoring it
+/// fails, the seek error is returned. Only the prefix is inspected, not the
+/// complete file or gzip checksum. Short reads may require further input before
+/// inference returns.
+/// Inference uses up to 500 decoded bytes. Gzip decoding reads at most 64 KiB
+/// of compressed input.
 pub fn infer_from_stream<R: Read + Seek>(
     stream: &mut R,
 ) -> io::Result<(MassSpectrometryFormat, bool)> {
-    // We need to read in at least enough bytes to span a complete XML head plus the
-    // end of an opening tag
-    let mut buf = Vec::with_capacity(500);
-    buf.resize(500, b'\0');
     let current_pos = stream.stream_position()?;
-    // record how many bytes were actually read so we know the upper bound
-    let bytes_read = stream.read(buf.as_mut_slice())?;
-    buf.shrink_to(bytes_read);
-    let is_stream_gzipped = is_gzipped(buf.as_slice());
-    if is_stream_gzipped {
-        let mut decompressed_buf = Vec::new();
-        // In the worst case, we can't have fewer bytes than those that were read in (minus the size of the gzip header)
-        // and we assume the compression ratio means we have recouped that. We read in only that many bytes
-        // decompressed because the decompressor treats an incomplete segment as an error and thus using
-        // io::Read::read_to_end is not an option.
-        decompressed_buf.resize(bytes_read, b'\0');
-        let mut decoder = GzDecoder::new(io::Cursor::new(buf));
-        decoder.read_exact(&mut decompressed_buf)?;
-        buf = decompressed_buf;
-    }
-    stream.seek(io::SeekFrom::Start(current_pos))?;
-
-    match &buf {
-        #[cfg(feature = "imzml")]
-        _ if is_imzml(&buf) => Ok((MassSpectrometryFormat::IMzML, is_stream_gzipped)),
-        #[cfg(feature = "mzml")]
-        _ if is_mzml(&buf) => Ok((MassSpectrometryFormat::MzML, is_stream_gzipped)),
-        #[cfg(feature = "mgf")]
-        _ if is_mgf(&buf) => Ok((MassSpectrometryFormat::MGF, is_stream_gzipped)),
-        #[cfg(feature = "thermo")]
-        _ if is_thermo_raw_prefix(&buf) => {
-            Ok((MassSpectrometryFormat::ThermoRaw, is_stream_gzipped))
+    let result = (|| {
+        let mut buf = vec![0u8; 500];
+        let mut n = 0;
+        while n < 2 {
+            match stream.read(&mut buf[n..]) {
+                Ok(0) => return Ok((MassSpectrometryFormat::Unknown, false)),
+                Ok(read) => n += read,
+                Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+                Err(err) => return Err(err),
+            }
         }
-        _ => Ok((MassSpectrometryFormat::Unknown, is_stream_gzipped)),
+        let gzipped = is_gzipped(&buf[..n]);
+        let format = if gzipped {
+            stream.seek(io::SeekFrom::Start(current_pos))?;
+            let source = (&mut *stream).take(2u64.pow(16));
+            let mut decoder = GzDecoder::new(BufReader::with_capacity(buf.len(), source));
+            infer_from_prefix(&mut decoder, &mut buf, 0)?
+        } else {
+            infer_from_prefix(stream, &mut buf, n)?
+        };
+        Ok((format, gzipped))
+    })();
+    stream.seek(io::SeekFrom::Start(current_pos))?;
+    result
+}
+
+fn infer_from_prefix<R: Read>(
+    stream: &mut R,
+    buf: &mut [u8],
+    mut n: usize,
+) -> io::Result<MassSpectrometryFormat> {
+    loop {
+        let format = match &buf[..n] {
+            [] => MassSpectrometryFormat::Unknown,
+            #[cfg(feature = "imzml")]
+            _ if is_imzml(&buf[..n]) => MassSpectrometryFormat::IMzML,
+            #[cfg(feature = "mzml")]
+            _ if is_mzml(&buf[..n]) => MassSpectrometryFormat::MzML,
+            #[cfg(feature = "mgf")]
+            _ if is_mgf(&buf[..n]) => MassSpectrometryFormat::MGF,
+            #[cfg(feature = "thermo")]
+            _ if is_thermo_raw_prefix(&buf[..n]) => MassSpectrometryFormat::ThermoRaw,
+            _ => MassSpectrometryFormat::Unknown,
+        };
+        // An XML comment can contain the MGF signature before the mzML opening tag.
+        let ambiguous_mgf = cfg!(feature = "mzml")
+            && format == MassSpectrometryFormat::MGF
+            && buf[..n]
+                .strip_prefix(b"\xef\xbb\xbf")
+                .unwrap_or(&buf[..n])
+                .iter()
+                .find(|byte| !byte.is_ascii_whitespace())
+                == Some(&b'<');
+        // imzML declares its IMS vocabulary after the mzML opening tag.
+        let identified = format != MassSpectrometryFormat::Unknown
+            && !(cfg!(feature = "imzml") && format == MassSpectrometryFormat::MzML)
+            && !ambiguous_mgf;
+        if identified || n == buf.len() {
+            return Ok(format);
+        }
+        match stream.read(&mut buf[n..]) {
+            Ok(0) => return Ok(format),
+            Ok(read) => n += read,
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+            Err(err) => return Err(err),
+        }
     }
 }
 

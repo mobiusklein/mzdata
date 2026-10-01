@@ -164,4 +164,138 @@ mod test {
         assert!(!gzip);
         Ok(())
     }
+
+    #[cfg(feature = "mgf")]
+    #[test]
+    fn test_infer_short_prefixes() -> io::Result<()> {
+        use io::{Read, Seek, Write};
+        let input = b"BEGIN IONS\nEND IONS\n";
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(input)?;
+        let compressed = encoder.finish()?;
+        for (bytes, gzipped) in [
+            (input.to_vec(), false),
+            (compressed.clone(), true),
+            ([compressed.clone(), compressed].concat(), true),
+        ] {
+            let source = io::Cursor::new(&bytes[..1]).chain(io::Cursor::new(&bytes[1..]));
+            let mut stream = crate::io::PreBufferedStream::new_with_buffer_size(source, 128)?;
+            assert_eq!(
+                infer_from_stream(&mut stream)?,
+                (MassSpectrometryFormat::MGF, gzipped)
+            );
+            assert_eq!(stream.stream_position()?, 0);
+            let mut remaining = Vec::new();
+            stream.read_to_end(&mut remaining)?;
+            assert_eq!(remaining, bytes);
+        }
+        #[cfg(feature = "mzml")]
+        for prefix in [b"".as_slice(), b" \n", b"\xef\xbb\xbf"] {
+            let bytes = [prefix, b"<!--BEGIN IONS--><mzML></mzML>"].concat();
+            let split = prefix.len() + 14;
+            let source = io::Cursor::new(&bytes[..1]).chain(io::Cursor::new(&bytes[1..split]));
+            let source = source.chain(io::Cursor::new(&bytes[split..]));
+            let mut stream = crate::io::PreBufferedStream::new(source)?;
+            assert_eq!(
+                infer_from_stream(&mut stream)?,
+                (MassSpectrometryFormat::MzML, false)
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_infer_restores_position() -> io::Result<()> {
+        for bytes in [vec![], vec![b'x'], vec![0; 700]] {
+            let mut stream = io::Cursor::new(bytes);
+            stream.set_position(1);
+            assert_eq!(
+                infer_from_stream(&mut stream)?,
+                (MassSpectrometryFormat::Unknown, false)
+            );
+            assert_eq!(stream.position(), 1);
+        }
+        for bytes in [vec![0x1f, 0x8b], vec![0x1f, 0x8b, 8, 0]] {
+            let mut stream = io::Cursor::new([vec![b'x'], bytes].concat());
+            stream.set_position(1);
+            assert!(infer_from_stream(&mut stream).is_err());
+            assert_eq!(stream.position(), 1);
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "mzml")]
+    #[test]
+    fn test_open_streams_preserve_spectra() -> io::Result<()> {
+        use io::Read;
+        fn check(
+            actual: impl Iterator<Item = Spectrum> + MSDataFileMetadata,
+            expected: impl Iterator<Item = Spectrum> + MSDataFileMetadata,
+        ) {
+            assert_eq!(actual.file_description(), expected.file_description());
+            assert_eq!(
+                actual.instrument_configurations(),
+                expected.instrument_configurations()
+            );
+            let actual: Vec<_> = actual.collect();
+            let expected: Vec<_> = expected.collect();
+            assert_eq!(actual.len(), 48);
+            assert_eq!(actual.len(), expected.len());
+            for (actual, expected) in actual.iter().zip(&expected) {
+                assert_eq!(actual.description, expected.description);
+                let actual = actual.arrays.as_ref().unwrap();
+                let expected = expected.arrays.as_ref().unwrap();
+                assert_eq!(actual.len(), expected.len());
+                for (name, expected) in expected.iter() {
+                    let actual = actual.get(name).unwrap();
+                    assert_eq!(actual.name, expected.name);
+                    assert_eq!(actual.dtype, expected.dtype);
+                    assert_eq!(actual.compression, expected.compression);
+                    assert_eq!(actual.unit, expected.unit);
+                    assert_eq!(actual.params, expected.params);
+                    assert_eq!(actual.data, expected.data);
+                }
+            }
+        }
+        for (path, gzipped) in [
+            ("test/data/small.mzML", false),
+            ("test/data/small.mzML.gz", true),
+        ] {
+            let input = fs::read(path)?;
+            let decoded = if gzipped {
+                let mut decoded = Vec::new();
+                flate2::read::GzDecoder::new(io::Cursor::new(&input)).read_to_end(&mut decoded)?;
+                decoded
+            } else {
+                input.clone()
+            };
+            let expected = crate::MzMLReader::new(io::Cursor::new(decoded.clone()));
+            let source = io::Cursor::new(&input[..2]).chain(io::Cursor::new(&input[2..]));
+            if gzipped {
+                check(MZReader::open_gzipped_read(source)?, expected);
+            } else {
+                check(MZReader::open_read(source)?, expected);
+            }
+            let source = Box::new(io::Cursor::new(input));
+            check(
+                MZReader::<crate::io::PreBufferedStream<fs::File>>::open_read_generic(source)?,
+                crate::MzMLReader::new(io::Cursor::new(decoded)),
+            );
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "imzml")]
+    #[test]
+    fn test_infer_short_imzml_prefix() -> io::Result<()> {
+        use io::Read;
+        let bytes = b"<mzML><cvList><cv id=\"IMS\"/></cvList></mzML>";
+        let source = io::Cursor::new(&bytes[..6]).chain(io::Cursor::new(&bytes[6..]));
+        let mut stream = crate::io::PreBufferedStream::new(source)?;
+        assert_eq!(
+            infer_from_stream(&mut stream)?,
+            (MassSpectrometryFormat::IMzML, false)
+        );
+        Ok(())
+    }
 }
