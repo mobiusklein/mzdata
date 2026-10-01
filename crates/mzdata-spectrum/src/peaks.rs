@@ -510,7 +510,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for PeakDataIter<'_,
 
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> ExactSizeIterator for PeakDataIter<'_, C, D> {
     fn len(&self) -> usize {
-        self.n
+        self.n - self.i
     }
 }
 
@@ -519,11 +519,11 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> FusedIterator for PeakDataIte
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> DoubleEndedIterator for PeakDataIter<'_, C, D> {
     fn next_back(&mut self) -> Option<Self::Item> {
         let n = self.n;
-        if n < 1 {
+        if self.i >= n {
             None
         } else {
             let pt = self.get(n - 1);
-            self.n = self.n.saturating_sub(1);
+            self.n -= 1;
             pt
         }
     }
@@ -752,7 +752,7 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> Iterator for RefPeakDataIter<
 
 impl<C: CentroidLike, D: DeconvolutedCentroidLike> ExactSizeIterator for RefPeakDataIter<'_, C, D> {
     fn len(&self) -> usize {
-        self.n
+        self.n - self.i
     }
 }
 
@@ -763,11 +763,11 @@ impl<C: CentroidLike, D: DeconvolutedCentroidLike> DoubleEndedIterator
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         let n = self.n;
-        if n < 1 {
+        if self.i >= n {
             None
         } else {
             let pt = self.get(n - 1);
-            self.n = self.n.saturating_sub(1);
+            self.n -= 1;
             pt
         }
     }
@@ -781,5 +781,58 @@ impl<'a, C: CentroidLike, D: DeconvolutedCentroidLike> RefPeakDataIter<'a, C, D>
 
     pub fn get(&self, i: usize) -> Option<MZPoint> {
         self.peaks.get(i)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use mzdata_bindata::BuildArrayMapFrom;
+
+    fn check_remaining(
+        mut it: impl ExactSizeIterator<Item = MZPoint> + DoubleEndedIterator,
+        expected: &[MZPoint],
+    ) {
+        let mut expected = expected.iter().cloned();
+        loop {
+            let n = expected.len();
+            assert_eq!(it.len(), n);
+            assert_eq!(it.next(), expected.next());
+            assert_eq!(it.len(), expected.len());
+            assert_eq!(it.next_back(), expected.next_back());
+            if n == 0 {
+                break;
+            }
+        }
+        assert_eq!(it.next_back(), None);
+        assert_eq!(it.next(), None);
+    }
+
+    #[test]
+    fn test_peak_iterator_remaining() {
+        for n in 0..5 {
+            let peaks: Vec<_> = (0..n)
+                .map(|i| CentroidPeak::new(100.0 + i as f64, i as f32, i))
+                .collect();
+            let expected: Vec<_> = peaks
+                .iter()
+                .map(|p| MZPoint::new(p.mz, p.intensity))
+                .collect();
+            let raw: PeakDataLevel = PeakDataLevel::RawData(CentroidPeak::as_arrays(&peaks));
+            let centroid: PeakDataLevel = PeakDataLevel::Centroid(PeakSetVec::new(peaks));
+            for data in [&raw, &centroid] {
+                check_remaining(PeakDataIter::new(data), &expected);
+                let borrowed: RefPeakDataLevel<CentroidPeak, DeconvolutedPeak> = match data {
+                    PeakDataLevel::RawData(a) => RefPeakDataLevel::RawData(a),
+                    PeakDataLevel::Centroid(a) => RefPeakDataLevel::Centroid(a),
+                    _ => unreachable!(),
+                };
+                check_remaining(RefPeakDataIter::new(&borrowed), &expected);
+            }
+        }
+        let missing: PeakDataLevel = PeakDataLevel::Missing;
+        check_remaining(PeakDataIter::new(&missing), &[]);
+        let missing: RefPeakDataLevel<CentroidPeak, DeconvolutedPeak> = RefPeakDataLevel::Missing;
+        check_remaining(RefPeakDataIter::new(&missing), &[]);
     }
 }
