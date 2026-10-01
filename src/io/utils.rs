@@ -394,6 +394,33 @@ mod test {
         Ok(())
     }
 
+    #[test]
+    fn test_prebuffer_read_across_prefix_end() -> io::Result<()> {
+        let mut stream =
+            PreBufferedStream::new_with_buffer_size(io::Cursor::new(b"abcdefghijkl"), 8)?;
+        stream.seek(io::SeekFrom::Start(4))?;
+        let mut bytes = [0; 6];
+        assert_eq!(stream.read(&mut bytes)?, 4);
+        assert_eq!(&bytes[..4], b"efgh");
+        assert_eq!(stream.read(&mut bytes)?, 4);
+        assert_eq!(&bytes[..4], b"ijkl");
+
+        let mut stream =
+            PreBufferedStream::new_with_buffer_size(io::Cursor::new(b"abcdefghijkl"), 8)?;
+        stream.seek(io::SeekFrom::Start(4))?;
+        stream.read_exact(&mut bytes)?;
+        assert_eq!(&bytes, b"efghij");
+        assert_eq!(stream.stream_position()?, 10);
+
+        let mut stream =
+            PreBufferedStream::new_with_buffer_size(io::Cursor::new(b"abcdefghijkl"), 8)?;
+        stream.seek(io::SeekFrom::Start(2))?;
+        let mut rest = Vec::new();
+        stream.read_to_end(&mut rest)?;
+        assert_eq!(rest, b"cdefghijkl");
+        Ok(())
+    }
+
     #[cfg(feature = "parallelism")]
     #[test]
     fn test_parallel_load() -> io::Result<()> {
