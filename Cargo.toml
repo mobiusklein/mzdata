@@ -59,7 +59,7 @@ checksum = ["dep:sha1", "dep:hex"]
 cv = ["mzdata-param/cv", "mzdata-param/static_data", "mzdata-meta/cv", "dep:mzcv"]
 
 mgf = []
-mzml = ["dep:quick-xml", "checksum", "dep:memchr", "dep:encoding_rs", "dep:phf"]
+mzml = ["dep:quick-xml", "checksum", "dep:encoding_rs", "dep:phf"]
 imzml = ["mzml", "dep:uuid", "mzdata-param/imzml"]
 
 numpress = ["mzdata-bindata/numpress"]
@@ -208,7 +208,6 @@ timsrust = { version = "0.4.1", default-features = false, features = [
 ], optional = true }
 
 parking_lot = { version = "0.12.3", optional = true }
-memchr = { version = "2.7.4", optional = true }
 encoding_rs = { version = "0.8.35", optional = true }
 libloading = { version = "0.8.6", optional = true }
 

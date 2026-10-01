@@ -2383,7 +2383,6 @@ dependencies = [
  "libloading 0.8.9",
  "libz-sys",
  "log",
- "memchr",
  "mzcv",
  "mzdata-bindata",
  "mzdata-meta",

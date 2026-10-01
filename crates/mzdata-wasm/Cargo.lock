@@ -580,7 +580,6 @@ dependencies = [
  "identity-hash",
  "indexmap 2.14.0",
  "log",
- "memchr",
  "mzdata-bindata",
  "mzdata-meta",
  "mzdata-param",

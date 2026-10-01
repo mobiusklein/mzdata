@@ -1618,7 +1618,6 @@ dependencies = [
  "identity-hash",
  "indexmap 2.13.0",
  "log",
- "memchr",
  "mzdata-bindata",
  "mzdata-meta",
  "mzdata-param",
