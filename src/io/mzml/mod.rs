@@ -27,6 +27,9 @@ pub use reading_shared::{
     FileMetadataBuilder, EntryType, build_spectrum_index
 };
 
+#[cfg(feature = "imzml")]
+pub(crate) use reading_shared::try_build_spectrum_index;
+
 #[allow(unused)]
 pub(crate) use reading_shared::{IncrementingIdMap, ParserResult};
 

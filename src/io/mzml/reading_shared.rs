@@ -1298,15 +1298,31 @@ pub fn build_spectrum_index<R: SeekRead>(
     spectrum_index: &mut OffsetIndex,
     buffer: &mut Bytes,
 ) -> u64 {
+    build_spectrum_index_impl(handle, spectrum_index, buffer, false)
+        .expect("Failed to build spectrum index")
+}
+
+#[cfg(feature = "imzml")]
+pub(crate) fn try_build_spectrum_index<R: SeekRead>(
+    handle: &mut io::BufReader<R>,
+    spectrum_index: &mut OffsetIndex,
+    buffer: &mut Bytes,
+) -> io::Result<u64> {
+    build_spectrum_index_impl(handle, spectrum_index, buffer, true)
+}
+
+fn build_spectrum_index_impl<R: SeekRead>(
+    handle: &mut io::BufReader<R>,
+    spectrum_index: &mut OffsetIndex,
+    buffer: &mut Bytes,
+    stop_on_xml_error: bool,
+) -> io::Result<u64> {
     use quick_xml::{events::Event, Reader};
     use log::trace;
 
-    let start = handle
-        .stream_position()
-        .expect("Failed to save restore location");
+    let start = handle.stream_position()?;
     trace!("Starting to build offset index by traversing the file, storing last position as {start}");
-    handle.seek(SeekFrom::Start(0))
-        .expect("Failed to reset stream to beginning");
+    handle.seek(SeekFrom::Start(0))?;
     let mut reader = Reader::from_reader(&mut *handle);
     reader.config_mut().trim_text(true);
     loop {
@@ -1321,7 +1337,7 @@ pub fn build_spectrum_index<R: SeekRead>(
                                 if attr.key.as_ref() == b"id" {
                                     let scan_id = attr
                                         .normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                                        .expect("Error decoding spectrum id in streaming index")
+                                        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?
                                         .to_string();
                                     // This count is off by 2 because somehow the < and > bytes are removed?
                                     spectrum_index.insert(
@@ -1345,18 +1361,23 @@ pub fn build_spectrum_index<R: SeekRead>(
             Ok(Event::Eof) => {
                 break;
             }
+            Err(err) if stop_on_xml_error => {
+                let kind = match &err {
+                    quick_xml::Error::Io(err) => err.kind(),
+                    _ => io::ErrorKind::InvalidData,
+                };
+                return Err(io::Error::new(kind, err));
+            }
             _ => {}
         };
         buffer.clear();
     }
     let offset = reader.buffer_position();
     trace!("Ended indexing scan at offset {offset}. Restoring starting position {start}");
-    handle
-        .seek(SeekFrom::Start(start))
-        .expect("Failed to restore location");
+    handle.seek(SeekFrom::Start(start))?;
     spectrum_index.init = true;
     if spectrum_index.is_empty() {
         warn!("A spectrum index was built but no entries were found")
     }
-    offset
+    Ok(offset)
 }

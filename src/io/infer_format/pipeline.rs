@@ -315,7 +315,7 @@ pub trait MassSpectrometryReadWriteProcess<
                         }
                         let ibd_file = fs::File::open(&ibd_path)?;
 
-                        let reader = ImzMLReaderType::new(xml_file, ibd_file);
+                        let reader = ImzMLReaderType::try_new(xml_file, ibd_file)?;
                         let reader = self.transform_reader(reader, format)?;
                         self.open_writer(reader, format, write_path)?;
                         Ok(())

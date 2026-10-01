@@ -578,19 +578,61 @@ impl<
 {
     /// Create a new [`ImzMLReaderType`] instance, wrapping the [`io::Read`] handle
     /// provided with an [`io::BufReader`] and parses the metadata section of the file.
+    ///
+    /// Use [`Self::try_new`] to return metadata, IBD header and index errors.
     pub fn new(file: R, ibd_file: S) -> ImzMLReaderType<R, S, C, D> {
         Self::with_buffer_capacity_and_detail_level(file, ibd_file, BUFFER_SIZE, DetailLevel::Full)
     }
 
+    /// Open an imzML/IBD pair, returning metadata, IBD header and index errors.
+    /// UUID mismatches still produce a warning.
+    pub fn try_new(file: R, ibd_file: S) -> io::Result<Self> {
+        Self::try_with_buffer_capacity_and_detail_level(
+            file,
+            ibd_file,
+            BUFFER_SIZE,
+            DetailLevel::Full,
+        )
+    }
+
+    /// Create a reader with the given buffer size and detail level.
+    /// Use [`Self::try_with_buffer_capacity_and_detail_level`] to return opening errors.
     pub fn with_buffer_capacity_and_detail_level(
         file: R,
         ibd_file: S,
         capacity: usize,
         detail_level: DetailLevel,
     ) -> ImzMLReaderType<R, S, C, D> {
+        let mut inst = Self::from_readers(file, ibd_file, capacity, detail_level);
+        let _ = inst.parse_metadata();
+        let _ = inst.check_ibd_file();
+        inst.build_index();
+        inst
+    }
+
+    /// Open an imzML/IBD pair with the given buffer size and detail level.
+    /// Returns metadata, IBD header and index errors; UUID mismatches still warn.
+    pub fn try_with_buffer_capacity_and_detail_level(
+        file: R,
+        ibd_file: S,
+        capacity: usize,
+        detail_level: DetailLevel,
+    ) -> io::Result<Self> {
+        let mut inst = Self::from_readers(file, ibd_file, capacity, detail_level);
+        inst.parse_metadata()?;
+        inst.check_ibd_file()?;
+        crate::io::mzml::try_build_spectrum_index(
+            &mut inst.handle,
+            &mut inst.spectrum_index,
+            &mut inst.buffer,
+        )?;
+        Ok(inst)
+    }
+
+    fn from_readers(file: R, ibd_file: S, capacity: usize, detail_level: DetailLevel) -> Self {
         let handle = BufReader::with_capacity(capacity, file);
         let ibd_handle = BufReader::with_capacity(capacity, ibd_file);
-        let mut inst = ImzMLReaderType {
+        ImzMLReaderType {
             handle,
             ibd_handle,
             state: MzMLParserState::Start,
@@ -614,17 +656,7 @@ impl<
             num_spectra: None,
             run: MassSpectrometryRun::default(),
             imzml_metadata: ImzMLFileMetadata::default(),
-        };
-        match inst.parse_metadata() {
-            Ok(()) => {}
-            Err(_err) => {}
         }
-        match inst.check_ibd_file() {
-            Ok(()) => {}
-            Err(_err) => {}
-        }
-        inst.build_index();
-        inst
     }
 
     /// Attempt to open the IBD file based on metadata or by deriving the filename
@@ -721,29 +753,30 @@ impl<
                 Ok(Event::Eof) => {
                     break;
                 }
-                Err(err) => match &err {
-                    XMLError::IllFormed(quick_xml::errors::IllFormedError::MismatchedEndTag {
-                        expected,
-                        found: _found,
-                    }) => {
-                        if expected.is_empty() && self.state == MzMLParserState::Resume {
-                            continue;
-                        } else {
-                            self.error = Some(Box::new(MzMLParserError::IncompleteElementError(
-                                String::from_utf8_lossy(&self.buffer).to_string(),
-                                self.state,
-                            )));
-                            self.state = MzMLParserState::ParserError;
+                Err(err) => {
+                    match &err {
+                        XMLError::IllFormed(
+                            quick_xml::errors::IllFormedError::MismatchedEndTag {
+                                expected, ..
+                            },
+                        ) if expected.is_empty() && self.state == MzMLParserState::Resume => {
+                            continue
                         }
+                        _ => {}
                     }
-                    _ => {
-                        self.error = Some(Box::new(MzMLParserError::IncompleteElementError(
-                            String::from_utf8_lossy(&self.buffer).to_string(),
+                    let error = match err {
+                        XMLError::Io(err) => {
+                            MzMLParserError::IOError(self.state, io::Error::new(err.kind(), err))
+                        }
+                        err => MzMLParserError::XMLErrorContext(
                             self.state,
-                        )));
-                        self.state = MzMLParserState::ParserError;
-                    }
-                },
+                            err,
+                            String::from_utf8_lossy(&self.buffer).to_string(),
+                        ),
+                    };
+                    self.error = Some(Box::new(error));
+                    self.state = MzMLParserState::ParserError;
+                }
                 _ => {}
             };
             self.buffer.clear();
@@ -753,6 +786,11 @@ impl<
                 }
                 _ => {}
             };
+        }
+        if self.state == MzMLParserState::ParserError {
+            return Err(*self.error.take().unwrap_or_else(|| {
+                Box::new(MzMLParserError::UnknownError(MzMLParserState::ParserError))
+            }));
         }
         // Extract standard mzML metadata (already present)
         self.file_description = accumulator.mzml_metadata_builder.file_description;
@@ -813,15 +851,10 @@ impl<
         );
 
         match self.state {
-            MzMLParserState::SpectrumDone | MzMLParserState::ChromatogramDone => Ok(()),
-            MzMLParserState::ParserError => {
-                Err(*self
-                    .error
-                    .take()
-                    .unwrap_or(Box::new(MzMLParserError::UnknownError(
-                        MzMLParserState::ParserError,
-                    ))))
-            }
+            MzMLParserState::SpectrumList
+            | MzMLParserState::Spectrum
+            | MzMLParserState::SpectrumDone
+            | MzMLParserState::ChromatogramDone => Ok(()),
             _ => Err(MzMLParserError::IncompleteSpectrum),
         }
     }
@@ -1460,9 +1493,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
         #[cfg(feature = "filename")]
         {
             // Get the path from the file using the filename crate
-            let xml_path = filename::file_name(&_source).ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidInput, "Source file has no path")
-            })?;
+            let xml_path = filename::file_name(&_source)?;
 
             // Derive IBD path from imzML path
             let mut ibd_path = xml_path.with_extension("ibd");
@@ -1484,7 +1515,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
             let ibd_file = fs::File::open(&ibd_path)?;
 
             // Create the reader with both files
-            Ok(Self::new(_source, ibd_file))
+            Self::try_new(_source, ibd_file)
         }
         #[cfg(not(feature = "filename"))]
         {
@@ -1507,9 +1538,7 @@ impl<C: CentroidLike + BuildFromArrayMap, D: DeconvolutedCentroidLike + BuildFro
             ibd_path = path.with_extension("IBD");
         }
         let ibd_file = fs::File::open(&ibd_path)?;
-        let reader = ImzMLReaderType::new(xml_file, ibd_file);
-        // Index is already built in the constructor
-        Ok(reader)
+        Self::try_new(xml_file, ibd_file)
     }
 
     fn construct_index_from_stream(&mut self) -> u64 {
