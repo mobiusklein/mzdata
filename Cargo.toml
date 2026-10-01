@@ -150,7 +150,7 @@ thiserror = { workspace = true }
 num-traits = { workspace = true }
 log = { workspace = true}
 
-quick-xml = { version = "0.41", features = ["serialize"], optional = true }
+quick-xml = { version = "0.41", optional = true }
 uuid = { version = "1.0", features = ["v4", "serde"], optional = true }
 
 indexmap = { version = "2.0.0", features = ["serde"] }
