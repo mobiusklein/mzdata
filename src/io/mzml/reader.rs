@@ -2842,6 +2842,43 @@ mod test {
     }
 
     #[test]
+    fn test_time_lookup_detail_level() -> io::Result<()> {
+        let mut reader = MzMLReader::open_path("test/data/small.mzML")?;
+        for level in [
+            DetailLevel::Full,
+            DetailLevel::Lazy,
+            DetailLevel::MetadataOnly,
+        ] {
+            reader.set_detail_level(level);
+            for index in [0, 24, 47] {
+                let expected = reader.get_spectrum_by_index(index).unwrap();
+                let actual = reader.get_spectrum_by_time(expected.start_time()).unwrap();
+                assert_eq!(actual.description, expected.description);
+                assert_eq!(*reader.detail_level(), level);
+                let actual = actual.arrays.as_ref().unwrap();
+                let expected = expected.arrays.as_ref().unwrap();
+                assert_eq!(actual.len(), expected.len());
+                for (name, expected) in expected.iter() {
+                    let actual = actual.get(name).unwrap();
+                    assert!(
+                        actual.data == expected.data,
+                        "array {name:?}, detail {level:?}"
+                    );
+                    assert_eq!(actual.dtype, expected.dtype);
+                    assert_eq!(actual.compression, expected.compression);
+                    assert_eq!(actual.unit, expected.unit);
+                    assert_eq!(actual.params, expected.params);
+                }
+            }
+            let left = reader.get_spectrum_by_index(23).unwrap();
+            let right = reader.get_spectrum_by_index(24).unwrap();
+            let time = left.start_time() + (right.start_time() - left.start_time()) * 0.75;
+            assert_eq!(reader.get_spectrum_by_time(time).unwrap().id(), right.id());
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_random_start() -> io::Result<()> {
         let path = path::Path::new("./test/data/batching_test.mzML");
         let mut reader = MzMLReader::open_path(path)?;
