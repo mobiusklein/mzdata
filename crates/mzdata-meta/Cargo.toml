@@ -11,7 +11,7 @@ description.workspace = true
 
 [features]
 
-serde = ["dep:serde", "dep:serde_json", "dep:serde_with"]
+serde = ["dep:serde", "dep:serde_json", "dep:serde_with", "chrono/serde", "mzdata-param/serde"]
 cv = ["mzdata-param/cv"]
 
 

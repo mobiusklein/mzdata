@@ -59,7 +59,7 @@ checksum = ["dep:sha1", "dep:hex"]
 cv = ["mzdata-param/cv", "mzdata-param/static_data", "mzdata-meta/cv", "dep:mzcv"]
 
 mgf = []
-mzml = ["dep:quick-xml", "checksum", "dep:memchr", "dep:encoding_rs", "dep:phf"]
+mzml = ["dep:quick-xml", "checksum", "dep:encoding_rs", "dep:phf"]
 imzml = ["mzml", "dep:uuid", "mzdata-param/imzml"]
 
 numpress = ["mzdata-bindata/numpress"]
@@ -83,9 +83,9 @@ parallelism = ["dep:rayon", "mzsignal?/parallelism", "mzdata-spectrum/parallelis
 # After substantial testing, zlib-ng-compat is the winner for speed and size on
 # a variety of real-world data.
 zlib = ["flate2/zlib", "mzdata-bindata/zlib", "mzdata-spectrum/zlib"]
-zlib-ng-compat = ["flate2/zlib-ng-compat", "mzdata-bindata/zlib-ng-compat", "mzdata-spectrum/zlib"]
-zlib-ng = ["flate2/zlib-ng", "mzdata-bindata/zlib-ng", "mzdata-spectrum/zlib"]
-zlib-rs = ["flate2/zlib-rs", "mzdata-bindata/zlib-rs", "mzdata-spectrum/zlib"]
+zlib-ng-compat = ["flate2/zlib-ng-compat", "mzdata-bindata/zlib-ng-compat", "mzdata-spectrum/zlib-ng-compat"]
+zlib-ng = ["flate2/zlib-ng", "mzdata-bindata/zlib-ng", "mzdata-spectrum/zlib-ng"]
+zlib-rs = ["flate2/zlib-rs", "mzdata-bindata/zlib-rs", "mzdata-spectrum/zlib-rs"]
 miniz_oxide = ["flate2/rust_backend", "mzdata-bindata/miniz_oxide", "mzdata-spectrum/miniz_oxide"]
 zstd = ["dep:zstd", "mzdata-bindata/zstd", "mzdata-spectrum/zstd"]
 
@@ -150,7 +150,7 @@ thiserror = { workspace = true }
 num-traits = { workspace = true }
 log = { workspace = true}
 
-quick-xml = { version = "0.41", features = ["serialize"], optional = true }
+quick-xml = { version = "0.41", optional = true }
 uuid = { version = "1.0", features = ["v4", "serde"], optional = true }
 
 indexmap = { version = "2.0.0", features = ["serde"] }
@@ -208,7 +208,6 @@ timsrust = { version = "0.4.1", default-features = false, features = [
 ], optional = true }
 
 parking_lot = { version = "0.12.3", optional = true }
-memchr = { version = "2.7.4", optional = true }
 encoding_rs = { version = "0.8.35", optional = true }
 libloading = { version = "0.8.6", optional = true }
 
