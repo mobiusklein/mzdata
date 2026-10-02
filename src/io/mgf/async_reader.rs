@@ -114,6 +114,7 @@ impl<R: io::AsyncRead + Unpin, C: CentroidLike + From<CentroidPeak>, D: Deconvol
     /// Read the next spectrum from the file, if there is one.
     pub async fn read_next(&mut self) -> Option<MultiLayerSpectrum<C, D>> {
         let mut builder = SpectrumBuilder::<C, D>::default();
+        builder.detail_level = self.detail_level;
         self._parse_into(&mut builder)
             .await
             .inspect_err(|e| error!("An error occurred while reading MGF spectrum: {e}"))
@@ -184,11 +185,13 @@ impl<R: io::AsyncRead + Unpin, C: CentroidLike + From<CentroidPeak>, D: Deconvol
         Ok((offset, had_begin_ions))
     }
 
+    /// Read the next spectrum into `spectrum`, replacing its previous contents.
     pub async fn read_into(
         &mut self,
         spectrum: &mut MultiLayerSpectrum<C, D>,
     ) -> Result<usize, MGFError> {
         let mut accumulator = SpectrumBuilder::default();
+        accumulator.detail_level = self.detail_level;
         match self._parse_into(&mut accumulator).await {
             Ok((sz, started_spectrum)) => {
                 if !started_spectrum {
@@ -372,8 +375,13 @@ impl<
     /// Helper method to support seeking to a specific time.
     /// Considerably more complex than seeking by ID or index.
     async fn _offset_of_time(&mut self, time: f64) -> Option<u64> {
-        match self.get_spectrum_by_time(time).await {
-            Some(scan) => self._offset_of_index(scan.index()),
+        let saved = self.detail_level;
+        let reader = crate::io::traits::DetailLevelGuard::new(self, saved, |r, level| {
+            r.detail_level = level
+        });
+        reader.source.detail_level = DetailLevel::MetadataOnly;
+        match reader.source.get_spectrum_by_time(time).await {
+            Some(scan) => reader.source._offset_of_index(scan.index()),
             None => None,
         }
     }

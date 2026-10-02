@@ -1459,6 +1459,97 @@ mod test {
     }
 
 
+    #[test]
+    fn test_coerce_from_mut() {
+        let mut values = [1.25_f64, 2.5];
+        let bytes = bytemuck::cast_slice_mut(&mut values);
+        let view = <DataArray as ByteArrayViewMut>::coerce_from_mut::<f64>(bytes).unwrap();
+        assert_eq!(view, &[1.25, 2.5]);
+        view[1] = -3.5;
+        assert_eq!(values, [1.25, -3.5]);
+
+        let mut empty = [];
+        assert!(
+            <DataArray as ByteArrayViewMut>::coerce_from_mut::<f64>(&mut empty)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            <DataArray as ByteArrayViewMut>::coerce_from_mut::<[u8; 0]>(&mut empty)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn test_coerce_from_mut_invalid_buffer() {
+        let mut values = [0_u64; 2];
+        let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut values);
+        assert_eq!(
+            <DataArray as ByteArrayViewMut>::coerce_from_mut::<u64>(&mut bytes[1..9]),
+            Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        );
+        assert_eq!(
+            <DataArray as ByteArrayViewMut>::coerce_from_mut::<u64>(&mut bytes[..7]),
+            Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        );
+        assert_eq!(
+            <DataArray as ByteArrayViewMut>::coerce_from_mut::<[u8; 0]>(&mut bytes[..1]),
+            Err(ArrayRetrievalError::DataTypeSizeMismatch)
+        );
+    }
+
+    #[test]
+    fn test_iter_unaligned_numeric_data() {
+        fn check<T: bytemuck::Pod + std::fmt::Debug + PartialEq>(
+            dtype: BinaryDataArrayType,
+            encoded: &[u8],
+            expected: &[T],
+        ) {
+            let alignment = std::mem::align_of::<T>();
+            let mut bytes = vec![0u8; encoded.len() + alignment + 1];
+            let start = (1..=alignment)
+                .find(|offset| !bytes[*offset..].as_ptr().cast::<T>().is_aligned())
+                .unwrap();
+            bytes[start..start + encoded.len()].copy_from_slice(encoded);
+            let array = DataArray::wrap(&ArrayType::MZArray, dtype, bytes);
+            let slice = DataArraySlice::new(&array, start, start + encoded.len());
+            let mut iter = slice.iter_type::<T>().unwrap();
+            for value in expected {
+                assert_eq!(iter.next(), Some(*value));
+            }
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+
+            let mut iter = crate::traits::DataSliceIter::<T>::new(Cow::Borrowed(
+                &array.data[start..start + encoded.len() + 1],
+            ));
+            assert_eq!(iter.by_ref().collect::<Vec<_>>(), expected);
+            assert_eq!(iter.next(), None);
+        }
+
+        check(
+            BinaryDataArrayType::Float64,
+            &[1.25_f64.to_le_bytes(), (-2.5_f64).to_le_bytes()].concat(),
+            &[1.25_f64, -2.5],
+        );
+        check(
+            BinaryDataArrayType::Float32,
+            &[1.25_f32.to_le_bytes(), (-2.5_f32).to_le_bytes()].concat(),
+            &[1.25_f32, -2.5],
+        );
+        check(
+            BinaryDataArrayType::Int64,
+            &[42_i64.to_le_bytes(), (-17_i64).to_le_bytes()].concat(),
+            &[42_i64, -17],
+        );
+        check(
+            BinaryDataArrayType::Int32,
+            &[42_i32.to_le_bytes(), (-17_i32).to_le_bytes()].concat(),
+            &[42_i32, -17],
+        );
+    }
+
     #[cfg(feature = "zstd")]
     #[test]
     fn test_dict_from_base64() -> io::Result<()> {

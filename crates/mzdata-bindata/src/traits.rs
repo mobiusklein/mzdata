@@ -1,5 +1,4 @@
 use std::marker::PhantomData;
-use std::slice;
 use std::mem;
 use std::borrow::Cow;
 
@@ -57,8 +56,8 @@ pub trait ByteArrayView<'transient, 'lifespan: 'transient> {
             Ok(data) => {
                 #[cfg(target_endian = "big")]
                 {
-                    let mut data = Cow::Owned(data.to_vec());
-                    self.dtype().swap_bytes(&mut data)?;
+                    let mut data: Cow<'_, [u8]> = Cow::Owned(data.to_vec());
+                    self.dtype().swap_bytes(data.to_mut())?;
                     Self::coerce_from(data)
                 }
                 #[cfg(not(target_endian = "big"))]
@@ -239,22 +238,48 @@ pub trait ByteArrayViewMut<'transient, 'lifespan: 'transient>:
     /// This is in turn used by [`ByteArrayViewMut::coerce_mut`] to produce a typed array
     fn view_mut(&'transient mut self) -> Result<&'transient mut Bytes, ArrayRetrievalError>;
 
-    fn coerce_from_mut<T: Clone + Sized>(
-        buffer: &mut [u8],
+    /// Reinterpret decoded bytes as a mutable slice in native byte order.
+    ///
+    /// The returned slice borrows the input buffer. `T` must be [`Pod`] so that
+    /// all bit patterns are valid and writing values cannot introduce padding.
+    /// Empty buffers return an empty slice.
+    ///
+    /// # Errors
+    /// Returns [`ArrayRetrievalError::DataTypeSizeMismatch`] if the buffer is
+    /// not aligned for `T` or its length is not a multiple of the element size.
+    /// A nonempty buffer cannot be cast to a zero-sized type.
+    ///
+    /// The returned reference cannot outlive its buffer:
+    ///
+    /// ```compile_fail
+    /// use mzdata_bindata::{ByteArrayViewMut, DataArray};
+    ///
+    /// fn escape_buffer() -> &'static mut [u8] {
+    ///     let mut bytes = vec![1u8, 2, 3];
+    ///     <DataArray as ByteArrayViewMut<'static, 'static>>::coerce_from_mut::<u8>(
+    ///         &mut bytes,
+    ///     ).unwrap()
+    /// }
+    /// ```
+    ///
+    /// Types such as `bool` cannot represent arbitrary bytes:
+    ///
+    /// ```compile_fail
+    /// use mzdata_bindata::{ByteArrayViewMut, DataArray};
+    ///
+    /// let mut bytes = [0u8];
+    /// let _ = <DataArray as ByteArrayViewMut>::coerce_from_mut::<bool>(&mut bytes);
+    /// ```
+    fn coerce_from_mut<T: Pod>(
+        buffer: &'transient mut [u8],
     ) -> Result<&'transient mut [T], ArrayRetrievalError> {
-        let n = buffer.len();
-        if n == 0 {
-            return Ok(&mut [])
+        if buffer.is_empty() {
+            return Ok(&mut []);
         }
-        let z = mem::size_of::<T>();
-        if n % z != 0 {
-            return Err(ArrayRetrievalError::DataTypeSizeMismatch);
-        }
-        let m = n / z;
-        unsafe { Ok(slice::from_raw_parts_mut(buffer.as_mut_ptr() as *mut T, m)) }
+        Ok(bytemuck::try_cast_slice_mut(buffer)?)
     }
 
-    fn coerce_mut<T: Clone + Sized>(
+    fn coerce_mut<T: Pod>(
         &'lifespan mut self,
     ) -> Result<&'transient mut [T], ArrayRetrievalError> {
         let view = self.view_mut()?;
@@ -280,7 +305,7 @@ pub struct DataSliceIter<'a, T: Pod> {
 impl<T: Pod> ExactSizeIterator for DataSliceIter<'_, T> {
     fn len(&self) -> usize {
         let z = mem::size_of::<T>();
-        self.buffer.len() / z
+        self.buffer.len() / z - self.i
     }
 }
 
@@ -300,15 +325,15 @@ impl<'a, T: Pod> DataSliceIter<'a, T> {
             {
                 let mut data = data.to_vec();
                 data.reverse();
-                let val = bytemuck::from_bytes(data);
+                let val = bytemuck::pod_read_unaligned(&data);
                 self.i += 1;
-                Some(*val)
+                Some(val)
             }
             #[cfg(not(target_endian = "big"))]
             {
-                let val = bytemuck::from_bytes(data);
+                let val = bytemuck::pod_read_unaligned(data);
                 self.i += 1;
-                Some(*val)
+                Some(val)
             }
         }
     }
@@ -319,5 +344,46 @@ impl<T: Pod> Iterator for DataSliceIter<'_, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_value()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if mem::size_of::<T>() == 0 {
+            return (0, None);
+        }
+        let n = self.len();
+        (n, Some(n))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn check_remaining<T: Pod + PartialEq + std::fmt::Debug>(values: &[T]) {
+        let mut it = DataSliceIter::<T>::new(Cow::Borrowed(bytemuck::cast_slice(values)));
+        for (i, value) in values.iter().enumerate() {
+            let n = values.len() - i;
+            assert_eq!(it.len(), n);
+            assert_eq!(it.size_hint(), (n, Some(n)));
+            assert_eq!(it.next(), Some(*value));
+        }
+        assert_eq!(it.len(), 0);
+        assert_eq!(it.size_hint(), (0, Some(0)));
+        assert_eq!(it.next(), None);
+        assert_eq!(it.next(), None);
+    }
+
+    #[test]
+    fn test_iterator_remaining() {
+        check_remaining::<u8>(&[]);
+        check_remaining(&[1u8]);
+        check_remaining(&[1u8, 2, 3]);
+        check_remaining(&[1i32, -2, 3]);
+        check_remaining(&[1i64, -2, 3]);
+        check_remaining(&[1.25f32, -2.5, 3.0]);
+        check_remaining(&[1.25f64, -2.5, 3.0]);
+
+        let units = DataSliceIter::<()>::new(Cow::Borrowed(&[]));
+        assert_eq!(units.take(3).collect::<Vec<_>>(), vec![(); 3]);
     }
 }

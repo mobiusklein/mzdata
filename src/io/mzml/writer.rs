@@ -199,7 +199,9 @@ impl<W: io::Write> ByteCountingStream<W> {
     }
 
     pub fn checksum(&self) -> sha1::Sha1 {
-        self.stream.get_ref().compute()
+        let mut checksum = self.stream.get_ref().compute();
+        checksum.update(self.stream.buffer());
+        checksum
     }
 
     pub fn get_mut(&mut self) -> &mut W {
@@ -2255,6 +2257,56 @@ mod test {
     use std::path;
     use tempfile;
 
+    fn assert_checksum(bytes: &[u8]) {
+        let tag = b"<fileChecksum>";
+        let end = bytes
+            .windows(tag.len())
+            .position(|part| part == tag)
+            .unwrap()
+            + tag.len();
+        let expected = hex::encode(sha1::Sha1::digest(&bytes[..end]));
+        assert_eq!(&bytes[end..end + expected.len()], expected.as_bytes());
+    }
+
+    #[test]
+    fn buffered_file_checksum() -> WriterResult {
+        struct ShortWriter<'a>(&'a mut Vec<u8>, usize);
+
+        impl Write for ShortWriter<'_> {
+            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+                let n = bytes.len().min(self.1);
+                self.0.extend_from_slice(&bytes[..n]);
+                Ok(n)
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        for large in [false, true] {
+            for limit in [usize::MAX, 4096] {
+                let mut bytes = Vec::new();
+                {
+                    let mut writer = MzMLWriter::new(ShortWriter(&mut bytes, limit));
+                    if large {
+                        let mut reader = MzMLReader::open_path("test/data/small.mzML")?;
+                        writer.copy_metadata_from(&reader);
+                        writer.set_spectrum_count(reader.len() as u64);
+                        for spectrum in reader.iter() {
+                            writer.write(&spectrum)?;
+                        }
+                    }
+                    writer.close()?;
+                    writer.close()?;
+                }
+                assert_eq!(bytes.len() > BUFFER_SIZE, large);
+                assert_checksum(&bytes);
+            }
+        }
+        Ok(())
+    }
+
     #[test_log::test]
     fn write_test() -> WriterResult {
         let tmpdir = tempfile::tempdir()?;
@@ -2313,6 +2365,8 @@ mod test {
             }
         }
         writer.close()?;
+
+        assert_checksum(&fs::read(&dest_path)?);
 
         let mut reader2 = MzMLReader::open_path(dest_path)?;
         assert_eq!(reader.file_description(), reader2.file_description());
