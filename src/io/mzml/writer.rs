@@ -2283,18 +2283,18 @@ mod test {
                 Ok(())
             }
         }
-
+        let mut reader = MzMLReader::open_path("test/data/small.mzML")?;
+        let spectra: Vec<_> = reader.iter().collect();
         for large in [false, true] {
             for limit in [usize::MAX, 4096] {
                 let mut bytes = Vec::new();
                 {
                     let mut writer = MzMLWriter::new(ShortWriter(&mut bytes, limit));
                     if large {
-                        let mut reader = MzMLReader::open_path("test/data/small.mzML")?;
                         writer.copy_metadata_from(&reader);
                         writer.set_spectrum_count(reader.len() as u64);
-                        for spectrum in reader.iter() {
-                            writer.write(&spectrum)?;
+                        for spectrum in spectra.iter() {
+                            writer.write(spectrum)?;
                         }
                     }
                     writer.close()?;

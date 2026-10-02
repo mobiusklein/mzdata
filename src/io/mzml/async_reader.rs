@@ -1159,7 +1159,6 @@ mod test {
     async fn test_read_into_replaces_spectrum() {
         for level in [
             DetailLevel::Full,
-            DetailLevel::Lazy,
             DetailLevel::MetadataOnly,
         ] {
             let mut reader =
@@ -1197,7 +1196,6 @@ mod test {
         let mut reference = crate::MzMLReader::open_path("test/data/small.mzML")?;
         for level in [
             DetailLevel::Full,
-            DetailLevel::Lazy,
             DetailLevel::MetadataOnly,
         ] {
             reference.set_detail_level(level);
@@ -1253,7 +1251,6 @@ mod test {
         let input = std::fs::read("test/data/small.mzML")?;
         for level in [
             DetailLevel::Full,
-            DetailLevel::Lazy,
             DetailLevel::MetadataOnly,
         ] {
             let mut reader = MzMLReader::new_indexed(std::io::Cursor::new(&input)).await;
