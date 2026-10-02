@@ -323,6 +323,57 @@ mod test {
         }
 
         #[tokio::test]
+        async fn test_spectrum_detail_level() -> std::io::Result<()> {
+            use crate::io::AsyncSpectrumSource;
+            let input = std::fs::read("test/data/small.mgf")?;
+            let mut reference = MGFReader::open_path("test/data/small.mgf")?;
+            for level in [
+                DetailLevel::Full,
+                DetailLevel::Lazy,
+                DetailLevel::MetadataOnly,
+            ] {
+                reference.set_detail_level(level);
+                let expected = reference.get_spectrum_by_index(0).unwrap();
+                assert_eq!(
+                    reference
+                        .get_spectrum_by_time(expected.start_time())
+                        .unwrap()
+                        .peaks,
+                    expected.peaks
+                );
+                for route in ["next", "read_into", "index", "id", "time", "trait_time"] {
+                    let mut reader =
+                        AsyncMGFReader::new_indexed(std::io::Cursor::new(&input)).await;
+                    reader.detail_level = level;
+                    let actual = match route {
+                        "next" => reader.read_next().await.unwrap(),
+                        "read_into" => {
+                            let mut spectrum = crate::spectrum::MultiLayerSpectrum::default();
+                            reader.read_into(&mut spectrum).await.unwrap();
+                            spectrum
+                        }
+                        "index" => reader.get_spectrum_by_index(0).await.unwrap(),
+                        "id" => reader.get_spectrum_by_id(expected.id()).await.unwrap(),
+                        "time" => reader
+                            .get_spectrum_by_time(expected.start_time())
+                            .await
+                            .unwrap(),
+                        _ => AsyncSpectrumSource::get_spectrum_by_time(
+                            &mut reader,
+                            expected.start_time(),
+                        )
+                        .await
+                        .unwrap(),
+                    };
+                    assert_eq!(actual.description, expected.description);
+                    assert_eq!(actual.peaks, expected.peaks);
+                    assert_eq!(reader.detail_level, level);
+                }
+            }
+            Ok(())
+        }
+
+        #[tokio::test]
         async fn test_reader() {
             let path = path::Path::new("./test/data/small.mgf");
             let file = fs::File::open(path).await.expect("Test file doesn't exist");

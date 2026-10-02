@@ -430,7 +430,7 @@ impl<
         &mut self,
         spectrum: &mut MultiLayerSpectrum<C, D>,
     ) -> Result<usize, MzMLParserError> {
-        let accumulator = MzMLSpectrumBuilder::<C, D>::new();
+        let accumulator = MzMLSpectrumBuilder::<C, D>::with_detail_level(self.detail_level);
         match self.state {
             MzMLParserState::SpectrumDone => {
                 self.state = MzMLParserState::Resume;
@@ -809,8 +809,13 @@ impl<
     /// Helper method to support seeking to a specific time.
     /// Considerably more complex than seeking by ID or index.
     async fn _offset_of_time(&mut self, time: f64) -> Option<u64> {
-        match self.get_spectrum_by_time(time).await {
-            Some(scan) => self._offset_of_index(scan.index()),
+        let saved = self.detail_level;
+        let reader = crate::io::traits::DetailLevelGuard::new(self, saved, |r, level| {
+            r.detail_level = level
+        });
+        reader.source.detail_level = DetailLevel::MetadataOnly;
+        match reader.source.get_spectrum_by_time(time).await {
+            Some(scan) => reader.source._offset_of_index(scan.index()),
             None => None,
         }
     }
@@ -1183,6 +1188,92 @@ mod test {
                 }
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_spectrum_detail_level() -> io::Result<()> {
+        use std::io::Cursor;
+        let input = std::fs::read("test/data/small.mzML")?;
+        let mut reference = crate::MzMLReader::open_path("test/data/small.mzML")?;
+        for level in [
+            DetailLevel::Full,
+            DetailLevel::Lazy,
+            DetailLevel::MetadataOnly,
+        ] {
+            reference.set_detail_level(level);
+            let expected =
+                crate::io::SpectrumSource::get_spectrum_by_index(&mut reference, 0).unwrap();
+            for route in ["next", "read_into", "index", "id", "time", "trait_time"] {
+                let mut reader = MzMLReader::new_indexed(Cursor::new(&input)).await;
+                reader.detail_level = level;
+                let actual = match route {
+                    "next" => reader.read_next().await.unwrap(),
+                    "read_into" => {
+                        let mut spectrum = MultiLayerSpectrum::default();
+                        reader.read_into(&mut spectrum).await.unwrap();
+                        spectrum
+                    }
+                    "index" => reader.get_spectrum_by_index(0).await.unwrap(),
+                    "id" => reader.get_spectrum_by_id(expected.id()).await.unwrap(),
+                    "time" => reader
+                        .get_spectrum_by_time(expected.start_time())
+                        .await
+                        .unwrap(),
+                    _ => AsyncSpectrumSource::get_spectrum_by_time(
+                        &mut reader,
+                        expected.start_time(),
+                    )
+                    .await
+                    .unwrap(),
+                };
+                assert_eq!(actual.description, expected.description);
+                assert_eq!(reader.detail_level, level);
+                let actual = actual.arrays.as_ref().unwrap();
+                let expected = expected.arrays.as_ref().unwrap();
+                assert_eq!(actual.len(), expected.len());
+                for (name, expected) in expected.iter() {
+                    let actual = actual.get(name).unwrap();
+                    assert!(
+                        actual.data == expected.data,
+                        "array {name:?}, detail {level:?}"
+                    );
+                    assert_eq!(actual.dtype, expected.dtype);
+                    assert_eq!(actual.compression, expected.compression);
+                    assert_eq!(actual.unit, expected.unit);
+                    assert_eq!(actual.params, expected.params);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_failed_detail_checks() -> io::Result<()> {
+        use crate::io::AsyncIntoIonMobilityFrameSource;
+        let input = std::fs::read("test/data/small.mzML")?;
+        for level in [
+            DetailLevel::Full,
+            DetailLevel::Lazy,
+            DetailLevel::MetadataOnly,
+        ] {
+            let mut reader = MzMLReader::new_indexed(std::io::Cursor::new(&input)).await;
+            reader.detail_level = level;
+            let mut index = OffsetIndex::new("spectrum".into());
+            index.insert("invalid offset", u64::MAX);
+            index.init = true;
+            reader.set_index(index);
+            assert!(AsyncSpectrumSource::get_spectrum_by_time(&mut reader, 1.0)
+                .await
+                .is_none());
+            assert_eq!(reader.detail_level, level);
+            assert!(
+                AsyncIntoIonMobilityFrameSource::has_ion_mobility(&mut reader)
+                    .await
+                    .is_none()
+            );
+            assert_eq!(reader.detail_level, level);
+        }
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

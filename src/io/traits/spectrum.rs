@@ -18,7 +18,7 @@ use crate::prelude::MSDataFileMetadata;
 use crate::spectrum::group::{SpectrumGroup, SpectrumGroupingIterator};
 use crate::spectrum::spectrum_types::{MultiLayerSpectrum, SpectrumLike};
 
-use super::SpectrumGrouping;
+use super::{util::DetailLevelGuard, SpectrumGrouping};
 
 /// A base trait defining the behaviors of a source of spectra.
 ///
@@ -66,35 +66,41 @@ pub trait SpectrumSource<
         let mut hi: usize = n;
 
         let mut best_error: f64 = f64::INFINITY;
-        let mut best_match: Option<S> = None;
+        let mut best_match: Option<(usize, S)> = None;
 
         if lo == hi {
             return None;
         }
 
         let original_detail_level = *self.detail_level();
-        self.set_detail_level(DetailLevel::MetadataOnly);
+        let reader = DetailLevelGuard::new(self, original_detail_level, Self::set_detail_level);
+        reader.source.set_detail_level(DetailLevel::MetadataOnly);
+        let search_detail_level = *reader.source.detail_level();
         while hi != lo {
             let mid = (hi + lo) / 2;
-            let scan = self.get_spectrum_by_index(mid)?;
+            let scan = reader.source.get_spectrum_by_index(mid)?;
             let scan_time = scan.start_time();
             let err = (scan_time - time).abs();
 
             if err < best_error {
                 best_error = err;
-                best_match = Some(scan);
+                best_match = Some((mid, scan));
             }
             if hi.saturating_sub(1) == lo {
-                self.set_detail_level(original_detail_level);
-                return best_match;
+                break;
             } else if scan_time > time {
                 hi = mid;
             } else {
                 lo = mid;
             }
         }
-        self.set_detail_level(original_detail_level);
-        best_match
+        drop(reader);
+        let (index, scan) = best_match?;
+        if original_detail_level == search_detail_level {
+            Some(scan)
+        } else {
+            self.get_spectrum_by_index(index)
+        }
     }
 
     /// Retrieve the number of spectra in source file, usually by getting
@@ -130,8 +136,11 @@ pub trait SpectrumSource<
     /// Helper method to support seeking to a specific time.
     /// Considerably more complex than seeking by ID or index.
     fn _offset_of_time(&mut self, time: f64) -> Option<u64> {
-        match self.get_spectrum_by_time(time) {
-            Some(scan) => self._offset_of_index(scan.index()),
+        let saved = *self.detail_level();
+        let reader = DetailLevelGuard::new(self, saved, Self::set_detail_level);
+        reader.source.set_detail_level(DetailLevel::MetadataOnly);
+        match reader.source.get_spectrum_by_time(time) {
+            Some(scan) => reader.source._offset_of_index(scan.index()),
             None => None,
         }
     }
@@ -217,7 +226,7 @@ impl<
     type Item = S;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index + self.back_index >= self.len() {
+        if ExactSizeIterator::len(self) == 0 {
             return None;
         }
         let result = self.source.get_spectrum_by_index(self.index);
@@ -226,7 +235,7 @@ impl<
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.index += n;
+        self.index += n.min(ExactSizeIterator::len(self));
         self.next()
     }
 }
@@ -239,7 +248,10 @@ impl<
     > ExactSizeIterator for SpectrumIterator<'_, C, D, S, R>
 {
     fn len(&self) -> usize {
-        self.source.len()
+        self.source
+            .len()
+            .saturating_sub(self.index)
+            .saturating_sub(self.back_index)
     }
 }
 
@@ -251,10 +263,10 @@ impl<
     > DoubleEndedIterator for SpectrumIterator<'_, C, D, S, R>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.index + self.back_index >= self.len() {
+        if ExactSizeIterator::len(self) == 0 {
             return None;
         };
-        let i = self.len() - (self.back_index + 1);
+        let i = self.source.len() - (self.back_index + 1);
         let result = self.source.get_spectrum_by_index(i);
         self.back_index += 1;
         result
@@ -449,7 +461,7 @@ impl<
     }
 
     fn start_from_index(&mut self, index: usize) -> Result<&mut Self, SpectrumAccessError> {
-        if index < self.len() {
+        if index < self.source.len() {
             self.index = index;
             self.back_index = 0;
             Ok(self)
@@ -459,12 +471,18 @@ impl<
     }
 
     fn start_from_time(&mut self, time: f64) -> Result<&mut Self, SpectrumAccessError> {
-        if let Some(scan) = self.get_spectrum_by_time(time) {
+        let scan = {
+            let saved = *self.detail_level();
+            let reader = DetailLevelGuard::new(self, saved, Self::set_detail_level);
+            reader.source.set_detail_level(DetailLevel::MetadataOnly);
+            reader.source.get_spectrum_by_time(time)
+        };
+        if let Some(scan) = scan {
             self.index = scan.index();
             self.back_index = 0;
             Ok(self)
         } else if self
-            .get_spectrum_by_index(self.len() - 1)
+            .get_spectrum_by_index(self.source.len() - 1)
             .expect("Failed to fetch spectrum for boundary testing")
             .start_time()
             < time
@@ -1242,35 +1260,42 @@ mod async_traits {
                 let mut hi: usize = n;
 
                 let mut best_error: f64 = f64::INFINITY;
-                let mut best_match: Option<S> = None;
+                let mut best_match: Option<(usize, S)> = None;
 
                 if lo == hi {
                     return None;
                 }
 
                 let original_detail_level = *self.detail_level();
-                self.set_detail_level(DetailLevel::MetadataOnly);
+                let reader =
+                    DetailLevelGuard::new(self, original_detail_level, Self::set_detail_level);
+                reader.source.set_detail_level(DetailLevel::MetadataOnly);
+                let search_detail_level = *reader.source.detail_level();
                 while hi != lo {
                     let mid = (hi + lo) / 2;
-                    let scan = self.get_spectrum_by_index(mid).await?;
+                    let scan = reader.source.get_spectrum_by_index(mid).await?;
                     let scan_time = scan.start_time();
                     let err = (scan_time - time).abs();
 
                     if err < best_error {
                         best_error = err;
-                        best_match = Some(scan);
+                        best_match = Some((mid, scan));
                     }
                     if hi.saturating_sub(1) == lo {
-                        self.set_detail_level(original_detail_level);
-                        return best_match;
+                        break;
                     } else if scan_time > time {
                         hi = mid;
                     } else {
                         lo = mid;
                     }
                 }
-                self.set_detail_level(original_detail_level);
-                best_match
+                drop(reader);
+                let (index, scan) = best_match?;
+                if original_detail_level == search_detail_level {
+                    Some(scan)
+                } else {
+                    self.get_spectrum_by_index(index).await
+                }
             }
         }
 
@@ -1309,8 +1334,11 @@ mod async_traits {
         #[allow(async_fn_in_trait)]
         async fn _offset_of_time(&mut self, time: f64) -> Option<u64> {
             {
-                match self.get_spectrum_by_time(time).await {
-                    Some(scan) => self._offset_of_index(scan.index()),
+                let saved = *self.detail_level();
+                let reader = DetailLevelGuard::new(self, saved, Self::set_detail_level);
+                reader.source.set_detail_level(DetailLevel::MetadataOnly);
+                match reader.source.get_spectrum_by_time(time).await {
+                    Some(scan) => reader.source._offset_of_index(scan.index()),
                     None => None,
                 }
             }
