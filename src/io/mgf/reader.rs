@@ -967,21 +967,8 @@ impl<
 
     /// Retrieve a spectrum by it's native ID
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
-        let offset = self.index.get(id)?;
         let index = self.index.index_of(id)?;
-        let start = self
-            .handle
-            .stream_position()
-            .expect("Failed to save checkpoint");
-        self.seek(SeekFrom::Start(offset))
-            .expect("Failed to move seek to offset");
-        let result = self.read_next();
-        self.seek(SeekFrom::Start(start))
-            .expect("Failed to restore offset");
-        result.map(|mut scan| {
-            scan.description.index = index;
-            scan
-        })
+        self.get_spectrum_by_index(index)
     }
 
     /// Retrieve a spectrum by it's integer index
@@ -992,19 +979,24 @@ impl<
             .stream_position()
             .expect("Failed to save checkpoint");
         self.seek(SeekFrom::Start(byte_offset)).ok()?;
+        let state = std::mem::replace(&mut self.state, MGFParserState::Start);
+        let read_counter = std::mem::replace(&mut self.read_counter, index);
+        let error = self.error.take();
         let result = self.read_next();
+        self.state = state;
+        self.read_counter = read_counter;
+        self.error = error;
         self.seek(SeekFrom::Start(start))
             .expect("Failed to restore offset");
-        result.map(|mut scan| {
-            scan.description.index = index;
-            scan
-        })
+        result
     }
 
     /// Return the data stream to the beginning
     fn reset(&mut self) {
         self.seek(SeekFrom::Start(0))
             .expect("Failed to reset file stream");
+        self.state = MGFParserState::Start;
+        self.error = None;
         self.read_counter = 0;
     }
 
@@ -1030,6 +1022,8 @@ impl<
         match self._offset_of_id(id) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => {
+                    self.state = MGFParserState::Start;
+                    self.error = None;
                     self.read_counter = self.index.index_of(id).unwrap();
                     Ok(self)
                 }
@@ -1043,6 +1037,8 @@ impl<
         match self._offset_of_index(index) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => {
+                    self.state = MGFParserState::Start;
+                    self.error = None;
                     self.read_counter = index;
                     Ok(self)
                 }
@@ -1066,6 +1062,8 @@ impl<
         match self._offset_of_index(index) {
             Some(offset) => match self.seek(SeekFrom::Start(offset)) {
                 Ok(_) => {
+                    self.state = MGFParserState::Start;
+                    self.error = None;
                     self.read_counter = index;
                     Ok(self)
                 }
