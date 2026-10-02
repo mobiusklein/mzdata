@@ -43,6 +43,41 @@ mod test {
     use super::*;
     use std::{fs, io, path};
 
+    const READ_INTO_MGF: &[u8] = b"BEGIN IONS\nTITLE=charged\nPEPMASS=400\n100 10 2\nEND IONS\nBEGIN IONS\nTITLE=centroid\nPEPMASS=500\n200 20\nEND IONS\nBEGIN IONS\nTITLE=charged again\nPEPMASS=600\n300 30 3\nEND IONS\nBEGIN IONS\nTITLE=empty\nPEPMASS=700\nEND IONS\n";
+
+    #[test]
+    fn test_read_into_replaces_spectrum() {
+        use crate::spectrum::{BinaryArrayMap, MultiLayerSpectrum};
+
+        for level in [
+            DetailLevel::Full,
+            DetailLevel::Lazy,
+            DetailLevel::MetadataOnly,
+        ] {
+            let mut reader = MGFReader::new(io::Cursor::new(READ_INTO_MGF));
+            let mut reference = MGFReader::new(io::Cursor::new(READ_INTO_MGF));
+            reader.set_detail_level(level);
+            reference.set_detail_level(level);
+            let mut spectrum = MultiLayerSpectrum {
+                arrays: Some(BinaryArrayMap::new()),
+                ..Default::default()
+            };
+            for _ in 0..4 {
+                let expected = reference.read_next().unwrap();
+                reader.read_into(&mut spectrum).unwrap();
+                assert_eq!(spectrum.description, expected.description);
+                assert_eq!(spectrum.peaks, expected.peaks);
+                assert_eq!(spectrum.deconvoluted_peaks, expected.deconvoluted_peaks);
+                assert!(spectrum.arrays.is_none());
+            }
+            let previous = spectrum.clone();
+            assert!(reader.read_into(&mut spectrum).is_err());
+            assert_eq!(spectrum.description, previous.description);
+            assert_eq!(spectrum.peaks, previous.peaks);
+            assert_eq!(spectrum.deconvoluted_peaks, previous.deconvoluted_peaks);
+        }
+    }
+
     #[test]
     fn test_reader() {
         let path = path::Path::new("./test/data/small.mgf");
@@ -261,6 +296,31 @@ mod test {
         use super::*;
         use futures::StreamExt;
         use tokio::fs;
+
+        #[tokio::test]
+        async fn test_read_into_replaces_spectrum() {
+            use crate::spectrum::{BinaryArrayMap, MultiLayerSpectrum};
+
+            let mut reader = AsyncMGFReader::new(io::Cursor::new(READ_INTO_MGF)).await;
+            let mut reference = AsyncMGFReader::new(io::Cursor::new(READ_INTO_MGF)).await;
+            let mut spectrum = MultiLayerSpectrum {
+                arrays: Some(BinaryArrayMap::new()),
+                ..Default::default()
+            };
+            for _ in 0..4 {
+                let expected = reference.read_next().await.unwrap();
+                reader.read_into(&mut spectrum).await.unwrap();
+                assert_eq!(spectrum.description, expected.description);
+                assert_eq!(spectrum.peaks, expected.peaks);
+                assert_eq!(spectrum.deconvoluted_peaks, expected.deconvoluted_peaks);
+                assert!(spectrum.arrays.is_none());
+            }
+            let previous = spectrum.clone();
+            assert!(reader.read_into(&mut spectrum).await.is_err());
+            assert_eq!(spectrum.description, previous.description);
+            assert_eq!(spectrum.peaks, previous.peaks);
+            assert_eq!(spectrum.deconvoluted_peaks, previous.deconvoluted_peaks);
+        }
 
         #[tokio::test]
         async fn test_spectrum_detail_level() -> std::io::Result<()> {

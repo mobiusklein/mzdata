@@ -126,7 +126,9 @@ impl<
     > SpectrumBuilder<C, D>
 {
     pub fn into_spectrum(self, spectrum: &mut MultiLayerSpectrum<C, D>) {
+        spectrum.arrays = None;
         if self.has_charge > 0 {
+            spectrum.peaks = None;
             spectrum.deconvoluted_peaks = Some(
                 self.mz_array
                     .into_iter()
@@ -144,6 +146,7 @@ impl<
                     .collect(),
             )
         } else {
+            spectrum.deconvoluted_peaks = None;
             spectrum.peaks = Some(
                 self.mz_array
                     .into_iter()
@@ -776,6 +779,7 @@ impl<
         Ok((offset, had_begin_ions))
     }
 
+    /// Read the next spectrum into `spectrum`, replacing its previous contents.
     pub fn read_into(
         &mut self,
         spectrum: &mut MultiLayerSpectrum<C, D>,

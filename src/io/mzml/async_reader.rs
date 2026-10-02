@@ -423,7 +423,7 @@ impl<
         }
     }
 
-    /// Populate a new [`Spectrum`](crate::spectrum::MultiLayerSpectrum) in-place on the next available spectrum data.
+    /// Read the next spectrum into `spectrum`, replacing its previous contents.
     /// This allocates memory to build the spectrum's attributes but then moves it
     /// into `spectrum` rather than copying it.
     pub async fn read_into(
@@ -1154,6 +1154,41 @@ mod test {
 
     use super::*;
     use tokio::{fs, io};
+
+    #[tokio::test]
+    async fn test_read_into_replaces_spectrum() {
+        for level in [
+            DetailLevel::Full,
+            DetailLevel::Lazy,
+            DetailLevel::MetadataOnly,
+        ] {
+            let mut reader =
+                MzMLReader::new(fs::File::open("test/data/small.mzML").await.unwrap()).await;
+            let mut reference =
+                MzMLReader::new(fs::File::open("test/data/small.mzML").await.unwrap()).await;
+            reader.detail_level = level;
+            reference.detail_level = level;
+            let mut spectrum = MultiLayerSpectrum::default();
+            for _ in 0..48 {
+                let expected = reference.read_next().await.unwrap();
+                reader.read_into(&mut spectrum).await.unwrap();
+                assert_eq!(spectrum.description, expected.description);
+                assert_eq!(spectrum.peaks, expected.peaks);
+                assert_eq!(spectrum.deconvoluted_peaks, expected.deconvoluted_peaks);
+                let actual = spectrum.arrays.as_ref().unwrap();
+                let expected = expected.arrays.as_ref().unwrap();
+                assert_eq!(actual.len(), expected.len());
+                for (name, array) in expected.iter() {
+                    let actual = actual.get(name).unwrap();
+                    assert_eq!(actual.dtype, array.dtype);
+                    assert_eq!(actual.compression, array.compression);
+                    assert_eq!(actual.unit, array.unit);
+                    assert_eq!(actual.params, array.params);
+                    assert!(actual.data == array.data);
+                }
+            }
+        }
+    }
 
     #[tokio::test]
     async fn test_spectrum_detail_level() -> io::Result<()> {

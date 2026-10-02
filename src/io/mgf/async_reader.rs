@@ -185,6 +185,7 @@ impl<R: io::AsyncRead + Unpin, C: CentroidLike + From<CentroidPeak>, D: Deconvol
         Ok((offset, had_begin_ions))
     }
 
+    /// Read the next spectrum into `spectrum`, replacing its previous contents.
     pub async fn read_into(
         &mut self,
         spectrum: &mut MultiLayerSpectrum<C, D>,
