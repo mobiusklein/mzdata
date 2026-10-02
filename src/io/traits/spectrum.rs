@@ -481,15 +481,16 @@ impl<
             self.index = scan.index();
             self.back_index = 0;
             Ok(self)
-        } else if self
-            .get_spectrum_by_index(self.source.len() - 1)
-            .expect("Failed to fetch spectrum for boundary testing")
-            .start_time()
-            < time
-        {
-            Err(SpectrumAccessError::SpectrumNotFound)
         } else {
-            Err(SpectrumAccessError::IOError(None))
+            let Some(last_index) = self.source.len().checked_sub(1) else {
+                return Err(SpectrumAccessError::SpectrumNotFound);
+            };
+            match self.get_spectrum_by_index(last_index) {
+                Some(scan) if scan.start_time() < time => {
+                    Err(SpectrumAccessError::SpectrumNotFound)
+                }
+                _ => Err(SpectrumAccessError::IOError(None)),
+            }
         }
     }
 }
