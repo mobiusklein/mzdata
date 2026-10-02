@@ -2298,7 +2298,6 @@ mod test {
                         }
                     }
                     writer.close()?;
-                    writer.close()?;
                 }
                 assert_eq!(bytes.len() > BUFFER_SIZE, large);
                 assert_checksum(&bytes);
