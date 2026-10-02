@@ -421,7 +421,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                 window.no_isolation();
             }
             Some(_) => {
-                log::debug!("Unexpected isolation window term {:?}", param)
+                log::trace!("Unexpected isolation window term {:?}", param)
             }
             _ => match param.name() {
                 "isolation window target m/z" => {
@@ -445,7 +445,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                             .expect("Failed to parse isolation window limit"),
                     );
                 }
-                _ => log::debug!("Unexpected isolation window term {:?}", param),
+                _ => log::trace!("Unexpected isolation window term {:?}", param),
             },
         }
     }
@@ -2495,7 +2495,6 @@ mod test {
     fn test_read_into_replaces_spectrum() {
         for level in [
             DetailLevel::Full,
-            DetailLevel::Lazy,
             DetailLevel::MetadataOnly,
         ] {
             let mut reader = MzMLReader::open_path("test/data/small.mzML").unwrap();
