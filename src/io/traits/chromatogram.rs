@@ -29,11 +29,16 @@ pub trait ChromatogramSource {
 pub struct ChromatogramIterator<'a, R: ChromatogramSource> {
     source: &'a mut R,
     index: usize,
+    done: bool,
 }
 
 impl<'a, R: ChromatogramSource> ChromatogramIterator<'a, R> {
     pub fn new(source: &'a mut R) -> Self {
-        Self { source, index: 0 }
+        Self {
+            source,
+            index: 0,
+            done: false,
+        }
     }
 }
 
@@ -41,10 +46,15 @@ impl<R: ChromatogramSource> Iterator for ChromatogramIterator<'_, R> {
     type Item = Chromatogram;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.done || self.index >= self.source.count_chromatograms() {
+            self.done = true;
+            return None;
+        }
         if let Some(chrom) = self.source.get_chromatogram_by_index(self.index) {
             self.index += 1;
             Some(chrom)
         } else {
+            self.done = true;
             None
         }
     }
@@ -54,7 +64,11 @@ impl<R: ChromatogramSource> FusedIterator for ChromatogramIterator<'_, R> {}
 
 impl<R: ChromatogramSource> ExactSizeIterator for ChromatogramIterator<'_, R> {
     fn len(&self) -> usize {
-        self.source.count_chromatograms()
+        if self.done {
+            0
+        } else {
+            self.source.count_chromatograms().saturating_sub(self.index)
+        }
     }
 }
 

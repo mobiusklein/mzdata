@@ -213,7 +213,7 @@ impl<
     type Item = S;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index + self.back_index >= self.len() {
+        if ExactSizeIterator::len(self) == 0 {
             return None;
         }
         let result = self.source.get_frame_by_index(self.index);
@@ -222,7 +222,7 @@ impl<
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.index += n;
+        self.index += n.min(ExactSizeIterator::len(self));
         self.next()
     }
 }
@@ -235,7 +235,10 @@ impl<
     > ExactSizeIterator for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     fn len(&self) -> usize {
-        self.source.len()
+        self.source
+            .len()
+            .saturating_sub(self.index)
+            .saturating_sub(self.back_index)
     }
 }
 
@@ -247,10 +250,10 @@ impl<
     > DoubleEndedIterator for IonMobilityFrameIterator<'_, C, D, S, R>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.index + self.back_index >= self.len() {
+        if ExactSizeIterator::len(self) == 0 {
             return None;
         };
-        let i = self.len() - (self.back_index + 1);
+        let i = self.source.len() - (self.back_index + 1);
         let result = self.source.get_frame_by_index(i);
         self.back_index += 1;
         result
@@ -600,7 +603,7 @@ impl<
     }
 
     fn start_from_index(&mut self, index: usize) -> Result<&mut Self, IonMobilityFrameAccessError> {
-        if index < self.len() {
+        if index < self.source.len() {
             self.index = index;
             self.back_index = 0;
             Ok(self)
@@ -615,7 +618,7 @@ impl<
             self.back_index = 0;
             Ok(self)
         } else if self
-            .get_frame_by_index(self.len() - 1)
+            .get_frame_by_index(self.source.len() - 1)
             .expect("Failed to fetch spectrum for boundary testing")
             .start_time()
             < time

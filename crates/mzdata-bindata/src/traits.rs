@@ -305,7 +305,7 @@ pub struct DataSliceIter<'a, T: Pod> {
 impl<T: Pod> ExactSizeIterator for DataSliceIter<'_, T> {
     fn len(&self) -> usize {
         let z = mem::size_of::<T>();
-        self.buffer.len() / z
+        self.buffer.len() / z - self.i
     }
 }
 
@@ -344,5 +344,46 @@ impl<T: Pod> Iterator for DataSliceIter<'_, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_value()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if mem::size_of::<T>() == 0 {
+            return (0, None);
+        }
+        let n = self.len();
+        (n, Some(n))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn check_remaining<T: Pod + PartialEq + std::fmt::Debug>(values: &[T]) {
+        let mut it = DataSliceIter::<T>::new(Cow::Borrowed(bytemuck::cast_slice(values)));
+        for (i, value) in values.iter().enumerate() {
+            let n = values.len() - i;
+            assert_eq!(it.len(), n);
+            assert_eq!(it.size_hint(), (n, Some(n)));
+            assert_eq!(it.next(), Some(*value));
+        }
+        assert_eq!(it.len(), 0);
+        assert_eq!(it.size_hint(), (0, Some(0)));
+        assert_eq!(it.next(), None);
+        assert_eq!(it.next(), None);
+    }
+
+    #[test]
+    fn test_iterator_remaining() {
+        check_remaining::<u8>(&[]);
+        check_remaining(&[1u8]);
+        check_remaining(&[1u8, 2, 3]);
+        check_remaining(&[1i32, -2, 3]);
+        check_remaining(&[1i64, -2, 3]);
+        check_remaining(&[1.25f32, -2.5, 3.0]);
+        check_remaining(&[1.25f64, -2.5, 3.0]);
+
+        let units = DataSliceIter::<()>::new(Cow::Borrowed(&[]));
+        assert_eq!(units.take(3).collect::<Vec<_>>(), vec![(); 3]);
     }
 }
