@@ -246,6 +246,8 @@ mod parallelism {
     }
 
     impl ConcurrentLoader {
+        /// Use `None` to run in the current Rayon pool, or `Some(0)`
+        /// to let a new pool choose its worker count automatically.
         pub fn new(path: PathBuf, num_threads: Option<usize>) -> Self {
             Self { path, num_threads }
         }
@@ -255,9 +257,8 @@ mod parallelism {
             let guide = F::open_path(&self.path)?;
             let n = guide.len();
 
-            let num_threads = self.num_threads.unwrap_or_else(|| rayon::max_num_threads());
-
             let task = || -> Vec<S>{
+                let num_threads = rayon::current_num_threads();
                 let mut chunks: Vec<_> = (0..n).into_par_iter().chunks((n / num_threads / 3).max(10)).map(|ii| {
                     let start = ii[0];
                     let mut local_reader = F::open_path(&self.path).unwrap();
@@ -438,14 +439,19 @@ mod test {
     fn test_parallel_load() -> io::Result<()> {
         use crate::prelude::*;
 
-        let loader= ConcurrentLoader::new("./test/data/batching_test.mzML".into(), Some(4));
-        let spectra = loader.load::<crate::MzMLReader<fs::File>, _, _, _>()?;
-        assert_eq!(spectra.len(), 2232);
-
-        let _ = spectra.iter().fold(0, |last, spec| {
-            assert_eq!(last, spec.index());
-            spec.index() + 1
-        });
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        for num_threads in [Some(4), Some(0), None] {
+            let loader =
+                ConcurrentLoader::new("./test/data/batching_test.mzML".into(), num_threads);
+            let spectra = pool.install(|| loader.load::<crate::MzMLReader<fs::File>, _, _, _>())?;
+            assert_eq!(spectra.len(), 2232);
+            for (index, spectrum) in spectra.iter().enumerate() {
+                assert_eq!(spectrum.index(), index);
+            }
+        }
 
         Ok(())
     }
