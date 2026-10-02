@@ -56,6 +56,7 @@ default = ["zlib-ng-compat", "mgf", "mzml"]
 
 checksum = ["dep:sha1", "dep:hex"]
 
+static_data = ["cv"]
 cv = ["mzdata-param/cv", "mzdata-param/static_data", "mzdata-meta/cv", "dep:mzcv"]
 
 mgf = []
@@ -227,6 +228,12 @@ tokio = { version = "1.42", features = ["macros", "fs", "rt-multi-thread"] }
 [[bench]]
 name = "mzml"
 harness = false
+
+[profile.dev.package.sha1]
+opt-level = 3
+
+[profile.dev.package.mzsignal]
+opt-level = 3
 
 
 [package.metadata.docs.rs]
