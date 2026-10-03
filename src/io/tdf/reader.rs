@@ -150,6 +150,7 @@ pub struct TDFFrameReaderType<
     frame_reader: timsrust::readers::FrameReader,
     tdf_reader: RawTDFSQLReader,
     entry_index: Vec<IndexExtry>,
+    window_group_index: DIAFrameWindowMap,
     index: usize,
     offset_index: OffsetIndex,
     calibration_models: CalibrationParameters,
@@ -298,6 +299,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             export_models_as_params: false,
             run: MassSpectrometryRun::default(),
             detail_level,
+            window_group_index: Default::default(),
 
             _c: PhantomData,
             _d: PhantomData,
@@ -399,7 +401,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     }
 
     fn build_index(&mut self) -> Result<(), Error> {
-        let pasef_window_groups = self.build_window_index()?;
+        self.window_group_index = self.build_window_index()?;
 
         let (entry_guess, _frame_types) = self
             .guess_number_of_entries()
@@ -465,7 +467,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
                 }
                 MsMsType::DIAPASEF => {
                     let group_id = self.tdf_reader.dia_window_group_for(frame.id)?;
-                    for window in pasef_window_groups.get(&group_id).into_iter().flatten() {
+                    for window in self.window_group_index.get(&group_id).into_iter().flatten() {
                         let entry = IndexExtry::new(
                             frame.clone(),
                             index_entries.len(),
@@ -1175,6 +1177,7 @@ impl<
             metadata: view.metadata,
             frame_reader: view.frame_reader,
             entry_index: view.entry_index,
+            window_group_index: view.window_group_index,
             index: view.index,
             calibration_models: view.calibration_models,
             offset_index: view.offset_index,
