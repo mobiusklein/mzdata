@@ -2285,9 +2285,9 @@ mod test {
         }
         let mut reader = MzMLReader::open_path("test/data/small.mzML")?;
         let spectra: Vec<_> = reader.iter().collect();
+        let mut bytes = Vec::new();
         for large in [false, true] {
             for limit in [usize::MAX, 4096] {
-                let mut bytes = Vec::new();
                 {
                     let mut writer = MzMLWriter::new(ShortWriter(&mut bytes, limit));
                     if large {
@@ -2301,6 +2301,7 @@ mod test {
                 }
                 assert_eq!(bytes.len() > BUFFER_SIZE, large);
                 assert_checksum(&bytes);
+                bytes.clear();
             }
         }
         Ok(())
