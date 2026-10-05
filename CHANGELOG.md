@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.67.3] - 2026-10-05
+
+### Added
+
+- Count remaining iterator items and prevent repeated peaks (#64)
+Subtract consumed items from iterator lengths, cap oversized indexed skips, and stop front/back peak reads when their positions meet. Keep chromatogram iteration exhausted after returning None.
+
+Preserve full source counts for seeking and the existing peak and reader size hints. Add regression tests in the existing source files.
+
+### Fixed
+
+- Check binary array casts and unaligned reads (#60)
+- Preserve bytes when opening streams (#61)
+- Use requested detail levels in time lookups and async reads (#62)
+- Correct mzML checksums and return file read errors (#63)
+- Replace old spectrum data in read_into (#65)
+- Return errors for empty iterator time seeks (#67)
+- Restore MGF reader state after seeking (#66)
+- Size loader chunks for the current Rayon pool (#68)
+- Return imzML opening errors (#69)
+
+### Removed
+
+- Forward serde and compression features (#59)
+* fix: forward serde features in model crates
+
+* fix: preserve requested compression backends
+
+* chore: remove unused direct memchr dependency
+
+* chore: stop requesting quick-xml serialization
+
 ## [0.67.2] - 2026-09-29
 
 ### Added
@@ -1278,7 +1310,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.67.2...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.67.3...HEAD
+[0.67.3]: https://github.com/mobiusklein/mzdata/compare/v0.67.2...v0.67.3
 [0.67.2]: https://github.com/mobiusklein/mzdata/compare/v0.67.1...v0.67.2
 [0.67.1]: https://github.com/mobiusklein/mzdata/compare/v0.67.0...v0.67.1
 [0.67.0]: https://github.com/mobiusklein/mzdata/compare/v0.66.7...v0.67.0
