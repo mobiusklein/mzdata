@@ -382,7 +382,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                     param
                         .to_f32()
                         .expect("Failed to parse isolation window target"),
-                );
+                ).unit(param.unit());
             }
             // isolation window lower offset
             Some(curie!(MS:1000828)) => {
@@ -390,7 +390,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                     param
                         .to_f32()
                         .expect("Failed to parse isolation window limit"),
-                );
+                ).unit(param.unit());
             }
             // isolation window upper offset
             Some(curie!(MS:1000829)) => {
@@ -398,7 +398,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                     param
                         .to_f32()
                         .expect("Failed to parse isolation window limit"),
-                );
+                ).unit(param.unit());
             }
             // deprecated lower limit
             Some(curie!(MS:1000794)) => {
@@ -406,7 +406,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                     param
                         .to_f32()
                         .expect("Failed to parse isolation window limit"),
-                );
+                ).unit(param.unit());
             }
             // deprecated upper limit
             Some(curie!(MS:1000793)) => {
@@ -414,7 +414,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                     param
                         .to_f32()
                         .expect("Failed to parse isolation window limit"),
-                );
+                ).unit(param.unit());
             }
             // no isolation, MSe/all ions fragmentation
             Some(curie!(MS:1003159)) => {
@@ -3351,6 +3351,7 @@ mod test {
         );
         builder.fill_param_into(param.into(), MzMLParserState::IsolationWindow);
         assert_eq!(builder.isolation_window_mut().target, 50.0);
+        assert_eq!(builder.isolation_window_mut().unit(), Unit::MZ);
 
         builder._reset();
         let param = ControlledVocabulary::MS.const_param(

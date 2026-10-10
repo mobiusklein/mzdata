@@ -83,8 +83,12 @@ impl<'a> IsolationWindowBuilder<'a> {
             IsolationWindowState::Unknown => IsolationWindowState::Complete,
             IsolationWindowState::Explicit => IsolationWindowState::Complete,
             IsolationWindowState::Offset => {
-                self.0.lower_bound = self.0.target - self.0.lower_bound;
-                self.0.upper_bound += self.0.target;
+                if self.0.lower_bound != 0.0 {
+                    self.0.lower_bound = self.0.target - self.0.lower_bound;
+                }
+                if self.0.upper_bound != 0.0  {
+                    self.0.upper_bound += self.0.target;
+                }
                 IsolationWindowState::Complete
             }
             IsolationWindowState::Complete => IsolationWindowState::Complete,
@@ -199,6 +203,9 @@ impl<'a> IsolationWindowBuilder<'a> {
 
     /// Set the isolation window unit
     pub const fn unit(self, unit: Unit) -> Self {
+        if unit.is_unknown() {
+            return self
+        }
         *self.0.unit_mut() = unit;
         self
     }
@@ -1252,7 +1259,26 @@ impl_param_described!(ChromatogramDescription);
 
 #[cfg(test)]
 mod contains_tests {
-    use super::*;
+    use num_traits::Zero;
+
+use super::*;
+
+    #[test]
+    fn isolation_window_builder_target_only() {
+        let mut this = IsolationWindow::default();
+        let builder = IsolationWindowBuilder(&mut this);
+        builder.target(500.0);
+        assert_eq!(this.target, 500.0);
+        assert!(this.upper_bound.is_zero());
+        assert!(this.lower_bound.is_zero());
+
+        this = IsolationWindow::default();
+        let builder = IsolationWindowBuilder(&mut this);
+        builder.target(500.0).lower_offset(2.0);
+        assert_eq!(this.target, 500.0);
+        assert!(this.upper_bound.is_zero());
+        assert_eq!(this.lower_bound, 498.0);
+    }
 
     // Regression tests for the isolation/scan-window `contains` membership check. A prior bug used
     // `lower <= point && upper <= point`, which wrongly excluded interior points and wrongly included

@@ -6,6 +6,7 @@ use std::{io, mem};
 
 use log::warn;
 use mzpeaks::feature::FeatureLike;
+use num_traits::Zero;
 use sha1::Digest;
 use thiserror::Error;
 
@@ -1538,36 +1539,42 @@ where
     pub fn write_isolation_window(&mut self, iw: &IsolationWindow) -> WriterResult {
         let iw_tag = bstart!("isolationWindow");
         self.handle.write_event(Event::Start(iw_tag.borrow()))?;
-        self.handle.write_param(
-            &self
-                .ms_cv
-                .param_val(
-                    "MS:1000827",
-                    "isolation window target m/z",
-                    iw.target.to_string(),
-                )
-                .with_unit("MS:1000040", "m/z"),
-        )?;
-        self.handle.write_param(
-            &self
-                .ms_cv
-                .param_val(
-                    "MS:1000828",
-                    "isolation window lower offset",
-                    (iw.target - iw.lower_bound).to_string(),
-                )
-                .with_unit("MS:1000040", "m/z"),
-        )?;
-        self.handle.write_param(
-            &self
-                .ms_cv
-                .param_val(
-                    "MS:1000829",
-                    "isolation window upper offset",
-                    (iw.upper_bound - iw.target).to_string(),
-                )
-                .with_unit("MS:1000040", "m/z"),
-        )?;
+        if !iw.target.is_zero() {
+            self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param_val(
+                        "MS:1000827",
+                        "isolation window target m/z",
+                        iw.target.to_string(),
+                    )
+                    .with_unit_t(&Unit::MZ),
+            )?;
+        }
+        if !iw.lower_bound.is_zero() {
+            self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param_val(
+                        "MS:1000828",
+                        "isolation window lower offset",
+                        (iw.target - iw.lower_bound).to_string(),
+                    )
+                    .with_unit_t(&Unit::MZ),
+            )?;
+        }
+        if !iw.upper_bound.is_zero() {
+            self.handle.write_param(
+                &self
+                    .ms_cv
+                    .param_val(
+                        "MS:1000829",
+                        "isolation window upper offset",
+                        (iw.upper_bound - iw.target).to_string(),
+                    )
+                    .with_unit_t(&Unit::MZ),
+            )?;
+        }
         self.handle.write_event(Event::End(iw_tag.to_end()))
     }
 

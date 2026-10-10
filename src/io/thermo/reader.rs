@@ -944,6 +944,7 @@ use thermorawfilereader::{
             iso_window.lower_bound = vwin.lower() as f32;
             iso_window.target = vwin.target() as f32;
             iso_window.upper_bound = vwin.upper() as f32;
+            *iso_window.unit_mut() = Unit::MZ;
             iso_window.flags = IsolationWindowState::Complete;
 
             precursor.precursor_id = Some(make_native_id(vprec.parent_index()));

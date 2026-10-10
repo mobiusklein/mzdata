@@ -5,6 +5,7 @@ use std::{
     str::FromStr,
 };
 
+use mzdata_param::Unit;
 use mzdata_spectrum::IsolationWindowBuilder;
 use num_traits::AsPrimitive;
 use serde::{de::SeqAccess, Deserialize, Deserializer, Serialize};
@@ -15,8 +16,8 @@ use crate::{
     params::{ControlledVocabulary, Param, ParamCow, Value, CURIE},
     prelude::*,
     spectrum::{
-        ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray,
-        MultiLayerSpectrum, Precursor, ScanPolarity, SignalContinuity, SpectrumDescription,
+        ArrayType, BinaryArrayMap, BinaryDataArrayType, DataArray, MultiLayerSpectrum, Precursor,
+        ScanPolarity, SignalContinuity, SpectrumDescription,
     },
 };
 
@@ -991,15 +992,21 @@ impl From<&PROXISpectrum> for SpectrumDescription {
 
                 "isolation window target m/z" => {
                     has_precursor = true;
-                    let window = IsolationWindowBuilder(precursor.isolation_window_mut());
-                    window.target(param.to_f32().expect("Failed to parse isolation window target"));
+                    let window =
+                        IsolationWindowBuilder(precursor.isolation_window_mut()).unit(Unit::MZ);
+                    window.target(
+                        param
+                            .to_f32()
+                            .expect("Failed to parse isolation window target"),
+                    );
                 }
                 "isolation window lower offset" => {
                     has_precursor = true;
                     let lower_bound = param
                         .to_f32()
                         .expect("Failed to parse isolation window limit");
-                    let window = IsolationWindowBuilder(precursor.isolation_window_mut());
+                    let window =
+                        IsolationWindowBuilder(precursor.isolation_window_mut()).unit(Unit::MZ);
                     window.lower_offset(lower_bound);
                 }
                 "isolation window upper offset" => {
@@ -1007,12 +1014,14 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                     let upper_bound = param
                         .to_f32()
                         .expect("Failed to parse isolation window limit");
-                    let window = IsolationWindowBuilder(precursor.isolation_window_mut());
+                    let window =
+                        IsolationWindowBuilder(precursor.isolation_window_mut()).unit(Unit::MZ);
                     window.upper_offset(upper_bound);
                 }
                 "isolation window lower limit" => {
                     has_precursor = true;
-                    let window = IsolationWindowBuilder(precursor.isolation_window_mut());
+                    let window =
+                        IsolationWindowBuilder(precursor.isolation_window_mut()).unit(Unit::MZ);
                     let lower_bound = param
                         .to_f32()
                         .expect("Failed to parse isolation window limit");
@@ -1023,7 +1032,8 @@ impl From<&PROXISpectrum> for SpectrumDescription {
                     let upper_bound = param
                         .to_f32()
                         .expect("Failed to parse isolation window limit");
-                    let window = IsolationWindowBuilder(precursor.isolation_window_mut());
+                    let window =
+                        IsolationWindowBuilder(precursor.isolation_window_mut()).unit(Unit::MZ);
                     window.upper_limit(upper_bound);
                 }
                 _ => {

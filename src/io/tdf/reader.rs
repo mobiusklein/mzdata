@@ -1571,6 +1571,7 @@ fn index_to_precursor(
 
             let iso_width = pasef.isolation_width / 2.0;
             isolation = IsolationWindow::around(pasef.isolation_mz as f32, iso_width as f32);
+            *isolation.unit_mut() = Unit::MZ;
         }
         if let Some(pasef) = index_entry.dia_window() {
             act.energy = pasef.collision_energy;
@@ -1578,6 +1579,7 @@ fn index_to_precursor(
 
             let iso_width = pasef.isolation_width / 2.0;
             isolation = IsolationWindow::around(pasef.isolation_mz as f32, iso_width as f32);
+            *isolation.unit_mut() = Unit::MZ;
         }
 
         let mut mz_prec = Precursor::default();
