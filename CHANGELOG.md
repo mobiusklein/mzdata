@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.67.4] - 2026-10-10
+
+### Fixed
+
+- Fix isolation window boundaries when no offsets or limits provided
+
 ## [0.67.3] - 2026-10-05
 
 ### Added
@@ -1310,7 +1316,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.67.3...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.67.4...HEAD
+[0.67.4]: https://github.com/mobiusklein/mzdata/compare/v0.67.3...v0.67.4
 [0.67.3]: https://github.com/mobiusklein/mzdata/compare/v0.67.2...v0.67.3
 [0.67.2]: https://github.com/mobiusklein/mzdata/compare/v0.67.1...v0.67.2
 [0.67.1]: https://github.com/mobiusklein/mzdata/compare/v0.67.0...v0.67.1
