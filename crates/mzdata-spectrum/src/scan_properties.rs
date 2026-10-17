@@ -209,6 +209,11 @@ impl<'a> IsolationWindowBuilder<'a> {
         *self.0.unit_mut() = unit;
         self
     }
+
+    pub fn param(self, param: Param) -> Self {
+        self.0.add_param(param);
+        self
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -230,7 +235,8 @@ pub struct IsolationWindow {
     /// window from the source file.
     #[cfg_attr(feature = "serde", serde(skip))]
     pub flags: IsolationWindowState,
-    unit: Unit
+    unit: Unit,
+    params: Option<Box<Vec<Param>>>,
 }
 
 impl IsolationWindow {
@@ -245,7 +251,8 @@ impl IsolationWindow {
             lower_bound,
             upper_bound,
             flags,
-            unit: Unit::Unknown
+            unit: Unit::Unknown,
+            params: None,
         }
     }
 
@@ -295,6 +302,8 @@ impl IsolationWindow {
         self.lower_bound == 0.0 && self.upper_bound == 0.0 && self.has_isolation()
     }
 }
+
+impl_param_described_deferred!(IsolationWindow);
 
 impl PartialEq for IsolationWindow {
     fn eq(&self, other: &Self) -> bool {

@@ -421,7 +421,7 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                 window.no_isolation();
             }
             Some(_) => {
-                log::trace!("Unexpected isolation window term {:?}", param)
+                window.param(param);
             }
             _ => match param.name() {
                 "isolation window target m/z" => {
@@ -445,7 +445,9 @@ pub trait SpectrumBuilding<'a, C: CentroidLike, D: DeconvolutedCentroidLike, S: 
                             .expect("Failed to parse isolation window limit"),
                     );
                 }
-                _ => log::trace!("Unexpected isolation window term {:?}", param),
+                _ => {
+                    window.param(param);
+                },
             },
         }
     }
