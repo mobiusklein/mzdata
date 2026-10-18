@@ -1575,6 +1575,7 @@ where
                     .with_unit_t(&Unit::MZ),
             )?;
         }
+        self.handle.write_param_list(iw.params().iter())?;
         self.handle.write_event(Event::End(iw_tag.to_end()))
     }
 
