@@ -57,7 +57,7 @@ pub enum MGFError {
     MalformedPeakLine,
     #[error("Encountered a malformed header line: {0}")]
     MalformedHeaderLine(String),
-    #[error("Too many columns for peak line encountered")]
+    #[error("Too many or too few columns for peak line encountered")]
     NotEnoughColumnsForPeakLine,
     #[error("Encountered an IO error: {0}")]
     IOError(
