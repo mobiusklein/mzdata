@@ -1285,6 +1285,9 @@ crate::cvmap! {
         #[term(cv=MS, accession=1003809, name="IoDataConverter", flags={2}, parents={["MS:1001457", "MS:1003803"]})]
         #[doc="IoDataConverter - Ionoptika software for converting Ionoptika data formats to imzML or HDF5."]
         IoDataConverter,
+        #[term(cv=MS, accession=1003871, name="Lutefisk", flags={1}, parents={["MS:1001456"]})]
+        #[doc="Lutefisk - Lutefisk is a program for the de novo interpretation of peptide CID spectra."]
+        Lutefisk,
         #[term(cv=MS, accession=1003916, name="SpectroSwiss software", flags={0}, parents={["MS:1000531"]})]
         #[doc="SpectroSwiss software - SpectroSwiss software for mass spectrometry data processing and analysis."]
         SpectroSwissSoftware,
@@ -1363,6 +1366,27 @@ crate::cvmap! {
         #[term(cv=MS, accession=1004010, name="Stitch", flags={1}, parents={["MS:1001456"]})]
         #[doc="Stitch - Template-based assembly of PSMs for de novo protein sequencing."]
         Stitch,
+        #[term(cv=MS, accession=1004032, name="chromConverter", flags={0}, parents={["MS:1002333"]})]
+        #[doc="chromConverter - CRAN package chromConverter for reading chromatography and mass spectrometry data files into R, and for exporting them to mzML and ANDI netCDF."]
+        ChromConverter,
+        #[term(cv=MS, accession=1004033, name="LabSolutions", flags={7}, parents={["MS:1001557", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        #[doc="LabSolutions - Shimadzu software for data acquisition, processing, and analysis for Shimadzu chromatography and mass spectrometry instruments."]
+        LabSolutions,
+        #[term(cv=MS, accession=1004034, name="MS Workstation", flags={7}, parents={["MS:1004038", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        #[doc="MS Workstation - Varian software for data acquisition, processing, and analysis for Varian mass spectrometers."]
+        MSWorkstation,
+        #[term(cv=MS, accession=1004035, name="ChemStation", flags={7}, parents={["MS:1000689", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        #[doc="ChemStation - Agilent software for data acquisition, processing, and analysis for Agilent chromatography and mass spectrometry instruments."]
+        ChemStation,
+        #[term(cv=MS, accession=1004036, name="OpenLab CDS", flags={7}, parents={["MS:1000689", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        #[doc="OpenLab CDS - Agilent chromatography data system for data acquisition, processing, and analysis for Agilent chromatography and mass spectrometry instruments."]
+        OpenLabCDS,
+        #[term(cv=MS, accession=1004037, name="GCMSsolution", flags={7}, parents={["MS:1001557", "MS:1001455", "MS:1001456", "MS:1001457"]})]
+        #[doc="GCMSsolution - Shimadzu software for data acquisition, processing, and analysis for Shimadzu gas chromatography-mass spectrometry instruments."]
+        GCMSsolution,
+        #[term(cv=MS, accession=1004038, name="Varian software", flags={0}, parents={["MS:1000531"]})]
+        #[doc="Varian software - Varian software for data acquisition and analysis."]
+        VarianSoftware,
         #[term(cv=MS, accession=4000151, name="MsQuality", flags={1}, parents={["MS:1001456"]})]
         #[doc="MsQuality - MsQuality – an interoperable open-source package for the calculation of standardized quality metrics of mass spectrometry data."]
         MsQuality,
@@ -1370,7 +1394,7 @@ crate::cvmap! {
         #[doc="DIAMetric - DIAMetric is a Data-Independent Acquisition Quality Metric Generator."]
         DIAMetric,
     }
-    //[[[end]]] (sum: IqKqt5F23c)
+    //[[[end]]] (sum: 6Qk15kGNyn)
 }
 
 #[cfg(test)]
