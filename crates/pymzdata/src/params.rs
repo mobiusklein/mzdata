@@ -137,6 +137,48 @@ impl PyIsolationWindow {
             self.0.target, self.0.lower_bound, self.0.upper_bound
         )
     }
+
+    fn params(&self) -> Vec<PyParam> {
+        self.0.params().iter().cloned().map(PyParam).collect()
+    }
+
+    #[pyo3(signature = (name = None, accession = None))]
+    fn find_param(
+        &self,
+        name: Option<&str>,
+        accession: Option<&str>,
+    ) -> PyResult<Option<PyParam>> {
+        if name.is_none() && accession.is_none() {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "Must provide one of `name` or `accession`",
+            ));
+        }
+        if let Some(n) = name {
+            Ok(self
+                .0
+                .params()
+                .iter()
+                .find(|p| p.name() == n)
+                .cloned()
+                .map(PyParam))
+        } else if let Some(acc) = accession {
+            let curie: Option<CURIE> = Some(
+                acc.parse()
+                    .map_err(|e: CURIEParsingError| {
+                        pyo3::exceptions::PyValueError::new_err(e.to_string())
+                    })?,
+            );
+            Ok(self
+                .0
+                .params()
+                .iter()
+                .find(|p| p.curie() == curie)
+                .cloned()
+                .map(PyParam))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
