@@ -90,7 +90,7 @@ pub use group::{
 };
 
 #[cfg(feature = "async_partial")]
-pub use group::SpectrumGroupingStream;
+pub use group::{SpectrumGroupingStream, IonMobilityFrameGroupingStream};
 
 #[cfg(feature = "mzsignal")]
 pub use group::{

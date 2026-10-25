@@ -637,7 +637,7 @@ mod async_impl {
                 max_ms1_seeking_depth: MAX_GROUP_DEPTH,
                 passed_first_ms1: false,
             }
-    }
+        }
 
         impl_ms_level_switching!();
 
@@ -715,9 +715,128 @@ mod async_impl {
         }
     }
 
+
+    pub struct IonMobilityFrameGroupingStreamState<
+        C: FeatureLike<MZ, IonMobility>,
+        D: FeatureLike<Mass, IonMobility> + KnownCharge,
+        S: IonMobilityFrameLike<C, D>,
+        G: IonMobilityFrameGrouping<C, D, S>,
+    > {
+        queue: VecDeque<S>,
+        product_mapping: HashMap<String, Vec<S>>,
+        generation_tracker: GenerationTracker,
+        buffering: usize,
+        highest_ms_level: u8,
+        generation: usize,
+        depth: u32,
+        passed_first_ms1: bool,
+        pub max_ms1_seeking_depth: u32,
+        phantom: PhantomData<S>,
+        centroid_type: PhantomData<C>,
+        deconvoluted_type: PhantomData<D>,
+        grouping_type: PhantomData<G>,
+    }
+
+    impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge, S: IonMobilityFrameLike<C, D>, G: IonMobilityFrameGrouping<C, D, S>> IonMobilityFrameGroupingStreamState<C, D, S, G> {
+        pub fn new() -> Self {
+            Self {
+                generation_tracker: GenerationTracker::default(),
+                phantom: PhantomData,
+                centroid_type: PhantomData,
+                deconvoluted_type: PhantomData,
+                grouping_type: PhantomData,
+                buffering: 3,
+                product_mapping: HashMap::new(),
+                queue: VecDeque::new(),
+                highest_ms_level: 0,
+                generation: 0,
+                depth: 0,
+                max_ms1_seeking_depth: MAX_GROUP_DEPTH,
+                passed_first_ms1: false,
+            }
+        }
+
+        impl_ms_level_switching!();
+
+        fn feed_item(&mut self, spectrum: Option<S>) -> (Option<G>, bool) {
+            if let Some(spectrum) = spectrum {
+                let level = spectrum.ms_level();
+                if level > self.highest_ms_level {
+                    self.highest_ms_level = level;
+                }
+                if level > 1 {
+                    self.add_product(spectrum);
+                    if self.depth > self.max_ms1_seeking_depth {
+                        return (Some(self.deque_group_without_precursor()), true);
+                    }
+                    else {
+                        return (None, true)
+                    }
+                } else if self.add_precursor(spectrum) {
+                    return (self.deque_group(false), true);
+                } else {
+                    return (None, true);
+                }
+            } else {
+                return match self.queue.len() {
+                    d if d > 1 => (self.deque_group(false), true),
+                    1 => (self.deque_group(true), true),
+                    _ => {
+                        if !self.product_mapping.is_empty() {
+                            (Some(self.deque_group_without_precursor()), true)
+                        } else {
+                            (None, false)
+                        }
+                    }
+                };
+            }
+
+        }
+
+    }
+
+    pub trait _DeconvFeature : FeatureLike<Mass, IonMobility> + KnownCharge {}
+    impl<T: FeatureLike<Mass, IonMobility> + KnownCharge> _DeconvFeature for T {}
+
+    pin_project_lite::pin_project! {
+        #[must_use = "streams do nothing unless polled"]
+        pub struct IonMobilityFrameGroupingStream<R: Stream<Item = S>, C: FeatureLike<MZ, IonMobility>, D: _DeconvFeature, S: IonMobilityFrameLike<C, D>, G: IonMobilityFrameGrouping<C, D, S>> {
+            pub state: IonMobilityFrameGroupingStreamState<C, D, S, G>,
+            #[pin]
+            pub source: R,
+        }
+    }
+
+    impl<R: Stream<Item = S>, C: FeatureLike<MZ, IonMobility>, D: _DeconvFeature, S: IonMobilityFrameLike<C, D>, G: IonMobilityFrameGrouping<C, D, S>> IonMobilityFrameGroupingStream<R, C, D, S, G> {
+        pub fn new(source: R) -> Self {
+            Self {
+                source,
+                state: IonMobilityFrameGroupingStreamState::new()
+            }
+        }
+    }
+
+    impl<R: Stream<Item = S>, C: FeatureLike<MZ, IonMobility>, D: _DeconvFeature, S: IonMobilityFrameLike<C, D>, G: IonMobilityFrameGrouping<C, D, S>> Stream for IonMobilityFrameGroupingStream<R, C, D, S, G> {
+        type Item = G;
+
+        fn poll_next(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Option<Self::Item>> {
+            let this = self.project();
+            let res = ready!(this.source.poll_next(cx));
+            let (res, more) = this.state.feed_item(res);
+            if res.is_some() {
+                Poll::Ready(res)
+            }
+            else if more {
+                Poll::Pending
+            }
+            else {
+                Poll::Ready(None)
+            }
+        }
+    }
 }
 #[cfg(feature = "async_partial")]
-pub use async_impl::SpectrumGroupingStream;
+pub use async_impl::{SpectrumGroupingStream, IonMobilityFrameGroupingStream};
 
 #[cfg(feature = "mzsignal")]
 mod mzsignal_impl {
