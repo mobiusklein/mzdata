@@ -51,15 +51,14 @@ impl MassSpectrometryRun {
         start_time: Option<DateTime<FixedOffset>>,
         parameters: Vec<Param>,
     ) -> Self {
-        let mut this = Self::new(
+        Self {
             id,
             default_data_processing_id,
             default_instrument_id,
             default_source_file_id,
             start_time,
-        );
-        this.params = parameters;
-        this
+            params: parameters
+        }
     }
 
     crate::params::find_param_method!(
