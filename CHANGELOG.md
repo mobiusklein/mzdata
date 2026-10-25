@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.68.0] - 2026-10-25
+
+### Added
+
+- Add a deferred parameter list and deferred `ParamDescribed` to `IsolationWindow` and associated `param` method to `IsolationWindowBuilder`
+- Add `Param` list to `MassSpectrometryRun`
+- Add `IonMobilityFrameGroupingStream` for parity
+- Add additional `ParamDescribed` wrappers to python bindings
+
+### Changed
+
+- Update bundled PSI-MS CV to v4.2.11
+
+### Fixed
+
+- Write out IsolationWindow::parameters in mzML
+
 ## [0.67.4] - 2026-10-10
 
 ### Fixed
@@ -1316,7 +1333,8 @@ using mz_read macro. This also prevents potential version mismatches.
 
 <!-- Versions -->
 
-[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.67.4...HEAD
+[unreleased]: https://github.com/mobiusklein/mzdata/compare/v0.68.0...HEAD
+[0.68.0]: https://github.com/mobiusklein/mzdata/compare/v0.67.4...v0.68.0
 [0.67.4]: https://github.com/mobiusklein/mzdata/compare/v0.67.3...v0.67.4
 [0.67.3]: https://github.com/mobiusklein/mzdata/compare/v0.67.2...v0.67.3
 [0.67.2]: https://github.com/mobiusklein/mzdata/compare/v0.67.1...v0.67.2
