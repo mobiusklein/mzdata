@@ -35,10 +35,12 @@ pub struct Component {
     pub component_type: ComponentType,
     /// The order in the sequence of components that the analytes interact with
     pub order: u8,
+    /// Descriptive parameters listing the hardware involved and any modifications made to them.
     pub params: ParamList,
 }
 
 impl Component {
+    /// Find the first [`MassAnalyzerTerm`] in this component, if it exists.
     pub fn mass_analyzer(&self) -> Option<MassAnalyzerTerm> {
         self.params
             .iter()
@@ -53,6 +55,7 @@ impl Component {
             .next()
     }
 
+    /// Find the first [`DetectorTypeTerm`] in this component, if it exists.
     pub fn detector(&self) -> Option<DetectorTypeTerm> {
         self.params
             .iter()
@@ -67,6 +70,7 @@ impl Component {
             .next()
     }
 
+    /// Find the first [`IonizationTypeTerm`] in this component, if it exists.
     pub fn ionization_type(&self) -> Option<IonizationTypeTerm> {
         self.params
             .iter()
@@ -81,6 +85,7 @@ impl Component {
             .next()
     }
 
+    /// Search for the name of this component based upon the first appropriate term given [`Self::component_type`].
     pub fn name(&self) -> Option<&str> {
         let it = self.params.iter().filter(|p| p.is_ms());
         match self.component_type {
@@ -165,6 +170,8 @@ pub struct InstrumentConfiguration {
     pub software_reference: String,
     /// A unique identifier translated to an ordinal identifying this configuration
     pub id: u32,
+    /// A reference to the scan settings that governed this configuration, if any.
+    pub scan_settings_reference: Option<String>
 }
 
 impl InstrumentConfiguration {
@@ -178,10 +185,12 @@ impl InstrumentConfiguration {
         self.components.last_mut().unwrap()
     }
 
+    /// The number of components in this configuration
     pub fn len(&self) -> usize {
         self.components.len()
     }
 
+    /// If there are no components in this configuration
     pub fn is_empty(&self) -> bool {
         self.components.is_empty()
     }
@@ -194,14 +203,17 @@ impl InstrumentConfiguration {
         self.components.push(value)
     }
 
+    /// Returns an iterator over the [`Component`] slice.
     pub fn iter(&self) -> std::slice::Iter<'_, Component> {
         self.components.iter()
     }
 
+    /// Returns a reference to the last element of the [`Component`] slice, or None if it is empty.
     pub fn last(&self) -> Option<&Component> {
         self.components.last()
     }
 
+    /// Returns a mutable reference to the last element of the [`Component`] slice, or None if it is empty.
     pub fn last_mut(&mut self) -> Option<&mut Component> {
         self.components.last_mut()
     }
