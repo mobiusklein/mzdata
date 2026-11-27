@@ -1207,8 +1207,8 @@ use thermorawfilereader::{
             macro_rules! trailer {
                 ($kv:ident) => {
                     let name = format!("[Thermo Trailer Extra]{}", $kv.label);
-                    if !$kv.value.is_empty() {
-                        let param = Param::new_key_value(name, $kv.value.parse::<Value>().unwrap());
+                    if !$kv.value.trim().is_empty() {
+                        let param = Param::new_key_value(name, $kv.value.trim().parse::<Value>().unwrap());
                         spec.params_mut().push(param);
                     }
                 };
@@ -1229,13 +1229,13 @@ use thermorawfilereader::{
                     "Scan Event" => {
                         trailer!(kv);
                     }
-                    "Monoisotopic M/Z" if ms_level > 1 && kv.value != "0" => {
+                    "Monoisotopic M/Z" if ms_level > 1 && kv.value.trim().parse::<f64>() != Ok(0.0) => {
                         trailer!(kv);
                     }
-                    "HCD Energy eV" if ms_level > 1 && kv.value != "0" => {
+                    "HCD Energy eV" if ms_level > 1 && kv.value.trim().parse::<f64>() != Ok(0.0) => {
                         trailer!(kv);
                     }
-                    "HCD Energy" if ms_level > 1 && kv.value != "0" => {
+                    "HCD Energy" if ms_level > 1 && kv.value.trim().parse::<f64>() != Ok(0.0) => {
                         trailer!(kv);
                     }
                     _ => {}
